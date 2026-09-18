@@ -23,6 +23,8 @@ paths:
                 $ref: "#/components/schemas/Health"
   /v1/portfolio:
     get:
+      security:
+        - bearerAuth: []
       operationId: getPortfolio
       responses:
         "200":
@@ -33,6 +35,8 @@ paths:
                 $ref: "#/components/schemas/PortfolioSnapshot"
   /v1/accounts:
     get:
+      security:
+        - bearerAuth: []
       operationId: listAccounts
       responses:
         "200":
@@ -45,6 +49,8 @@ paths:
                   $ref: "#/components/schemas/AccountSnapshot"
   /v1/traders:
     get:
+      security:
+        - bearerAuth: []
       operationId: listTraders
       responses:
         "200":
@@ -57,6 +63,8 @@ paths:
                   $ref: "#/components/schemas/TraderSnapshot"
   /v1/positions:
     get:
+      security:
+        - bearerAuth: []
       operationId: listPositions
       responses:
         "200":
@@ -69,6 +77,8 @@ paths:
                   $ref: "#/components/schemas/PositionSnapshot"
   /v1/runtimes:
     get:
+      security:
+        - bearerAuth: []
       operationId: listRuntimes
       responses:
         "200":
@@ -80,6 +90,11 @@ paths:
                 items:
                   $ref: "#/components/schemas/RuntimeSnapshot"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
   schemas:
     Health:
       type: object
