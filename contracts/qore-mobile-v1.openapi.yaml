@@ -5,7 +5,8 @@ info:
   description: >
     Read-only supervision contract between QORE Mobile Gateway and the
     official Android/iOS application. Trading command endpoints are
-    intentionally absent.
+    intentionally absent. Runtime ingestion endpoints use a separate
+    runtime-authentication boundary and are not mobile control endpoints.
 servers:
   - url: https://gateway.invalid
     description: Placeholder only; no production endpoint is committed.
@@ -66,6 +67,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PositionSnapshot"
+  /v1/runtimes:
+    get:
+      operationId: listRuntimes
+      responses:
+        "200":
+          description: Runtime connectivity and reconciliation state
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RuntimeSnapshot"
 components:
   schemas:
     Health:
@@ -158,3 +171,17 @@ components:
         r_state: { type: number }
         opened_at: { type: string, format: date-time }
         as_of: { type: string, format: date-time }
+    RuntimeSnapshot:
+      type: object
+      required:
+        [runtime_id, account_ids, reconciliation_required, as_of, freshness]
+      properties:
+        runtime_id: { type: string }
+        account_ids:
+          type: array
+          items: { type: string }
+        last_sequence: { type: integer, minimum: 1 }
+        reconciliation_required: { type: boolean }
+        last_heartbeat: { type: string, format: date-time }
+        as_of: { type: string, format: date-time }
+        freshness: { $ref: "#/components/schemas/Freshness" }
