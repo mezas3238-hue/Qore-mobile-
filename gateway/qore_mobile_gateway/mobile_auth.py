@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import os
 
@@ -44,5 +45,8 @@ class MobileReadTokenRegistry:
         if not token:
             raise MobileAuthenticationError("missing mobile read token")
         digest = token_hash(token)
-        if digest not in self._token_hashes:
+        if not any(
+            hmac.compare_digest(digest, allowed)
+            for allowed in self._token_hashes
+        ):
             raise MobileAuthenticationError("invalid mobile read token")
