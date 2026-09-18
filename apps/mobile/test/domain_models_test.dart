@@ -38,6 +38,7 @@ void main() {
 
   test('unknown freshness fails safe to unknown', () {
     final portfolio = PortfolioSnapshot.fromJson({
+      'as_of': '2026-09-18T23:00:00Z',
       'account_count': 0,
       'trader_count': 0,
       'active_positions': 0,
@@ -45,5 +46,20 @@ void main() {
     });
 
     expect(portfolio.freshness, Freshness.unknown);
+  });
+
+  test('missing financial identity fields do not become empty strings', () {
+    expect(
+      () => AccountSnapshot.fromJson({
+        'provider': 'FundedNext',
+        'label': 'Primary',
+        'mode': 'live',
+        'runtime_id': 'runtime-a',
+        'open_positions': 0,
+        'as_of': '2026-09-18T23:00:00Z',
+        'freshness': 'live',
+      }),
+      throwsA(isA<QoreModelException>()),
+    );
   });
 }
