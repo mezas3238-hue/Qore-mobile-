@@ -71,6 +71,16 @@ class PositionSnapshot(BaseModel):
     as_of: datetime
 
 
+class RuntimeSnapshot(BaseModel):
+    runtime_id: str
+    account_ids: list[str]
+    last_sequence: int | None = Field(default=None, ge=1)
+    reconciliation_required: bool
+    last_heartbeat: datetime | None = None
+    as_of: datetime
+    freshness: Freshness
+
+
 class PortfolioSnapshot(BaseModel):
     as_of: datetime
     account_count: int = Field(ge=0)
