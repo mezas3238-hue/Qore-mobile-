@@ -37,16 +37,30 @@ class ReadRepository:
         with self._lock:
             return sorted(self.positions.values(), key=lambda item: item.position_id)
 
+    def get_trader(self, trader_id: str) -> TraderSnapshot | None:
+        with self._lock:
+            return self.traders.get(trader_id)
+
+    def get_position(self, position_id: str) -> PositionSnapshot | None:
+        with self._lock:
+            return self.positions.get(position_id)
+
     def upsert_account(self, account: AccountSnapshot) -> None:
         with self._lock:
             self.accounts[account.account_id] = account
 
     def upsert_trader(self, trader: TraderSnapshot) -> None:
         with self._lock:
+            existing = self.traders.get(trader.trader_id)
+            if existing is not None and existing.account_id != trader.account_id:
+                raise ValueError("trader identity already belongs to another account")
             self.traders[trader.trader_id] = trader
 
     def upsert_position(self, position: PositionSnapshot) -> None:
         with self._lock:
+            existing = self.positions.get(position.position_id)
+            if existing is not None and existing.account_id != position.account_id:
+                raise ValueError("position identity already belongs to another account")
             self.positions[position.position_id] = position
 
     def close_position(self, *, account_id: str, position_id: str) -> None:
@@ -80,6 +94,27 @@ class ReadRepository:
                     "freshness": freshness,
                 }
             )
+
+    def validate_reconciliation_scope(
+        self,
+        *,
+        account_id: str,
+        traders: list[TraderSnapshot],
+        positions: list[PositionSnapshot],
+    ) -> None:
+        with self._lock:
+            for trader in traders:
+                existing = self.traders.get(trader.trader_id)
+                if existing is not None and existing.account_id != account_id:
+                    raise ValueError(
+                        "reconciliation trader identity belongs to another account"
+                    )
+            for position in positions:
+                existing = self.positions.get(position.position_id)
+                if existing is not None and existing.account_id != account_id:
+                    raise ValueError(
+                        "reconciliation position identity belongs to another account"
+                    )
 
     def replace_account_scope(
         self,
