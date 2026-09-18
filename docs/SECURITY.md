@@ -109,3 +109,18 @@ Repository policy:
 - local secrets via ignored environment files
 - production secrets supplied by deployment secret manager
 - example files contain names only, never real values
+
+
+## Current mobile read authorization boundary
+
+The Gateway now denies portfolio/account/trader/position/runtime reads by default.
+
+- `/v1/health` is intentionally unauthenticated for service health checks.
+- all supervision data endpoints require an HTTP Bearer credential.
+- the current foundation verifier stores only SHA-256 token hashes server-side.
+- raw mobile tokens are not committed to GitHub.
+- an empty token allowlist means all protected mobile reads fail closed.
+
+This is an interim authorization boundary, not the final device enrollment design. The final session system must add device-bound enrollment, short-lived access tokens, refresh rotation and remote revocation without weakening the existing protected read boundary.
+
+Runtime telemetry uses a separate credential class and cannot authenticate as a mobile reader merely by possessing a runtime signing secret.
