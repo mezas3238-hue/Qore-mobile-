@@ -1,0 +1,99 @@
+openapi: 3.1.0
+info:
+  title: QORE Runtime Telemetry API
+  version: 0.1.0
+  description: >
+    Authenticated outbound telemetry from QORE runtimes to QORE Mobile Gateway.
+    This API is observation-only and contains no trading command operations.
+paths:
+  /v1/runtime/events:
+    post:
+      operationId: ingestRuntimeEvent
+      parameters:
+        - $ref: "#/components/parameters/RuntimeId"
+        - $ref: "#/components/parameters/Signature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryEnvelope"
+      responses:
+        "202":
+          description: Event accepted
+        "401":
+          description: Runtime authentication failed
+        "409":
+          description: Replay, out-of-order event, sequence gap, or reconciliation required
+        "422":
+          description: Invalid telemetry payload
+  /v1/runtime/reconcile:
+    post:
+      operationId: reconcileRuntime
+      parameters:
+        - $ref: "#/components/parameters/RuntimeId"
+        - $ref: "#/components/parameters/Signature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconciliationSnapshot"
+      responses:
+        "202":
+          description: Full account scope reconciled
+        "401":
+          description: Runtime authentication failed
+        "409":
+          description: Reconciliation sequence did not advance state
+        "422":
+          description: Invalid reconciliation payload
+components:
+  parameters:
+    RuntimeId:
+      name: X-Qore-Runtime-Id
+      in: header
+      required: true
+      schema: { type: string }
+    Signature:
+      name: X-Qore-Signature
+      in: header
+      required: true
+      description: v1= followed by HMAC-SHA256 hex over the exact raw request body.
+      schema: { type: string }
+  schemas:
+    TelemetryEnvelope:
+      type: object
+      required:
+        [schema_version, event_id, event_type, runtime_id, account_id, sequence, event_time, emitted_at, payload]
+      properties:
+        schema_version: { type: string, const: "0.1" }
+        event_id: { type: string }
+        event_type:
+          type: string
+          enum:
+            [runtime.heartbeat, account.snapshot, trader.state, position.opened, position.updated, position.closed]
+        runtime_id: { type: string }
+        account_id: { type: string }
+        sequence: { type: integer, minimum: 1 }
+        event_time: { type: string, format: date-time }
+        emitted_at: { type: string, format: date-time }
+        payload: { type: object }
+    ReconciliationSnapshot:
+      type: object
+      required:
+        [schema_version, runtime_id, account_id, sequence, event_time, emitted_at, account, traders, positions]
+      properties:
+        schema_version: { type: string, const: "0.1" }
+        runtime_id: { type: string }
+        account_id: { type: string }
+        sequence: { type: integer, minimum: 1 }
+        event_time: { type: string, format: date-time }
+        emitted_at: { type: string, format: date-time }
+        account: { type: object }
+        traders:
+          type: array
+          items: { type: object }
+        positions:
+          type: array
+          items: { type: object }
