@@ -1,3 +1,52 @@
+class QoreModelException implements Exception {
+  const QoreModelException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'QoreModelException: $message';
+}
+
+String _requiredString(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value is! String || value.isEmpty) {
+    throw QoreModelException('Missing or invalid $key');
+  }
+  return value;
+}
+
+int _requiredInt(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value is! num) {
+    throw QoreModelException('Missing or invalid $key');
+  }
+  return value.toInt();
+}
+
+bool _requiredBool(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value is! bool) {
+    throw QoreModelException('Missing or invalid $key');
+  }
+  return value;
+}
+
+DateTime _requiredDate(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value is! String) {
+    throw QoreModelException('Missing or invalid $key');
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    throw QoreModelException('Missing or invalid $key');
+  }
+  return parsed.toUtc();
+}
+
+double? _double(Object? value) => value is num ? value.toDouble() : null;
+DateTime? _date(Object? value) =>
+    value is String ? DateTime.tryParse(value)?.toUtc() : null;
+
 enum Freshness {
   live,
   delayed,
@@ -16,20 +65,16 @@ enum Freshness {
 enum TradingMode {
   demo,
   shadow,
-  live;
+  live,
+  unknown;
 
   static TradingMode fromJson(Object? value) {
     return TradingMode.values.firstWhere(
       (item) => item.name == value,
-      orElse: () => TradingMode.demo,
+      orElse: () => TradingMode.unknown,
     );
   }
 }
-
-double? _double(Object? value) => value is num ? value.toDouble() : null;
-int _int(Object? value) => value is num ? value.toInt() : 0;
-DateTime? _date(Object? value) =>
-    value is String ? DateTime.tryParse(value)?.toUtc() : null;
 
 class PortfolioSnapshot {
   const PortfolioSnapshot({
@@ -46,7 +91,7 @@ class PortfolioSnapshot {
     this.totalDrawdownFraction,
   });
 
-  final DateTime? asOf;
+  final DateTime asOf;
   final int accountCount;
   final int traderCount;
   final int activePositions;
@@ -60,10 +105,10 @@ class PortfolioSnapshot {
 
   factory PortfolioSnapshot.fromJson(Map<String, Object?> json) {
     return PortfolioSnapshot(
-      asOf: _date(json['as_of']),
-      accountCount: _int(json['account_count']),
-      traderCount: _int(json['trader_count']),
-      activePositions: _int(json['active_positions']),
+      asOf: _requiredDate(json, 'as_of'),
+      accountCount: _requiredInt(json, 'account_count'),
+      traderCount: _requiredInt(json, 'trader_count'),
+      activePositions: _requiredInt(json, 'active_positions'),
       balance: _double(json['balance']),
       equity: _double(json['equity']),
       realizedPnlToday: _double(json['realized_pnl_today']),
@@ -107,25 +152,25 @@ class AccountSnapshot {
   final double? totalDrawdownFraction;
   final int openPositions;
   final DateTime? lastHeartbeat;
-  final DateTime? asOf;
+  final DateTime asOf;
   final Freshness freshness;
 
   factory AccountSnapshot.fromJson(Map<String, Object?> json) {
     return AccountSnapshot(
-      accountId: json['account_id'] as String? ?? '',
-      provider: json['provider'] as String? ?? '',
-      label: json['label'] as String? ?? '',
+      accountId: _requiredString(json, 'account_id'),
+      provider: _requiredString(json, 'provider'),
+      label: _requiredString(json, 'label'),
       mode: TradingMode.fromJson(json['mode']),
-      runtimeId: json['runtime_id'] as String? ?? '',
+      runtimeId: _requiredString(json, 'runtime_id'),
       balance: _double(json['balance']),
       equity: _double(json['equity']),
       realizedPnlToday: _double(json['realized_pnl_today']),
       floatingPnl: _double(json['floating_pnl']),
       dailyDrawdownFraction: _double(json['daily_drawdown_fraction']),
       totalDrawdownFraction: _double(json['total_drawdown_fraction']),
-      openPositions: _int(json['open_positions']),
+      openPositions: _requiredInt(json, 'open_positions'),
       lastHeartbeat: _date(json['last_heartbeat']),
-      asOf: _date(json['as_of']),
+      asOf: _requiredDate(json, 'as_of'),
       freshness: Freshness.fromJson(json['freshness']),
     );
   }
@@ -154,20 +199,20 @@ class TraderSnapshot {
   final DateTime? lastMarketRead;
   final DateTime? lastSignalOrAbstention;
   final Freshness freshness;
-  final DateTime? asOf;
+  final DateTime asOf;
 
   factory TraderSnapshot.fromJson(Map<String, Object?> json) {
     return TraderSnapshot(
-      traderId: json['trader_id'] as String? ?? '',
-      accountId: json['account_id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      market: json['market'] as String? ?? '',
+      traderId: _requiredString(json, 'trader_id'),
+      accountId: _requiredString(json, 'account_id'),
+      name: _requiredString(json, 'name'),
+      market: _requiredString(json, 'market'),
       mode: TradingMode.fromJson(json['mode']),
-      state: json['state'] as String? ?? '',
+      state: _requiredString(json, 'state'),
       lastMarketRead: _date(json['last_market_read']),
       lastSignalOrAbstention: _date(json['last_signal_or_abstention']),
       freshness: Freshness.fromJson(json['freshness']),
-      asOf: _date(json['as_of']),
+      asOf: _requiredDate(json, 'as_of'),
     );
   }
 }
@@ -202,16 +247,16 @@ class PositionSnapshot {
   final double? size;
   final double? unrealizedPnl;
   final double? rState;
-  final DateTime? openedAt;
-  final DateTime? asOf;
+  final DateTime openedAt;
+  final DateTime asOf;
 
   factory PositionSnapshot.fromJson(Map<String, Object?> json) {
     return PositionSnapshot(
-      positionId: json['position_id'] as String? ?? '',
-      accountId: json['account_id'] as String? ?? '',
-      traderId: json['trader_id'] as String? ?? '',
-      symbol: json['symbol'] as String? ?? '',
-      side: json['side'] as String? ?? '',
+      positionId: _requiredString(json, 'position_id'),
+      accountId: _requiredString(json, 'account_id'),
+      traderId: _requiredString(json, 'trader_id'),
+      symbol: _requiredString(json, 'symbol'),
+      side: _requiredString(json, 'side'),
       entry: _double(json['entry']),
       currentPrice: _double(json['current_price']),
       stop: _double(json['stop']),
@@ -219,8 +264,8 @@ class PositionSnapshot {
       size: _double(json['size']),
       unrealizedPnl: _double(json['unrealized_pnl']),
       rState: _double(json['r_state']),
-      openedAt: _date(json['opened_at']),
-      asOf: _date(json['as_of']),
+      openedAt: _requiredDate(json, 'opened_at'),
+      asOf: _requiredDate(json, 'as_of'),
     );
   }
 }
@@ -241,22 +286,28 @@ class RuntimeSnapshot {
   final int? lastSequence;
   final bool reconciliationRequired;
   final DateTime? lastHeartbeat;
-  final DateTime? asOf;
+  final DateTime asOf;
   final Freshness freshness;
 
   factory RuntimeSnapshot.fromJson(Map<String, Object?> json) {
     final rawAccounts = json['account_ids'];
+    if (rawAccounts is! List || rawAccounts.any((item) => item is! String)) {
+      throw const QoreModelException('Missing or invalid account_ids');
+    }
+
+    final rawSequence = json['last_sequence'];
+    if (rawSequence != null && rawSequence is! num) {
+      throw const QoreModelException('Invalid last_sequence');
+    }
+
     return RuntimeSnapshot(
-      runtimeId: json['runtime_id'] as String? ?? '',
-      accountIds: rawAccounts is List
-          ? rawAccounts.whereType<String>().toList(growable: false)
-          : const [],
-      lastSequence:
-          json['last_sequence'] is num ? (json['last_sequence'] as num).toInt() : null,
+      runtimeId: _requiredString(json, 'runtime_id'),
+      accountIds: rawAccounts.cast<String>().toList(growable: false),
+      lastSequence: rawSequence is num ? rawSequence.toInt() : null,
       reconciliationRequired:
-          json['reconciliation_required'] as bool? ?? false,
+          _requiredBool(json, 'reconciliation_required'),
       lastHeartbeat: _date(json['last_heartbeat']),
-      asOf: _date(json['as_of']),
+      asOf: _requiredDate(json, 'as_of'),
       freshness: Freshness.fromJson(json['freshness']),
     );
   }
