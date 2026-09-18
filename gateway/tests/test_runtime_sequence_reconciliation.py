@@ -7,9 +7,12 @@ from fastapi.testclient import TestClient
 
 from qore_mobile_gateway.auth import RuntimeCredential, RuntimeCredentialRegistry
 from qore_mobile_gateway.main import create_app
+from qore_mobile_gateway.mobile_auth import MobileReadTokenRegistry
 
 
 SECRET = b"unit-test-secret"
+MOBILE_TOKEN = "test-mobile-token"
+MOBILE_HEADERS = {"Authorization": f"Bearer {MOBILE_TOKEN}"}
 
 
 def _client() -> TestClient:
@@ -22,14 +25,21 @@ def _client() -> TestClient:
             )
         ]
     )
-    return TestClient(create_app(credential_registry=registry))
+    return TestClient(
+        create_app(
+            credential_registry=registry,
+            mobile_read_registry=MobileReadTokenRegistry.for_test_tokens(
+                {MOBILE_TOKEN}
+            ),
+        )
+    )
 
 
 def _sign(body: bytes) -> str:
     return "v1=" + hmac.new(SECRET, body, hashlib.sha256).hexdigest()
 
 
-def _post(client: TestClient, path: str, payload: dict) -> object:
+def _post(client: TestClient, path: str, payload: dict):
     body = json.dumps(payload, separators=(",", ":")).encode()
     return client.post(
         path,
@@ -75,7 +85,10 @@ def test_gap_blocks_incremental_state_until_full_reconciliation() -> None:
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "reconciliation_required"
 
-    runtime_before = client.get("/v1/runtimes").json()[0]
+    runtime_before = client.get(
+        "/v1/runtimes",
+        headers=MOBILE_HEADERS,
+    ).json()[0]
     assert runtime_before["reconciliation_required"] is True
     assert runtime_before["last_sequence"] == 1
 
@@ -121,12 +134,15 @@ def test_gap_blocks_incremental_state_until_full_reconciliation() -> None:
     reconciled = _post(client, "/v1/runtime/reconcile", reconciliation)
     assert reconciled.status_code == 202
 
-    runtime_after = client.get("/v1/runtimes").json()[0]
+    runtime_after = client.get(
+        "/v1/runtimes",
+        headers=MOBILE_HEADERS,
+    ).json()[0]
     assert runtime_after["reconciliation_required"] is False
     assert runtime_after["last_sequence"] == 3
 
-    accounts = client.get("/v1/accounts").json()
-    traders = client.get("/v1/traders").json()
+    accounts = client.get("/v1/accounts", headers=MOBILE_HEADERS).json()
+    traders = client.get("/v1/traders", headers=MOBILE_HEADERS).json()
     assert len(accounts) == 1
     assert accounts[0]["provider"] == "FundedNext"
     assert len(traders) == 1
