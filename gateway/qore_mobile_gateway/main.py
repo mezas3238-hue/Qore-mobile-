@@ -1,9 +1,12 @@
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ValidationError
 
 from .auth import RuntimeAuthenticationError, RuntimeCredentialRegistry
+from .mobile_auth import MobileAuthenticationError, MobileReadTokenRegistry
 from .models import (
     AccountSnapshot,
     PortfolioSnapshot,
@@ -45,6 +48,7 @@ def _raise(status_code: int, code: str, message: str) -> None:
 def create_app(
     *,
     credential_registry: RuntimeCredentialRegistry | None = None,
+    mobile_read_registry: MobileReadTokenRegistry | None = None,
     read_repository: ReadRepository | None = None,
     runtime_state: RuntimeStateStore | None = None,
 ) -> FastAPI:
@@ -52,15 +56,33 @@ def create_app(
         title="QORE Mobile Gateway",
         version="0.1.0",
         description=(
-            "Read-only mobile supervision API plus authenticated inbound "
-            "QORE runtime telemetry. No trading execution endpoints exist."
+            "Authenticated read-only mobile supervision API plus authenticated "
+            "inbound QORE runtime telemetry. No trading execution endpoints exist."
         ),
     )
 
     repository = read_repository or ReadRepository()
     states = runtime_state or RuntimeStateStore()
     registry = credential_registry or RuntimeCredentialRegistry.from_environment()
+    mobile_registry = (
+        mobile_read_registry or MobileReadTokenRegistry.from_environment()
+    )
     telemetry = TelemetryService(repository=repository, runtime_state=states)
+    bearer = HTTPBearer(auto_error=False)
+
+    def require_mobile_read(
+        credentials: Annotated[
+            HTTPAuthorizationCredentials | None,
+            Depends(bearer),
+        ],
+    ) -> None:
+        token = credentials.credentials if credentials is not None else None
+        try:
+            mobile_registry.authenticate(token)
+        except MobileAuthenticationError as exc:
+            _raise(401, "mobile_authentication_failed", str(exc))
+
+    MobileRead = Annotated[None, Depends(require_mobile_read)]
 
     @app.get("/v1/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -72,7 +94,7 @@ def create_app(
         )
 
     @app.get("/v1/portfolio", response_model=PortfolioSnapshot)
-    def portfolio() -> PortfolioSnapshot:
+    def portfolio(_: MobileRead) -> PortfolioSnapshot:
         return build_portfolio_snapshot(
             accounts=repository.list_accounts(),
             traders=repository.list_traders(),
@@ -80,19 +102,19 @@ def create_app(
         )
 
     @app.get("/v1/accounts", response_model=list[AccountSnapshot])
-    def accounts() -> list[AccountSnapshot]:
+    def accounts(_: MobileRead) -> list[AccountSnapshot]:
         return repository.list_accounts()
 
     @app.get("/v1/traders", response_model=list[TraderSnapshot])
-    def traders() -> list[TraderSnapshot]:
+    def traders(_: MobileRead) -> list[TraderSnapshot]:
         return repository.list_traders()
 
     @app.get("/v1/positions", response_model=list[PositionSnapshot])
-    def positions() -> list[PositionSnapshot]:
+    def positions(_: MobileRead) -> list[PositionSnapshot]:
         return repository.list_positions()
 
     @app.get("/v1/runtimes", response_model=list[RuntimeSnapshot])
-    def runtimes() -> list[RuntimeSnapshot]:
+    def runtimes(_: MobileRead) -> list[RuntimeSnapshot]:
         return states.list_snapshots(now=datetime.now(UTC))
 
     @app.post("/v1/runtime/events", response_model=EventReceipt, status_code=202)
