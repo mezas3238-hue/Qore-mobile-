@@ -95,6 +95,11 @@ class TelemetryService:
                 envelope_account_id=envelope.account_id,
                 account_id=trader.account_id,
             )
+            existing = self.repository.get_trader(trader.trader_id)
+            if existing is not None and existing.account_id != trader.account_id:
+                raise TelemetryValidationError(
+                    "trader identity belongs to another account"
+                )
             return trader
 
         if envelope.event_type in {
@@ -106,6 +111,11 @@ class TelemetryService:
                 envelope_account_id=envelope.account_id,
                 account_id=position.account_id,
             )
+            existing = self.repository.get_position(position.position_id)
+            if existing is not None and existing.account_id != position.account_id:
+                raise TelemetryValidationError(
+                    "position identity belongs to another account"
+                )
             return position
 
         if envelope.event_type == EventType.POSITION_CLOSED:
@@ -113,6 +123,11 @@ class TelemetryService:
             if not isinstance(position_id, str) or not position_id:
                 raise TelemetryValidationError(
                     "position.closed requires a non-empty position_id"
+                )
+            existing = self.repository.get_position(position_id)
+            if existing is not None and existing.account_id != envelope.account_id:
+                raise TelemetryValidationError(
+                    "position identity belongs to another account"
                 )
             return position_id
 
@@ -183,6 +198,15 @@ class TelemetryService:
             raise TelemetryValidationError("reconciliation trader account mismatch")
         if any(item.account_id != snapshot.account_id for item in snapshot.positions):
             raise TelemetryValidationError("reconciliation position account mismatch")
+
+        try:
+            self.repository.validate_reconciliation_scope(
+                account_id=snapshot.account_id,
+                traders=snapshot.traders,
+                positions=snapshot.positions,
+            )
+        except ValueError as exc:
+            raise TelemetryValidationError(str(exc)) from exc
 
         self.runtime_state.reconcile(
             runtime_id=snapshot.runtime_id,
