@@ -232,31 +232,28 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
 
   @override
   Future<DashboardSnapshot> fetchDashboard() async {
-    final results = await Future.wait<Object?>([
-      _getJson('/v1/portfolio'),
-      _getJson('/v1/accounts'),
-      _getJson('/v1/traders'),
-      _getJson('/v1/positions'),
-      _getJson('/v1/runtimes'),
-      _getJson('/v1/risk'),
-      _getJson('/v1/alerts'),
-    ]);
+    final raw = _map(await _getJson('/v1/dashboard'));
 
     return DashboardSnapshot(
-      portfolio: PortfolioSnapshot.fromJson(_map(results[0])),
-      accounts:
-          _list(results[1]).map(AccountSnapshot.fromJson).toList(growable: false),
-      traders:
-          _list(results[2]).map(TraderSnapshot.fromJson).toList(growable: false),
-      positions: _list(results[3])
+      portfolio: PortfolioSnapshot.fromJson(_map(raw['portfolio'])),
+      accounts: _list(raw['accounts'])
+          .map(AccountSnapshot.fromJson)
+          .toList(growable: false),
+      traders: _list(raw['traders'])
+          .map(TraderSnapshot.fromJson)
+          .toList(growable: false),
+      positions: _list(raw['positions'])
           .map(PositionSnapshot.fromJson)
           .toList(growable: false),
-      runtimes:
-          _list(results[4]).map(RuntimeSnapshot.fromJson).toList(growable: false),
-      risks:
-          _list(results[5]).map(RiskSnapshot.fromJson).toList(growable: false),
-      alerts:
-          _list(results[6]).map(AlertSnapshot.fromJson).toList(growable: false),
+      runtimes: _list(raw['runtimes'])
+          .map(RuntimeSnapshot.fromJson)
+          .toList(growable: false),
+      risks: _list(raw['risk'])
+          .map(RiskSnapshot.fromJson)
+          .toList(growable: false),
+      alerts: _list(raw['alerts'])
+          .map(AlertSnapshot.fromJson)
+          .toList(growable: false),
     );
   }
 
