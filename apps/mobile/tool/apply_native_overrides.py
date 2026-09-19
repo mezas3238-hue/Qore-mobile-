@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import plistlib
+import re
 import shutil
 from pathlib import Path
 
@@ -63,29 +64,24 @@ def apply_android() -> None:
     manifest = android / "app" / "src" / "main" / "AndroidManifest.xml"
     text = manifest.read_text(encoding="utf-8")
     if "android.permission.INTERNET" not in text:
-        text = text.replace(
-            "<manifest ",
-            '<manifest >\n    <uses-permission android:name="android.permission.INTERNET" />\n'
-            "    <!-- qore-manifest-namespace -->\n"
-            "<manifest-placeholder ",
-            1,
+        text, count = re.subn(
+            r"(<manifest\\b[^>]*>)",
+            r'\\1\\n    <uses-permission android:name="android.permission.INTERNET" />',
+            text,
+            count=1,
+            flags=re.DOTALL,
         )
-        text = text.replace(
-            '<manifest >\n    <uses-permission android:name="android.permission.INTERNET" />\n'
-            "    <!-- qore-manifest-namespace -->\n"
-            "<manifest-placeholder ",
-            '<manifest ',
-            1,
-        )
+        if count != 1:
+            raise RuntimeError("could not patch Android manifest root")
     text = text.replace(
         'android:label="qore_mobile"',
         'android:label="@string/qore_app_name"',
     )
     if 'android:allowBackup=' not in text:
         text = text.replace(
-            "<application\n",
-            '<application\n        android:allowBackup="false"\n'
-            '        android:usesCleartextTraffic="false"\n',
+            "<application",
+            '<application android:allowBackup="false" '
+            'android:usesCleartextTraffic="false"',
             1,
         )
     if "QoreWidgetProvider" not in text:
