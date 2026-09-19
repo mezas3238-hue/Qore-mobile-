@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
-import '../dashboard/dashboard_controller.dart';
 import '../data/qore_gateway_client.dart';
 import '../domain/models.dart';
 import '../domain/widget_snapshot.dart';
 import '../dashboard/qore_home.dart';
 import '../security/enrollment_service.dart';
 import '../security/native_device_session_provider.dart';
-import '../security/session.dart';
 
 enum _BootstrapState {
   loading,
@@ -155,6 +153,16 @@ class _QoreBootstrapState extends State<QoreBootstrap>
     }
   }
 
+  void _sessionMissing() {
+    _client?.close();
+    _client = null;
+    if (!mounted) return;
+    setState(() {
+      _state = _BootstrapState.needsEnrollment;
+      _message = 'La sesión fue revocada o expiró. Vuelve a enrolar este dispositivo.';
+    });
+  }
+
   Future<void> _publishWidgetSnapshot(DashboardSnapshot snapshot) async {
     final widgetSnapshot = WidgetSnapshot.fromDashboard(
       snapshot,
@@ -216,6 +224,7 @@ class _QoreBootstrapState extends State<QoreBootstrap>
       _BootstrapState.ready => QoreHome(
           client: _client,
           snapshotSink: _publishWidgetSnapshot,
+          onSessionMissing: _sessionMissing,
         ),
       _BootstrapState.configurationError => const _CenteredStatus(
           icon: Icons.settings_outlined,
