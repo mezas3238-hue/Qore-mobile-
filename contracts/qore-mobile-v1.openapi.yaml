@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: QORE Mobile Read API
-  version: 0.1.0
+  version: 0.2.0
   description: >
     Read-only supervision contract between QORE Mobile Gateway and the
     official Android/iOS application. Trading command endpoints are
@@ -25,6 +25,11 @@ paths:
     get:
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
       operationId: getPortfolio
       responses:
         "200":
@@ -37,6 +42,11 @@ paths:
     get:
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
       operationId: listAccounts
       responses:
         "200":
@@ -51,6 +61,11 @@ paths:
     get:
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
       operationId: listTraders
       responses:
         "200":
@@ -65,6 +80,11 @@ paths:
     get:
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
       operationId: listPositions
       responses:
         "200":
@@ -79,6 +99,11 @@ paths:
     get:
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
       operationId: listRuntimes
       responses:
         "200":
@@ -94,7 +119,29 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: opaque-session-token
+      bearerFormat: short-lived-device-bound-access-token
+  parameters:
+    DeviceId:
+      name: X-Qore-Device-Id
+      in: header
+      required: true
+      schema: { type: string }
+    DeviceTime:
+      name: X-Qore-Device-Time
+      in: header
+      required: true
+      schema: { type: string, format: date-time }
+    DeviceNonce:
+      name: X-Qore-Device-Nonce
+      in: header
+      required: true
+      schema: { type: string }
+    DeviceSignature:
+      name: X-Qore-Device-Signature
+      in: header
+      required: true
+      description: Base64 Ed25519 proof over method, path, timestamp, nonce and body hash.
+      schema: { type: string }
   schemas:
     Health:
       type: object
