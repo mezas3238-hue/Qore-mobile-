@@ -27,6 +27,18 @@ QORE's Gradle release config accepts signing material only from:
 
 There is no debug-signing fallback for release builds.
 
+## Local signing helper scripts
+
+Two PowerShell helpers are provided and contain no credentials:
+
+- `apps/mobile/tool/generate_android_upload_key.ps1` creates the Google Play
+  upload keystore on the Owner-controlled computer using `keytool`.
+- `apps/mobile/tool/sign_android_bundle.ps1` signs an already-built unsigned
+  AAB using `jarsigner`; passwords are entered interactively and exist only in
+  process environment variables during signing.
+
+The upload keystore must remain off GitHub, Railway and the trading VPS.
+
 ## Recommended Owner flow
 
 ### 1. Create the upload key locally
