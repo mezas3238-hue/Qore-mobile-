@@ -48,6 +48,10 @@ def apply_android() -> None:
         res / "layout" / "qore_widget.xml",
     )
     shutil.copyfile(
+        TEMPLATES / "android" / "qore_widget_compact.xml",
+        res / "layout" / "qore_widget_compact.xml",
+    )
+    shutil.copyfile(
         TEMPLATES / "android" / "qore_widget_info.xml",
         res / "xml" / "qore_widget_info.xml",
     )
