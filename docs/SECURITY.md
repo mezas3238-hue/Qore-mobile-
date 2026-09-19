@@ -124,3 +124,46 @@ The Gateway now denies portfolio/account/trader/position/runtime reads by defaul
 This is an interim authorization boundary, not the final device enrollment design. The final session system must add device-bound enrollment, short-lived access tokens, refresh rotation and remote revocation without weakening the existing protected read boundary.
 
 Runtime telemetry uses a separate credential class and cannot authenticate as a mobile reader merely by possessing a runtime signing secret.
+
+
+## Device-bound session protocol
+
+The final mobile read boundary is moving from bearer-only authentication to proof-of-possession sessions.
+
+Each enrolled phone owns an Ed25519 keypair:
+
+- private key: generated/stored in the device secure key store and never sent to the Gateway;
+- public key: registered with QORE Mobile Gateway during one-time enrollment.
+
+Every protected request carries:
+
+- short-lived access token;
+- device ID;
+- UTC proof timestamp;
+- unique nonce;
+- Ed25519 signature over the canonical request.
+
+Canonical proof input:
+
+```text
+METHOD
+PATH
+TIMESTAMP
+NONCE
+SHA256(BODY)
+```
+
+The Gateway rejects:
+
+- unknown/revoked devices;
+- expired access sessions;
+- token/device mismatches;
+- stale proof timestamps;
+- repeated nonces;
+- invalid signatures.
+
+Refresh tokens are rotating and also require device proof. Using a refresh token revokes the previous session tokens before a replacement session is issued.
+
+Remote device revocation invalidates all active sessions for that device.
+
+This makes possession of an access/refresh token alone insufficient to impersonate the enrolled phone.
