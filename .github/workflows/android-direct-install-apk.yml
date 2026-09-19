@@ -48,7 +48,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          KEYSTORE="$(mktemp --suffix=.jks)"
+          KEYSTORE_DIR="$(mktemp -d)"
+          KEYSTORE="$KEYSTORE_DIR/qore-direct-install.jks"
           STORE_PASS="$(openssl rand -hex 24)"
           KEY_PASS="$(openssl rand -hex 24)"
           KEY_ALIAS="qore-direct-install"
@@ -61,6 +62,7 @@ jobs:
             STORE_PASS=""
             KEY_PASS=""
             rm -f "$KEYSTORE"
+            rmdir "$KEYSTORE_DIR" 2>/dev/null || true
           }
           trap cleanup EXIT
 
