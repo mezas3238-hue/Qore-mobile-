@@ -12,6 +12,10 @@ on:
       - "apps/mobile/**"
       - ".github/workflows/mobile-ci.yml"
 
+concurrency:
+  group: qore-mobile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
