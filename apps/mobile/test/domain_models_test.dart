@@ -48,6 +48,22 @@ void main() {
     expect(portfolio.freshness, Freshness.unknown);
   });
 
+  test('parses authoritative QORE Risk snapshots', () {
+    final risk = RiskSnapshot.fromJson({
+      'account_id': 'account-a',
+      'state': 'normal',
+      'source': 'qore-risk',
+      'as_of': '2026-09-18T23:00:00Z',
+      'open_risk_fraction': 0.005,
+      'daily_loss_remaining_fraction': 0.03,
+      'total_loss_remaining_fraction': 0.05,
+    });
+
+    expect(risk.accountId, 'account-a');
+    expect(risk.state, 'normal');
+    expect(risk.openRiskFraction, 0.005);
+  });
+
   test('parses Alert Center snapshots', () {
     final alert = AlertSnapshot.fromJson({
       'alert_id': 'runtime:r1:runtime.offline',
