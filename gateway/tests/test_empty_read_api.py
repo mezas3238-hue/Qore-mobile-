@@ -1,32 +1,69 @@
-from fastapi.testclient import TestClient
-
-from qore_mobile_gateway.main import create_app
-from qore_mobile_gateway.mobile_auth import MobileReadTokenRegistry
-
-
-TOKEN = "test-mobile-token"
-client = TestClient(
-    create_app(
-        mobile_read_registry=MobileReadTokenRegistry.for_test_tokens({TOKEN})
-    )
+from tests.device_auth_helpers import (
+    build_client,
+    enroll_device,
+    new_private_key,
+    proof_headers,
 )
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
 
 def test_mobile_reads_fail_closed_without_session() -> None:
+    client = build_client()
+
     assert client.get("/v1/accounts").status_code == 401
     assert client.get("/v1/portfolio").status_code == 401
 
 
 def test_read_api_starts_empty_instead_of_fabricating_live_state() -> None:
-    assert client.get("/v1/accounts", headers=HEADERS).json() == []
-    assert client.get("/v1/traders", headers=HEADERS).json() == []
-    assert client.get("/v1/positions", headers=HEADERS).json() == []
+    client = build_client()
+    private_key = new_private_key()
+    session = enroll_device(client, private_key)
+    access = session["access_token"]
 
-    portfolio = client.get("/v1/portfolio", headers=HEADERS).json()
-    assert portfolio["account_count"] == 0
-    assert portfolio["trader_count"] == 0
-    assert portfolio["active_positions"] == 0
-    assert portfolio["freshness"] == "unknown"
-    assert portfolio["balance"] is None
-    assert portfolio["equity"] is None
+    accounts = client.get(
+        "/v1/accounts",
+        headers=proof_headers(
+            token=access,
+            private_key=private_key,
+            method="GET",
+            path="/v1/accounts",
+        ),
+    )
+    traders = client.get(
+        "/v1/traders",
+        headers=proof_headers(
+            token=access,
+            private_key=private_key,
+            method="GET",
+            path="/v1/traders",
+        ),
+    )
+    positions = client.get(
+        "/v1/positions",
+        headers=proof_headers(
+            token=access,
+            private_key=private_key,
+            method="GET",
+            path="/v1/positions",
+        ),
+    )
+    portfolio = client.get(
+        "/v1/portfolio",
+        headers=proof_headers(
+            token=access,
+            private_key=private_key,
+            method="GET",
+            path="/v1/portfolio",
+        ),
+    )
+
+    assert accounts.json() == []
+    assert traders.json() == []
+    assert positions.json() == []
+
+    payload = portfolio.json()
+    assert payload["account_count"] == 0
+    assert payload["trader_count"] == 0
+    assert payload["active_positions"] == 0
+    assert payload["freshness"] == "unknown"
+    assert payload["balance"] is None
+    assert payload["equity"] is None
