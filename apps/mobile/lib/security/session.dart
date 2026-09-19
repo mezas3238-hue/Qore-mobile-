@@ -43,7 +43,7 @@ class QoreDeviceSession {
 
 /// Security boundary implemented by native Android/iOS code.
 ///
-/// The private Ed25519 key must remain inside OS-backed secure storage. Dart
+/// The private production signing key must remain inside OS-backed secure storage. Dart
 /// receives signatures only; it never receives raw private-key material.
 class DeviceEnrollmentIdentity {
   const DeviceEnrollmentIdentity({
