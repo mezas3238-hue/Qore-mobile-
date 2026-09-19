@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.widget.RemoteViews
 import java.text.NumberFormat
 import java.time.Instant
@@ -17,6 +18,7 @@ class QoreWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val PREFS = "qore_widget"
         private const val SNAPSHOT = "snapshot_json"
+        private const val EXPANDED_MIN_WIDTH_DP = 250
 
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -32,7 +34,14 @@ class QoreWidgetProvider : AppWidgetProvider() {
             manager: AppWidgetManager,
             appWidgetId: Int,
         ) {
-            val views = RemoteViews(context.packageName, R.layout.qore_widget)
+            val minWidth = manager.getAppWidgetOptions(appWidgetId)
+                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            val layout = if (minWidth >= EXPANDED_MIN_WIDTH_DP) {
+                R.layout.qore_widget
+            } else {
+                R.layout.qore_widget_compact
+            }
+            val views = RemoteViews(context.packageName, layout)
             val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(SNAPSHOT, null)
 
@@ -135,6 +144,15 @@ class QoreWidgetProvider : AppWidgetProvider() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
+    ) {
+        updateAll(context)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
     ) {
         updateAll(context)
     }
