@@ -99,6 +99,18 @@ class RuntimeSnapshot(BaseModel):
     freshness: Freshness
 
 
+class RiskSnapshot(BaseModel):
+    account_id: str
+    state: str
+    source: str = "qore-risk"
+    as_of: datetime
+    daily_drawdown_fraction: float | None = Field(default=None, ge=0)
+    total_drawdown_fraction: float | None = Field(default=None, ge=0)
+    open_risk_fraction: float | None = Field(default=None, ge=0)
+    daily_loss_remaining_fraction: float | None = Field(default=None, ge=0)
+    total_loss_remaining_fraction: float | None = Field(default=None, ge=0)
+
+
 class AlertSnapshot(BaseModel):
     alert_id: str
     kind: AlertKind
