@@ -48,6 +48,24 @@ void main() {
     expect(portfolio.freshness, Freshness.unknown);
   });
 
+  test('parses Alert Center snapshots', () {
+    final alert = AlertSnapshot.fromJson({
+      'alert_id': 'runtime:r1:runtime.offline',
+      'kind': 'runtime.offline',
+      'severity': 'critical',
+      'title': 'Runtime offline',
+      'detail': 'r1 está offline.',
+      'source': 'gateway.runtime',
+      'raised_at': '2026-09-18T23:00:00Z',
+      'as_of': '2026-09-18T23:01:00Z',
+      'runtime_id': 'r1',
+    });
+
+    expect(alert.severity, AlertSeverity.critical);
+    expect(alert.runtimeId, 'r1');
+    expect(alert.kind, 'runtime.offline');
+  });
+
   test('missing financial identity fields do not become empty strings', () {
     expect(
       () => AccountSnapshot.fromJson({
