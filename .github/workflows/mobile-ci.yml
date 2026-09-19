@@ -61,6 +61,14 @@ jobs:
           cp /tmp/qore_mobile_host/analysis_options.yaml apps/mobile/analysis_options.yaml
           grep -q "QORE Mobile" apps/mobile/lib/main.dart
 
+      - name: Apply QORE native security and widgets
+        if: steps.native.outputs.generate == 'true'
+        run: |
+          python3 apps/mobile/tool/apply_native_overrides.py
+          gem install xcodeproj -v 1.27.0 --no-document
+          ruby apps/mobile/tool/configure_ios_widget.rb
+          grep -q "QORE Mobile" apps/mobile/lib/main.dart
+
       - name: Commit generated native hosts
         if: steps.native.outputs.generate == 'true'
         run: |
