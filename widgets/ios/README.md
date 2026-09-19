@@ -2,17 +2,37 @@
 
 Planned native implementation: Swift + WidgetKit.
 
-The widget will consume only a sanitized QORE Mobile snapshot and will display:
+## Data boundary
+
+WidgetKit does **not** authenticate to QORE Mobile Gateway.
+
+It consumes only the sanitized snapshot defined by:
+
+- `contracts/widget-snapshot-v1.schema.json`
+- `docs/adr/0004-widget-sanitized-snapshot.md`
+
+The authenticated Flutter application produces the snapshot and writes it through the future App Group bridge.
+
+## Visible MVP fields
 
 - daily portfolio P/L
 - equity
-- drawdown usage
+- daily drawdown only when QORE Risk supplies an explicit aggregate
 - active positions
 - healthy/total runtimes
+- freshness
 - last refresh time
 
-The widget is a snapshot surface, not a continuous trading connection.
+## Security
 
-No MT5 or provider credential is available to the widget.
+The extension never receives:
 
-Implementation begins after the authenticated app snapshot/cache boundary is established.
+- MT5/provider credentials
+- Gateway Bearer token
+- runtime HMAC secret
+- account login numbers
+- order-entry controls
+
+An expired timeline snapshot must render stale/offline state rather than silently presenting old data as current.
+
+Native WidgetKit implementation begins once the generated iOS host target, App Group and timeline bridge are committed.
