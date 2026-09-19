@@ -327,6 +327,44 @@ class RuntimeSnapshot {
   }
 }
 
+class RiskSnapshot {
+  const RiskSnapshot({
+    required this.accountId,
+    required this.state,
+    required this.source,
+    required this.asOf,
+    this.dailyDrawdownFraction,
+    this.totalDrawdownFraction,
+    this.openRiskFraction,
+    this.dailyLossRemainingFraction,
+    this.totalLossRemainingFraction,
+  });
+
+  final String accountId;
+  final String state;
+  final String source;
+  final DateTime asOf;
+  final double? dailyDrawdownFraction;
+  final double? totalDrawdownFraction;
+  final double? openRiskFraction;
+  final double? dailyLossRemainingFraction;
+  final double? totalLossRemainingFraction;
+
+  factory RiskSnapshot.fromJson(Map<String, Object?> json) {
+    return RiskSnapshot(
+      accountId: _requiredString(json, 'account_id'),
+      state: _requiredString(json, 'state'),
+      source: _requiredString(json, 'source'),
+      asOf: _requiredDate(json, 'as_of'),
+      dailyDrawdownFraction: _double(json['daily_drawdown_fraction']),
+      totalDrawdownFraction: _double(json['total_drawdown_fraction']),
+      openRiskFraction: _double(json['open_risk_fraction']),
+      dailyLossRemainingFraction: _double(json['daily_loss_remaining_fraction']),
+      totalLossRemainingFraction: _double(json['total_loss_remaining_fraction']),
+    );
+  }
+}
+
 class AlertSnapshot {
   const AlertSnapshot({
     required this.alertId,
@@ -384,6 +422,7 @@ class DashboardSnapshot {
     required this.traders,
     required this.positions,
     required this.runtimes,
+    required this.risks,
     required this.alerts,
   });
 
@@ -392,5 +431,6 @@ class DashboardSnapshot {
   final List<TraderSnapshot> traders;
   final List<PositionSnapshot> positions;
   final List<RuntimeSnapshot> runtimes;
+  final List<RiskSnapshot> risks;
   final List<AlertSnapshot> alerts;
 }
