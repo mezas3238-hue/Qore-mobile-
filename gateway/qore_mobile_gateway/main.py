@@ -21,6 +21,7 @@ from .models import (
     AlertSnapshot,
     PortfolioSnapshot,
     PositionSnapshot,
+    RiskSnapshot,
     RuntimeSnapshot,
     TraderSnapshot,
 )
@@ -340,6 +341,10 @@ def create_app(
     @app.get("/v1/positions", response_model=list[PositionSnapshot])
     def positions(_: MobileRead) -> list[PositionSnapshot]:
         return repository.list_positions()
+
+    @app.get("/v1/risk", response_model=list[RiskSnapshot])
+    def risk(_: MobileRead) -> list[RiskSnapshot]:
+        return repository.list_risk()
 
     @app.get("/v1/runtimes", response_model=list[RuntimeSnapshot])
     def runtimes(_: MobileRead) -> list[RuntimeSnapshot]:
