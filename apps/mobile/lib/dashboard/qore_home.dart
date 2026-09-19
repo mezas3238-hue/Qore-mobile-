@@ -9,10 +9,12 @@ class QoreHome extends StatefulWidget {
     super.key,
     this.client,
     this.snapshotSink,
+    this.onSessionMissing,
   });
 
   final QoreGatewayClient? client;
   final DashboardSnapshotSink? snapshotSink;
+  final SessionMissingCallback? onSessionMissing;
 
   @override
   State<QoreHome> createState() => _QoreHomeState();
@@ -29,6 +31,7 @@ class _QoreHomeState extends State<QoreHome> with WidgetsBindingObserver {
     controller = DashboardController(
       widget.client,
       snapshotSink: widget.snapshotSink,
+      onSessionMissing: widget.onSessionMissing,
     );
     controller.startAutoRefresh();
   }
