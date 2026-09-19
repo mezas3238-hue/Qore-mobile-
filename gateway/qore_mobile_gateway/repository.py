@@ -3,7 +3,13 @@ from datetime import datetime
 from threading import RLock
 
 from .freshness import FreshnessPolicy
-from .models import AlertSnapshot, AccountSnapshot, PositionSnapshot, TraderSnapshot
+from .models import (
+    AlertSnapshot,
+    AccountSnapshot,
+    PositionSnapshot,
+    RiskSnapshot,
+    TraderSnapshot,
+)
 
 
 @dataclass
@@ -19,6 +25,7 @@ class ReadRepository:
     traders: dict[str, TraderSnapshot] = field(default_factory=dict)
     positions: dict[str, PositionSnapshot] = field(default_factory=dict)
     alerts: dict[str, AlertSnapshot] = field(default_factory=dict)
+    risk_by_account: dict[str, RiskSnapshot] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
     _freshness_policy: FreshnessPolicy = field(
         default_factory=FreshnessPolicy,
@@ -37,6 +44,13 @@ class ReadRepository:
     def list_positions(self) -> list[PositionSnapshot]:
         with self._lock:
             return sorted(self.positions.values(), key=lambda item: item.position_id)
+
+    def list_risk(self) -> list[RiskSnapshot]:
+        with self._lock:
+            return sorted(
+                self.risk_by_account.values(),
+                key=lambda item: item.account_id,
+            )
 
     def list_alerts(self, *, include_resolved: bool = False) -> list[AlertSnapshot]:
         with self._lock:
@@ -70,6 +84,10 @@ class ReadRepository:
             if existing is not None and existing.account_id != position.account_id:
                 raise ValueError("position identity already belongs to another account")
             self.positions[position.position_id] = position
+
+    def upsert_risk(self, risk: RiskSnapshot) -> None:
+        with self._lock:
+            self.risk_by_account[risk.account_id] = risk
 
     def upsert_alert(self, alert: AlertSnapshot) -> None:
         with self._lock:
