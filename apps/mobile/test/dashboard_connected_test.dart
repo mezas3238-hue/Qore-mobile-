@@ -105,6 +105,17 @@ void main() {
           asOf: now,
         ),
       ],
+      risks: [
+        RiskSnapshot(
+          accountId: 'account-a',
+          state: 'normal',
+          source: 'qore-risk',
+          asOf: now,
+          openRiskFraction: 0.005,
+          dailyLossRemainingFraction: 0.03,
+          totalLossRemainingFraction: 0.05,
+        ),
+      ],
       alerts: [
         AlertSnapshot(
           alertId: 'runtime:runtime-b:runtime.delayed',
