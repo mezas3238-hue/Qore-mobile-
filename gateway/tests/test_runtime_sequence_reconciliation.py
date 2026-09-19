@@ -3,19 +3,19 @@ import hmac
 import json
 from datetime import UTC, datetime
 
-from fastapi.testclient import TestClient
-
 from qore_mobile_gateway.auth import RuntimeCredential, RuntimeCredentialRegistry
-from qore_mobile_gateway.main import create_app
-from qore_mobile_gateway.mobile_auth import MobileReadTokenRegistry
+from tests.device_auth_helpers import (
+    build_client,
+    enroll_device,
+    new_private_key,
+    proof_headers,
+)
 
 
 SECRET = b"unit-test-secret"
-MOBILE_TOKEN = "test-mobile-token"
-MOBILE_HEADERS = {"Authorization": f"Bearer {MOBILE_TOKEN}"}
 
 
-def _client() -> TestClient:
+def _client():
     registry = RuntimeCredentialRegistry(
         [
             RuntimeCredential(
@@ -25,21 +25,14 @@ def _client() -> TestClient:
             )
         ]
     )
-    return TestClient(
-        create_app(
-            credential_registry=registry,
-            mobile_read_registry=MobileReadTokenRegistry.for_test_tokens(
-                {MOBILE_TOKEN}
-            ),
-        )
-    )
+    return build_client(credential_registry=registry)
 
 
 def _sign(body: bytes) -> str:
     return "v1=" + hmac.new(SECRET, body, hashlib.sha256).hexdigest()
 
 
-def _post(client: TestClient, path: str, payload: dict):
+def _post(client, path: str, payload: dict):
     body = json.dumps(payload, separators=(",", ":")).encode()
     return client.post(
         path,
@@ -66,8 +59,23 @@ def _heartbeat(sequence: int, now: datetime) -> dict:
     }
 
 
+def _mobile_get(client, path: str, access: str, private_key):
+    return client.get(
+        path,
+        headers=proof_headers(
+            token=access,
+            private_key=private_key,
+            method="GET",
+            path=path,
+        ),
+    )
+
+
 def test_gap_blocks_incremental_state_until_full_reconciliation() -> None:
     client = _client()
+    private_key = new_private_key()
+    mobile_session = enroll_device(client, private_key)
+    access = mobile_session["access_token"]
     now = datetime.now(UTC)
 
     accepted = _post(client, "/v1/runtime/events", _heartbeat(1, now))
@@ -85,9 +93,11 @@ def test_gap_blocks_incremental_state_until_full_reconciliation() -> None:
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "reconciliation_required"
 
-    runtime_before = client.get(
+    runtime_before = _mobile_get(
+        client,
         "/v1/runtimes",
-        headers=MOBILE_HEADERS,
+        access,
+        private_key,
     ).json()[0]
     assert runtime_before["reconciliation_required"] is True
     assert runtime_before["last_sequence"] == 1
@@ -134,15 +144,27 @@ def test_gap_blocks_incremental_state_until_full_reconciliation() -> None:
     reconciled = _post(client, "/v1/runtime/reconcile", reconciliation)
     assert reconciled.status_code == 202
 
-    runtime_after = client.get(
+    runtime_after = _mobile_get(
+        client,
         "/v1/runtimes",
-        headers=MOBILE_HEADERS,
+        access,
+        private_key,
     ).json()[0]
     assert runtime_after["reconciliation_required"] is False
     assert runtime_after["last_sequence"] == 3
 
-    accounts = client.get("/v1/accounts", headers=MOBILE_HEADERS).json()
-    traders = client.get("/v1/traders", headers=MOBILE_HEADERS).json()
+    accounts = _mobile_get(
+        client,
+        "/v1/accounts",
+        access,
+        private_key,
+    ).json()
+    traders = _mobile_get(
+        client,
+        "/v1/traders",
+        access,
+        private_key,
+    ).json()
     assert len(accounts) == 1
     assert accounts[0]["provider"] == "FundedNext"
     assert len(traders) == 1
