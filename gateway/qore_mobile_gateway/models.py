@@ -127,6 +127,17 @@ class AlertSnapshot(BaseModel):
     resolved_at: datetime | None = None
 
 
+class MobileDashboardSnapshot(BaseModel):
+    as_of: datetime
+    portfolio: "PortfolioSnapshot"
+    accounts: list[AccountSnapshot]
+    traders: list[TraderSnapshot]
+    positions: list[PositionSnapshot]
+    runtimes: list[RuntimeSnapshot]
+    risk: list[RiskSnapshot]
+    alerts: list[AlertSnapshot]
+
+
 class PortfolioSnapshot(BaseModel):
     as_of: datetime
     account_count: int = Field(ge=0)
