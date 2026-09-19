@@ -5,7 +5,7 @@ import '../dashboard/dashboard_controller.dart';
 import '../data/qore_gateway_client.dart';
 import '../domain/models.dart';
 import '../domain/widget_snapshot.dart';
-import '../main.dart' show QoreHome;
+import '../dashboard/qore_home.dart';
 import '../security/enrollment_service.dart';
 import '../security/native_device_session_provider.dart';
 import '../security/session.dart';
