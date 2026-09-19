@@ -62,6 +62,20 @@ enum Freshness {
   }
 }
 
+enum AlertSeverity {
+  info,
+  warning,
+  critical,
+  unknown;
+
+  static AlertSeverity fromJson(Object? value) {
+    return AlertSeverity.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => AlertSeverity.unknown,
+    );
+  }
+}
+
 enum TradingMode {
   demo,
   shadow,
@@ -313,6 +327,56 @@ class RuntimeSnapshot {
   }
 }
 
+class AlertSnapshot {
+  const AlertSnapshot({
+    required this.alertId,
+    required this.kind,
+    required this.severity,
+    required this.title,
+    required this.detail,
+    required this.source,
+    required this.raisedAt,
+    required this.asOf,
+    this.accountId,
+    this.traderId,
+    this.runtimeId,
+    this.positionId,
+    this.resolvedAt,
+  });
+
+  final String alertId;
+  final String kind;
+  final AlertSeverity severity;
+  final String title;
+  final String detail;
+  final String source;
+  final DateTime raisedAt;
+  final DateTime asOf;
+  final String? accountId;
+  final String? traderId;
+  final String? runtimeId;
+  final String? positionId;
+  final DateTime? resolvedAt;
+
+  factory AlertSnapshot.fromJson(Map<String, Object?> json) {
+    return AlertSnapshot(
+      alertId: _requiredString(json, 'alert_id'),
+      kind: _requiredString(json, 'kind'),
+      severity: AlertSeverity.fromJson(json['severity']),
+      title: _requiredString(json, 'title'),
+      detail: _requiredString(json, 'detail'),
+      source: _requiredString(json, 'source'),
+      raisedAt: _requiredDate(json, 'raised_at'),
+      asOf: _requiredDate(json, 'as_of'),
+      accountId: json['account_id'] as String?,
+      traderId: json['trader_id'] as String?,
+      runtimeId: json['runtime_id'] as String?,
+      positionId: json['position_id'] as String?,
+      resolvedAt: _date(json['resolved_at']),
+    );
+  }
+}
+
 class DashboardSnapshot {
   const DashboardSnapshot({
     required this.portfolio,
@@ -320,6 +384,7 @@ class DashboardSnapshot {
     required this.traders,
     required this.positions,
     required this.runtimes,
+    required this.alerts,
   });
 
   final PortfolioSnapshot portfolio;
@@ -327,4 +392,5 @@ class DashboardSnapshot {
   final List<TraderSnapshot> traders;
   final List<PositionSnapshot> positions;
   final List<RuntimeSnapshot> runtimes;
+  final List<AlertSnapshot> alerts;
 }
