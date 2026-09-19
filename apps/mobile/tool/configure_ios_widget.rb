@@ -94,6 +94,16 @@ unless embed_phase.files_references.include?(widget_target.product_reference)
   build_file.settings = { "ATTRIBUTES" => ["RemoveHeadersOnCopy"] }
 end
 
+# Flutter's Thin Binary script reads the assembled Runner bundle. Embedding an
+# app extension after Thin Binary creates a dependency cycle in modern Xcode.
+# Keep the extension copy phase immediately before Thin Binary.
+thin_phase = runner.build_phases.find { |phase| phase.respond_to?(:name) && phase.name == "Thin Binary" }
+if thin_phase
+  runner.build_phases.delete(embed_phase)
+  thin_index = runner.build_phases.index(thin_phase)
+  runner.build_phases.insert(thin_index, embed_phase)
+end
+
 target_attributes = project.root_object.attributes["TargetAttributes"] ||= {}
 [runner, widget_target].each do |target|
   attributes = target_attributes[target.uuid] ||= {}

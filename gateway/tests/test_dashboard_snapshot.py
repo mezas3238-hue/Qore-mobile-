@@ -34,4 +34,9 @@ def test_dashboard_endpoint_is_authenticated_and_empty_safe() -> None:
     assert payload["positions"] == []
     assert payload["runtimes"] == []
     assert payload["risk"] == []
-    assert payload["alerts"] == []
+    assert len(payload["alerts"]) == 1
+    security = payload["alerts"][0]
+    assert security["kind"] == "security"
+    assert security["severity"] == "info"
+    assert security["title"] == "Dispositivo enrolado"
+    assert security["source"] == "gateway.security"
