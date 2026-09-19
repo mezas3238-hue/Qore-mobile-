@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import plistlib
-import re
 import shutil
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -62,43 +62,65 @@ def apply_android() -> None:
     )
 
     manifest = android / "app" / "src" / "main" / "AndroidManifest.xml"
-    text = manifest.read_text(encoding="utf-8")
-    if "android.permission.INTERNET" not in text:
-        text, count = re.subn(
-            r"(<manifest\\b[^>]*>)",
-            r'\\1\\n    <uses-permission android:name="android.permission.INTERNET" />',
-            text,
-            count=1,
-            flags=re.DOTALL,
+    android_ns = "http://schemas.android.com/apk/res/android"
+    ET.register_namespace("android", android_ns)
+    tree = ET.parse(manifest)
+    root = tree.getroot()
+
+    permission_attr = f"{{{android_ns}}}name"
+    if not any(
+        element.get(permission_attr) == "android.permission.INTERNET"
+        for element in root.findall("uses-permission")
+    ):
+        permission = ET.Element("uses-permission")
+        permission.set(permission_attr, "android.permission.INTERNET")
+        root.insert(0, permission)
+
+    application = root.find("application")
+    if application is None:
+        raise RuntimeError("Android manifest is missing <application>")
+
+    application.set(f"{{{android_ns}}}label", "@string/qore_app_name")
+    application.set(f"{{{android_ns}}}allowBackup", "false")
+    application.set(f"{{{android_ns}}}usesCleartextTraffic", "false")
+
+    receiver = None
+    for candidate in application.findall("receiver"):
+        if candidate.get(permission_attr) == ".QoreWidgetProvider":
+            receiver = candidate
+            break
+
+    if receiver is None:
+        receiver = ET.SubElement(application, "receiver")
+        receiver.set(permission_attr, ".QoreWidgetProvider")
+        receiver.set(f"{{{android_ns}}}exported", "false")
+
+        intent_filter = ET.SubElement(receiver, "intent-filter")
+        action = ET.SubElement(intent_filter, "action")
+        action.set(
+            permission_attr,
+            "android.appwidget.action.APPWIDGET_UPDATE",
         )
-        if count != 1:
-            raise RuntimeError("could not patch Android manifest root")
-    text = text.replace(
-        'android:label="qore_mobile"',
-        'android:label="@string/qore_app_name"',
+
+        metadata = ET.SubElement(receiver, "meta-data")
+        metadata.set(
+            permission_attr,
+            "android.appwidget.provider",
+        )
+        metadata.set(
+            f"{{{android_ns}}}resource",
+            "@xml/qore_widget_info",
+        )
+
+    try:
+        ET.indent(tree, space="    ")
+    except AttributeError:
+        pass
+    tree.write(
+        manifest,
+        encoding="utf-8",
+        xml_declaration=True,
     )
-    if 'android:allowBackup=' not in text:
-        text = text.replace(
-            "<application",
-            '<application android:allowBackup="false" '
-            'android:usesCleartextTraffic="false"',
-            1,
-        )
-    if "QoreWidgetProvider" not in text:
-        receiver = """
-        <receiver
-            android:name=".QoreWidgetProvider"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/qore_widget_info" />
-        </receiver>
-"""
-        text = text.replace("</application>", receiver + "    </application>")
-    manifest.write_text(text, encoding="utf-8")
 
     gradle = android / "app" / "build.gradle.kts"
     gradle_text = gradle.read_text(encoding="utf-8")
