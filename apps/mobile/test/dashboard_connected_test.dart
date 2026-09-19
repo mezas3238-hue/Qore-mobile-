@@ -137,6 +137,13 @@ void main() {
     expect(find.text('Secondary'), findsOneWidget);
     expect(find.textContaining('FundedNext'), findsNWidgets(2));
 
+    await tester.tap(find.text('Primary'));
+    await tester.pumpAndSettle();
+    expect(find.text('Provider'), findsOneWidget);
+    expect(find.text('Equity'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Posiciones'));
     await tester.pumpAndSettle();
     expect(find.textContaining('EURUSD'), findsOneWidget);
