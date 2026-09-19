@@ -12,6 +12,19 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
   final MethodChannel _channel;
 
   @override
+  Future<DeviceSecurityCapabilities> securityCapabilities() async {
+    final raw = await _channel.invokeMapMethod<String, Object?>(
+      'securityCapabilities',
+    );
+    if (raw == null) {
+      throw StateError('Native security capabilities are unavailable.');
+    }
+    return DeviceSecurityCapabilities.fromJson(
+      Map<String, Object?>.from(raw),
+    );
+  }
+
+  @override
   Future<QoreDeviceSession?> readSession() async {
     final raw = await _channel.invokeMapMethod<String, Object?>('readSession');
     if (raw == null || raw.isEmpty) {

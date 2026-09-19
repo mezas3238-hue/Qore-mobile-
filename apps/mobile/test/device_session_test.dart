@@ -16,6 +16,30 @@ void main() {
     expect(session.refreshToken, 'refresh');
   });
 
+  test('parses native security capabilities', () {
+    final capabilities = DeviceSecurityCapabilities.fromJson({
+      'biometric_strong_available': true,
+      'device_credential_available': true,
+      'secure_store_available': true,
+      'secure_hardware_available': true,
+      'secure_store': 'AndroidKeyStore',
+      'biometric_kind': 'strong',
+    });
+
+    expect(capabilities.strongBiometricAvailable, isTrue);
+    expect(capabilities.ownerAuthenticationAvailable, isTrue);
+    expect(capabilities.secureStore, 'AndroidKeyStore');
+  });
+
+  test('rejects incomplete security capabilities', () {
+    expect(
+      () => DeviceSecurityCapabilities.fromJson({
+        'biometric_strong_available': true,
+      }),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('rejects incomplete session payloads', () {
     expect(
       () => QoreDeviceSession.fromJson({

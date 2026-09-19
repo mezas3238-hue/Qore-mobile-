@@ -33,6 +33,7 @@ class _QoreBootstrapState extends State<QoreBootstrap>
   String? _message;
   HttpQoreGatewayClient? _client;
   DateTime? _backgroundedAt;
+  DeviceSecurityCapabilities? _securityCapabilities;
   bool _unlocking = false;
 
   QoreAppConfig? get _config => QoreAppConfig.fromEnvironment();
@@ -55,6 +56,21 @@ class _QoreBootstrapState extends State<QoreBootstrap>
     }
 
     try {
+      final capabilities = await _sessionProvider.securityCapabilities();
+      if (!capabilities.secureStoreAvailable ||
+          !capabilities.ownerAuthenticationAvailable) {
+        if (!mounted) return;
+        setState(() {
+          _securityCapabilities = capabilities;
+          _state = _BootstrapState.error;
+          _message = !capabilities.secureStoreAvailable
+              ? 'El almacén seguro del dispositivo no está disponible.'
+              : 'Configura huella, biometría fuerte o bloqueo seguro del dispositivo antes de usar QORE Mobile.';
+        });
+        return;
+      }
+      _securityCapabilities = capabilities;
+
       final session = await _sessionProvider.readSession();
       if (!mounted) return;
       if (session == null) {
@@ -124,6 +140,19 @@ class _QoreBootstrapState extends State<QoreBootstrap>
       _state = _BootstrapState.loading;
       _message = null;
     });
+
+    final authorized = await _sessionProvider.authenticateOwner(
+      reason: 'Autorizar el enrolamiento seguro de QORE Mobile',
+    );
+    if (!mounted) return;
+    if (!authorized) {
+      setState(() {
+        _state = _BootstrapState.needsEnrollment;
+        _message =
+            'Debes autenticarte con huella, biometría o el bloqueo seguro del teléfono para enrolar este dispositivo.';
+      });
+      return;
+    }
 
     final service = EnrollmentService(
       baseUri: config.gatewayUri,
@@ -211,6 +240,7 @@ class _QoreBootstrapState extends State<QoreBootstrap>
         ),
       _BootstrapState.needsEnrollment => _EnrollmentScreen(
           errorMessage: _message,
+          securityCapabilities: _securityCapabilities,
           onEnroll: _enroll,
         ),
       _BootstrapState.locked => _CenteredStatus(
@@ -306,6 +336,7 @@ class _EnrollmentScreen extends StatefulWidget {
   const _EnrollmentScreen({
     required this.onEnroll,
     this.errorMessage,
+    this.securityCapabilities,
   });
 
   final Future<void> Function({
@@ -313,6 +344,7 @@ class _EnrollmentScreen extends StatefulWidget {
     required String label,
   }) onEnroll;
   final String? errorMessage;
+  final DeviceSecurityCapabilities? securityCapabilities;
 
   @override
   State<_EnrollmentScreen> createState() => _EnrollmentScreenState();
@@ -339,6 +371,7 @@ class _EnrollmentScreenState extends State<_EnrollmentScreen> {
         label: _labelController.text,
       );
     } finally {
+      _codeController.clear();
       if (mounted) {
         setState(() => _submitting = false);
       }
@@ -360,7 +393,11 @@ class _EnrollmentScreenState extends State<_EnrollmentScreen> {
             const SizedBox(height: 8),
             const Text(
               'QORE Mobile registrará una clave del dispositivo. '
-              'El código de enrolamiento es de un solo uso.',
+              'El código de enrolamiento es de un solo uso, se mantiene sólo en memoria y no se guarda en GitHub ni en el teléfono.',
+            ),
+            const SizedBox(height: 16),
+            _SecurityReadinessCard(
+              capabilities: widget.securityCapabilities,
             ),
             const SizedBox(height: 24),
             TextField(
@@ -398,6 +435,76 @@ class _EnrollmentScreenState extends State<_EnrollmentScreen> {
               icon: const Icon(Icons.phonelink_lock),
               label: Text(_submitting ? 'Enrolando…' : 'Enrolar'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _SecurityReadinessCard extends StatelessWidget {
+  const _SecurityReadinessCard({required this.capabilities});
+
+  final DeviceSecurityCapabilities? capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final caps = capabilities;
+    final biometric = caps?.strongBiometricAvailable == true;
+    final deviceLock = caps?.deviceCredentialAvailable == true;
+    final secureStore = caps?.secureStoreAvailable == true;
+
+    Widget securityRow(String label, bool ok) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(
+              ok ? Icons.check_circle_outline : Icons.cancel_outlined,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label)),
+          ],
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Seguridad del dispositivo',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            securityRow(
+              biometric
+                  ? 'Huella/biometría fuerte detectada'
+                  : 'Huella/biometría fuerte no detectada',
+              biometric,
+            ),
+            securityRow(
+              deviceLock
+                  ? 'Bloqueo seguro del dispositivo disponible'
+                  : 'Bloqueo seguro del dispositivo no disponible',
+              deviceLock,
+            ),
+            securityRow(
+              secureStore
+                  ? 'Almacén seguro: ${caps?.secureStore ?? 'disponible'}'
+                  : 'Almacén seguro no disponible',
+              secureStore,
+            ),
+            if (caps?.secureHardwareAvailable == true)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text('Protección criptográfica por hardware detectada.'),
+              ),
           ],
         ),
       ),

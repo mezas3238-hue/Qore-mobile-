@@ -182,3 +182,28 @@ can remain non-exportable in Android Keystore or Apple Secure Enclave.
 
 The canonical request proof is unchanged; only the native signature algorithm
 and public-key representation are versioned.
+
+
+## Local enrollment secret and biometric gate
+
+The one-time enrollment code is entered directly in the QORE Mobile UI. It is
+never committed to GitHub, embedded in the APK/AAB, written to the widget
+snapshot, or persisted as application configuration.
+
+Before enrollment is sent to the Gateway, the native security bridge requires
+device-owner authentication. Android detects strong biometrics (including
+fingerprint where supported) and the device secure lock through
+`BiometricManager`; iOS reports LocalAuthentication capability.
+
+Android marks the QORE activity with `FLAG_SECURE` so sensitive enrollment and
+session screens cannot be captured by ordinary screenshots or screen
+recording.
+
+Session access/refresh tokens remain encrypted at rest in OS-backed secure
+storage. The widget receives only the sanitized portfolio snapshot and never
+receives enrollment codes, session tokens, private signing keys, runtime
+credentials, broker passwords, or trading credentials.
+
+This local-entry path does **not** change the standing prohibition on storing
+MT5, broker, prop-firm, VPS, or QORE production signing credentials on the
+phone.

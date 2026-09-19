@@ -1,11 +1,15 @@
 package com.qore.mobile.qore_mobile
 
+import android.app.KeyguardManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
+import android.os.Bundle
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.view.WindowManager
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -39,6 +43,11 @@ class MainActivity : FlutterFragmentActivity() {
         private const val WIDGET_SNAPSHOT = "snapshot_json"
     }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
@@ -46,6 +55,9 @@ class MainActivity : FlutterFragmentActivity() {
             CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "securityCapabilities" -> runCrypto(result) {
+                    securityCapabilities()
+                }
                 "ensureEnrollmentIdentity" -> runCrypto(result) {
                     enrollmentIdentity()
                 }
@@ -106,6 +118,40 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun securityCapabilities(): Map<String, Any> {
+        val manager = BiometricManager.from(this)
+        val strongBiometric =
+            manager.canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG,
+            ) == BiometricManager.BIOMETRIC_SUCCESS
+
+        val deviceCredential = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            manager.canAuthenticate(
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+            ) == BiometricManager.BIOMETRIC_SUCCESS
+        } else {
+            val keyguard =
+                getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            keyguard.isDeviceSecure
+        }
+
+        val keyStoreAvailable = try {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            true
+        } catch (_: Exception) {
+            false
+        }
+
+        return mapOf(
+            "biometric_strong_available" to strongBiometric,
+            "device_credential_available" to deviceCredential,
+            "secure_store_available" to keyStoreAvailable,
+            "secure_hardware_available" to keyStoreAvailable,
+            "secure_store" to "AndroidKeyStore",
+            "biometric_kind" to if (strongBiometric) "strong" else "none",
+        )
     }
 
     private fun enrollmentIdentity(): Map<String, Any> {

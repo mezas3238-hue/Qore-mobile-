@@ -62,6 +62,39 @@ final class QoreSecurityBridge {
 
   private func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "securityCapabilities":
+      let biometricContext = LAContext()
+      var biometricError: NSError?
+      let biometricAvailable = biometricContext.canEvaluatePolicy(
+        .deviceOwnerAuthenticationWithBiometrics,
+        error: &biometricError
+      )
+      let biometricKind: String
+      switch biometricContext.biometryType {
+      case .faceID:
+        biometricKind = "face"
+      case .touchID:
+        biometricKind = "fingerprint"
+      default:
+        biometricKind = "none"
+      }
+
+      let ownerContext = LAContext()
+      var ownerError: NSError?
+      let ownerAuthenticationAvailable = ownerContext.canEvaluatePolicy(
+        .deviceOwnerAuthentication,
+        error: &ownerError
+      )
+
+      result([
+        "biometric_strong_available": biometricAvailable,
+        "device_credential_available": ownerAuthenticationAvailable,
+        "secure_store_available": true,
+        "secure_hardware_available": SecureEnclave.isAvailable,
+        "secure_store": "Keychain",
+        "biometric_kind": biometricKind,
+      ])
+
     case "ensureEnrollmentIdentity":
       runCrypto(result: result) {
         let key = try self.loadOrCreateSigningKey()
