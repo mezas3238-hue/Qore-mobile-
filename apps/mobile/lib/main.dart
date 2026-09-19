@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard/dashboard_controller.dart';
+import 'data/qore_gateway_client.dart';
+import 'domain/models.dart';
+
 void main() {
   runApp(const QoreMobileApp());
 }
 
 class QoreMobileApp extends StatelessWidget {
-  const QoreMobileApp({super.key});
+  const QoreMobileApp({super.key, this.client});
+
+  final QoreGatewayClient? client;
 
   @override
   Widget build(BuildContext context) {
@@ -16,147 +22,379 @@ class QoreMobileApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
         useMaterial3: true,
       ),
-      home: const QoreHome(),
+      home: QoreHome(client: client),
     );
   }
 }
 
 class QoreHome extends StatefulWidget {
-  const QoreHome({super.key});
+  const QoreHome({super.key, this.client});
+
+  final QoreGatewayClient? client;
 
   @override
   State<QoreHome> createState() => _QoreHomeState();
 }
 
 class _QoreHomeState extends State<QoreHome> {
+  late final DashboardController controller;
   int selectedIndex = 0;
 
-  static const pages = <Widget>[
-    _StatusPage(
-      heading: 'Portfolio',
-      description: 'Resumen agregado de todas las cuentas QORE autorizadas.',
-    ),
-    _StatusPage(
-      heading: 'Cuentas',
-      description: 'Balance, equity, drawdown y estado por cuenta.',
-    ),
-    _StatusPage(
-      heading: 'Traders',
-      description: 'Estado, heartbeat, mercado y posiciones por trader.',
-    ),
-    _StatusPage(
-      heading: 'Alertas',
-      description: 'Eventos operativos, riesgo y conectividad.',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    controller = DashboardController(widget.client);
+    if (widget.client != null) {
+      controller.refresh();
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('QORE Mobile'),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: Center(child: _ConnectionBadge()),
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('QORE Mobile'),
+            actions: [
+              _ConnectionBadge(status: controller.status),
+              IconButton(
+                tooltip: 'Actualizar',
+                onPressed: controller.canRefresh ? controller.refresh : null,
+                icon: const Icon(Icons.refresh),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-        ],
-      ),
-      body: SafeArea(child: pages[selectedIndex]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() => selectedIndex = index);
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Portfolio',
+          body: SafeArea(
+            child: _pageForIndex(
+              selectedIndex,
+              controller.status,
+              controller.snapshot,
+              controller.errorMessage,
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: 'Cuentas',
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) {
+              setState(() => selectedIndex = index);
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: 'Portfolio',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.account_balance_wallet_outlined),
+                selectedIcon: Icon(Icons.account_balance_wallet),
+                label: 'Cuentas',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.smart_toy_outlined),
+                selectedIcon: Icon(Icons.smart_toy),
+                label: 'Traders',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.notifications_none),
+                selectedIcon: Icon(Icons.notifications),
+                label: 'Alertas',
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.smart_toy_outlined),
-            selectedIcon: Icon(Icons.smart_toy),
-            label: 'Traders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_none),
-            selectedIcon: Icon(Icons.notifications),
-            label: 'Alertas',
-          ),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  Widget _pageForIndex(
+    int index,
+    DashboardStatus status,
+    DashboardSnapshot? snapshot,
+    String? errorMessage,
+  ) {
+    if (status == DashboardStatus.disconnected) {
+      return const _SafeStatePage(
+        heading: 'Sin conexión a Core',
+        description:
+            'No existe una sesión autenticada con QORE Mobile Gateway. '
+            'La aplicación no mostrará datos simulados como si fueran LIVE.',
+        icon: Icons.cloud_off,
+      );
+    }
+
+    if (status == DashboardStatus.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (status == DashboardStatus.error || snapshot == null) {
+      return _SafeStatePage(
+        heading: 'Sincronización no disponible',
+        description: errorMessage ??
+            'No hay un snapshot autenticado disponible en este momento.',
+        icon: Icons.warning_amber_outlined,
+      );
+    }
+
+    return switch (index) {
+      0 => _PortfolioPage(snapshot: snapshot),
+      1 => _AccountsPage(accounts: snapshot.accounts),
+      2 => _TradersPage(
+          traders: snapshot.traders,
+          runtimes: snapshot.runtimes,
+        ),
+      _ => const _SafeStatePage(
+          heading: 'Alertas',
+          description:
+              'El inbox de alertas se habilitará con el contrato de notificaciones. '
+              'No se fabrican alertas locales sin evidencia del Gateway.',
+          icon: Icons.notifications_none,
+        ),
+    };
   }
 }
 
 class _ConnectionBadge extends StatelessWidget {
-  const _ConnectionBadge();
+  const _ConnectionBadge({required this.status});
+
+  final DashboardStatus status;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Estado de conexión: sin conexión a Core',
+    final (label, icon) = switch (status) {
+      DashboardStatus.ready => ('Conectado', Icons.cloud_done_outlined),
+      DashboardStatus.loading => ('Sincronizando', Icons.sync),
+      DashboardStatus.error => ('Error', Icons.cloud_off_outlined),
+      DashboardStatus.disconnected => ('Sin conexión', Icons.cloud_off),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Chip(
-        avatar: const Icon(Icons.cloud_off, size: 18),
-        label: const Text('Sin conexión a Core'),
+        avatar: Icon(icon, size: 18),
+        label: Text(label),
       ),
     );
   }
 }
 
-class _StatusPage extends StatelessWidget {
-  const _StatusPage({
+class _SafeStatePage extends StatelessWidget {
+  const _SafeStatePage({
     required this.heading,
     required this.description,
+    required this.icon,
   });
 
   final String heading;
   final String description;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          heading,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(description),
-        const SizedBox(height: 24),
+        Text(heading, style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 16),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.shield_outlined),
-                    SizedBox(width: 8),
-                    Text(
-                      'Estado seguro',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Todavía no hay una sesión autenticada con QORE Mobile Gateway. '
-                  'La aplicación no mostrará datos simulados como si fueran datos LIVE.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                Icon(icon),
+                const SizedBox(width: 12),
+                Expanded(child: Text(description)),
               ],
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _PortfolioPage extends StatelessWidget {
+  const _PortfolioPage({required this.snapshot});
+
+  final DashboardSnapshot snapshot;
+
+  String _money(double? value) =>
+      value == null ? '—' : value.toStringAsFixed(2);
+
+  @override
+  Widget build(BuildContext context) {
+    final portfolio = snapshot.portfolio;
+    final healthyRuntimes = snapshot.runtimes
+        .where((runtime) => runtime.freshness == Freshness.live)
+        .length;
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Portfolio', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _MetricCard(label: 'Balance', value: _money(portfolio.balance)),
+            _MetricCard(label: 'Equity', value: _money(portfolio.equity)),
+            _MetricCard(
+              label: 'P/L hoy',
+              value: _money(portfolio.realizedPnlToday),
+            ),
+            _MetricCard(
+              label: 'Flotante',
+              value: _money(portfolio.floatingPnl),
+            ),
+            _MetricCard(
+              label: 'Cuentas',
+              value: '${portfolio.accountCount}',
+            ),
+            _MetricCard(
+              label: 'Posiciones',
+              value: '${portfolio.activePositions}',
+            ),
+            _MetricCard(
+              label: 'Runtimes',
+              value: '$healthyRuntimes/${snapshot.runtimes.length}',
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Actualizado: ${portfolio.asOf.toLocal().toIso8601String()}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 160,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 8),
+              Text(value, style: Theme.of(context).textTheme.titleLarge),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountsPage extends StatelessWidget {
+  const _AccountsPage({required this.accounts});
+
+  final List<AccountSnapshot> accounts;
+
+  @override
+  Widget build(BuildContext context) {
+    if (accounts.isEmpty) {
+      return const _SafeStatePage(
+        heading: 'Cuentas',
+        description: 'El Gateway autenticado no reporta cuentas todavía.',
+        icon: Icons.account_balance_wallet_outlined,
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: accounts.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final account = accounts[index];
+        return Card(
+          child: ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: Text(account.label),
+            subtitle: Text(
+              '${account.provider} · ${account.mode.name.toUpperCase()} · '
+              '${account.freshness.name.toUpperCase()}',
+            ),
+            trailing: Text(
+              account.equity == null
+                  ? '—'
+                  : account.equity!.toStringAsFixed(2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TradersPage extends StatelessWidget {
+  const _TradersPage({
+    required this.traders,
+    required this.runtimes,
+  });
+
+  final List<TraderSnapshot> traders;
+  final List<RuntimeSnapshot> runtimes;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Traders', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 12),
+        for (final trader in traders)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.smart_toy_outlined),
+              title: Text(trader.name),
+              subtitle: Text(
+                '${trader.market} · ${trader.state} · '
+                '${trader.freshness.name.toUpperCase()}',
+              ),
+            ),
+          ),
+        const SizedBox(height: 20),
+        Text('Runtimes', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        for (final runtime in runtimes)
+          Card(
+            child: ListTile(
+              leading: Icon(
+                runtime.reconciliationRequired
+                    ? Icons.sync_problem
+                    : Icons.dns_outlined,
+              ),
+              title: Text(runtime.runtimeId),
+              subtitle: Text(
+                '${runtime.freshness.name.toUpperCase()} · '
+                'seq ${runtime.lastSequence ?? '—'}',
+              ),
+              trailing: runtime.reconciliationRequired
+                  ? const Text('RECONCILIAR')
+                  : null,
+            ),
+          ),
       ],
     );
   }
