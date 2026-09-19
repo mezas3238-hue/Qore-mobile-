@@ -16,14 +16,18 @@ typedef DashboardSnapshotSink = Future<void> Function(
   DashboardSnapshot snapshot,
 );
 
+typedef SessionMissingCallback = void Function();
+
 class DashboardController extends ChangeNotifier {
   DashboardController(
     this._client, {
     this.snapshotSink,
+    this.onSessionMissing,
   });
 
   final QoreGatewayClient? _client;
   final DashboardSnapshotSink? snapshotSink;
+  final SessionMissingCallback? onSessionMissing;
 
   DashboardStatus status = DashboardStatus.disconnected;
   DashboardSnapshot? snapshot;
@@ -96,6 +100,7 @@ class DashboardController extends ChangeNotifier {
       status = DashboardStatus.disconnected;
       errorMessage = null;
       stopAutoRefresh();
+      onSessionMissing?.call();
     } on QoreGatewayException {
       status = DashboardStatus.error;
       errorMessage = 'No se pudo sincronizar con QORE Mobile Gateway.';
