@@ -134,6 +134,14 @@ class EnrollmentCodeRegistry:
                 raise EnrollmentError("invalid or already-used enrollment code")
             self._unused.remove(match)
 
+    def unused_hashes(self) -> set[str]:
+        with self._lock:
+            return set(self._unused)
+
+    def replace_unused_hashes(self, hashes: set[str]) -> None:
+        with self._lock:
+            self._unused = set(hashes)
+
 
 class DeviceSessionStore:
     def __init__(

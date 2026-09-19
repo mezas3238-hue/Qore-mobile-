@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -21,6 +22,7 @@ from .push import (
     PushRegistrationError,
     PushRegistrationStore,
 )
+from .persistent_device_sessions import PersistentDeviceSessionStore
 
 from .models import (
     AccountSnapshot,
@@ -111,6 +113,27 @@ def _raise(status_code: int, code: str, message: str) -> None:
     )
 
 
+def _default_device_session_store() -> DeviceSessionStore:
+    enrollment_codes = EnrollmentCodeRegistry.from_environment()
+    state_path = os.getenv("QORE_MOBILE_STATE_DB_PATH", "").strip()
+    environment = os.getenv("QORE_GATEWAY_ENV", "development").strip().lower()
+
+    if state_path:
+        return PersistentDeviceSessionStore(
+            db_path=state_path,
+            enrollment_codes=enrollment_codes,
+        )
+
+    if environment == "production":
+        raise RuntimeError(
+            "QORE_MOBILE_STATE_DB_PATH is required in production so "
+            "device sessions, consumed enrollment codes and replay nonces "
+            "survive Gateway restarts"
+        )
+
+    return DeviceSessionStore(enrollment_codes=enrollment_codes)
+
+
 def create_app(
     *,
     credential_registry: RuntimeCredentialRegistry | None = None,
@@ -133,9 +156,7 @@ def create_app(
     repository = read_repository or ReadRepository()
     states = runtime_state or RuntimeStateStore()
     registry = credential_registry or RuntimeCredentialRegistry.from_environment()
-    sessions = device_sessions or DeviceSessionStore(
-        enrollment_codes=EnrollmentCodeRegistry.from_environment()
-    )
+    sessions = device_sessions or _default_device_session_store()
     admins = admin_registry or AdminTokenRegistry.from_environment()
     audit = audit_log or AuditLog()
     telemetry = TelemetryService(repository=repository, runtime_state=states)
