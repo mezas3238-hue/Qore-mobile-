@@ -105,11 +105,32 @@ struct QoreWidgetProvider: TimelineProvider {
 struct QoreWidgetView: View {
   let entry: QoreWidgetEntry
 
+  @Environment(\.widgetFamily) private var family
+
   private var status: String {
     if entry.expired {
       return "STALE"
     }
     return entry.snapshot?.freshness.uppercased() ?? "SIN DATOS"
+  }
+
+  private var drawdown: String {
+    guard
+      !entry.expired,
+      let value = entry.snapshot?.dailyDrawdownFraction
+    else {
+      return "—"
+    }
+    return (value * 100).formatted(
+      .number.precision(.fractionLength(2))
+    ) + "%"
+  }
+
+  private var updated: String {
+    entry.snapshot?.generatedAt.formatted(
+      date: .omitted,
+      time: .standard
+    ) ?? "Sin datos"
   }
 
   private func number(_ value: Double?) -> String {
@@ -120,6 +141,44 @@ struct QoreWidgetView: View {
   }
 
   var body: some View {
+    Group {
+      if family == .systemSmall {
+        compact
+      } else {
+        expanded
+      }
+    }
+    .padding()
+    .widgetURL(URL(string: "qore://dashboard"))
+    .containerBackground(.background, for: .widget)
+  }
+
+  private var compact: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("QORE")
+          .font(.headline)
+        Spacer()
+        Text(status)
+          .font(.caption2.bold())
+      }
+
+      metric("Equity", number(entry.snapshot?.equity))
+
+      HStack {
+        metric("P/L hoy", number(entry.snapshot?.realizedPnlToday))
+        Spacer()
+      }
+
+      Spacer(minLength: 0)
+
+      Text(updated)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  private var expanded: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
         Text("QORE")
@@ -136,14 +195,7 @@ struct QoreWidgetView: View {
       }
 
       HStack {
-        let dd = entry.expired
-          ? "—"
-          : entry.snapshot?.dailyDrawdownFraction.map {
-              ($0 * 100).formatted(
-                .number.precision(.fractionLength(2))
-              ) + "%"
-            } ?? "—"
-        metric("DD", dd)
+        metric("DD", drawdown)
         Spacer()
         metric(
           "Pos.",
@@ -160,18 +212,10 @@ struct QoreWidgetView: View {
         )
       }
 
-      Text(
-        entry.snapshot?.generatedAt.formatted(
-          date: .omitted,
-          time: .standard
-        ) ?? "Sin datos"
-      )
-      .font(.caption2)
-      .foregroundStyle(.secondary)
+      Text(updated)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
-    .padding()
-    .widgetURL(URL(string: "qore://dashboard"))
-    .containerBackground(.background, for: .widget)
   }
 
   @ViewBuilder
