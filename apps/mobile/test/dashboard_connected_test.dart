@@ -105,6 +105,19 @@ void main() {
           asOf: now,
         ),
       ],
+      alerts: [
+        AlertSnapshot(
+          alertId: 'runtime:runtime-b:runtime.delayed',
+          kind: 'runtime.delayed',
+          severity: AlertSeverity.warning,
+          title: 'Runtime con demora',
+          detail: 'runtime-b está delayed.',
+          source: 'gateway.runtime',
+          raisedAt: now,
+          asOf: now,
+          runtimeId: 'runtime-b',
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -123,5 +136,13 @@ void main() {
     expect(find.text('Primary'), findsOneWidget);
     expect(find.text('Secondary'), findsOneWidget);
     expect(find.textContaining('FundedNext'), findsNWidgets(2));
+
+    await tester.tap(find.text('Posiciones'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('EURUSD'), findsOneWidget);
+
+    await tester.tap(find.text('Alertas'));
+    await tester.pumpAndSettle();
+    expect(find.text('Runtime con demora'), findsOneWidget);
   });
 }
