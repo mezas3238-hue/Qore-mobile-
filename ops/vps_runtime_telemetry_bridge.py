@@ -75,26 +75,73 @@ def _position_side(position: Any) -> str:
     return "long" if int(position.type) == int(mt5.POSITION_TYPE_BUY) else "short"
 
 
+def _magic(client_order_id: str) -> int:
+    digest = hashlib.sha256(client_order_id.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") & 0x7FFFFFFF
+
+
+def _position_lineages(root: Path) -> dict[int, str]:
+    state_dir = root / "var" / "fundednext"
+    mutations = _read_json(state_dir / "mt5-mutations.json")
+    risk = _read_json(state_dir / "risk-reservations.json")
+
+    authorization_to_trader: dict[str, str] = {}
+    for reservation in risk.get("reservations", []):
+        if not isinstance(reservation, dict):
+            continue
+        authorization = reservation.get("authorization")
+        if not isinstance(authorization, dict):
+            continue
+        authorization_id = authorization.get("authorization_id")
+        trader_id = authorization.get("trader_id")
+        if isinstance(authorization_id, str) and isinstance(trader_id, str):
+            authorization_to_trader[authorization_id] = trader_id
+
+    magic_to_trader: dict[int, str] = {}
+    for mutation in mutations.get("records", []):
+        if not isinstance(mutation, dict) or mutation.get("state") != "accepted":
+            continue
+        client_order_id = mutation.get("client_order_id")
+        authorization_id = mutation.get("risk_authorization_id")
+        if not isinstance(client_order_id, str) or not isinstance(
+            authorization_id, str
+        ):
+            continue
+        trader_id = authorization_to_trader.get(authorization_id)
+        if trader_id:
+            magic_to_trader[_magic(client_order_id)] = trader_id
+    return magic_to_trader
+
+
 def _fallback_trader_for_symbol(symbol: str) -> str:
     exact = {
         "XAUUSD": "R34_XAUUSD",
         "EURUSD": "R38_EURUSD",
     }
-    return exact.get(symbol.upper(), "VT08_FOREX")
+    return exact.get(symbol.upper(), "UNATTRIBUTED_RUNTIME_POSITION")
 
 
-def _positions(account_id: str, now: datetime) -> list[dict[str, Any]]:
+def _positions(
+    root: Path,
+    account_id: str,
+    now: datetime,
+) -> list[dict[str, Any]]:
     raw = mt5.positions_get()
     if raw is None:
         raise RuntimeError(f"positions_get failed: {mt5.last_error()}")
+    lineage_by_magic = _position_lineages(root)
     output: list[dict[str, Any]] = []
     for position in raw:
         symbol = str(position.symbol)
+        trader_id = lineage_by_magic.get(
+            int(position.magic),
+            _fallback_trader_for_symbol(symbol),
+        )
         output.append(
             {
                 "position_id": str(position.ticket),
                 "account_id": account_id,
-                "trader_id": _fallback_trader_for_symbol(symbol),
+                "trader_id": trader_id,
                 "symbol": symbol,
                 "side": _position_side(position),
                 "entry": float(position.price_open),
@@ -138,7 +185,7 @@ def build_snapshot(
         if isinstance(value, str)
     }
 
-    positions = _positions(account_id, now)
+    positions = _positions(root, account_id, now)
     balance = float(account.balance)
     equity = float(account.equity)
 
