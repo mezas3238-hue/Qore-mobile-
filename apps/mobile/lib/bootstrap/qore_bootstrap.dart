@@ -7,6 +7,7 @@ import '../domain/widget_snapshot.dart';
 import '../dashboard/qore_home.dart';
 import '../security/enrollment_service.dart';
 import '../security/native_device_session_provider.dart';
+import '../security/session.dart';
 
 enum _BootstrapState {
   loading,
