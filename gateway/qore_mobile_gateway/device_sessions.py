@@ -1,6 +1,8 @@
 import base64
 import hashlib
 import hmac
+import json
+import os
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -70,6 +72,22 @@ class EnrollmentCodeRegistry:
     def __init__(self, code_hashes: set[str] | None = None) -> None:
         self._unused = set(code_hashes or set())
         self._lock = RLock()
+
+    @classmethod
+    def from_environment(cls) -> "EnrollmentCodeRegistry":
+        raw = os.getenv("QORE_MOBILE_ENROLLMENT_CODE_HASHES_JSON", "[]")
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "QORE_MOBILE_ENROLLMENT_CODE_HASHES_JSON is not valid JSON"
+            ) from exc
+        hashes = {str(value).lower() for value in parsed}
+        if any(len(value) != 64 for value in hashes):
+            raise RuntimeError(
+                "enrollment code hashes must be SHA-256 hex digests"
+            )
+        return cls(hashes)
 
     @classmethod
     def for_test_codes(cls, codes: set[str]) -> "EnrollmentCodeRegistry":
@@ -193,6 +211,14 @@ class DeviceSessionStore:
             raise SessionAuthenticationError("device proof timestamp must be timezone-aware")
         if abs(now - proof_time.astimezone(UTC)) > self._proof_skew:
             raise SessionAuthenticationError("device proof timestamp outside allowed skew")
+
+        expired = [
+            key
+            for key, expiry_time in self._seen_nonces.items()
+            if expiry_time < now
+        ]
+        for key in expired:
+            self._seen_nonces.pop(key, None)
 
         nonce_key = (device.device_id, nonce)
         expiry = self._seen_nonces.get(nonce_key)
