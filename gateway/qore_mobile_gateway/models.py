@@ -23,6 +23,24 @@ class PositionSide(StrEnum):
     SHORT = "short"
 
 
+class AlertSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+class AlertKind(StrEnum):
+    RUNTIME_DELAYED = "runtime.delayed"
+    RUNTIME_STALE = "runtime.stale"
+    RUNTIME_OFFLINE = "runtime.offline"
+    RECONCILIATION_REQUIRED = "runtime.reconciliation_required"
+    POSITION_OPENED = "position.opened"
+    POSITION_CLOSED = "position.closed"
+    RISK_THRESHOLD = "risk.threshold"
+    RISK_LOCK = "risk.lock"
+    SECURITY = "security"
+
+
 class AccountSnapshot(BaseModel):
     account_id: str
     provider: str
@@ -79,6 +97,22 @@ class RuntimeSnapshot(BaseModel):
     last_heartbeat: datetime | None = None
     as_of: datetime
     freshness: Freshness
+
+
+class AlertSnapshot(BaseModel):
+    alert_id: str
+    kind: AlertKind
+    severity: AlertSeverity
+    title: str
+    detail: str
+    source: str
+    raised_at: datetime
+    as_of: datetime
+    account_id: str | None = None
+    trader_id: str | None = None
+    runtime_id: str | None = None
+    position_id: str | None = None
+    resolved_at: datetime | None = None
 
 
 class PortfolioSnapshot(BaseModel):
