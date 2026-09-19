@@ -103,6 +103,11 @@ class _QoreHomeState extends State<QoreHome> {
                 label: 'Traders',
               ),
               NavigationDestination(
+                icon: Icon(Icons.show_chart),
+                selectedIcon: Icon(Icons.show_chart),
+                label: 'Posiciones',
+              ),
+              NavigationDestination(
                 icon: Icon(Icons.notifications_none),
                 selectedIcon: Icon(Icons.notifications),
                 label: 'Alertas',
@@ -150,13 +155,8 @@ class _QoreHomeState extends State<QoreHome> {
           traders: snapshot.traders,
           runtimes: snapshot.runtimes,
         ),
-      _ => const _SafeStatePage(
-          heading: 'Alertas',
-          description:
-              'El inbox de alertas se habilitará con el contrato de notificaciones. '
-              'No se fabrican alertas locales sin evidencia del Gateway.',
-          icon: Icons.notifications_none,
-        ),
+      3 => _PositionsPage(positions: snapshot.positions),
+      _ => _AlertsPage(alerts: snapshot.alerts),
     };
   }
 }
@@ -396,6 +396,100 @@ class _TradersPage extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+
+class _PositionsPage extends StatelessWidget {
+  const _PositionsPage({required this.positions});
+
+  final List<PositionSnapshot> positions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (positions.isEmpty) {
+      return const _SafeStatePage(
+        heading: 'Posiciones',
+        description: 'No hay posiciones abiertas reportadas por el Gateway.',
+        icon: Icons.show_chart,
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: positions.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final position = positions[index];
+        final pnl = position.unrealizedPnl == null
+            ? '—'
+            : position.unrealizedPnl!.toStringAsFixed(2);
+        return Card(
+          child: ListTile(
+            leading: Icon(
+              position.side.toLowerCase() == 'long'
+                  ? Icons.trending_up
+                  : Icons.trending_down,
+            ),
+            title: Text(
+              '${position.symbol} · ${position.side.toUpperCase()}',
+            ),
+            subtitle: Text(
+              '${position.traderId} · entrada '
+              '${position.entry?.toStringAsFixed(5) ?? '—'}',
+            ),
+            trailing: Text(pnl),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AlertsPage extends StatelessWidget {
+  const _AlertsPage({required this.alerts});
+
+  final List<AlertSnapshot> alerts;
+
+  IconData _icon(AlertSeverity severity) {
+    return switch (severity) {
+      AlertSeverity.critical => Icons.error_outline,
+      AlertSeverity.warning => Icons.warning_amber_outlined,
+      AlertSeverity.info => Icons.info_outline,
+      AlertSeverity.unknown => Icons.help_outline,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (alerts.isEmpty) {
+      return const _SafeStatePage(
+        heading: 'Alertas',
+        description: 'No hay alertas activas ni eventos operativos recientes.',
+        icon: Icons.notifications_none,
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: alerts.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final alert = alerts[index];
+        return Card(
+          child: ListTile(
+            leading: Icon(_icon(alert.severity)),
+            title: Text(alert.title),
+            subtitle: Text(
+              '${alert.detail}\n'
+              '${alert.source} · '
+              '${alert.raisedAt.toLocal().toIso8601String()}',
+            ),
+            isThreeLine: true,
+          ),
+        );
+      },
     );
   }
 }
