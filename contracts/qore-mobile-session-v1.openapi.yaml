@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: QORE Mobile Device Session API
+  version: 1.0.0
+  description: >
+    Device enrollment and proof-of-possession session contract for the
+    read-only QORE Mobile application.
+paths:
+  /v1/mobile/enroll:
+    post:
+      operationId: enrollMobileDevice
+      parameters:
+        - name: X-Qore-Enrollment-Code
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceEnrollmentRequest"
+      responses:
+        "201":
+          description: Device enrolled and initial session issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSession"
+        "401":
+          description: Missing, invalid or already-used enrollment code.
+  /v1/mobile/refresh:
+    post:
+      operationId: refreshMobileSession
+      security:
+        - refreshBearer: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
+      responses:
+        "200":
+          description: Previous token pair revoked and replacement pair issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSession"
+        "401":
+          description: Refresh session or device proof invalid.
+  /v1/admin/devices/{device_id}/revoke:
+    post:
+      operationId: revokeMobileDevice
+      security:
+        - adminBearer: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Device and its active sessions revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_id, revoked]
+                properties:
+                  device_id: { type: string }
+                  revoked: { type: boolean }
+components:
+  securitySchemes:
+    refreshBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-rotating-refresh-token
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-admin-token
+  parameters:
+    DeviceId:
+      name: X-Qore-Device-Id
+      in: header
+      required: true
+      schema: { type: string }
+    DeviceTime:
+      name: X-Qore-Device-Time
+      in: header
+      required: true
+      schema: { type: string, format: date-time }
+    DeviceNonce:
+      name: X-Qore-Device-Nonce
+      in: header
+      required: true
+      schema: { type: string }
+    DeviceSignature:
+      name: X-Qore-Device-Signature
+      in: header
+      required: true
+      description: Base64 Ed25519 signature over the canonical request proof.
+      schema: { type: string }
+  schemas:
+    DeviceEnrollmentRequest:
+      type: object
+      required: [device_id, platform, label, public_key_b64]
+      additionalProperties: false
+      properties:
+        device_id:
+          type: string
+          minLength: 8
+          maxLength: 128
+        platform:
+          enum: [android, ios]
+        label:
+          type: string
+          minLength: 1
+          maxLength: 128
+        public_key_b64:
+          type: string
+          description: Base64 raw 32-byte Ed25519 public key.
+    DeviceSession:
+      type: object
+      required:
+        [access_token, access_expires_at, refresh_token, refresh_expires_at, device_id]
+      properties:
+        access_token: { type: string }
+        access_expires_at: { type: string, format: date-time }
+        refresh_token: { type: string }
+        refresh_expires_at: { type: string, format: date-time }
+        device_id: { type: string }
