@@ -72,7 +72,7 @@ components:
         event_type:
           type: string
           enum:
-            [runtime.heartbeat, account.snapshot, trader.state, position.opened, position.updated, position.closed]
+            [runtime.heartbeat, account.snapshot, trader.state, risk.snapshot, position.opened, position.updated, position.closed]
         runtime_id: { type: string }
         account_id: { type: string }
         sequence: { type: integer, minimum: 1 }
