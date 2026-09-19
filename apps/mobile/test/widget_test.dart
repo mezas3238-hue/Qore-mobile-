@@ -7,7 +7,8 @@ void main() {
 
     expect(find.text('QORE Mobile'), findsOneWidget);
     expect(find.text('Sin conexión a Core'), findsOneWidget);
-    expect(find.text('Portfolio'), findsWidgets);
+    expect(find.text('Sin conexión'), findsOneWidget);
+    expect(find.text('Portfolio'), findsOneWidget);
     expect(find.text('Cuentas'), findsOneWidget);
     expect(find.text('Traders'), findsOneWidget);
     expect(find.text('Alertas'), findsOneWidget);
