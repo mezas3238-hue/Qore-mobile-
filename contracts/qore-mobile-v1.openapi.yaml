@@ -95,6 +95,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PositionSnapshot"
+  /v1/risk:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
+      operationId: listRisk
+      responses:
+        "200":
+          description: Authoritative per-account QORE Risk snapshots.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskSnapshot"
   /v1/runtimes:
     get:
       security:
@@ -180,6 +199,19 @@ components:
     TradingMode:
       type: string
       enum: [demo, shadow, live]
+    RiskSnapshot:
+      type: object
+      required: [account_id, state, source, as_of]
+      properties:
+        account_id: { type: string }
+        state: { type: string }
+        source: { type: string }
+        as_of: { type: string, format: date-time }
+        daily_drawdown_fraction: { type: [number, "null"], minimum: 0 }
+        total_drawdown_fraction: { type: [number, "null"], minimum: 0 }
+        open_risk_fraction: { type: [number, "null"], minimum: 0 }
+        daily_loss_remaining_fraction: { type: [number, "null"], minimum: 0 }
+        total_loss_remaining_fraction: { type: [number, "null"], minimum: 0 }
     AlertSnapshot:
       type: object
       required:
