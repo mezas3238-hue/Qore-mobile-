@@ -205,6 +205,13 @@ class DeviceSessionStore:
             )
             return self._issue_session(device_id=device_id, now=current)
 
+    def get_active_device_platform(self, device_id: str) -> str | None:
+        with self._lock:
+            device = self._devices.get(device_id)
+            if device is None or device.revoked_at is not None:
+                return None
+            return device.platform
+
     def _canonical_message(
         self,
         *,

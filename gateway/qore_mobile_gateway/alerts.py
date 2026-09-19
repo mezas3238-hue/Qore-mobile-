@@ -12,6 +12,40 @@ from .models import (
 from .repository import ReadRepository
 
 
+def device_security_alert(
+    *,
+    action: str,
+    device_id: str,
+    raised_at: datetime,
+    label: str | None = None,
+    platform: str | None = None,
+) -> AlertSnapshot:
+    if action == "enrolled":
+        title = "Dispositivo enrolado"
+        descriptor = label or "Dispositivo móvil"
+        suffix = f" ({platform})" if platform else ""
+        detail = f"{descriptor}{suffix} quedó enrolado en QORE Mobile."
+    elif action == "revoked":
+        title = "Dispositivo revocado"
+        detail = "Un dispositivo QORE Mobile fue revocado y sus sesiones quedaron invalidadas."
+    else:
+        raise ValueError("unsupported device security alert action")
+
+    return AlertSnapshot(
+        alert_id=(
+            f"security:{action}:{device_id}:"
+            f"{raised_at.timestamp():.6f}"
+        ),
+        kind=AlertKind.SECURITY,
+        severity=AlertSeverity.INFO,
+        title=title,
+        detail=detail,
+        source="gateway.security",
+        raised_at=raised_at,
+        as_of=raised_at,
+    )
+
+
 def position_opened_alert(
     *,
     event_id: str,

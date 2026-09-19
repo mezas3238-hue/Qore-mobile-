@@ -6,7 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, ValidationError
 
 from .admin_auth import AdminAuthenticationError, AdminTokenRegistry
-from .alerts import current_alerts
+from .alerts import current_alerts, device_security_alert
 from .audit import AuditEvent, AuditEventType, AuditLog
 from .auth import RuntimeAuthenticationError, RuntimeCredentialRegistry
 from .device_sessions import (
@@ -16,6 +16,12 @@ from .device_sessions import (
     IssuedSession,
     SessionAuthenticationError,
 )
+from .push import (
+    PushProvider,
+    PushRegistrationError,
+    PushRegistrationStore,
+)
+
 from .models import (
     AccountSnapshot,
     AlertSnapshot,
@@ -81,6 +87,23 @@ class DeviceRevocationResponse(BaseModel):
     revoked: bool
 
 
+class PushTokenRegistrationRequest(BaseModel):
+    provider: Literal["fcm", "apns"]
+    token: str = Field(min_length=16, max_length=4096)
+
+
+class PushTokenRegistrationResponse(BaseModel):
+    device_id: str
+    provider: Literal["fcm", "apns"]
+    token_fingerprint: str
+    registered_at: datetime
+
+
+class PushTokenRemovalResponse(BaseModel):
+    device_id: str
+    removed: bool
+
+
 def _raise(status_code: int, code: str, message: str) -> None:
     raise HTTPException(
         status_code=status_code,
@@ -96,6 +119,7 @@ def create_app(
     audit_log: AuditLog | None = None,
     read_repository: ReadRepository | None = None,
     runtime_state: RuntimeStateStore | None = None,
+    push_registrations: PushRegistrationStore | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="QORE Mobile Gateway",
@@ -115,6 +139,7 @@ def create_app(
     admins = admin_registry or AdminTokenRegistry.from_environment()
     audit = audit_log or AuditLog()
     telemetry = TelemetryService(repository=repository, runtime_state=states)
+    pushes = push_registrations or PushRegistrationStore()
     bearer = HTTPBearer(auto_error=False)
 
     async def require_mobile_read(
@@ -245,9 +270,20 @@ def create_app(
                 reason_code="invalid_code_or_device",
             )
             _raise(401, "device_enrollment_failed", str(exc))
+        security_time = datetime.now(UTC)
         audit.record(
             AuditEventType.DEVICE_ENROLLED,
             device_id=payload.device_id,
+            occurred_at=security_time,
+        )
+        repository.upsert_alert(
+            device_security_alert(
+                action="enrolled",
+                device_id=payload.device_id,
+                label=payload.label,
+                platform=payload.platform,
+                raised_at=security_time,
+            )
         )
         return DeviceSessionResponse.from_issued(issued)
 
@@ -325,6 +361,69 @@ def create_app(
         )
         return DeviceSessionResponse.from_issued(issued)
 
+    @app.put(
+        "/v1/mobile/push-token",
+        response_model=PushTokenRegistrationResponse,
+    )
+    def register_mobile_push_token(
+        payload: PushTokenRegistrationRequest,
+        _: MobileRead,
+        x_qore_device_id: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Id",
+        ),
+    ) -> PushTokenRegistrationResponse:
+        if not x_qore_device_id:
+            _raise(401, "device_session_authentication_failed", "missing device id")
+        platform = sessions.get_active_device_platform(x_qore_device_id)
+        if platform is None:
+            _raise(401, "device_session_authentication_failed", "unknown device")
+        try:
+            registration = pushes.register(
+                device_id=x_qore_device_id,
+                platform=platform,
+                provider=PushProvider(payload.provider),
+                token=payload.token,
+            )
+        except PushRegistrationError as exc:
+            _raise(422, "push_registration_invalid", str(exc))
+        audit.record(
+            AuditEventType.PUSH_TOKEN_REGISTERED,
+            device_id=x_qore_device_id,
+            token_fingerprint=registration.token_fingerprint,
+        )
+        return PushTokenRegistrationResponse(
+            device_id=registration.device_id,
+            provider=registration.provider.value,
+            token_fingerprint=registration.token_fingerprint,
+            registered_at=registration.registered_at,
+        )
+
+    @app.delete(
+        "/v1/mobile/push-token",
+        response_model=PushTokenRemovalResponse,
+    )
+    def delete_mobile_push_token(
+        _: MobileRead,
+        x_qore_device_id: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Id",
+        ),
+    ) -> PushTokenRemovalResponse:
+        if not x_qore_device_id:
+            _raise(401, "device_session_authentication_failed", "missing device id")
+        removed = pushes.remove(x_qore_device_id)
+        if removed is not None:
+            audit.record(
+                AuditEventType.PUSH_TOKEN_REMOVED,
+                device_id=x_qore_device_id,
+                token_fingerprint=removed.token_fingerprint,
+            )
+        return PushTokenRemovalResponse(
+            device_id=x_qore_device_id,
+            removed=removed is not None,
+        )
+
     @app.get("/v1/dashboard", response_model=MobileDashboardSnapshot)
     def dashboard(_: MobileRead) -> MobileDashboardSnapshot:
         now = datetime.now(UTC)
@@ -390,9 +489,26 @@ def create_app(
     ) -> DeviceRevocationResponse:
         revoked = sessions.revoke_device(device_id)
         if revoked:
+            security_time = datetime.now(UTC)
+            removed_push = pushes.remove(device_id)
+            if removed_push is not None:
+                audit.record(
+                    AuditEventType.PUSH_TOKEN_REMOVED,
+                    device_id=device_id,
+                    token_fingerprint=removed_push.token_fingerprint,
+                    occurred_at=security_time,
+                )
             audit.record(
                 AuditEventType.DEVICE_REVOKED,
                 device_id=device_id,
+                occurred_at=security_time,
+            )
+            repository.upsert_alert(
+                device_security_alert(
+                    action="revoked",
+                    device_id=device_id,
+                    raised_at=security_time,
+                )
             )
         return DeviceRevocationResponse(
             device_id=device_id,

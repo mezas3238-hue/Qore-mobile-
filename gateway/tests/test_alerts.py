@@ -7,6 +7,7 @@ from qore_mobile_gateway.auth import RuntimeCredential, RuntimeCredentialRegistr
 from qore_mobile_gateway.repository import ReadRepository
 from qore_mobile_gateway.runtime_state import RuntimeStateStore, SequenceGap
 from tests.device_auth_helpers import (
+    ADMIN_TOKEN,
     build_client,
     enroll_device,
     new_private_key,
@@ -210,3 +211,35 @@ def test_risk_alerts_follow_only_canonical_state_transitions() -> None:
     post_risk(5, "UNKNOWN")
     after_unknown = {item["alert_id"] for item in read_risk_alerts()}
     assert after_unknown == before_unknown
+
+
+
+def test_device_enrollment_and_revocation_surface_security_alerts() -> None:
+    repository = ReadRepository()
+    client = build_client(read_repository=repository)
+    private_key = new_private_key()
+    session = enroll_device(client, private_key)
+
+    response = _read_alerts(
+        client,
+        session["access_token"],
+        private_key,
+    )
+    assert response.status_code == 200
+    security = [
+        item for item in response.json()
+        if item["kind"] == "security"
+    ]
+    assert any(item["title"] == "Dispositivo enrolado" for item in security)
+    serialized = json.dumps(security)
+    assert "test-enrollment-code" not in serialized
+    assert session["access_token"] not in serialized
+    assert session["refresh_token"] not in serialized
+
+    revoked = client.post(
+        "/v1/admin/devices/device-test-0001/revoke",
+        headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+    )
+    assert revoked.status_code == 200
+    stored = repository.list_alerts(include_resolved=True)
+    assert any(item.title == "Dispositivo revocado" for item in stored)

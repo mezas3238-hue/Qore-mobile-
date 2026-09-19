@@ -12,6 +12,8 @@ class AuditEventType(StrEnum):
     DEVICE_REVOKED = "device.revoked"
     DEVICE_AUTH_FAILED = "device.auth_failed"
     DEVICE_ENROLLMENT_FAILED = "device.enrollment_failed"
+    PUSH_TOKEN_REGISTERED = "push.token_registered"
+    PUSH_TOKEN_REMOVED = "push.token_removed"
     ADMIN_AUTH_FAILED = "admin.auth_failed"
     RUNTIME_AUTH_FAILED = "runtime.auth_failed"
     TELEMETRY_REJECTED = "telemetry.rejected"
@@ -24,6 +26,7 @@ class AuditEvent(BaseModel):
     runtime_id: str | None = None
     account_id: str | None = None
     reason_code: str | None = None
+    token_fingerprint: str | None = None
 
 
 class AuditLog:
@@ -45,6 +48,7 @@ class AuditLog:
         runtime_id: str | None = None,
         account_id: str | None = None,
         reason_code: str | None = None,
+        token_fingerprint: str | None = None,
         occurred_at: datetime | None = None,
     ) -> None:
         with self._lock:
@@ -56,6 +60,7 @@ class AuditLog:
                     runtime_id=runtime_id,
                     account_id=account_id,
                     reason_code=reason_code,
+                    token_fingerprint=token_fingerprint,
                 )
             )
 
