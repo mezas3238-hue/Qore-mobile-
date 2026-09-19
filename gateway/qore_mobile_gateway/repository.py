@@ -3,7 +3,7 @@ from datetime import datetime
 from threading import RLock
 
 from .freshness import FreshnessPolicy
-from .models import AccountSnapshot, PositionSnapshot, TraderSnapshot
+from .models import AlertSnapshot, AccountSnapshot, PositionSnapshot, TraderSnapshot
 
 
 @dataclass
@@ -18,6 +18,7 @@ class ReadRepository:
     accounts: dict[str, AccountSnapshot] = field(default_factory=dict)
     traders: dict[str, TraderSnapshot] = field(default_factory=dict)
     positions: dict[str, PositionSnapshot] = field(default_factory=dict)
+    alerts: dict[str, AlertSnapshot] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
     _freshness_policy: FreshnessPolicy = field(
         default_factory=FreshnessPolicy,
@@ -36,6 +37,13 @@ class ReadRepository:
     def list_positions(self) -> list[PositionSnapshot]:
         with self._lock:
             return sorted(self.positions.values(), key=lambda item: item.position_id)
+
+    def list_alerts(self, *, include_resolved: bool = False) -> list[AlertSnapshot]:
+        with self._lock:
+            values = list(self.alerts.values())
+            if not include_resolved:
+                values = [item for item in values if item.resolved_at is None]
+            return sorted(values, key=lambda item: item.raised_at, reverse=True)
 
     def get_trader(self, trader_id: str) -> TraderSnapshot | None:
         with self._lock:
@@ -62,6 +70,22 @@ class ReadRepository:
             if existing is not None and existing.account_id != position.account_id:
                 raise ValueError("position identity already belongs to another account")
             self.positions[position.position_id] = position
+
+    def upsert_alert(self, alert: AlertSnapshot) -> None:
+        with self._lock:
+            self.alerts[alert.alert_id] = alert
+
+    def resolve_alert(self, alert_id: str, *, resolved_at: datetime) -> None:
+        with self._lock:
+            existing = self.alerts.get(alert_id)
+            if existing is None:
+                return
+            self.alerts[alert_id] = existing.model_copy(
+                update={
+                    "resolved_at": resolved_at,
+                    "as_of": resolved_at,
+                }
+            )
 
     def close_position(self, *, account_id: str, position_id: str) -> None:
         with self._lock:
