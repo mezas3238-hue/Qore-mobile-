@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/native-bootstrap.yml"
 
+concurrency:
+  group: qore-native-bootstrap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
