@@ -68,6 +68,11 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
   Future<QoreDeviceSession> _refreshSession(
     QoreDeviceSession session,
   ) async {
+    final latest = await sessionProvider.readSession();
+    if (latest != null && latest.refreshToken != session.refreshToken) {
+      return latest;
+    }
+
     final active = _refreshInFlight;
     if (active != null) {
       final result = await active;
@@ -171,7 +176,12 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
     var responseBody = await utf8.decoder.bind(response).join();
 
     if (response.statusCode == HttpStatus.unauthorized && allowRefreshRetry) {
-      session = await _refreshSession(session);
+      final latest = await sessionProvider.readSession();
+      if (latest != null && latest.accessToken != session.accessToken) {
+        session = latest;
+      } else {
+        session = await _refreshSession(session);
+      }
       headers = await _proofHeaders(
         session: session,
         token: session.accessToken,
