@@ -528,7 +528,8 @@ void _showDetailSheet(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 title: Text(row.$1),
-                trailing: Flexible(
+                trailing: SizedBox(
+                  width: 180,
                   child: Text(
                     row.$2,
                     textAlign: TextAlign.end,
