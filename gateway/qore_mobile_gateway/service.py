@@ -3,9 +3,13 @@ from datetime import UTC, datetime
 
 from .models import (
     AccountSnapshot,
+    AlertSnapshot,
     Freshness,
+    MobileDashboardSnapshot,
     PortfolioSnapshot,
     PositionSnapshot,
+    RiskSnapshot,
+    RuntimeSnapshot,
     TraderSnapshot,
 )
 
@@ -60,4 +64,33 @@ def build_portfolio_snapshot(
         daily_drawdown_fraction=None,
         total_drawdown_fraction=None,
         freshness=_worst_freshness(accounts),
+    )
+
+
+
+def build_mobile_dashboard_snapshot(
+    *,
+    accounts: list[AccountSnapshot],
+    traders: list[TraderSnapshot],
+    positions: list[PositionSnapshot],
+    runtimes: list[RuntimeSnapshot],
+    risk: list[RiskSnapshot],
+    alerts: list[AlertSnapshot],
+    now: datetime | None = None,
+) -> MobileDashboardSnapshot:
+    as_of = now or datetime.now(UTC)
+    return MobileDashboardSnapshot(
+        as_of=as_of,
+        portfolio=build_portfolio_snapshot(
+            accounts=accounts,
+            traders=traders,
+            positions=positions,
+            now=as_of,
+        ),
+        accounts=accounts,
+        traders=traders,
+        positions=positions,
+        runtimes=runtimes,
+        risk=risk,
+        alerts=alerts,
     )
