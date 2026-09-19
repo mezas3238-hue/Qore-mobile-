@@ -1,12 +1,20 @@
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
+from .admin_auth import AdminAuthenticationError, AdminTokenRegistry
 from .auth import RuntimeAuthenticationError, RuntimeCredentialRegistry
-from .mobile_auth import MobileAuthenticationError, MobileReadTokenRegistry
+from .device_sessions import (
+    DeviceSessionError,
+    DeviceSessionStore,
+    EnrollmentCodeRegistry,
+    EnrollmentError,
+    IssuedSession,
+    SessionAuthenticationError,
+)
 from .models import (
     AccountSnapshot,
     PortfolioSnapshot,
@@ -38,6 +46,36 @@ class HealthResponse(BaseModel):
     server_time: datetime
 
 
+class DeviceEnrollmentRequest(BaseModel):
+    device_id: str = Field(min_length=8, max_length=128)
+    platform: Literal["android", "ios"]
+    label: str = Field(min_length=1, max_length=128)
+    public_key_b64: str = Field(min_length=40, max_length=128)
+
+
+class DeviceSessionResponse(BaseModel):
+    access_token: str
+    access_expires_at: datetime
+    refresh_token: str
+    refresh_expires_at: datetime
+    device_id: str
+
+    @classmethod
+    def from_issued(cls, issued: IssuedSession) -> "DeviceSessionResponse":
+        return cls(
+            access_token=issued.access_token,
+            access_expires_at=issued.access_expires_at,
+            refresh_token=issued.refresh_token,
+            refresh_expires_at=issued.refresh_expires_at,
+            device_id=issued.device_id,
+        )
+
+
+class DeviceRevocationResponse(BaseModel):
+    device_id: str
+    revoked: bool
+
+
 def _raise(status_code: int, code: str, message: str) -> None:
     raise HTTPException(
         status_code=status_code,
@@ -48,15 +86,16 @@ def _raise(status_code: int, code: str, message: str) -> None:
 def create_app(
     *,
     credential_registry: RuntimeCredentialRegistry | None = None,
-    mobile_read_registry: MobileReadTokenRegistry | None = None,
+    device_sessions: DeviceSessionStore | None = None,
+    admin_registry: AdminTokenRegistry | None = None,
     read_repository: ReadRepository | None = None,
     runtime_state: RuntimeStateStore | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="QORE Mobile Gateway",
-        version="0.1.0",
+        version="0.2.0",
         description=(
-            "Authenticated read-only mobile supervision API plus authenticated "
+            "Device-bound read-only mobile supervision API plus authenticated "
             "inbound QORE runtime telemetry. No trading execution endpoints exist."
         ),
     )
@@ -64,23 +103,66 @@ def create_app(
     repository = read_repository or ReadRepository()
     states = runtime_state or RuntimeStateStore()
     registry = credential_registry or RuntimeCredentialRegistry.from_environment()
-    mobile_registry = (
-        mobile_read_registry or MobileReadTokenRegistry.from_environment()
+    sessions = device_sessions or DeviceSessionStore(
+        enrollment_codes=EnrollmentCodeRegistry.from_environment()
     )
+    admins = admin_registry or AdminTokenRegistry.from_environment()
     telemetry = TelemetryService(repository=repository, runtime_state=states)
     bearer = HTTPBearer(auto_error=False)
 
-    def require_mobile_read(
+    async def require_mobile_read(
+        request: Request,
         credentials: Annotated[
             HTTPAuthorizationCredentials | None,
             Depends(bearer),
         ],
+        x_qore_device_id: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Id",
+        ),
+        x_qore_device_time: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Time",
+        ),
+        x_qore_device_nonce: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Nonce",
+        ),
+        x_qore_device_signature: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Signature",
+        ),
     ) -> None:
         token = credentials.credentials if credentials is not None else None
+        if not all(
+            [
+                token,
+                x_qore_device_id,
+                x_qore_device_time,
+                x_qore_device_nonce,
+                x_qore_device_signature,
+            ]
+        ):
+            _raise(
+                401,
+                "device_session_authentication_failed",
+                "missing device-bound session proof",
+            )
+
+        raw_body = await request.body()
         try:
-            mobile_registry.authenticate(token)
-        except MobileAuthenticationError as exc:
-            _raise(401, "mobile_authentication_failed", str(exc))
+            sessions.authenticate_access(
+                access_token=token,
+                device_id=x_qore_device_id,
+                method=request.method,
+                path=request.url.path,
+                timestamp=x_qore_device_time,
+                nonce=x_qore_device_nonce,
+                signature_b64=x_qore_device_signature,
+                body=raw_body,
+            )
+        except SessionAuthenticationError as exc:
+            _raise(401, "device_session_authentication_failed", str(exc))
 
     MobileRead = Annotated[None, Depends(require_mobile_read)]
 
@@ -92,6 +174,92 @@ def create_app(
             mode="read-only",
             server_time=datetime.now(UTC),
         )
+
+    @app.post(
+        "/v1/mobile/enroll",
+        response_model=DeviceSessionResponse,
+        status_code=201,
+    )
+    def enroll_mobile_device(
+        payload: DeviceEnrollmentRequest,
+        x_qore_enrollment_code: str | None = Header(
+            default=None,
+            alias="X-Qore-Enrollment-Code",
+        ),
+    ) -> DeviceSessionResponse:
+        if not x_qore_enrollment_code:
+            _raise(401, "device_enrollment_failed", "missing enrollment code")
+        try:
+            issued = sessions.enroll(
+                enrollment_code=x_qore_enrollment_code,
+                device_id=payload.device_id,
+                platform=payload.platform,
+                label=payload.label,
+                public_key_b64=payload.public_key_b64,
+            )
+        except EnrollmentError as exc:
+            _raise(401, "device_enrollment_failed", str(exc))
+        return DeviceSessionResponse.from_issued(issued)
+
+    @app.post(
+        "/v1/mobile/refresh",
+        response_model=DeviceSessionResponse,
+    )
+    async def refresh_mobile_session(
+        request: Request,
+        credentials: Annotated[
+            HTTPAuthorizationCredentials | None,
+            Depends(bearer),
+        ],
+        x_qore_device_id: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Id",
+        ),
+        x_qore_device_time: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Time",
+        ),
+        x_qore_device_nonce: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Nonce",
+        ),
+        x_qore_device_signature: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Signature",
+        ),
+    ) -> DeviceSessionResponse:
+        refresh_token = (
+            credentials.credentials if credentials is not None else None
+        )
+        if not all(
+            [
+                refresh_token,
+                x_qore_device_id,
+                x_qore_device_time,
+                x_qore_device_nonce,
+                x_qore_device_signature,
+            ]
+        ):
+            _raise(
+                401,
+                "device_refresh_failed",
+                "missing device-bound refresh proof",
+            )
+        raw_body = await request.body()
+        try:
+            issued = sessions.refresh(
+                refresh_token=refresh_token,
+                device_id=x_qore_device_id,
+                method=request.method,
+                path=request.url.path,
+                timestamp=x_qore_device_time,
+                nonce=x_qore_device_nonce,
+                signature_b64=x_qore_device_signature,
+                body=raw_body,
+            )
+        except SessionAuthenticationError as exc:
+            _raise(401, "device_refresh_failed", str(exc))
+        return DeviceSessionResponse.from_issued(issued)
 
     @app.get("/v1/portfolio", response_model=PortfolioSnapshot)
     def portfolio(_: MobileRead) -> PortfolioSnapshot:
@@ -116,6 +284,27 @@ def create_app(
     @app.get("/v1/runtimes", response_model=list[RuntimeSnapshot])
     def runtimes(_: MobileRead) -> list[RuntimeSnapshot]:
         return states.list_snapshots(now=datetime.now(UTC))
+
+    @app.post(
+        "/v1/admin/devices/{device_id}/revoke",
+        response_model=DeviceRevocationResponse,
+    )
+    def revoke_mobile_device(
+        device_id: str,
+        credentials: Annotated[
+            HTTPAuthorizationCredentials | None,
+            Depends(bearer),
+        ],
+    ) -> DeviceRevocationResponse:
+        token = credentials.credentials if credentials is not None else None
+        try:
+            admins.authenticate(token)
+        except AdminAuthenticationError as exc:
+            _raise(401, "admin_authentication_failed", str(exc))
+        return DeviceRevocationResponse(
+            device_id=device_id,
+            revoked=sessions.revoke_device(device_id),
+        )
 
     @app.post("/v1/runtime/events", response_model=EventReceipt, status_code=202)
     async def ingest_runtime_event(
