@@ -6,6 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml ./
 COPY qore_mobile_gateway ./qore_mobile_gateway
 
@@ -16,8 +20,9 @@ RUN useradd --create-home --uid 10001 qore \
     && mkdir -p /data \
     && chown -R qore:qore /app /data
 
-USER qore
+COPY docker-entrypoint.sh /usr/local/bin/qore-mobile-entrypoint
+RUN chmod 0755 /usr/local/bin/qore-mobile-entrypoint
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn qore_mobile_gateway.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+ENTRYPOINT ["/usr/local/bin/qore-mobile-entrypoint"]
