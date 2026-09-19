@@ -6,6 +6,7 @@ from .models import (
     AlertSnapshot,
     Freshness,
     PositionSnapshot,
+    RiskSnapshot,
     RuntimeSnapshot,
 )
 from .repository import ReadRepository
@@ -60,6 +61,72 @@ def position_closed_alert(
         trader_id=trader_id,
         position_id=position_id,
     )
+
+
+
+_CANONICAL_RISK_STATES = frozenset({"clear", "degraded", "blocked"})
+
+
+def risk_state_alerts(
+    *,
+    event_id: str,
+    previous: RiskSnapshot | None,
+    current: RiskSnapshot,
+    raised_at: datetime,
+) -> list[AlertSnapshot]:
+    """Project only canonical QORE Risk state transitions into mobile alerts."""
+
+    current_state = current.state.strip().lower()
+    previous_state = (
+        previous.state.strip().lower()
+        if previous is not None
+        else None
+    )
+
+    if current_state not in _CANONICAL_RISK_STATES:
+        return []
+    if previous_state == current_state:
+        return []
+
+    if current_state == "degraded":
+        kind = AlertKind.RISK_THRESHOLD
+        severity = AlertSeverity.WARNING
+        title = "QORE Risk degradado"
+        detail = (
+            f"{current.account_id} cambió a DEGRADED según QORE Risk."
+        )
+    elif current_state == "blocked":
+        kind = AlertKind.RISK_LOCK
+        severity = AlertSeverity.CRITICAL
+        title = "QORE Risk bloqueado"
+        detail = (
+            f"{current.account_id} cambió a BLOCKED según QORE Risk."
+        )
+    else:
+        if previous_state not in {"degraded", "blocked"}:
+            return []
+        kind = AlertKind.RISK_SAFE
+        severity = AlertSeverity.INFO
+        title = "QORE Risk recuperado"
+        detail = (
+            f"{current.account_id} volvió a CLEAR según QORE Risk."
+        )
+
+    return [
+        AlertSnapshot(
+            alert_id=(
+                f"risk:{current.account_id}:{kind.value}:{event_id}"
+            ),
+            kind=kind,
+            severity=severity,
+            title=title,
+            detail=detail,
+            source=current.source,
+            raised_at=raised_at,
+            as_of=raised_at,
+            account_id=current.account_id,
+        )
+    ]
 
 
 def runtime_health_alerts(

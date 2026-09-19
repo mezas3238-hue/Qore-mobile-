@@ -38,6 +38,7 @@ class AlertKind(StrEnum):
     POSITION_CLOSED = "position.closed"
     RISK_THRESHOLD = "risk.threshold"
     RISK_LOCK = "risk.lock"
+    RISK_SAFE = "risk.safe"
     SECURITY = "security"
 
 

@@ -67,6 +67,10 @@ class ReadRepository:
         with self._lock:
             return self.positions.get(position_id)
 
+    def get_risk(self, account_id: str) -> RiskSnapshot | None:
+        with self._lock:
+            return self.risk_by_account.get(account_id)
+
     def upsert_account(self, account: AccountSnapshot) -> None:
         with self._lock:
             self.accounts[account.account_id] = account

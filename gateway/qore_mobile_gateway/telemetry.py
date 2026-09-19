@@ -4,7 +4,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .alerts import position_closed_alert, position_opened_alert
+from .alerts import (
+    position_closed_alert,
+    position_opened_alert,
+    risk_state_alerts,
+)
 from .models import AccountSnapshot, PositionSnapshot, RiskSnapshot, TraderSnapshot
 from .repository import ReadRepository
 from .runtime_state import RuntimeStateStore
@@ -176,7 +180,15 @@ class TelemetryService:
             self.repository.upsert_trader(validated_payload)
         elif envelope.event_type == EventType.RISK_SNAPSHOT:
             assert isinstance(validated_payload, RiskSnapshot)
+            previous = self.repository.get_risk(validated_payload.account_id)
             self.repository.upsert_risk(validated_payload)
+            for alert in risk_state_alerts(
+                event_id=envelope.event_id,
+                previous=previous,
+                current=validated_payload,
+                raised_at=received_at,
+            ):
+                self.repository.upsert_alert(alert)
         elif envelope.event_type in {
             EventType.POSITION_OPENED,
             EventType.POSITION_UPDATED,

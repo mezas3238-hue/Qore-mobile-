@@ -148,3 +148,65 @@ def test_position_open_event_is_visible_in_alert_center() -> None:
     assert len(position_alerts) == 1
     assert position_alerts[0]["position_id"] == "position-1"
     assert "EURUSD" in position_alerts[0]["title"]
+
+
+
+def test_risk_alerts_follow_only_canonical_state_transitions() -> None:
+    client = build_client(credential_registry=_runtime_registry())
+    private_key = new_private_key()
+    session = enroll_device(client, private_key)
+    now = datetime.now(UTC)
+
+    def post_risk(sequence: int, state: str) -> None:
+        event = {
+            "schema_version": "0.1",
+            "event_id": f"risk-{sequence}",
+            "event_type": "risk.snapshot",
+            "runtime_id": "runtime-a",
+            "account_id": "account-a",
+            "sequence": sequence,
+            "event_time": now.isoformat(),
+            "emitted_at": now.isoformat(),
+            "payload": {
+                "account_id": "account-a",
+                "state": state,
+                "source": "qore-risk",
+                "as_of": now.isoformat(),
+            },
+        }
+        assert _runtime_post(client, event).status_code == 202
+
+    def read_risk_alerts() -> list[dict]:
+        response = _read_alerts(
+            client,
+            session["access_token"],
+            private_key,
+        )
+        assert response.status_code == 200
+        return [
+            item for item in response.json()
+            if item["kind"].startswith("risk.")
+        ]
+
+    post_risk(1, "CLEAR")
+    assert read_risk_alerts() == []
+
+    post_risk(2, "DEGRADED")
+    degraded = read_risk_alerts()
+    assert degraded[0]["kind"] == "risk.threshold"
+    assert degraded[0]["severity"] == "warning"
+
+    post_risk(3, "BLOCKED")
+    blocked = read_risk_alerts()
+    lock = next(item for item in blocked if item["kind"] == "risk.lock")
+    assert lock["severity"] == "critical"
+
+    post_risk(4, "CLEAR")
+    recovered = read_risk_alerts()
+    safe = next(item for item in recovered if item["kind"] == "risk.safe")
+    assert safe["severity"] == "info"
+
+    before_unknown = {item["alert_id"] for item in recovered}
+    post_risk(5, "UNKNOWN")
+    after_unknown = {item["alert_id"] for item in read_risk_alerts()}
+    assert after_unknown == before_unknown
