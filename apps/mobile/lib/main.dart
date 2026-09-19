@@ -36,21 +36,30 @@ class QoreHome extends StatefulWidget {
   State<QoreHome> createState() => _QoreHomeState();
 }
 
-class _QoreHomeState extends State<QoreHome> {
+class _QoreHomeState extends State<QoreHome> with WidgetsBindingObserver {
   late final DashboardController controller;
   int selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     controller = DashboardController(widget.client);
-    if (widget.client != null) {
-      controller.refresh();
+    controller.startAutoRefresh();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      controller.startAutoRefresh();
+    } else {
+      controller.stopAutoRefresh();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     controller.dispose();
     super.dispose();
   }
