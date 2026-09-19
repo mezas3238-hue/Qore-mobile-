@@ -1,8 +1,51 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val localSigningProperties = Properties()
+val localSigningPropertiesFile = rootProject.file("key.properties")
+if (localSigningPropertiesFile.exists()) {
+    FileInputStream(localSigningPropertiesFile).use {
+        localSigningProperties.load(it)
+    }
+}
+
+fun releaseSigningValue(propertyName: String, environmentName: String): String? {
+    val environmentValue = System.getenv(environmentName)?.trim()
+    if (!environmentValue.isNullOrEmpty()) {
+        return environmentValue
+    }
+    return localSigningProperties.getProperty(propertyName)?.trim()
+        ?.takeIf { it.isNotEmpty() }
+}
+
+val releaseStoreFile = releaseSigningValue(
+    "storeFile",
+    "QORE_ANDROID_KEYSTORE_PATH",
+)
+val releaseStorePassword = releaseSigningValue(
+    "storePassword",
+    "QORE_ANDROID_STORE_PASSWORD",
+)
+val releaseKeyAlias = releaseSigningValue(
+    "keyAlias",
+    "QORE_ANDROID_KEY_ALIAS",
+)
+val releaseKeyPassword = releaseSigningValue(
+    "keyPassword",
+    "QORE_ANDROID_KEY_PASSWORD",
+)
+val releaseSigningConfigured = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.qore.mobile.qore_mobile"
@@ -29,11 +72,27 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Never fall back to the debug key. CI intentionally compiles an
+            // unsigned release bundle; the Owner signs the Play upload bundle
+            // locally with credentials that never enter GitHub.
+            signingConfig = if (releaseSigningConfigured) {
+                signingConfigs.getByName("release")
+            } else {
+                null
+            }
         }
     }
 }

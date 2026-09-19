@@ -134,6 +134,13 @@ jobs:
           flutter build apk
           --debug
           --dart-define=QORE_GATEWAY_URL=https://gateway.invalid
+      - name: Compile unsigned Android release bundle
+        run: >
+          flutter build appbundle
+          --release
+          --dart-define=QORE_GATEWAY_URL=https://gateway.invalid
+      - name: Verify release bundle exists
+        run: test -f build/app/outputs/bundle/release/app-release.aab
 
   ios-native:
     runs-on: macos-latest

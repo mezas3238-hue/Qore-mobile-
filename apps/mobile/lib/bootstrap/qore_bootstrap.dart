@@ -417,7 +417,7 @@ class _EnrollmentScreenState extends State<_EnrollmentScreen> {
               autocorrect: false,
               onSubmitted: (_) => _submit(),
               decoration: const InputDecoration(
-                labelText: 'Código de enrolamiento',
+                labelText: 'Clave/código de enrolamiento (uso único)',
                 border: OutlineInputBorder(),
               ),
             ),
