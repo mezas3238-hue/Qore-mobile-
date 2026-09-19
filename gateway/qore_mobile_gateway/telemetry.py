@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .alerts import position_closed_alert, position_opened_alert
-from .models import AccountSnapshot, PositionSnapshot, TraderSnapshot
+from .models import AccountSnapshot, PositionSnapshot, RiskSnapshot, TraderSnapshot
 from .repository import ReadRepository
 from .runtime_state import RuntimeStateStore
 
@@ -14,6 +14,7 @@ class EventType(StrEnum):
     RUNTIME_HEARTBEAT = "runtime.heartbeat"
     ACCOUNT_SNAPSHOT = "account.snapshot"
     TRADER_STATE = "trader.state"
+    RISK_SNAPSHOT = "risk.snapshot"
     POSITION_OPENED = "position.opened"
     POSITION_UPDATED = "position.updated"
     POSITION_CLOSED = "position.closed"
@@ -90,6 +91,14 @@ class TelemetryService:
                 )
             return account
 
+        if envelope.event_type == EventType.RISK_SNAPSHOT:
+            risk = RiskSnapshot.model_validate(envelope.payload)
+            self._validate_account_scope(
+                envelope_account_id=envelope.account_id,
+                account_id=risk.account_id,
+            )
+            return risk
+
         if envelope.event_type == EventType.TRADER_STATE:
             trader = TraderSnapshot.model_validate(envelope.payload)
             self._validate_account_scope(
@@ -165,6 +174,9 @@ class TelemetryService:
         elif envelope.event_type == EventType.TRADER_STATE:
             assert isinstance(validated_payload, TraderSnapshot)
             self.repository.upsert_trader(validated_payload)
+        elif envelope.event_type == EventType.RISK_SNAPSHOT:
+            assert isinstance(validated_payload, RiskSnapshot)
+            self.repository.upsert_risk(validated_payload)
         elif envelope.event_type in {
             EventType.POSITION_OPENED,
             EventType.POSITION_UPDATED,
