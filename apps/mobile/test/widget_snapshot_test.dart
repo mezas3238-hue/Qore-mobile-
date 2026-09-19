@@ -19,6 +19,7 @@ void main() {
       accounts: const [],
       traders: const [],
       positions: const [],
+      risks: const [],
       alerts: const [],
       runtimes: [
         RuntimeSnapshot(
