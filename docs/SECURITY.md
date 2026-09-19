@@ -130,7 +130,7 @@ Runtime telemetry uses a separate credential class and cannot authenticate as a 
 
 The final mobile read boundary is moving from bearer-only authentication to proof-of-possession sessions.
 
-Each enrolled phone owns an Ed25519 keypair:
+Each enrolled phone owns a native signing keypair:
 
 - private key: generated/stored in the device secure key store and never sent to the Gateway;
 - public key: registered with QORE Mobile Gateway during one-time enrollment.
@@ -141,7 +141,7 @@ Every protected request carries:
 - device ID;
 - UTC proof timestamp;
 - unique nonce;
-- Ed25519 signature over the canonical request.
+- P-256 ECDSA signature over the canonical request.
 
 Canonical proof input:
 
@@ -167,3 +167,18 @@ Refresh tokens are rotating and also require device proof. Using a refresh token
 Remote device revocation invalidates all active sessions for that device.
 
 This makes possession of an access/refresh token alone insufficient to impersonate the enrolled phone.
+
+
+## Native signing algorithm
+
+Production Android and iOS enrollment prefers P-256 ECDSA so the private key
+can remain non-exportable in Android Keystore or Apple Secure Enclave.
+
+- Android publishes the DER SubjectPublicKeyInfo representation as
+  `key_algorithm=p256-spki`.
+- iOS publishes the X9.63 uncompressed public representation as
+  `key_algorithm=p256-x963`.
+- Ed25519 remains accepted only for compatibility and automated tests.
+
+The canonical request proof is unchanged; only the native signature algorithm
+and public-key representation are versioned.
