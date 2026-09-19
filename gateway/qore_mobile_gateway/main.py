@@ -6,9 +6,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, ValidationError
 
 from .admin_auth import AdminAuthenticationError, AdminTokenRegistry
+from .audit import AuditEvent, AuditEventType, AuditLog
 from .auth import RuntimeAuthenticationError, RuntimeCredentialRegistry
 from .device_sessions import (
-    DeviceSessionError,
     DeviceSessionStore,
     EnrollmentCodeRegistry,
     EnrollmentError,
@@ -88,6 +88,7 @@ def create_app(
     credential_registry: RuntimeCredentialRegistry | None = None,
     device_sessions: DeviceSessionStore | None = None,
     admin_registry: AdminTokenRegistry | None = None,
+    audit_log: AuditLog | None = None,
     read_repository: ReadRepository | None = None,
     runtime_state: RuntimeStateStore | None = None,
 ) -> FastAPI:
@@ -107,6 +108,7 @@ def create_app(
         enrollment_codes=EnrollmentCodeRegistry.from_environment()
     )
     admins = admin_registry or AdminTokenRegistry.from_environment()
+    audit = audit_log or AuditLog()
     telemetry = TelemetryService(repository=repository, runtime_state=states)
     bearer = HTTPBearer(auto_error=False)
 
@@ -143,6 +145,11 @@ def create_app(
                 x_qore_device_signature,
             ]
         ):
+            audit.record(
+                AuditEventType.DEVICE_AUTH_FAILED,
+                device_id=x_qore_device_id,
+                reason_code="missing_proof",
+            )
             _raise(
                 401,
                 "device_session_authentication_failed",
@@ -162,9 +169,32 @@ def create_app(
                 body=raw_body,
             )
         except SessionAuthenticationError as exc:
+            audit.record(
+                AuditEventType.DEVICE_AUTH_FAILED,
+                device_id=x_qore_device_id,
+                reason_code="invalid_proof_or_session",
+            )
             _raise(401, "device_session_authentication_failed", str(exc))
 
     MobileRead = Annotated[None, Depends(require_mobile_read)]
+
+    def require_admin(
+        credentials: Annotated[
+            HTTPAuthorizationCredentials | None,
+            Depends(bearer),
+        ],
+    ) -> None:
+        token = credentials.credentials if credentials is not None else None
+        try:
+            admins.authenticate(token)
+        except AdminAuthenticationError as exc:
+            audit.record(
+                AuditEventType.ADMIN_AUTH_FAILED,
+                reason_code="invalid_admin_token",
+            )
+            _raise(401, "admin_authentication_failed", str(exc))
+
+    AdminAccess = Annotated[None, Depends(require_admin)]
 
     @app.get("/v1/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -188,6 +218,11 @@ def create_app(
         ),
     ) -> DeviceSessionResponse:
         if not x_qore_enrollment_code:
+            audit.record(
+                AuditEventType.DEVICE_ENROLLMENT_FAILED,
+                device_id=payload.device_id,
+                reason_code="missing_code",
+            )
             _raise(401, "device_enrollment_failed", "missing enrollment code")
         try:
             issued = sessions.enroll(
@@ -198,7 +233,16 @@ def create_app(
                 public_key_b64=payload.public_key_b64,
             )
         except EnrollmentError as exc:
+            audit.record(
+                AuditEventType.DEVICE_ENROLLMENT_FAILED,
+                device_id=payload.device_id,
+                reason_code="invalid_code_or_device",
+            )
             _raise(401, "device_enrollment_failed", str(exc))
+        audit.record(
+            AuditEventType.DEVICE_ENROLLED,
+            device_id=payload.device_id,
+        )
         return DeviceSessionResponse.from_issued(issued)
 
     @app.post(
@@ -240,6 +284,11 @@ def create_app(
                 x_qore_device_signature,
             ]
         ):
+            audit.record(
+                AuditEventType.DEVICE_AUTH_FAILED,
+                device_id=x_qore_device_id,
+                reason_code="refresh_missing_proof",
+            )
             _raise(
                 401,
                 "device_refresh_failed",
@@ -258,7 +307,16 @@ def create_app(
                 body=raw_body,
             )
         except SessionAuthenticationError as exc:
+            audit.record(
+                AuditEventType.DEVICE_AUTH_FAILED,
+                device_id=x_qore_device_id,
+                reason_code="refresh_invalid",
+            )
             _raise(401, "device_refresh_failed", str(exc))
+        audit.record(
+            AuditEventType.DEVICE_SESSION_REFRESHED,
+            device_id=x_qore_device_id,
+        )
         return DeviceSessionResponse.from_issued(issued)
 
     @app.get("/v1/portfolio", response_model=PortfolioSnapshot)
@@ -291,20 +349,22 @@ def create_app(
     )
     def revoke_mobile_device(
         device_id: str,
-        credentials: Annotated[
-            HTTPAuthorizationCredentials | None,
-            Depends(bearer),
-        ],
+        _: AdminAccess,
     ) -> DeviceRevocationResponse:
-        token = credentials.credentials if credentials is not None else None
-        try:
-            admins.authenticate(token)
-        except AdminAuthenticationError as exc:
-            _raise(401, "admin_authentication_failed", str(exc))
+        revoked = sessions.revoke_device(device_id)
+        if revoked:
+            audit.record(
+                AuditEventType.DEVICE_REVOKED,
+                device_id=device_id,
+            )
         return DeviceRevocationResponse(
             device_id=device_id,
-            revoked=sessions.revoke_device(device_id),
+            revoked=revoked,
         )
+
+    @app.get("/v1/admin/audit", response_model=list[AuditEvent])
+    def admin_audit(_: AdminAccess) -> list[AuditEvent]:
+        return audit.list_events()
 
     @app.post("/v1/runtime/events", response_model=EventReceipt, status_code=202)
     async def ingest_runtime_event(
@@ -322,6 +382,10 @@ def create_app(
         try:
             envelope = TelemetryEnvelope.model_validate_json(raw_body)
         except ValidationError as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                reason_code="invalid_envelope",
+            )
             _raise(422, "invalid_envelope", str(exc))
 
         try:
@@ -333,6 +397,12 @@ def create_app(
                 raw_body=raw_body,
             )
         except RuntimeAuthenticationError as exc:
+            audit.record(
+                AuditEventType.RUNTIME_AUTH_FAILED,
+                runtime_id=envelope.runtime_id,
+                account_id=envelope.account_id,
+                reason_code="runtime_authentication_failed",
+            )
             _raise(401, "runtime_authentication_failed", str(exc))
 
         try:
@@ -343,12 +413,36 @@ def create_app(
                 received_at=datetime.now(UTC),
             )
         except TelemetryValidationError as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                runtime_id=envelope.runtime_id,
+                account_id=envelope.account_id,
+                reason_code="telemetry_validation_failed",
+            )
             _raise(422, "telemetry_validation_failed", str(exc))
         except SequenceReplayOrOutOfOrder as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                runtime_id=envelope.runtime_id,
+                account_id=envelope.account_id,
+                reason_code="sequence_replay_or_out_of_order",
+            )
             _raise(409, "sequence_replay_or_out_of_order", str(exc))
         except SequenceGap as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                runtime_id=envelope.runtime_id,
+                account_id=envelope.account_id,
+                reason_code="sequence_gap",
+            )
             _raise(409, "sequence_gap", str(exc))
         except ReconciliationRequired as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                runtime_id=envelope.runtime_id,
+                account_id=envelope.account_id,
+                reason_code="reconciliation_required",
+            )
             _raise(409, "reconciliation_required", str(exc))
 
     @app.post(
@@ -371,6 +465,10 @@ def create_app(
         try:
             snapshot = ReconciliationSnapshot.model_validate_json(raw_body)
         except ValidationError as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                reason_code="invalid_reconciliation_snapshot",
+            )
             _raise(422, "invalid_reconciliation_snapshot", str(exc))
 
         try:
@@ -382,6 +480,12 @@ def create_app(
                 raw_body=raw_body,
             )
         except RuntimeAuthenticationError as exc:
+            audit.record(
+                AuditEventType.RUNTIME_AUTH_FAILED,
+                runtime_id=snapshot.runtime_id,
+                account_id=snapshot.account_id,
+                reason_code="runtime_authentication_failed",
+            )
             _raise(401, "runtime_authentication_failed", str(exc))
 
         try:
@@ -390,8 +494,20 @@ def create_app(
                 received_at=datetime.now(UTC),
             )
         except TelemetryValidationError as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                runtime_id=snapshot.runtime_id,
+                account_id=snapshot.account_id,
+                reason_code="reconciliation_validation_failed",
+            )
             _raise(422, "telemetry_validation_failed", str(exc))
         except SequenceReplayOrOutOfOrder as exc:
+            audit.record(
+                AuditEventType.TELEMETRY_REJECTED,
+                runtime_id=snapshot.runtime_id,
+                account_id=snapshot.account_id,
+                reason_code="reconciliation_sequence_rejected",
+            )
             _raise(409, "sequence_replay_or_out_of_order", str(exc))
 
     return app
