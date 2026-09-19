@@ -45,6 +45,20 @@ class QoreDeviceSession {
 ///
 /// The private Ed25519 key must remain inside OS-backed secure storage. Dart
 /// receives signatures only; it never receives raw private-key material.
+class DeviceEnrollmentIdentity {
+  const DeviceEnrollmentIdentity({
+    required this.deviceId,
+    required this.platform,
+    required this.publicKeyB64,
+    required this.keyAlgorithm,
+  });
+
+  final String deviceId;
+  final String platform;
+  final String publicKeyB64;
+  final String keyAlgorithm;
+}
+
 abstract interface class DeviceSessionProvider {
   Future<QoreDeviceSession?> readSession();
 
@@ -53,6 +67,12 @@ abstract interface class DeviceSessionProvider {
   Future<void> saveSession(QoreDeviceSession session);
 
   Future<void> clearSession();
+
+  Future<DeviceEnrollmentIdentity> ensureEnrollmentIdentity();
+
+  Future<bool> authenticateOwner({required String reason});
+
+  Future<void> publishWidgetSnapshot(Map<String, Object?> snapshot);
 }
 
 /// Fail-closed placeholder until native device enrollment is wired.
@@ -72,4 +92,15 @@ class NoDeviceSessionProvider implements DeviceSessionProvider {
 
   @override
   Future<void> clearSession() async {}
+
+  @override
+  Future<DeviceEnrollmentIdentity> ensureEnrollmentIdentity() {
+    throw StateError('No native device identity is available.');
+  }
+
+  @override
+  Future<bool> authenticateOwner({required String reason}) async => false;
+
+  @override
+  Future<void> publishWidgetSnapshot(Map<String, Object?> snapshot) async {}
 }
