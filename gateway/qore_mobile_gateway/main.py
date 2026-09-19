@@ -19,6 +19,7 @@ from .device_sessions import (
 from .models import (
     AccountSnapshot,
     AlertSnapshot,
+    MobileDashboardSnapshot,
     PortfolioSnapshot,
     PositionSnapshot,
     RiskSnapshot,
@@ -32,7 +33,7 @@ from .runtime_state import (
     SequenceGap,
     SequenceReplayOrOutOfOrder,
 )
-from .service import build_portfolio_snapshot
+from .service import build_mobile_dashboard_snapshot, build_portfolio_snapshot
 from .telemetry import (
     EventReceipt,
     ReconciliationSnapshot,
@@ -323,6 +324,24 @@ def create_app(
             device_id=x_qore_device_id,
         )
         return DeviceSessionResponse.from_issued(issued)
+
+    @app.get("/v1/dashboard", response_model=MobileDashboardSnapshot)
+    def dashboard(_: MobileRead) -> MobileDashboardSnapshot:
+        now = datetime.now(UTC)
+        runtimes_snapshot = states.list_snapshots(now=now)
+        return build_mobile_dashboard_snapshot(
+            accounts=repository.list_accounts(),
+            traders=repository.list_traders(),
+            positions=repository.list_positions(),
+            runtimes=runtimes_snapshot,
+            risk=repository.list_risk(),
+            alerts=current_alerts(
+                repository=repository,
+                runtimes=runtimes_snapshot,
+                now=now,
+            ),
+            now=now,
+        )
 
     @app.get("/v1/portfolio", response_model=PortfolioSnapshot)
     def portfolio(_: MobileRead) -> PortfolioSnapshot:
