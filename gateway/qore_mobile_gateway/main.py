@@ -53,7 +53,8 @@ class DeviceEnrollmentRequest(BaseModel):
     device_id: str = Field(min_length=8, max_length=128)
     platform: Literal["android", "ios"]
     label: str = Field(min_length=1, max_length=128)
-    public_key_b64: str = Field(min_length=40, max_length=128)
+    public_key_b64: str = Field(min_length=40, max_length=512)
+    key_algorithm: Literal["ed25519", "p256-spki", "p256-x963"] = "ed25519"
 
 
 class DeviceSessionResponse(BaseModel):
@@ -234,6 +235,7 @@ def create_app(
                 platform=payload.platform,
                 label=payload.label,
                 public_key_b64=payload.public_key_b64,
+                key_algorithm=payload.key_algorithm,
             )
         except EnrollmentError as exc:
             audit.record(
