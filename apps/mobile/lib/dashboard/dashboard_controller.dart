@@ -12,10 +12,18 @@ enum DashboardStatus {
   error,
 }
 
+typedef DashboardSnapshotSink = Future<void> Function(
+  DashboardSnapshot snapshot,
+);
+
 class DashboardController extends ChangeNotifier {
-  DashboardController(this._client);
+  DashboardController(
+    this._client, {
+    this.snapshotSink,
+  });
 
   final QoreGatewayClient? _client;
+  final DashboardSnapshotSink? snapshotSink;
 
   DashboardStatus status = DashboardStatus.disconnected;
   DashboardSnapshot? snapshot;
@@ -43,6 +51,19 @@ class DashboardController extends ChangeNotifier {
     _refreshTimer = null;
   }
 
+  Future<void> _publishSnapshotSafely(DashboardSnapshot value) async {
+    final sink = snapshotSink;
+    if (sink == null) {
+      return;
+    }
+    try {
+      await sink(value);
+    } catch (_) {
+      // Widget publication is best-effort observability. It must never
+      // downgrade or block the authenticated foreground dashboard.
+    }
+  }
+
   Future<void> refresh() async {
     final client = _client;
     if (client == null) {
@@ -66,8 +87,10 @@ class DashboardController extends ChangeNotifier {
     errorMessage = null;
 
     try {
-      snapshot = await client.fetchDashboard();
+      final next = await client.fetchDashboard();
+      snapshot = next;
       status = DashboardStatus.ready;
+      unawaited(_publishSnapshotSafely(next));
     } on QoreSessionMissing {
       snapshot = null;
       status = DashboardStatus.disconnected;
