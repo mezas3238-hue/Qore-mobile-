@@ -51,7 +51,7 @@ jobs:
           KEYSTORE_DIR="$(mktemp -d)"
           KEYSTORE="$KEYSTORE_DIR/qore-direct-install.jks"
           STORE_PASS="$(openssl rand -hex 24)"
-          KEY_PASS="$(openssl rand -hex 24)"
+          KEY_PASS="$STORE_PASS"
           KEY_ALIAS="qore-direct-install"
 
           cleanup() {
