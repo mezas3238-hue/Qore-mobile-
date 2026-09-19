@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .alerts import position_closed_alert, position_opened_alert
 from .models import AccountSnapshot, PositionSnapshot, TraderSnapshot
 from .repository import ReadRepository
 from .runtime_state import RuntimeStateStore
@@ -170,11 +171,29 @@ class TelemetryService:
         }:
             assert isinstance(validated_payload, PositionSnapshot)
             self.repository.upsert_position(validated_payload)
+            if envelope.event_type == EventType.POSITION_OPENED:
+                self.repository.upsert_alert(
+                    position_opened_alert(
+                        event_id=envelope.event_id,
+                        position=validated_payload,
+                        raised_at=received_at,
+                    )
+                )
         elif envelope.event_type == EventType.POSITION_CLOSED:
             assert isinstance(validated_payload, str)
+            existing = self.repository.get_position(validated_payload)
             self.repository.close_position(
                 account_id=envelope.account_id,
                 position_id=validated_payload,
+            )
+            self.repository.upsert_alert(
+                position_closed_alert(
+                    event_id=envelope.event_id,
+                    account_id=envelope.account_id,
+                    position_id=validated_payload,
+                    position=existing,
+                    raised_at=received_at,
+                )
             )
 
         return EventReceipt(
