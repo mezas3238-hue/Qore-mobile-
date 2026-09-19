@@ -48,6 +48,71 @@ paths:
                 $ref: "#/components/schemas/DeviceSession"
         "401":
           description: Refresh session or device proof invalid.
+  /v1/mobile/push-token:
+    put:
+      operationId: registerMobilePushToken
+      description: >
+        Registers the provider token bound to the authenticated device.
+        Android accepts FCM only; iOS accepts APNs only. The raw token is
+        never returned by the API.
+      security:
+        - accessBearer: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [provider, token]
+              properties:
+                provider:
+                  enum: [fcm, apns]
+                token:
+                  type: string
+                  minLength: 16
+                  maxLength: 4096
+      responses:
+        "200":
+          description: Push token registered for the authenticated device.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [device_id, provider, token_fingerprint, registered_at]
+                properties:
+                  device_id: { type: string }
+                  provider: { enum: [fcm, apns] }
+                  token_fingerprint: { type: string }
+                  registered_at: { type: string, format: date-time }
+        "422":
+          description: Provider/platform mismatch or invalid token.
+    delete:
+      operationId: deleteMobilePushToken
+      security:
+        - accessBearer: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
+      responses:
+        "200":
+          description: Push registration removed when present.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_id, removed]
+                properties:
+                  device_id: { type: string }
+                  removed: { type: boolean }
   /v1/admin/devices/{device_id}/revoke:
     post:
       operationId: revokeMobileDevice
@@ -71,6 +136,10 @@ paths:
                   revoked: { type: boolean }
 components:
   securitySchemes:
+    accessBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-short-lived-access-token
     refreshBearer:
       type: http
       scheme: bearer
@@ -99,7 +168,9 @@ components:
       name: X-Qore-Device-Signature
       in: header
       required: true
-      description: Base64 Ed25519 signature over the canonical request proof.
+      description: >
+        Base64 signature over the canonical request proof using the enrolled
+        device key algorithm (P-256 in native production builds).
       schema: { type: string }
   schemas:
     DeviceEnrollmentRequest:
