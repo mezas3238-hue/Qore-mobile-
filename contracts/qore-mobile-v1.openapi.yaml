@@ -21,6 +21,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /v1/dashboard:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
+      operationId: getDashboard
+      responses:
+        "200":
+          description: Canonical one-round-trip mobile dashboard snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileDashboardSnapshot"
   /v1/portfolio:
     get:
       security:
@@ -181,6 +198,30 @@ components:
       description: Base64 Ed25519 proof over method, path, timestamp, nonce and body hash.
       schema: { type: string }
   schemas:
+    MobileDashboardSnapshot:
+      type: object
+      required: [as_of, portfolio, accounts, traders, positions, runtimes, risk, alerts]
+      properties:
+        as_of: { type: string, format: date-time }
+        portfolio: { $ref: "#/components/schemas/PortfolioSnapshot" }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/AccountSnapshot" }
+        traders:
+          type: array
+          items: { $ref: "#/components/schemas/TraderSnapshot" }
+        positions:
+          type: array
+          items: { $ref: "#/components/schemas/PositionSnapshot" }
+        runtimes:
+          type: array
+          items: { $ref: "#/components/schemas/RuntimeSnapshot" }
+        risk:
+          type: array
+          items: { $ref: "#/components/schemas/RiskSnapshot" }
+        alerts:
+          type: array
+          items: { $ref: "#/components/schemas/AlertSnapshot" }
     Health:
       type: object
       required: [service, status, mode, server_time]
