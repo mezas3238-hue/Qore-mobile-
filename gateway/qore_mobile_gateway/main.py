@@ -6,6 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, ValidationError
 
 from .admin_auth import AdminAuthenticationError, AdminTokenRegistry
+from .alerts import current_alerts
 from .audit import AuditEvent, AuditEventType, AuditLog
 from .auth import RuntimeAuthenticationError, RuntimeCredentialRegistry
 from .device_sessions import (
@@ -17,6 +18,7 @@ from .device_sessions import (
 )
 from .models import (
     AccountSnapshot,
+    AlertSnapshot,
     PortfolioSnapshot,
     PositionSnapshot,
     RuntimeSnapshot,
@@ -342,6 +344,15 @@ def create_app(
     @app.get("/v1/runtimes", response_model=list[RuntimeSnapshot])
     def runtimes(_: MobileRead) -> list[RuntimeSnapshot]:
         return states.list_snapshots(now=datetime.now(UTC))
+
+    @app.get("/v1/alerts", response_model=list[AlertSnapshot])
+    def alerts(_: MobileRead) -> list[AlertSnapshot]:
+        now = datetime.now(UTC)
+        return current_alerts(
+            repository=repository,
+            runtimes=states.list_snapshots(now=now),
+            now=now,
+        )
 
     @app.post(
         "/v1/admin/devices/{device_id}/revoke",
