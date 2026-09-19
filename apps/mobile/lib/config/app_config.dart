@@ -21,7 +21,7 @@ class QoreAppConfig {
       return QoreAppConfig._(uri);
     }
     return QoreAppConfig._(
-      uri.replace(path: uri.path + '/'),
+      uri.replace(path: '${uri.path}/'),
     );
   }
 }
