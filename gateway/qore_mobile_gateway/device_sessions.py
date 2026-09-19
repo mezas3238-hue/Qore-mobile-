@@ -9,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 from threading import RLock
 
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 
@@ -39,6 +41,7 @@ class DeviceRecord:
     platform: str
     label: str
     public_key: bytes
+    key_algorithm: str
     created_at: datetime
     revoked_at: datetime | None = None
 
@@ -58,14 +61,37 @@ def _hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _decode_public_key(value: str) -> bytes:
+def _decode_public_key(value: str, *, key_algorithm: str) -> bytes:
     try:
         raw = base64.b64decode(value, validate=True)
     except ValueError as exc:
         raise EnrollmentError("invalid device public key encoding") from exc
-    if len(raw) != 32:
-        raise EnrollmentError("Ed25519 public key must be 32 bytes")
-    return raw
+
+    if key_algorithm == "ed25519":
+        if len(raw) != 32:
+            raise EnrollmentError("Ed25519 public key must be 32 bytes")
+        Ed25519PublicKey.from_public_bytes(raw)
+        return raw
+
+    if key_algorithm == "p256-x963":
+        try:
+            ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw)
+        except ValueError as exc:
+            raise EnrollmentError("invalid P-256 X9.63 public key") from exc
+        return raw
+
+    if key_algorithm == "p256-spki":
+        try:
+            key = serialization.load_der_public_key(raw)
+        except ValueError as exc:
+            raise EnrollmentError("invalid P-256 SPKI public key") from exc
+        if not isinstance(key, ec.EllipticCurvePublicKey):
+            raise EnrollmentError("SPKI public key is not elliptic-curve")
+        if not isinstance(key.curve, ec.SECP256R1):
+            raise EnrollmentError("SPKI public key is not P-256")
+        return raw
+
+    raise EnrollmentError("unsupported device key algorithm")
 
 
 class EnrollmentCodeRegistry:
@@ -156,10 +182,14 @@ class DeviceSessionStore:
         platform: str,
         label: str,
         public_key_b64: str,
+        key_algorithm: str = "ed25519",
         now: datetime | None = None,
     ) -> IssuedSession:
         current = now or datetime.now(UTC)
-        public_key = _decode_public_key(public_key_b64)
+        public_key = _decode_public_key(
+            public_key_b64,
+            key_algorithm=key_algorithm,
+        )
         with self._lock:
             existing = self._devices.get(device_id)
             if existing is not None and existing.revoked_at is None:
@@ -170,6 +200,7 @@ class DeviceSessionStore:
                 platform=platform,
                 label=label,
                 public_key=public_key,
+                key_algorithm=key_algorithm,
                 created_at=current,
             )
             return self._issue_session(device_id=device_id, now=current)
@@ -230,7 +261,6 @@ class DeviceSessionStore:
         except ValueError as exc:
             raise SessionAuthenticationError("invalid device signature encoding") from exc
 
-        public_key = Ed25519PublicKey.from_public_bytes(device.public_key)
         message = self._canonical_message(
             method=method,
             path=path,
@@ -239,8 +269,35 @@ class DeviceSessionStore:
             body=body,
         )
         try:
-            public_key.verify(signature, message)
-        except InvalidSignature as exc:
+            if device.key_algorithm == "ed25519":
+                public_key = Ed25519PublicKey.from_public_bytes(device.public_key)
+                public_key.verify(signature, message)
+            elif device.key_algorithm == "p256-x963":
+                public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+                    ec.SECP256R1(),
+                    device.public_key,
+                )
+                public_key.verify(
+                    signature,
+                    message,
+                    ec.ECDSA(hashes.SHA256()),
+                )
+            elif device.key_algorithm == "p256-spki":
+                public_key = serialization.load_der_public_key(device.public_key)
+                if not isinstance(public_key, ec.EllipticCurvePublicKey):
+                    raise SessionAuthenticationError(
+                        "stored P-256 public key is invalid"
+                    )
+                public_key.verify(
+                    signature,
+                    message,
+                    ec.ECDSA(hashes.SHA256()),
+                )
+            else:
+                raise SessionAuthenticationError(
+                    "unsupported stored device key algorithm"
+                )
+        except (InvalidSignature, ValueError) as exc:
             raise SessionAuthenticationError("device proof signature failed") from exc
 
         self._seen_nonces[nonce_key] = now + self._proof_skew
