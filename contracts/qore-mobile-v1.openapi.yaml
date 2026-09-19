@@ -114,6 +114,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RuntimeSnapshot"
+  /v1/alerts:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+        - $ref: "#/components/parameters/DeviceTime"
+        - $ref: "#/components/parameters/DeviceNonce"
+        - $ref: "#/components/parameters/DeviceSignature"
+      operationId: listAlerts
+      responses:
+        "200":
+          description: Current runtime-health alerts plus recent operational events.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertSnapshot"
 components:
   securitySchemes:
     bearerAuth:
@@ -161,6 +180,29 @@ components:
     TradingMode:
       type: string
       enum: [demo, shadow, live]
+    AlertSnapshot:
+      type: object
+      required:
+        [alert_id, kind, severity, title, detail, source, raised_at, as_of]
+      properties:
+        alert_id: { type: string }
+        kind:
+          type: string
+          enum:
+            [runtime.delayed, runtime.stale, runtime.offline, runtime.reconciliation_required, position.opened, position.closed, risk.threshold, risk.lock, security]
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        title: { type: string }
+        detail: { type: string }
+        source: { type: string }
+        raised_at: { type: string, format: date-time }
+        as_of: { type: string, format: date-time }
+        account_id: { type: [string, "null"] }
+        trader_id: { type: [string, "null"] }
+        runtime_id: { type: [string, "null"] }
+        position_id: { type: [string, "null"] }
+        resolved_at: { type: [string, "null"], format: date-time }
     PortfolioSnapshot:
       type: object
       required:
