@@ -12,14 +12,23 @@ QORE Mobile displays sensitive operational information. The read API therefore n
 
 ## Decision
 
-Each enrolled Android/iOS device owns an Ed25519 keypair.
+Each enrolled Android/iOS device owns a signing keypair.
 
-The private key remains in OS-backed secure storage. The Gateway stores only the public key and hashed opaque session tokens.
+The preferred native algorithm is P-256 ECDSA because Android Keystore and
+Apple Secure Enclave can protect P-256 private keys without exporting them.
+The Gateway also retains Ed25519 compatibility for non-production/testing
+clients.
+
+Android enrolls a P-256 SubjectPublicKeyInfo (`p256-spki`). iOS enrolls the
+Secure Enclave P-256 X9.63 public representation (`p256-x963`).
+
+The private key remains in OS-backed secure storage. The Gateway stores only
+the public key, its algorithm identifier and hashed opaque session tokens.
 
 Protected reads require both:
 
 1. a valid short-lived access token; and
-2. a valid Ed25519 proof signed by the enrolled device key.
+2. a valid cryptographic proof signed by the enrolled device key.
 
 The proof covers:
 
