@@ -238,6 +238,7 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
       _getJson('/v1/traders'),
       _getJson('/v1/positions'),
       _getJson('/v1/runtimes'),
+      _getJson('/v1/risk'),
       _getJson('/v1/alerts'),
     ]);
 
@@ -252,8 +253,10 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
           .toList(growable: false),
       runtimes:
           _list(results[4]).map(RuntimeSnapshot.fromJson).toList(growable: false),
+      risks:
+          _list(results[5]).map(RiskSnapshot.fromJson).toList(growable: false),
       alerts:
-          _list(results[5]).map(AlertSnapshot.fromJson).toList(growable: false),
+          _list(results[6]).map(AlertSnapshot.fromJson).toList(growable: false),
     );
   }
 
