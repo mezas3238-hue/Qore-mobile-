@@ -150,7 +150,10 @@ class _QoreHomeState extends State<QoreHome> {
 
     return switch (index) {
       0 => _PortfolioPage(snapshot: snapshot),
-      1 => _AccountsPage(accounts: snapshot.accounts),
+      1 => _AccountsPage(
+          accounts: snapshot.accounts,
+          risks: snapshot.risks,
+        ),
       2 => _TradersPage(
           traders: snapshot.traders,
           runtimes: snapshot.runtimes,
@@ -307,9 +310,22 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _AccountsPage extends StatelessWidget {
-  const _AccountsPage({required this.accounts});
+  const _AccountsPage({
+    required this.accounts,
+    required this.risks,
+  });
 
   final List<AccountSnapshot> accounts;
+  final List<RiskSnapshot> risks;
+
+  RiskSnapshot? _riskFor(String accountId) {
+    for (final risk in risks) {
+      if (risk.accountId == accountId) {
+        return risk;
+      }
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -329,7 +345,11 @@ class _AccountsPage extends StatelessWidget {
         final account = accounts[index];
         return Card(
           child: ListTile(
-            onTap: () => _showAccountDetails(context, account),
+            onTap: () => _showAccountDetails(
+              context,
+              account,
+              _riskFor(account.accountId),
+            ),
             leading: const Icon(Icons.account_balance_wallet_outlined),
             title: Text(account.label),
             subtitle: Text(
@@ -543,7 +563,11 @@ void _showDetailSheet(
   );
 }
 
-void _showAccountDetails(BuildContext context, AccountSnapshot account) {
+void _showAccountDetails(
+  BuildContext context,
+  AccountSnapshot account,
+  RiskSnapshot? risk,
+) {
   _showDetailSheet(
     context,
     title: account.label,
@@ -570,6 +594,26 @@ void _showAccountDetails(BuildContext context, AccountSnapshot account) {
       ('Posiciones', '${account.openPositions}'),
       ('Runtime', account.runtimeId),
       ('Heartbeat', _detailTime(account.lastHeartbeat)),
+      ('QORE Risk', risk?.state ?? '—'),
+      (
+        'Open risk',
+        risk?.openRiskFraction == null
+            ? '—'
+            : '${(risk!.openRiskFraction! * 100).toStringAsFixed(2)}%',
+      ),
+      (
+        'Riesgo diario restante',
+        risk?.dailyLossRemainingFraction == null
+            ? '—'
+            : '${(risk!.dailyLossRemainingFraction! * 100).toStringAsFixed(2)}%',
+      ),
+      (
+        'Riesgo total restante',
+        risk?.totalLossRemainingFraction == null
+            ? '—'
+            : '${(risk!.totalLossRemainingFraction! * 100).toStringAsFixed(2)}%',
+      ),
+      ('Fuente riesgo', risk?.source ?? '—'),
       ('Actualizado', _detailTime(account.asOf)),
     ],
   );
