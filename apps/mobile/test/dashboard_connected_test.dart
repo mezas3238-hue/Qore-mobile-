@@ -164,8 +164,25 @@ void main() {
 
     await tester.tap(find.text('Apariencia'));
     await tester.pump();
+    expect(find.text('Apariencia'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('Widget Android'),
+      450,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+
     expect(find.text('Widget Android'), findsOneWidget);
     expect(find.text('VISTA DEL WIDGET EN LA PANTALLA DE INICIO'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Detallado 4×4'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+
     expect(find.text('Compacto 2×1'), findsOneWidget);
     expect(find.text('Normal 4×2'), findsOneWidget);
     expect(find.text('Detallado 4×4'), findsOneWidget);
