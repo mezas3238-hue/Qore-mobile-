@@ -14,7 +14,7 @@ class _FakeGatewayClient implements QoreGatewayClient {
 }
 
 void main() {
-  testWidgets('renders authenticated portfolio and account data', (tester) async {
+  testWidgets('renders authenticated supervision dashboard', (tester) async {
     final now = DateTime.utc(2026, 9, 18, 23);
     final snapshot = DashboardSnapshot(
       portfolio: PortfolioSnapshot(
@@ -40,6 +40,7 @@ void main() {
           asOf: now,
           balance: 100000,
           equity: 100250,
+          lastHeartbeat: now,
         ),
         AccountSnapshot(
           accountId: 'account-b',
@@ -52,6 +53,7 @@ void main() {
           asOf: now,
           balance: 200000,
           equity: 199900,
+          lastHeartbeat: now,
         ),
       ],
       traders: [
@@ -64,6 +66,7 @@ void main() {
           state: 'monitoring',
           freshness: Freshness.live,
           asOf: now,
+          lastMarketRead: now,
         ),
         TraderSnapshot(
           traderId: 'ts-xau',
@@ -74,6 +77,7 @@ void main() {
           state: 'monitoring',
           freshness: Freshness.delayed,
           asOf: now,
+          lastMarketRead: now,
         ),
       ],
       positions: [
@@ -95,6 +99,7 @@ void main() {
           reconciliationRequired: false,
           freshness: Freshness.live,
           asOf: now,
+          lastHeartbeat: now,
         ),
         RuntimeSnapshot(
           runtimeId: 'runtime-b',
@@ -103,6 +108,7 @@ void main() {
           reconciliationRequired: false,
           freshness: Freshness.delayed,
           asOf: now,
+          lastHeartbeat: now,
         ),
       ],
       risks: [
@@ -134,33 +140,35 @@ void main() {
     await tester.pumpWidget(
       QoreMobileApp(client: _FakeGatewayClient(snapshot)),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('Conectado'), findsOneWidget);
+    expect(find.text('CONECTADO'), findsOneWidget);
+    expect(find.text('Runtime heartbeat'), findsOneWidget);
     expect(find.text('300000.00'), findsOneWidget);
     expect(find.text('300150.00'), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.account_balance_wallet_outlined).last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Primary'), findsOneWidget);
-    expect(find.text('Secondary'), findsOneWidget);
-    expect(find.textContaining('FundedNext'), findsNWidgets(2));
-
-    await tester.tap(find.text('Primary'));
-    await tester.pumpAndSettle();
-    expect(find.text('Provider'), findsOneWidget);
-    expect(find.text('Equity'), findsOneWidget);
-    await tester.tapAt(const Offset(10, 10));
-    await tester.pumpAndSettle();
+    await tester.tap(find.text('Traders'));
+    await tester.pump();
+    expect(find.text('VT08 FOREX'), findsOneWidget);
+    expect(find.text('TURTLE SOUP XAUUSD'), findsOneWidget);
 
     await tester.tap(find.text('Posiciones'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.textContaining('EURUSD'), findsOneWidget);
 
     await tester.tap(find.text('Alertas'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.text('Runtime con demora'), findsOneWidget);
+
+    await tester.tap(find.text('Apariencia'));
+    await tester.pump();
+    expect(find.text('Widget Android'), findsOneWidget);
+    expect(find.text('VISTA DEL WIDGET EN LA PANTALLA DE INICIO'), findsOneWidget);
+    expect(find.text('Compacto 2×1'), findsOneWidget);
+    expect(find.text('Normal 4×2'), findsOneWidget);
+    expect(find.text('Detallado 4×4'), findsOneWidget);
   });
 }
