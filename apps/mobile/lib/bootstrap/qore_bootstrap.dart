@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../appearance/appearance_controller.dart';
 import '../config/app_config.dart';
 import '../data/qore_gateway_client.dart';
 import '../domain/models.dart';
@@ -19,7 +20,12 @@ enum _BootstrapState {
 }
 
 class QoreBootstrap extends StatefulWidget {
-  const QoreBootstrap({super.key});
+  const QoreBootstrap({
+    super.key,
+    this.appearanceController,
+  });
+
+  final AppearanceController? appearanceController;
 
   @override
   State<QoreBootstrap> createState() => _QoreBootstrapState();
@@ -256,6 +262,8 @@ class _QoreBootstrapState extends State<QoreBootstrap>
           client: _client,
           snapshotSink: _publishWidgetSnapshot,
           onSessionMissing: _sessionMissing,
+          appearanceController:
+              widget.appearanceController ?? AppearanceController.instance,
         ),
       _BootstrapState.configurationError => const _CenteredStatus(
           icon: Icons.settings_outlined,

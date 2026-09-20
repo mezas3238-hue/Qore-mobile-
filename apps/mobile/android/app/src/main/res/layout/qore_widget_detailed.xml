@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="16dp"
     android:background="@drawable/qore_widget_bg_solid">
 
     <LinearLayout
@@ -19,7 +19,7 @@
             android:layout_weight="1"
             android:text="QORE Mobile"
             android:textStyle="bold"
-            android:textSize="17sp"
+            android:textSize="18sp"
             android:textColor="@android:color/white" />
         <TextView
             android:id="@+id/qore_widget_mode"
@@ -42,27 +42,42 @@
 
     <GridLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:columnCount="4"
-        android:rowCount="2"
+        android:rowCount="4"
         android:useDefaultMargins="true">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_balance_label" android:text="Balance" android:textSize="9sp" android:textColor="#9CA3AF" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_equity_label" android:text="Equity" android:textSize="9sp" android:textColor="#9CA3AF" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_pnl_label" android:text="P/L" android:textSize="9sp" android:textColor="#9CA3AF" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_positions_label" android:text="Pos" android:textSize="9sp" android:textColor="#9CA3AF" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_runtimes_label" android:text="Runtime" android:textSize="9sp" android:textColor="#9CA3AF" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_dd_label" android:text="DD" android:textSize="9sp" android:textColor="#9CA3AF" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_balance" android:text="—" android:textStyle="bold" android:textColor="@android:color/white" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_equity" android:text="—" android:textStyle="bold" android:textColor="@android:color/white" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_pnl" android:text="—" android:textStyle="bold" android:textColor="@android:color/white" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_dd" android:text="—" android:textStyle="bold" android:textColor="@android:color/white" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_positions_label" android:text="Posiciones" android:textSize="9sp" android:textColor="#9CA3AF" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_runtimes_label" android:text="Runtime" android:textSize="9sp" android:textColor="#9CA3AF" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_positions" android:text="—" android:textStyle="bold" android:textColor="@android:color/white" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:id="@+id/qore_widget_runtimes" android:text="—" android:textStyle="bold" android:textColor="@android:color/white" />
     </GridLayout>
 
-    <TextView android:id="@+id/qore_widget_balance_label" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-    <TextView android:id="@+id/qore_widget_balance" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-    <TextView android:id="@+id/qore_widget_dd_label" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-    <TextView android:id="@+id/qore_widget_dd" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-    <TextView android:id="@+id/qore_widget_traders_label" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-    <TextView android:id="@+id/qore_widget_traders" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <TextView
+        android:id="@+id/qore_widget_traders_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Traders"
+        android:textSize="10sp"
+        android:textColor="#9CA3AF" />
+    <TextView
+        android:id="@+id/qore_widget_traders"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:text="—"
+        android:textSize="11sp"
+        android:textColor="@android:color/white" />
+
     <TextView
         android:id="@+id/qore_widget_updated"
         android:layout_width="match_parent"

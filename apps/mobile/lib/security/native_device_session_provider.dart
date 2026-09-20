@@ -103,4 +103,11 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
       {'snapshot_json': jsonEncode(snapshot)},
     );
   }
+
+  Future<void> publishWidgetPreferences(Map<String, Object?> preferences) {
+    return _channel.invokeMethod<void>(
+      'publishWidgetPreferences',
+      {'appearance_json': jsonEncode(preferences)},
+    );
+  }
 }

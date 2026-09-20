@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'appearance/appearance_controller.dart';
 import 'bootstrap/qore_bootstrap.dart';
 import 'dashboard/dashboard_controller.dart';
 import 'dashboard/qore_home.dart';
@@ -9,7 +10,7 @@ void main() {
   runApp(const QoreMobileApp.production());
 }
 
-class QoreMobileApp extends StatelessWidget {
+class QoreMobileApp extends StatefulWidget {
   const QoreMobileApp({
     super.key,
     this.client,
@@ -26,22 +27,58 @@ class QoreMobileApp extends StatelessWidget {
   final bool production;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'QORE Mobile',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4F46E5),
-        ),
-        useMaterial3: true,
+  State<QoreMobileApp> createState() => _QoreMobileAppState();
+}
+
+class _QoreMobileAppState extends State<QoreMobileApp> {
+  final AppearanceController appearance = AppearanceController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    appearance.load();
+  }
+
+  ThemeData _theme(Brightness brightness) {
+    final base = ThemeData(
+      brightness: brightness,
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: appearance.accentColor,
+        brightness: brightness,
       ),
-      home: production
-          ? const QoreBootstrap()
-          : QoreHome(
-              client: client,
-              snapshotSink: snapshotSink,
-            ),
+      visualDensity: appearance.visualDensity,
+    );
+    return base.copyWith(
+      textTheme: base.textTheme.apply(fontSizeFactor: appearance.textScale),
+      cardTheme: CardThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(appearance.radius),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: appearance,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'QORE Mobile',
+          debugShowCheckedModeBanner: false,
+          themeMode: appearance.themeMode,
+          theme: _theme(Brightness.light),
+          darkTheme: _theme(Brightness.dark),
+          home: widget.production
+              ? QoreBootstrap(appearanceController: appearance)
+              : QoreHome(
+                  client: widget.client,
+                  snapshotSink: widget.snapshotSink,
+                  appearanceController: appearance,
+                ),
+        );
+      },
     );
   }
 }

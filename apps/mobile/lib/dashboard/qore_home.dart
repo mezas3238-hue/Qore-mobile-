@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../appearance/appearance_controller.dart';
+import '../appearance/appearance_page.dart';
+import 'connection_health_card.dart';
 import 'dashboard_controller.dart';
 import '../data/qore_gateway_client.dart';
 import '../domain/models.dart';
@@ -10,11 +13,13 @@ class QoreHome extends StatefulWidget {
     this.client,
     this.snapshotSink,
     this.onSessionMissing,
+    this.appearanceController,
   });
 
   final QoreGatewayClient? client;
   final DashboardSnapshotSink? snapshotSink;
   final SessionMissingCallback? onSessionMissing;
+  final AppearanceController? appearanceController;
 
   @override
   State<QoreHome> createState() => _QoreHomeState();
@@ -87,12 +92,7 @@ class _QoreHomeState extends State<QoreHome> with WidgetsBindingObserver {
               NavigationDestination(
                 icon: Icon(Icons.dashboard_outlined),
                 selectedIcon: Icon(Icons.dashboard),
-                label: 'Portfolio',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.account_balance_wallet_outlined),
-                selectedIcon: Icon(Icons.account_balance_wallet),
-                label: 'Cuentas',
+                label: 'Resumen',
               ),
               NavigationDestination(
                 icon: Icon(Icons.smart_toy_outlined),
@@ -108,6 +108,11 @@ class _QoreHomeState extends State<QoreHome> with WidgetsBindingObserver {
                 icon: Icon(Icons.notifications_none),
                 selectedIcon: Icon(Icons.notifications),
                 label: 'Alertas',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.palette_outlined),
+                selectedIcon: Icon(Icons.palette),
+                label: 'Apariencia',
               ),
             ],
           ),
@@ -147,16 +152,17 @@ class _QoreHomeState extends State<QoreHome> with WidgetsBindingObserver {
 
     return switch (index) {
       0 => _PortfolioPage(snapshot: snapshot),
-      1 => _AccountsPage(
-          accounts: snapshot.accounts,
-          risks: snapshot.risks,
-        ),
-      2 => _TradersPage(
+      1 => _TradersPage(
           traders: snapshot.traders,
           runtimes: snapshot.runtimes,
         ),
-      3 => _PositionsPage(positions: snapshot.positions),
-      _ => _AlertsPage(alerts: snapshot.alerts),
+      2 => _PositionsPage(positions: snapshot.positions),
+      3 => _AlertsPage(alerts: snapshot.alerts),
+      _ => AppearancePage(
+          controller:
+              widget.appearanceController ?? AppearanceController.instance,
+          snapshot: snapshot,
+        ),
     };
   }
 }
@@ -239,7 +245,9 @@ class _PortfolioPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Portfolio', style: Theme.of(context).textTheme.headlineMedium),
+        Text('Resumen', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 12),
+        ConnectionHealthCard(snapshot: snapshot),
         const SizedBox(height: 16),
         Wrap(
           spacing: 12,

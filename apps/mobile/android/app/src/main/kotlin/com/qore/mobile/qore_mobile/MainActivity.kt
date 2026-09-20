@@ -41,6 +41,7 @@ class MainActivity : FlutterFragmentActivity() {
         private const val SESSION_BLOB = "session_blob"
         private const val DEVICE_ID = "device_id"
         private const val WIDGET_SNAPSHOT = "snapshot_json"
+        private const val WIDGET_APPEARANCE = "appearance_json"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,6 +91,23 @@ class MainActivity : FlutterFragmentActivity() {
                         getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
                             .edit()
                             .putString(WIDGET_SNAPSHOT, snapshot)
+                            .apply()
+                        QoreWidgetProvider.updateAll(this)
+                        result.success(null)
+                    }
+                }
+                "publishWidgetPreferences" -> {
+                    val appearance = call.argument<String>("appearance_json")
+                    if (appearance.isNullOrBlank()) {
+                        result.error(
+                            "INVALID_WIDGET_APPEARANCE",
+                            "appearance_json is required",
+                            null,
+                        )
+                    } else {
+                        getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+                            .edit()
+                            .putString(WIDGET_APPEARANCE, appearance)
                             .apply()
                         QoreWidgetProvider.updateAll(this)
                         result.success(null)

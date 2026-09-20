@@ -8,16 +8,21 @@ class WidgetSnapshot {
     required this.healthyRuntimes,
     required this.totalRuntimes,
     required this.freshness,
+    required this.mode,
+    required this.traderNames,
+    this.balance,
     this.equity,
     this.realizedPnlToday,
     this.floatingPnl,
     this.dailyDrawdownFraction,
+    this.lastHeartbeat,
   });
 
-  static const schemaVersion = '1';
+  static const schemaVersion = '2';
 
   final DateTime generatedAt;
   final DateTime expiresAt;
+  final double? balance;
   final double? equity;
   final double? realizedPnlToday;
   final double? floatingPnl;
@@ -26,6 +31,9 @@ class WidgetSnapshot {
   final int healthyRuntimes;
   final int totalRuntimes;
   final Freshness freshness;
+  final TradingMode mode;
+  final DateTime? lastHeartbeat;
+  final List<String> traderNames;
 
   factory WidgetSnapshot.fromDashboard(
     DashboardSnapshot dashboard, {
@@ -36,9 +44,19 @@ class WidgetSnapshot {
         .where((runtime) => runtime.freshness == Freshness.live)
         .length;
 
+    DateTime? lastHeartbeat;
+    for (final runtime in dashboard.runtimes) {
+      final value = runtime.lastHeartbeat;
+      if (value != null &&
+          (lastHeartbeat == null || value.isAfter(lastHeartbeat))) {
+        lastHeartbeat = value;
+      }
+    }
+
     return WidgetSnapshot(
       generatedAt: generatedAt.toUtc(),
       expiresAt: generatedAt.toUtc().add(validity),
+      balance: dashboard.portfolio.balance,
       equity: dashboard.portfolio.equity,
       realizedPnlToday: dashboard.portfolio.realizedPnlToday,
       floatingPnl: dashboard.portfolio.floatingPnl,
@@ -47,6 +65,11 @@ class WidgetSnapshot {
       healthyRuntimes: healthy,
       totalRuntimes: dashboard.runtimes.length,
       freshness: dashboard.portfolio.freshness,
+      mode: dashboard.accounts.isEmpty
+          ? TradingMode.unknown
+          : dashboard.accounts.first.mode,
+      lastHeartbeat: lastHeartbeat,
+      traderNames: dashboard.traders.map((trader) => trader.name).toList(),
     );
   }
 
@@ -55,6 +78,7 @@ class WidgetSnapshot {
       'schema_version': schemaVersion,
       'generated_at': generatedAt.toIso8601String(),
       'expires_at': expiresAt.toIso8601String(),
+      'balance': balance,
       'equity': equity,
       'realized_pnl_today': realizedPnlToday,
       'floating_pnl': floatingPnl,
@@ -63,6 +87,9 @@ class WidgetSnapshot {
       'healthy_runtimes': healthyRuntimes,
       'total_runtimes': totalRuntimes,
       'freshness': freshness.name,
+      'mode': mode.name,
+      'last_heartbeat': lastHeartbeat?.toIso8601String(),
+      'trader_names': traderNames,
     };
   }
 }
