@@ -509,62 +509,6 @@ void _showDetailSheet(
   );
 }
 
-void _showAccountDetails(
-  BuildContext context,
-  AccountSnapshot account,
-  RiskSnapshot? risk,
-) {
-  _showDetailSheet(
-    context,
-    title: account.label,
-    rows: [
-      ('Provider', account.provider),
-      ('Modo', account.mode.name.toUpperCase()),
-      ('Freshness', account.freshness.name.toUpperCase()),
-      ('Balance', _detailNumber(account.balance)),
-      ('Equity', _detailNumber(account.equity)),
-      ('P/L hoy', _detailNumber(account.realizedPnlToday)),
-      ('P/L flotante', _detailNumber(account.floatingPnl)),
-      (
-        'DD diario',
-        account.dailyDrawdownFraction == null
-            ? '—'
-            : '${(account.dailyDrawdownFraction! * 100).toStringAsFixed(2)}%',
-      ),
-      (
-        'DD total',
-        account.totalDrawdownFraction == null
-            ? '—'
-            : '${(account.totalDrawdownFraction! * 100).toStringAsFixed(2)}%',
-      ),
-      ('Posiciones', '${account.openPositions}'),
-      ('Runtime', account.runtimeId),
-      ('Heartbeat', _detailTime(account.lastHeartbeat)),
-      ('QORE Risk', risk?.state ?? '—'),
-      (
-        'Open risk',
-        risk?.openRiskFraction == null
-            ? '—'
-            : '${(risk!.openRiskFraction! * 100).toStringAsFixed(2)}%',
-      ),
-      (
-        'Riesgo diario restante',
-        risk?.dailyLossRemainingFraction == null
-            ? '—'
-            : '${(risk!.dailyLossRemainingFraction! * 100).toStringAsFixed(2)}%',
-      ),
-      (
-        'Riesgo total restante',
-        risk?.totalLossRemainingFraction == null
-            ? '—'
-            : '${(risk!.totalLossRemainingFraction! * 100).toStringAsFixed(2)}%',
-      ),
-      ('Fuente riesgo', risk?.source ?? '—'),
-      ('Actualizado', _detailTime(account.asOf)),
-    ],
-  );
-}
-
 void _showTraderDetails(BuildContext context, TraderSnapshot trader) {
   _showDetailSheet(
     context,
