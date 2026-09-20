@@ -186,7 +186,7 @@ class AppearanceController extends ChangeNotifier {
         QoreWidgetBackground.glass => 'glass',
         QoreWidgetBackground.highContrast => 'high_contrast',
       },
-      'accent_argb': accentColor.value,
+      'accent_argb': accentColor.toARGB32(),
       'text_scale': textScale,
       'info_level': widgetInfoLevel.name,
       'show_heartbeat_age': showHeartbeatAge,

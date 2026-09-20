@@ -129,7 +129,7 @@ class _HomePreview extends StatelessWidget {
         Align(alignment: Alignment.centerLeft, child: Text('Pantalla de inicio Android', style: TextStyle(color: fg, fontWeight: FontWeight.w700))),
         const SizedBox(height: 12),
         Container(width: size.width, height: size.height, padding: const EdgeInsets.all(13), decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(controller.radius), border: Border.all(color: controller.accentColor.withOpacity(.45))),
+          color: bg, borderRadius: BorderRadius.circular(controller.radius), border: Border.all(color: controller.accentColor.withValues(alpha: .45))),
           child: DefaultTextStyle(style: TextStyle(color: fg, fontSize: 12 * controller.textScale), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [const Expanded(child: Text('QORE', style: TextStyle(fontWeight: FontWeight.w800))), Text(mode, style: TextStyle(color: controller.accentColor, fontWeight: FontWeight.w800))]),
             const SizedBox(height: 5), Row(children: [Icon(Icons.circle, size: 9, color: live ? const Color(0xFF22C55E) : muted), const SizedBox(width: 5), Text(status, style: const TextStyle(fontWeight: FontWeight.w700))]),
@@ -147,7 +147,7 @@ class _HomePreview extends StatelessWidget {
             ]
           ]))),
         const Spacer(),
-        Wrap(spacing: 22, children: [for (final x in const [(Icons.mail_outline,'Correo'), (Icons.folder_outlined,'Archivos'), (Icons.code,'GitHub'), (Icons.settings_outlined,'Ajustes')]) Column(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: fg.withOpacity(.10), borderRadius: BorderRadius.circular(12)), child: Icon(x.$1, color: fg)), const SizedBox(height: 3), Text(x.$2, style: TextStyle(color: fg, fontSize: 9))])])
+        Wrap(spacing: 22, children: [for (final x in const [(Icons.mail_outline,'Correo'), (Icons.folder_outlined,'Archivos'), (Icons.code,'GitHub'), (Icons.settings_outlined,'Ajustes')]) Column(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: fg.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: Icon(x.$1, color: fg)), const SizedBox(height: 3), Text(x.$2, style: TextStyle(color: fg, fontSize: 9))])])
       ]));
   }
 

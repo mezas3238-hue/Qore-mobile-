@@ -42,7 +42,7 @@ class ConnectionHealthCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Expanded(child: Text('Runtime heartbeat')),
                 Text(
-                  $'{freshness.name.toUpperCase()}$${age == null ? '' : ' · $${age}s'}',
+                  '${freshness.name.toUpperCase()}${age == null ? '' : ' · ${age}s'}',
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ],

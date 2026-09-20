@@ -314,65 +314,6 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _AccountsPage extends StatelessWidget {
-  const _AccountsPage({
-    required this.accounts,
-    required this.risks,
-  });
-
-  final List<AccountSnapshot> accounts;
-  final List<RiskSnapshot> risks;
-
-  RiskSnapshot? _riskFor(String accountId) {
-    for (final risk in risks) {
-      if (risk.accountId == accountId) {
-        return risk;
-      }
-    }
-    return null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (accounts.isEmpty) {
-      return const _SafeStatePage(
-        heading: 'Cuentas',
-        description: 'El Gateway autenticado no reporta cuentas todavía.',
-        icon: Icons.account_balance_wallet_outlined,
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(20),
-      itemCount: accounts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final account = accounts[index];
-        return Card(
-          child: ListTile(
-            onTap: () => _showAccountDetails(
-              context,
-              account,
-              _riskFor(account.accountId),
-            ),
-            leading: const Icon(Icons.account_balance_wallet_outlined),
-            title: Text(account.label),
-            subtitle: Text(
-              '${account.provider} · ${account.mode.name.toUpperCase()} · '
-              '${account.freshness.name.toUpperCase()}',
-            ),
-            trailing: Text(
-              account.equity == null
-                  ? '—'
-                  : account.equity!.toStringAsFixed(2),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _TradersPage extends StatelessWidget {
   const _TradersPage({
     required this.traders,
