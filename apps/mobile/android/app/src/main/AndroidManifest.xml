@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <application android:label="@string/qore_app_name" android:name="${applicationName}" android:icon="@mipmap/ic_launcher" android:allowBackup="false" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
             <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
@@ -10,6 +12,15 @@
             </intent-filter>
         </activity>
         <meta-data android:name="flutterEmbedding" android:value="2" />
+        <service
+            android:name=".QoreWidgetLiveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Continuous read-only authenticated QORE runtime supervision for the Owner home-screen widget." />
+        </service>
         <receiver android:name=".QoreWidgetProvider" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

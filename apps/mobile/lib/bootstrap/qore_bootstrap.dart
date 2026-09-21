@@ -118,6 +118,17 @@ class _QoreBootstrapState extends State<QoreBootstrap>
         baseUri: config.gatewayUri,
         sessionProvider: _sessionProvider,
       );
+      final appearance =
+          widget.appearanceController ?? AppearanceController.instance;
+      await appearance.load();
+      try {
+        await _sessionProvider.setWidgetLiveMode(
+          enabled: appearance.widgetLiveEnabled,
+          gatewayUrl: config.gatewayUri.toString(),
+        );
+      } catch (_) {
+        // Foreground widget supervision is best-effort and must not block app unlock.
+      }
       setState(() {
         _state = _BootstrapState.ready;
         _message = null;

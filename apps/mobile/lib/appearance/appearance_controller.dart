@@ -26,6 +26,7 @@ class AppearanceController extends ChangeNotifier {
   bool showTraderMarkets = true;
   bool showHeartbeatAge = true;
   bool showExactTime = false;
+  bool widgetLiveEnabled = true;
 
   Future<void> load() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -71,6 +72,8 @@ class AppearanceController extends ChangeNotifier {
         prefs.getBool('appearance.show_heartbeat_age') ?? showHeartbeatAge;
     showExactTime =
         prefs.getBool('appearance.show_exact_time') ?? showExactTime;
+    widgetLiveEnabled =
+        prefs.getBool('appearance.widget_live_enabled') ?? widgetLiveEnabled;
     notifyListeners();
   }
 
@@ -177,6 +180,12 @@ class AppearanceController extends ChangeNotifier {
     showExactTime = value;
     notifyListeners();
     await (await _store()).setBool('appearance.show_exact_time', value);
+  }
+
+  Future<void> setWidgetLiveEnabled(bool value) async {
+    widgetLiveEnabled = value;
+    notifyListeners();
+    await (await _store()).setBool('appearance.widget_live_enabled', value);
   }
 
   Map<String, Object?> widgetPreferences() {

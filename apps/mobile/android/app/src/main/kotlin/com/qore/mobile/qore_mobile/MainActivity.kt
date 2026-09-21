@@ -4,6 +4,8 @@ import android.app.KeyguardManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.security.keystore.KeyGenParameterSpec
@@ -42,11 +44,34 @@ class MainActivity : FlutterFragmentActivity() {
         private const val DEVICE_ID = "device_id"
         private const val WIDGET_SNAPSHOT = "snapshot_json"
         private const val WIDGET_APPEARANCE = "appearance_json"
+        private const val WIDGET_LIVE_ENABLED = "widget_live_enabled"
+        private const val WIDGET_GATEWAY_URL = "widget_gateway_url"
+        private const val WIDGET_ACTIVE_INTERVAL_SECONDS = "widget_active_interval_seconds"
+        private const val WIDGET_SCREEN_OFF_INTERVAL_SECONDS = "widget_screen_off_interval_seconds"
+        private const val WIDGET_APP_FOREGROUND = "widget_app_foreground"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        setWidgetAppForeground(true)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        setWidgetAppForeground(true)
+    }
+
+    override fun onPause() {
+        setWidgetAppForeground(false)
+        super.onPause()
+    }
+
+    private fun setWidgetAppForeground(value: Boolean) {
+        getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(WIDGET_APP_FOREGROUND, value)
+            .apply()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -110,6 +135,51 @@ class MainActivity : FlutterFragmentActivity() {
                             .putString(WIDGET_APPEARANCE, appearance)
                             .apply()
                         QoreWidgetProvider.updateAll(this)
+                        result.success(null)
+                    }
+                }
+                "setWidgetLiveMode" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    val gatewayUrl = call.argument<String>("gateway_url")
+                    val activeInterval =
+                        call.argument<Int>("active_interval_seconds") ?: 2
+                    val screenOffInterval =
+                        call.argument<Int>("screen_off_interval_seconds") ?: 15
+                    val parsed = gatewayUrl?.let { Uri.parse(it) }
+                    if (enabled &&
+                        (gatewayUrl.isNullOrBlank() ||
+                            parsed?.scheme?.lowercase() != "https" ||
+                            parsed.host.isNullOrBlank())
+                    ) {
+                        result.error(
+                            "INVALID_WIDGET_GATEWAY",
+                            "A valid HTTPS gateway_url is required",
+                            null,
+                        )
+                    } else {
+                        getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean(WIDGET_LIVE_ENABLED, enabled)
+                            .putString(WIDGET_GATEWAY_URL, gatewayUrl)
+                            .putInt(
+                                WIDGET_ACTIVE_INTERVAL_SECONDS,
+                                activeInterval.coerceIn(2, 60),
+                            )
+                            .putInt(
+                                WIDGET_SCREEN_OFF_INTERVAL_SECONDS,
+                                screenOffInterval.coerceIn(5, 300),
+                            )
+                            .apply()
+                        val serviceIntent =
+                            Intent(this, QoreWidgetLiveService::class.java)
+                        if (enabled) {
+                            ContextCompat.startForegroundService(
+                                this,
+                                serviceIntent,
+                            )
+                        } else {
+                            stopService(serviceIntent)
+                        }
                         result.success(null)
                     }
                 }

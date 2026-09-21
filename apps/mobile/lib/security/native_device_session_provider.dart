@@ -110,4 +110,21 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
       {'appearance_json': jsonEncode(preferences)},
     );
   }
+
+  Future<void> setWidgetLiveMode({
+    required bool enabled,
+    required String gatewayUrl,
+    int activeIntervalSeconds = 2,
+    int screenOffIntervalSeconds = 15,
+  }) {
+    return _channel.invokeMethod<void>(
+      'setWidgetLiveMode',
+      {
+        'enabled': enabled,
+        'gateway_url': gatewayUrl,
+        'active_interval_seconds': activeIntervalSeconds,
+        'screen_off_interval_seconds': screenOffIntervalSeconds,
+      },
+    );
+  }
 }

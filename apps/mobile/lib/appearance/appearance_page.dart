@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
 import '../domain/models.dart';
 import '../security/native_device_session_provider.dart';
 import 'appearance_controller.dart';
@@ -15,6 +16,18 @@ class AppearancePage extends StatelessWidget {
     await change;
     try {
       await _native.publishWidgetPreferences(controller.widgetPreferences());
+    } catch (_) {}
+  }
+
+  Future<void> _setWidgetLive(bool enabled) async {
+    await controller.setWidgetLiveEnabled(enabled);
+    final config = QoreAppConfig.fromEnvironment();
+    if (config == null) return;
+    try {
+      await _native.setWidgetLiveMode(
+        enabled: enabled,
+        gatewayUrl: config.gatewayUri.toString(),
+      );
     } catch (_) {}
   }
 
@@ -53,6 +66,16 @@ class AppearancePage extends StatelessWidget {
           const Text('VISTA DEL WIDGET EN LA PANTALLA DE INICIO',
               style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
+          Card(
+            child: SwitchListTile(
+              title: const Text('Widget LIVE'),
+              subtitle: const Text(
+                'Actualiza aproximadamente cada 2 s con la pantalla activa y mantiene el relevo en segundo plano.',
+              ),
+              value: controller.widgetLiveEnabled,
+              onChanged: _setWidgetLive,
+            ),
+          ),
           _section(context, 'Fondo', QoreWidgetBackground.values, controller.widgetBackground,
               (v) => v.name == 'solid' ? 'Sólido' : v.name == 'glass' ? 'Glass' : 'Alto contraste',
               (v) => _apply(controller.setWidgetBackground(v))),
