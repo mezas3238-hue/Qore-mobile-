@@ -18,7 +18,12 @@ while ($true) {
             $sequenceStale = $age -gt $StaleAfterSeconds
         }
 
-        if ($task.State -ne 'Running' -or $sequenceStale) {
+        $terminalAvailable = $null -ne (
+            Get-Process terminal64 -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+        )
+
+        if (($task.State -ne 'Running' -or $sequenceStale) -and $terminalAvailable) {
             if ($task.State -eq 'Running') {
                 Stop-ScheduledTask -TaskName $BridgeTaskName -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 1
