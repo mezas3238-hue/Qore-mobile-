@@ -22,12 +22,26 @@ while ($true) {
             Get-Process terminal64 -ErrorAction SilentlyContinue |
                 Select-Object -First 1
         )
+        $bridgeProcesses = @(
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Name -eq 'python.exe' -and
+                    $_.CommandLine -like '*vps_runtime_telemetry_bridge.py*'
+                }
+        )
+        $processHealthy = $bridgeProcesses.Count -eq 1
+        $needsRecovery = $sequenceStale -or -not $processHealthy
 
-        if (($task.State -ne 'Running' -or $sequenceStale) -and $terminalAvailable) {
+        if ($needsRecovery -and $terminalAvailable) {
             if ($task.State -eq 'Running') {
                 Stop-ScheduledTask -TaskName $BridgeTaskName -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 1
             }
+            foreach ($process in $bridgeProcesses) {
+                Invoke-CimMethod -InputObject $process -MethodName Terminate -ErrorAction SilentlyContinue |
+                    Out-Null
+            }
+            Start-Sleep -Seconds 1
             Start-ScheduledTask -TaskName $BridgeTaskName -ErrorAction SilentlyContinue
         }
     } catch {
