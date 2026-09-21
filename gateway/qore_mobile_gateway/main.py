@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -122,6 +122,7 @@ def _default_device_session_store() -> DeviceSessionStore:
         return PersistentDeviceSessionStore(
             db_path=state_path,
             enrollment_codes=enrollment_codes,
+            access_ttl=timedelta(hours=24),
         )
 
     if environment == "production":
@@ -305,6 +306,71 @@ def create_app(
                 platform=payload.platform,
                 raised_at=security_time,
             )
+        )
+        return DeviceSessionResponse.from_issued(issued)
+
+    @app.post(
+        "/v1/mobile/recover",
+        response_model=DeviceSessionResponse,
+    )
+    async def recover_mobile_session(
+        request: Request,
+        x_qore_device_id: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Id",
+        ),
+        x_qore_device_time: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Time",
+        ),
+        x_qore_device_nonce: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Nonce",
+        ),
+        x_qore_device_signature: str | None = Header(
+            default=None,
+            alias="X-Qore-Device-Signature",
+        ),
+    ) -> DeviceSessionResponse:
+        if not all(
+            [
+                x_qore_device_id,
+                x_qore_device_time,
+                x_qore_device_nonce,
+                x_qore_device_signature,
+            ]
+        ):
+            audit.record(
+                AuditEventType.DEVICE_AUTH_FAILED,
+                device_id=x_qore_device_id,
+                reason_code="recovery_missing_proof",
+            )
+            _raise(
+                401,
+                "device_recovery_failed",
+                "missing device-bound recovery proof",
+            )
+        raw_body = await request.body()
+        try:
+            issued = sessions.recover(
+                device_id=x_qore_device_id,
+                method=request.method,
+                path=request.url.path,
+                timestamp=x_qore_device_time,
+                nonce=x_qore_device_nonce,
+                signature_b64=x_qore_device_signature,
+                body=raw_body,
+            )
+        except SessionAuthenticationError as exc:
+            audit.record(
+                AuditEventType.DEVICE_AUTH_FAILED,
+                device_id=x_qore_device_id,
+                reason_code="recovery_invalid",
+            )
+            _raise(401, "device_recovery_failed", str(exc))
+        audit.record(
+            AuditEventType.DEVICE_SESSION_RECOVERED,
+            device_id=x_qore_device_id,
         )
         return DeviceSessionResponse.from_issued(issued)
 

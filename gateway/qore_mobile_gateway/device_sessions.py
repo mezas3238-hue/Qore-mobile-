@@ -182,6 +182,19 @@ class DeviceSessionStore:
             device_id=device_id,
         )
 
+    def _revoke_sessions_for_device(
+        self,
+        *,
+        device_id: str,
+        now: datetime,
+    ) -> None:
+        for record in list(self._sessions_by_access_hash.values()):
+            if record.device_id != device_id:
+                continue
+            record.revoked_at = now
+            self._sessions_by_access_hash.pop(record.access_hash, None)
+            self._sessions_by_refresh_hash.pop(record.refresh_hash, None)
+
     def enroll(
         self,
         *,
@@ -201,7 +214,22 @@ class DeviceSessionStore:
         with self._lock:
             existing = self._devices.get(device_id)
             if existing is not None and existing.revoked_at is None:
-                raise EnrollmentError("device_id is already enrolled")
+                if (
+                    existing.public_key != public_key
+                    or existing.key_algorithm != key_algorithm
+                ):
+                    raise EnrollmentError(
+                        "device_id is already enrolled with another key"
+                    )
+                self._enrollment_codes.consume(enrollment_code)
+                self._revoke_sessions_for_device(
+                    device_id=device_id,
+                    now=current,
+                )
+                existing.platform = platform
+                existing.label = label
+                return self._issue_session(device_id=device_id, now=current)
+
             self._enrollment_codes.consume(enrollment_code)
             self._devices[device_id] = DeviceRecord(
                 device_id=device_id,
@@ -210,6 +238,41 @@ class DeviceSessionStore:
                 public_key=public_key,
                 key_algorithm=key_algorithm,
                 created_at=current,
+            )
+            return self._issue_session(device_id=device_id, now=current)
+
+    def recover(
+        self,
+        *,
+        device_id: str,
+        method: str,
+        path: str,
+        timestamp: str,
+        nonce: str,
+        signature_b64: str,
+        body: bytes,
+        now: datetime | None = None,
+    ) -> IssuedSession:
+        current = now or datetime.now(UTC)
+        with self._lock:
+            device = self._devices.get(device_id)
+            if device is None or device.revoked_at is not None:
+                raise SessionAuthenticationError(
+                    "device is not actively enrolled"
+                )
+            self._verify_device_proof(
+                device=device,
+                method=method,
+                path=path,
+                timestamp=timestamp,
+                nonce=nonce,
+                signature_b64=signature_b64,
+                body=body,
+                now=current,
+            )
+            self._revoke_sessions_for_device(
+                device_id=device_id,
+                now=current,
             )
             return self._issue_session(device_id=device_id, now=current)
 
@@ -404,9 +467,8 @@ class DeviceSessionStore:
             if device is None:
                 return False
             device.revoked_at = current
-            for record in list(self._sessions_by_access_hash.values()):
-                if record.device_id == device_id:
-                    record.revoked_at = current
-                    self._sessions_by_access_hash.pop(record.access_hash, None)
-                    self._sessions_by_refresh_hash.pop(record.refresh_hash, None)
+            self._revoke_sessions_for_device(
+                device_id=device_id,
+                now=current,
+            )
             return True

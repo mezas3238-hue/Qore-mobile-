@@ -135,3 +135,68 @@ def test_health_endpoint_remains_available_without_mobile_session() -> None:
 
     assert response.status_code == 200
     assert response.json()["mode"] == "read-only"
+
+
+def test_device_key_can_recover_session_without_enrollment_code() -> None:
+    client = build_client()
+    private_key = new_private_key()
+    session = enroll_device(client, private_key)
+
+    headers = proof_headers(
+        token="unused",
+        private_key=private_key,
+        method="POST",
+        path="/v1/mobile/recover",
+    )
+    headers.pop("Authorization")
+    recovered_response = client.post(
+        "/v1/mobile/recover",
+        headers=headers,
+    )
+
+    assert recovered_response.status_code == 200
+    recovered = recovered_response.json()
+    assert recovered["device_id"] == session["device_id"]
+    assert recovered["access_token"] != session["access_token"]
+
+    old_read = client.get(
+        "/v1/accounts",
+        headers=proof_headers(
+            token=session["access_token"],
+            private_key=private_key,
+            method="GET",
+            path="/v1/accounts",
+        ),
+    )
+    new_read = client.get(
+        "/v1/accounts",
+        headers=proof_headers(
+            token=recovered["access_token"],
+            private_key=private_key,
+            method="GET",
+            path="/v1/accounts",
+        ),
+    )
+    assert old_read.status_code == 401
+    assert new_read.status_code == 200
+
+
+def test_revoked_device_cannot_recover_session() -> None:
+    client = build_client()
+    private_key = new_private_key()
+    session = enroll_device(client, private_key)
+    revoked = client.post(
+        f"/v1/admin/devices/{session['device_id']}/revoke",
+        headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+    )
+    assert revoked.status_code == 200
+
+    headers = proof_headers(
+        token="unused",
+        private_key=private_key,
+        method="POST",
+        path="/v1/mobile/recover",
+    )
+    headers.pop("Authorization")
+    recovery = client.post("/v1/mobile/recover", headers=headers)
+    assert recovery.status_code == 401

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 class AuditEventType(StrEnum):
     DEVICE_ENROLLED = "device.enrolled"
     DEVICE_SESSION_REFRESHED = "device.session_refreshed"
+    DEVICE_SESSION_RECOVERED = "device.session_recovered"
     DEVICE_REVOKED = "device.revoked"
     DEVICE_AUTH_FAILED = "device.auth_failed"
     DEVICE_ENROLLMENT_FAILED = "device.enrollment_failed"

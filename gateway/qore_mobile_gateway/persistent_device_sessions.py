@@ -291,6 +291,12 @@ class PersistentDeviceSessionStore(DeviceSessionStore):
             self._persist_state()
         return issued
 
+    def recover(self, **kwargs) -> IssuedSession:
+        issued = super().recover(**kwargs)
+        with self._lock:
+            self._persist_state()
+        return issued
+
     def revoke_device(self, device_id: str, **kwargs) -> bool:
         revoked = super().revoke_device(device_id, **kwargs)
         with self._lock:
