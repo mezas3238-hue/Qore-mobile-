@@ -144,7 +144,7 @@ class MainActivity : FlutterFragmentActivity() {
                     val activeInterval =
                         call.argument<Int>("active_interval_seconds") ?: 2
                     val screenOffInterval =
-                        call.argument<Int>("screen_off_interval_seconds") ?: 15
+                        call.argument<Int>("screen_off_interval_seconds") ?: 2
                     val parsed = gatewayUrl?.let { Uri.parse(it) }
                     if (enabled &&
                         (gatewayUrl.isNullOrBlank() ||
@@ -167,7 +167,7 @@ class MainActivity : FlutterFragmentActivity() {
                             )
                             .putInt(
                                 WIDGET_SCREEN_OFF_INTERVAL_SECONDS,
-                                screenOffInterval.coerceIn(5, 300),
+                                screenOffInterval.coerceIn(2, 60),
                             )
                             .apply()
                         val serviceIntent =
@@ -389,7 +389,6 @@ class MainActivity : FlutterFragmentActivity() {
                 "refresh_expires_at" to json.getString("refresh_expires_at"),
             )
         } catch (_: Exception) {
-            clearSession()
             null
         }
     }

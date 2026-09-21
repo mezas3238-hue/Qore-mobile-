@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../appearance/appearance_controller.dart';
@@ -9,6 +11,7 @@ import '../dashboard/qore_home.dart';
 import '../security/enrollment_service.dart';
 import '../security/native_device_session_provider.dart';
 import '../security/session.dart';
+import '../security/session_recovery_service.dart';
 
 enum _BootstrapState {
   loading,
@@ -78,7 +81,16 @@ class _QoreBootstrapState extends State<QoreBootstrap>
       }
       _securityCapabilities = capabilities;
 
-      final session = await _sessionProvider.readSession();
+      var session = await _sessionProvider.readSession();
+      if (session == null) {
+        final recovered = await _recoverExistingDevice(config);
+        if (!mounted) return;
+        if (!recovered) {
+          setState(() => _state = _BootstrapState.needsEnrollment);
+          return;
+        }
+        session = await _sessionProvider.readSession();
+      }
       if (!mounted) return;
       if (session == null) {
         setState(() => _state = _BootstrapState.needsEnrollment);
@@ -91,6 +103,21 @@ class _QoreBootstrapState extends State<QoreBootstrap>
         _state = _BootstrapState.error;
         _message = 'No se pudo abrir el almacén seguro del dispositivo.';
       });
+    }
+  }
+
+  Future<bool> _recoverExistingDevice(QoreAppConfig config) async {
+    final recovery = DeviceSessionRecoveryService(
+      baseUri: config.gatewayUri,
+      sessionProvider: _sessionProvider,
+    );
+    try {
+      await recovery.recover();
+      return true;
+    } on DeviceRecoveryNotEnrolled {
+      return false;
+    } finally {
+      recovery.close();
     }
   }
 
@@ -201,13 +228,54 @@ class _QoreBootstrapState extends State<QoreBootstrap>
   }
 
   void _sessionMissing() {
+    unawaited(_recoverAfterSessionLoss());
+  }
+
+  Future<void> _recoverAfterSessionLoss() async {
     _client?.close();
     _client = null;
     if (!mounted) return;
     setState(() {
-      _state = _BootstrapState.needsEnrollment;
-      _message = 'La sesión fue revocada o expiró. Vuelve a enrolar este dispositivo.';
+      _state = _BootstrapState.loading;
+      _message = 'Recuperando la sesión segura del dispositivo.';
     });
+
+    final config = _config;
+    if (config == null) {
+      if (!mounted) return;
+      setState(() => _state = _BootstrapState.configurationError);
+      return;
+    }
+
+    try {
+      final recovered = await _recoverExistingDevice(config);
+      if (!mounted) return;
+      if (!recovered) {
+        setState(() {
+          _state = _BootstrapState.needsEnrollment;
+          _message =
+              'Este dispositivo ya no está registrado en QORE Mobile.';
+        });
+        return;
+      }
+      await _unlock();
+    } on DeviceRecoveryUnavailable {
+      if (!mounted) return;
+      setState(() {
+        _state = _BootstrapState.error;
+        _message =
+            'La conexión está temporalmente no disponible. '
+            'El enrolamiento del teléfono se conserva; pulsa Reintentar.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _state = _BootstrapState.error;
+        _message =
+            'No se pudo revalidar la sesión. '
+            'El enrolamiento del teléfono se conserva; pulsa Reintentar.';
+      });
+    }
   }
 
   Future<void> _publishWidgetSnapshot(DashboardSnapshot snapshot) async {

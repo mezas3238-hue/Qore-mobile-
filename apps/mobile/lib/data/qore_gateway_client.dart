@@ -4,6 +4,7 @@ import 'dart:io';
 import '../domain/models.dart';
 import '../security/device_proof.dart';
 import '../security/session.dart';
+import '../security/session_recovery_service.dart';
 
 class QoreGatewayException implements Exception {
   const QoreGatewayException(this.message, {this.statusCode});
@@ -95,6 +96,26 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
     }
   }
 
+  Future<QoreDeviceSession?> _recoverSessionFromDevice() async {
+    final recovery = DeviceSessionRecoveryService(
+      baseUri: baseUri,
+      sessionProvider: sessionProvider,
+      httpClient: _httpClient,
+    );
+    try {
+      return await recovery.recover();
+    } on DeviceRecoveryNotEnrolled {
+      return null;
+    } on DeviceRecoveryUnavailable catch (error) {
+      throw QoreGatewayException(
+        error.message,
+        statusCode: error.statusCode,
+      );
+    } finally {
+      recovery.close();
+    }
+  }
+
   Future<QoreDeviceSession?> _performRefresh(
     QoreDeviceSession session,
   ) async {
@@ -115,8 +136,11 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
     final body = await utf8.decoder.bind(response).join();
 
     if (response.statusCode == HttpStatus.unauthorized) {
-      await sessionProvider.clearSession();
-      return null;
+      final latest = await sessionProvider.readSession();
+      if (latest != null && latest.refreshToken != session.refreshToken) {
+        return latest;
+      }
+      return _recoverSessionFromDevice();
     }
     if (response.statusCode != HttpStatus.ok) {
       throw QoreGatewayException(
@@ -142,7 +166,10 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
   Future<QoreDeviceSession> _usableSession() async {
     var session = await sessionProvider.readSession();
     if (session == null) {
-      throw const QoreSessionMissing();
+      session = await _recoverSessionFromDevice();
+      if (session == null) {
+        throw const QoreSessionMissing();
+      }
     }
 
     final refreshBefore = DateTime.now().toUtc().add(
@@ -197,8 +224,25 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
     }
 
     if (response.statusCode == HttpStatus.unauthorized) {
-      await sessionProvider.clearSession();
-      throw const QoreSessionMissing();
+      final recovered = await _recoverSessionFromDevice();
+      if (recovered == null) {
+        throw const QoreSessionMissing();
+      }
+      headers = await _proofHeaders(
+        session: recovered,
+        token: recovered.accessToken,
+        method: 'GET',
+        path: path,
+      );
+      request = await _httpClient
+          .getUrl(baseUri.resolve(path))
+          .timeout(const Duration(seconds: 8));
+      headers.forEach(request.headers.set);
+      response = await request.close().timeout(const Duration(seconds: 8));
+      responseBody = await utf8.decoder.bind(response).join();
+      if (response.statusCode == HttpStatus.unauthorized) {
+        throw const QoreSessionMissing();
+      }
     }
     if (response.statusCode != HttpStatus.ok) {
       throw QoreGatewayException(

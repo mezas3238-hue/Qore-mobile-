@@ -10,7 +10,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.io.BufferedReader
@@ -44,6 +43,8 @@ class QoreWidgetLiveService : Service() {
         private const val WIDGET_ACTIVE_INTERVAL_SECONDS = "widget_active_interval_seconds"
         private const val WIDGET_SCREEN_OFF_INTERVAL_SECONDS = "widget_screen_off_interval_seconds"
         private const val WIDGET_APP_FOREGROUND = "widget_app_foreground"
+        private const val IDENTITY_PREFS = "qore_identity"
+        private const val DEVICE_ID = "device_id"
 
         private const val SESSION_PREFS = "qore_secure_session"
         private const val SESSION_BLOB = "session_blob"
@@ -52,12 +53,12 @@ class QoreWidgetLiveService : Service() {
 
         private const val DASHBOARD_PATH = "/v1/dashboard"
         private const val REFRESH_PATH = "/v1/mobile/refresh"
+        private const val RECOVER_PATH = "/v1/mobile/recover"
     }
 
     private val running = AtomicBoolean(false)
     private val worker = Executors.newSingleThreadExecutor()
     private val random = SecureRandom()
-    private var lastScreenOffRefreshAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -108,23 +109,7 @@ class QoreWidgetLiveService : Service() {
                 val appForeground =
                     prefs.getBoolean(WIDGET_APP_FOREGROUND, false)
                 if (!appForeground) {
-                    val power =
-                        getSystemService(Context.POWER_SERVICE) as PowerManager
-                    val nowMs = System.currentTimeMillis()
-                    val shouldRefresh = if (power.isInteractive) {
-                        true
-                    } else {
-                        val screenOffIntervalMs =
-                            prefs.getInt(WIDGET_SCREEN_OFF_INTERVAL_SECONDS, 15)
-                                .coerceIn(5, 300) * 1000L
-                        nowMs - lastScreenOffRefreshAtMs >= screenOffIntervalMs
-                    }
-                    if (shouldRefresh) {
-                        refreshWidget(prefs)
-                        if (!power.isInteractive) {
-                            lastScreenOffRefreshAtMs = nowMs
-                        }
-                    }
+                    refreshWidget(prefs)
                 }
             } catch (_: InterruptedException) {
                 return
@@ -152,9 +137,11 @@ class QoreWidgetLiveService : Service() {
             ?.takeIf { it.startsWith("https://") }
             ?: return
 
-        var session = readSession() ?: return
+        var session = readSession() ?: recoverSession(gateway) ?: return
         if (expiresSoon(session.optString("access_expires_at"))) {
-            refreshSession(gateway, session)?.let { session = it }
+            session = refreshSession(gateway, session)
+                ?: recoverSession(gateway)
+                ?: return
         }
 
         var response = request(
@@ -180,6 +167,7 @@ class QoreWidgetLiveService : Service() {
                 )
             } else {
                 val refreshed = refreshSession(gateway, latest ?: session)
+                    ?: recoverSession(gateway)
                 if (refreshed != null) {
                     session = refreshed
                     response = request(
@@ -220,6 +208,15 @@ class QoreWidgetLiveService : Service() {
             token = refreshToken,
             deviceId = deviceId,
         )
+        if (response.code == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            val latest = readSession()
+            if (latest != null &&
+                latest.optString("refresh_token") != refreshToken
+            ) {
+                return latest
+            }
+            return null
+        }
         if (response.code != HttpURLConnection.HTTP_OK) return null
 
         val refreshed = JSONObject(response.body)
@@ -233,6 +230,32 @@ class QoreWidgetLiveService : Service() {
         return refreshed
     }
 
+    private fun recoverSession(gateway: String): JSONObject? {
+        val deviceId = getSharedPreferences(
+            IDENTITY_PREFS,
+            Context.MODE_PRIVATE,
+        ).getString(DEVICE_ID, null) ?: return null
+
+        val response = request(
+            gateway = gateway,
+            path = RECOVER_PATH,
+            method = "POST",
+            token = null,
+            deviceId = deviceId,
+        )
+        if (response.code != HttpURLConnection.HTTP_OK) return null
+
+        val recovered = JSONObject(response.body)
+        if (recovered.optString("device_id") != deviceId) return null
+        if (recovered.optString("access_token").isBlank() ||
+            recovered.optString("refresh_token").isBlank()
+        ) {
+            return null
+        }
+        saveSession(recovered)
+        return recovered
+    }
+
     private data class HttpResult(
         val code: Int,
         val body: String,
@@ -242,10 +265,10 @@ class QoreWidgetLiveService : Service() {
         gateway: String,
         path: String,
         method: String,
-        token: String,
+        token: String?,
         deviceId: String,
     ): HttpResult {
-        if (token.isBlank() || deviceId.isBlank()) {
+        if (deviceId.isBlank()) {
             return HttpResult(HttpURLConnection.HTTP_UNAUTHORIZED, "")
         }
 
@@ -277,7 +300,9 @@ class QoreWidgetLiveService : Service() {
             connection.connectTimeout = 4000
             connection.readTimeout = 4000
             connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Authorization", "Bearer $token")
+            if (!token.isNullOrBlank()) {
+                connection.setRequestProperty("Authorization", "Bearer $token")
+            }
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("X-Qore-Device-Id", deviceId)
             connection.setRequestProperty("X-Qore-Device-Time", timestamp)
@@ -326,7 +351,7 @@ class QoreWidgetLiveService : Service() {
         val snapshot = JSONObject()
             .put("schema_version", "2")
             .put("generated_at", now.toString())
-            .put("expires_at", now.plusSeconds(10).toString())
+            .put("expires_at", now.plusSeconds(30).toString())
             .put("active_positions", portfolio.optInt("active_positions", 0))
             .put("healthy_runtimes", healthyRuntimes)
             .put("total_runtimes", runtimes.length())
@@ -479,7 +504,7 @@ class QoreWidgetLiveService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle("QORE Widget LIVE")
-            .setContentText("Supervisión read-only activa · actualización ~2 s")
+            .setContentText("Supervisión read-only activa · actualización ~2 s continua")
             .setContentIntent(pending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

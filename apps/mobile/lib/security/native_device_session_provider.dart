@@ -115,7 +115,7 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
     required bool enabled,
     required String gatewayUrl,
     int activeIntervalSeconds = 2,
-    int screenOffIntervalSeconds = 15,
+    int screenOffIntervalSeconds = 2,
   }) {
     return _channel.invokeMethod<void>(
       'setWidgetLiveMode',

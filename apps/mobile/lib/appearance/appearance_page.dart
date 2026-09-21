@@ -70,7 +70,7 @@ class AppearancePage extends StatelessWidget {
             child: SwitchListTile(
               title: const Text('Widget LIVE'),
               subtitle: const Text(
-                'Actualiza aproximadamente cada 2 s con la pantalla activa y mantiene el relevo en segundo plano.',
+                'Actualiza aproximadamente cada 2 s también con la pantalla apagada mientras Widget LIVE esté activo.',
               ),
               value: controller.widgetLiveEnabled,
               onChanged: _setWidgetLive,
