@@ -23,3 +23,17 @@ The current runtime publishes these trader identities:
 
 The bridge publishes every 2 seconds by default and uses the same mobile
 freshness thresholds as the Gateway.
+
+
+## VPS watchdog hardening
+
+The Windows bridge is intentionally read-only, but the mobile supervision layer must
+survive transient network failures and Task Scheduler termination. The bridge now
+keeps its process alive across transient snapshot/publish errors and reinitializes
+the read-only MT5 connection after repeated failures.
+
+For production VPS deployment, run `ops/windows_qore_mobile_bridge_watchdog.ps1`
+from a separate SYSTEM scheduled task. The watchdog only observes the bridge task
+and the sequence file. If the bridge task is stopped or the sequence file has not
+advanced for 20 seconds, it restarts the bridge task. It has no order, Risk, CIBO,
+or trading authority.

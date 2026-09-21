@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -294,23 +295,46 @@ def main() -> int:
     if not mt5.initialize():
         raise RuntimeError(f"mt5.initialize failed: {mt5.last_error()}")
 
+    consecutive_failures = 0
     try:
         while True:
-            sequence = _next_sequence(args.sequence_file)
-            snapshot = build_snapshot(
-                root=args.root,
-                runtime_id=args.runtime_id,
-                account_id=args.account_id,
-                mode=args.mode,
-                sequence=sequence,
-            )
-            publish(
-                gateway_url=args.gateway_url,
-                runtime_id=args.runtime_id,
-                secret=secret,
-                payload=snapshot,
-            )
-            time.sleep(max(1.0, args.interval))
+            cycle_started = time.monotonic()
+            try:
+                sequence = _next_sequence(args.sequence_file)
+                snapshot = build_snapshot(
+                    root=args.root,
+                    runtime_id=args.runtime_id,
+                    account_id=args.account_id,
+                    mode=args.mode,
+                    sequence=sequence,
+                )
+                publish(
+                    gateway_url=args.gateway_url,
+                    runtime_id=args.runtime_id,
+                    secret=secret,
+                    payload=snapshot,
+                )
+                consecutive_failures = 0
+            except Exception as exc:
+                consecutive_failures += 1
+                print(
+                    f"telemetry cycle failed ({consecutive_failures}): "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                if consecutive_failures % 5 == 0:
+                    mt5.shutdown()
+                    time.sleep(0.5)
+                    if not mt5.initialize():
+                        print(
+                            f"mt5 reinitialize failed: {mt5.last_error()}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+
+            elapsed = time.monotonic() - cycle_started
+            time.sleep(max(0.25, max(1.0, args.interval) - elapsed))
     finally:
         mt5.shutdown()
 
