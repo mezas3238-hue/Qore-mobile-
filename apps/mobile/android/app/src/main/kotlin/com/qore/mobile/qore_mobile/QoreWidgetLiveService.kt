@@ -57,6 +57,7 @@ class QoreWidgetLiveService : Service() {
     private val running = AtomicBoolean(false)
     private val worker = Executors.newSingleThreadExecutor()
     private val random = SecureRandom()
+    private var lastScreenOffRefreshAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -107,7 +108,23 @@ class QoreWidgetLiveService : Service() {
                 val appForeground =
                     prefs.getBoolean(WIDGET_APP_FOREGROUND, false)
                 if (!appForeground) {
-                    refreshWidget(prefs)
+                    val power =
+                        getSystemService(Context.POWER_SERVICE) as PowerManager
+                    val nowMs = System.currentTimeMillis()
+                    val shouldRefresh = if (power.isInteractive) {
+                        true
+                    } else {
+                        val screenOffIntervalMs =
+                            prefs.getInt(WIDGET_SCREEN_OFF_INTERVAL_SECONDS, 15)
+                                .coerceIn(5, 300) * 1000L
+                        nowMs - lastScreenOffRefreshAtMs >= screenOffIntervalMs
+                    }
+                    if (shouldRefresh) {
+                        refreshWidget(prefs)
+                        if (!power.isInteractive) {
+                            lastScreenOffRefreshAtMs = nowMs
+                        }
+                    }
                 }
             } catch (_: InterruptedException) {
                 return
@@ -117,13 +134,8 @@ class QoreWidgetLiveService : Service() {
             }
 
             val prefs = getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
-            val power = getSystemService(Context.POWER_SERVICE) as PowerManager
-            val intervalSeconds = if (power.isInteractive) {
+            val intervalSeconds =
                 prefs.getInt(WIDGET_ACTIVE_INTERVAL_SECONDS, 2).coerceIn(2, 60)
-            } else {
-                prefs.getInt(WIDGET_SCREEN_OFF_INTERVAL_SECONDS, 15)
-                    .coerceIn(5, 300)
-            }
             val elapsed = System.currentTimeMillis() - cycleStart
             val sleepMs = max(250L, intervalSeconds * 1000L - elapsed)
             try {
