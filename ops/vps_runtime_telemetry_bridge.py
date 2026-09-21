@@ -23,6 +23,7 @@ TRADERS = (
     ("R43_GBPUSD", "Turtle Soup GBPUSD R43", "GBPUSD"),
     ("R38_GBPJPY", "Turtle Soup GBPJPY R38", "GBPJPY"),
     ("R42_AUDJPY", "Turtle Soup AUDJPY R42", "AUDJPY"),
+    ("VT31_NAS100", "VT31 NAS100", "NAS100"),
 )
 
 
@@ -117,6 +118,9 @@ def _fallback_trader_for_symbol(symbol: str) -> str:
     exact = {
         "XAUUSD": "R34_XAUUSD",
         "EURUSD": "R38_EURUSD",
+        "NAS100": "VT31_NAS100",
+        "USTEC": "VT31_NAS100",
+        "US100": "VT31_NAS100",
     }
     return exact.get(symbol.upper(), "UNATTRIBUTED_RUNTIME_POSITION")
 
