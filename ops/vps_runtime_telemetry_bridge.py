@@ -28,9 +28,16 @@ TRADERS = (
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8-sig"))
+    for attempt in range(5):
+        try:
+            if not path.exists():
+                return {}
+            return json.loads(path.read_text(encoding="utf-8-sig"))
+        except (PermissionError, FileNotFoundError):
+            if attempt == 4:
+                raise
+            time.sleep(0.1)
+    return {}
 
 
 def _parse_time(value: object) -> datetime | None:
