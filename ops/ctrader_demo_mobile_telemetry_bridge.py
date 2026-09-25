@@ -136,9 +136,19 @@ def build_snapshot(
     if str(binding.get("environment", "")).upper() != "DEMO":
         raise RuntimeError("cTrader mobile bridge refuses non-DEMO binding")
 
-    account = position_service.account_snapshot(observed_at=now)
+    balance_raw = runtime_state.get("balance")
+    equity_raw = runtime_state.get("equity")
+    if balance_raw is None or equity_raw is None:
+        raise RuntimeError("cTrader runtime state missing balance/equity")
+    balance = float(balance_raw)
+    equity = float(equity_raw)
+
     positions_native = position_service.positions()
-    unrealized = position_service.unrealized_by_position()
+    unrealized = (
+        position_service.unrealized_by_position()
+        if positions_native
+        else {}
+    )
 
     positions: list[dict[str, Any]] = []
     for position in positions_native:
@@ -200,10 +210,10 @@ def build_snapshot(
         "label": "cTrader Demo Free",
         "mode": "demo",
         "runtime_id": runtime_id,
-        "balance": float(account.balance),
-        "equity": float(account.equity),
+        "balance": balance,
+        "equity": equity,
         "realized_pnl_today": None,
-        "floating_pnl": float(account.net_unrealized_pnl),
+        "floating_pnl": equity - balance,
         "daily_drawdown_fraction": None,
         "total_drawdown_fraction": None,
         "open_positions": len(positions),
