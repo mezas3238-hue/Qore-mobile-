@@ -146,11 +146,31 @@ void main() {
     expect(find.text('Conectado'), findsOneWidget);
     expect(find.text('CONECTADO'), findsOneWidget);
     expect(find.text('Runtime heartbeat'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('cTrader Demo Free'),
+      260,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    expect(find.text('Primary'), findsOneWidget);
+    expect(find.text('cTrader Demo Free'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Portfolio combinado'),
+      260,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('300000.00'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
     expect(find.text('300000.00'), findsOneWidget);
     expect(find.text('300150.00'), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
-    expect(find.text('Primary'), findsOneWidget);
-    expect(find.text('cTrader Demo Free'), findsOneWidget);
 
     await tester.tap(find.text('Traders'));
     await tester.pump();
