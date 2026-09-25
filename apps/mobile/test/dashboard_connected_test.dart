@@ -147,13 +147,13 @@ void main() {
     expect(find.text('CONECTADO'), findsOneWidget);
     expect(find.text('Runtime heartbeat'), findsOneWidget);
 
+    expect(find.text('Primary'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('cTrader Demo Free'),
       260,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    expect(find.text('Primary'), findsOneWidget);
     expect(find.text('cTrader Demo Free'), findsOneWidget);
 
     await tester.scrollUntilVisible(
