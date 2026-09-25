@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/qore_widget_description"
+    android:initialLayout="@layout/qore_widget_compact"
+    android:minWidth="110dp"
+    android:minHeight="70dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="70dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

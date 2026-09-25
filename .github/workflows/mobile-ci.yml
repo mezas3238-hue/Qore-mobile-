@@ -1,0 +1,167 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+
+concurrency:
+  group: qore-mobile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap-native:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Check whether native hosts already exist
+        id: native
+        shell: bash
+        run: |
+          if [ -f apps/mobile/android/app/build.gradle.kts ] &&              [ -f apps/mobile/ios/Runner.xcodeproj/project.pbxproj ]; then
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Flutter
+        if: steps.native.outputs.generate == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate isolated native hosts
+        if: steps.native.outputs.generate == 'true'
+        run: |
+          rm -rf /tmp/qore_mobile_host
+          flutter create             --platforms=android,ios             --project-name qore_mobile             --org com.qore.mobile             /tmp/qore_mobile_host
+          rm -rf apps/mobile/android apps/mobile/ios
+          cp -R /tmp/qore_mobile_host/android apps/mobile/android
+          cp -R /tmp/qore_mobile_host/ios apps/mobile/ios
+          cp /tmp/qore_mobile_host/.metadata apps/mobile/.metadata
+          cp /tmp/qore_mobile_host/analysis_options.yaml apps/mobile/analysis_options.yaml
+          grep -q "QORE Mobile" apps/mobile/lib/main.dart
+
+      - name: Set up Ruby
+        if: steps.native.outputs.generate == 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+
+      - name: Apply QORE native security and widgets
+        if: steps.native.outputs.generate == 'true'
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/apps/mobile/Gemfile
+          BUNDLE_PATH: ${{ runner.temp }}/qore-bundle
+        run: |
+          python3 apps/mobile/tool/apply_native_overrides.py
+          bundle install --jobs 4 --retry 3
+          bundle exec ruby apps/mobile/tool/configure_ios_widget.rb
+          grep -q "QORE Mobile" apps/mobile/lib/main.dart
+
+      - name: Commit generated native hosts
+        if: steps.native.outputs.generate == 'true'
+        run: |
+          git config user.name "qore-mobile-ci"
+          git config user.email "qore-mobile-ci@users.noreply.github.com"
+          git add             apps/mobile/android             apps/mobile/ios             apps/mobile/.metadata             apps/mobile/analysis_options.yaml
+          if git diff --cached --quiet; then
+            echo "No native changes."
+            exit 0
+          fi
+          git commit -m "build: generate Flutter Android and iOS hosts"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+
+
+  android-native:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Compile Android app and widget
+        run: >
+          flutter build apk
+          --debug
+          --dart-define=QORE_GATEWAY_URL=https://gateway.invalid
+      - name: Compile unsigned Android release bundle
+        run: >
+          flutter build appbundle
+          --release
+          --dart-define=QORE_GATEWAY_URL=https://gateway.invalid
+      - name: Verify release bundle exists
+        run: test -f build/app/outputs/bundle/release/app-release.aab
+
+  ios-native:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Compile iOS app and WidgetKit
+        run: >
+          flutter build ios
+          --simulator
+          --debug
+          --dart-define=QORE_GATEWAY_URL=https://gateway.invalid

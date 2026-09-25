@@ -1,0 +1,39 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Apple
+.DS_Store
+ios/Pods/
+ios/.symlinks/
+*.xcworkspace/xcuserdata/
+
+# Android
+.gradle/
+local.properties
+**/keystore.properties
+*.jks
+*.keystore
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+
+# Secrets / local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/

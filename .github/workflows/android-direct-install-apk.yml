@@ -1,0 +1,100 @@
+name: Android Direct Install APK
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/android-direct-install-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qore-mobile-direct-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-direct-install-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build signed direct-install APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          KEYSTORE_DIR="$(mktemp -d)"
+          KEYSTORE="$KEYSTORE_DIR/qore-direct-install.jks"
+          STORE_PASS="$(openssl rand -hex 24)"
+          KEY_PASS="$STORE_PASS"
+          KEY_ALIAS="qore-direct-install"
+
+          cleanup() {
+            unset QORE_ANDROID_KEYSTORE_PATH || true
+            unset QORE_ANDROID_STORE_PASSWORD || true
+            unset QORE_ANDROID_KEY_ALIAS || true
+            unset QORE_ANDROID_KEY_PASSWORD || true
+            STORE_PASS=""
+            KEY_PASS=""
+            rm -f "$KEYSTORE"
+            rmdir "$KEYSTORE_DIR" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          keytool -genkeypair             -keystore "$KEYSTORE"             -storepass "$STORE_PASS"             -keypass "$KEY_PASS"             -alias "$KEY_ALIAS"             -keyalg RSA             -keysize 4096             -validity 365             -dname "CN=QORE Direct Install Test,O=QORE"
+
+          export QORE_ANDROID_KEYSTORE_PATH="$KEYSTORE"
+          export QORE_ANDROID_STORE_PASSWORD="$STORE_PASS"
+          export QORE_ANDROID_KEY_ALIAS="$KEY_ALIAS"
+          export QORE_ANDROID_KEY_PASSWORD="$KEY_PASS"
+
+          flutter build apk             --release             --dart-define=QORE_GATEWAY_URL=https://qore-mobile-gateway-production.up.railway.app
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+
+          APKSIGNER="$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}" -type f -path '*/build-tools/*/apksigner' 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "apksigner not found" >&2
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK"             > build/app/outputs/flutter-apk/app-release.apk.cert.txt
+
+          sha256sum "$APK"             > build/app/outputs/flutter-apk/app-release.apk.sha256
+
+      - name: Upload direct-install APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-mobile-android-direct-install-test
+          path: |
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk.sha256
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk.cert.txt
+          if-no-files-found: error
+          retention-days: 7
