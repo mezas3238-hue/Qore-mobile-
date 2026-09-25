@@ -2,7 +2,8 @@ param(
     [string]$BridgeTaskName = 'QORE Mobile cTrader Demo Bridge',
     [string]$SequenceFile = 'C:\ProgramData\QOREMobileBridge\ctrader-sequence.txt',
     [int]$CheckEverySeconds = 5,
-    [int]$StaleAfterSeconds = 20
+    [int]$StaleAfterSeconds = 20,
+    [int]$StartupGraceSeconds = 45
 )
 
 $ErrorActionPreference = 'Continue'
@@ -11,11 +12,6 @@ while ($true) {
     try {
         $task = Get-ScheduledTask -TaskName $BridgeTaskName -ErrorAction Stop
         $sequenceItem = Get-Item -LiteralPath $SequenceFile -ErrorAction SilentlyContinue
-        $sequenceStale = $true
-        if ($null -ne $sequenceItem) {
-            $age = ((Get-Date) - $sequenceItem.LastWriteTime).TotalSeconds
-            $sequenceStale = $age -gt $StaleAfterSeconds
-        }
 
         $runtimeAvailable = $null -ne (
             Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -33,6 +29,20 @@ while ($true) {
                 }
         )
         $processHealthy = $bridgeProcesses.Count -eq 1
+        $sequenceStale = $false
+
+        if ($null -ne $sequenceItem) {
+            $age = ((Get-Date) - $sequenceItem.LastWriteTime).TotalSeconds
+            $sequenceStale = $age -gt $StaleAfterSeconds
+        } elseif ($processHealthy) {
+            $created = [Management.ManagementDateTimeConverter]::ToDateTime(
+                $bridgeProcesses[0].CreationDate
+            )
+            $age = ((Get-Date) - $created).TotalSeconds
+            $sequenceStale = $age -gt $StartupGraceSeconds
+        } else {
+            $sequenceStale = $true
+        }
 
         if (($sequenceStale -or -not $processHealthy) -and $runtimeAvailable) {
             if ($task.State -eq 'Running') {
