@@ -249,6 +249,13 @@ class _PortfolioPage extends StatelessWidget {
         const SizedBox(height: 12),
         ConnectionHealthCard(snapshot: snapshot),
         const SizedBox(height: 16),
+        Text('Cuentas', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        for (final account in snapshot.accounts)
+          _AccountSummaryCard(account: account),
+        const SizedBox(height: 16),
+        Text('Portfolio combinado', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -283,6 +290,46 @@ class _PortfolioPage extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+
+class _AccountSummaryCard extends StatelessWidget {
+  const _AccountSummaryCard({required this.account});
+
+  final AccountSnapshot account;
+
+  String _money(double? value) =>
+      value == null ? '—' : value.toStringAsFixed(2);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        onTap: () => _showDetailSheet(
+          context,
+          title: account.label,
+          rows: [
+            ('Proveedor', account.provider),
+            ('Modo', account.mode.name.toUpperCase()),
+            ('Freshness', account.freshness.name.toUpperCase()),
+            ('Balance', _money(account.balance)),
+            ('Equity', _money(account.equity)),
+            ('P/L flotante', _money(account.floatingPnl)),
+            ('Posiciones', account.openPositions.toString()),
+            ('Runtime', account.runtimeId),
+            ('Heartbeat', _detailTime(account.lastHeartbeat)),
+          ],
+        ),
+        leading: const Icon(Icons.account_balance_wallet_outlined),
+        title: Text(account.label),
+        subtitle: Text(
+          '${account.provider} · ${account.mode.name.toUpperCase()} · '
+          '${account.freshness.name.toUpperCase()}',
+        ),
+        trailing: Text(_money(account.equity)),
+      ),
     );
   }
 }

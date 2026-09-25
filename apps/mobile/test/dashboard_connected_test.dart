@@ -44,9 +44,9 @@ void main() {
         ),
         AccountSnapshot(
           accountId: 'account-b',
-          provider: 'FundedNext',
-          label: 'Secondary',
-          mode: TradingMode.shadow,
+          provider: 'cTrader',
+          label: 'cTrader Demo Free',
+          mode: TradingMode.demo,
           runtimeId: 'runtime-b',
           openPositions: 0,
           freshness: Freshness.delayed,
@@ -149,6 +149,8 @@ void main() {
     expect(find.text('300000.00'), findsOneWidget);
     expect(find.text('300150.00'), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
+    expect(find.text('Primary'), findsOneWidget);
+    expect(find.text('cTrader Demo Free'), findsOneWidget);
 
     await tester.tap(find.text('Traders'));
     await tester.pump();
