@@ -77,7 +77,7 @@ class QoreWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.qore_widget_dd, dd)
                 views.setTextViewText(R.id.qore_widget_positions, json.optInt("active_positions", 0).toString())
                 views.setTextViewText(R.id.qore_widget_runtimes, "${json.optInt("healthy_runtimes",0)}/${json.optInt("total_runtimes",0)}")
-                views.setTextViewText(R.id.qore_widget_mode, json.optString("mode", "unknown").uppercase())
+                views.setTextViewText(R.id.qore_widget_mode, accountModeLabel(json))
                 val freshness = json.optString("freshness", "unknown").uppercase()
                 val hb = if (json.isNull("last_heartbeat")) null else runCatching { Instant.parse(json.getString("last_heartbeat")) }.getOrNull()
                 val age = hb?.let { Duration.between(it, Instant.now()).seconds.coerceAtLeast(0) }
@@ -117,6 +117,25 @@ class QoreWidgetProvider : AppWidgetProvider() {
             views.setTextColor(R.id.qore_widget_mode, accent)
             views.setTextViewTextSize(R.id.qore_widget_title, TypedValue.COMPLEX_UNIT_SP, 17f * scale)
             views.setTextViewTextSize(R.id.qore_widget_equity, TypedValue.COMPLEX_UNIT_SP, 16f * scale)
+        }
+
+        private fun accountModeLabel(json: JSONObject): String {
+            val providers = json.optJSONArray("account_providers")
+            var hasCTrader = false
+            var hasFundedNext = false
+            if (providers != null) {
+                for (index in 0 until providers.length()) {
+                    when (providers.optString(index).lowercase()) {
+                        "ctrader" -> hasCTrader = true
+                        "fundednext" -> hasFundedNext = true
+                    }
+                }
+            }
+            return when {
+                hasCTrader && hasFundedNext -> "MT5+cTRADER"
+                hasCTrader -> "cTRADER DEMO"
+                else -> json.optString("mode", "unknown").uppercase()
+            }
         }
 
         private fun freshnessColor(v: String) = when (v) {

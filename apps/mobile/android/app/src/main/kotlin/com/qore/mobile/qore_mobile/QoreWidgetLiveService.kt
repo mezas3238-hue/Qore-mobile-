@@ -348,6 +348,13 @@ class QoreWidgetLiveService : Service() {
             if (name.isNotBlank()) traderNames.put(name)
         }
 
+        val accountProviders = JSONArray()
+        for (index in 0 until accounts.length()) {
+            val provider =
+                accounts.optJSONObject(index)?.optString("provider").orEmpty()
+            if (provider.isNotBlank()) accountProviders.put(provider)
+        }
+
         val snapshot = JSONObject()
             .put("schema_version", "2")
             .put("generated_at", now.toString())
@@ -355,6 +362,8 @@ class QoreWidgetLiveService : Service() {
             .put("active_positions", portfolio.optInt("active_positions", 0))
             .put("healthy_runtimes", healthyRuntimes)
             .put("total_runtimes", runtimes.length())
+            .put("account_count", accounts.length())
+            .put("account_providers", accountProviders)
             .put("freshness", portfolio.optString("freshness", "unknown"))
             .put(
                 "mode",
