@@ -349,10 +349,18 @@ class QoreWidgetLiveService : Service() {
         }
 
         val accountProviders = JSONArray()
+        val accountLines = JSONArray()
         for (index in 0 until accounts.length()) {
-            val provider =
-                accounts.optJSONObject(index)?.optString("provider").orEmpty()
+            val account = accounts.optJSONObject(index) ?: continue
+            val provider = account.optString("provider")
             if (provider.isNotBlank()) accountProviders.put(provider)
+            val label = account.optString("label", provider)
+            val equityText = if (account.isNull("equity")) {
+                "—"
+            } else {
+                String.format(java.util.Locale.US, "%.2f", account.optDouble("equity"))
+            }
+            if (label.isNotBlank()) accountLines.put("$label · $equityText")
         }
 
         val snapshot = JSONObject()
@@ -364,6 +372,7 @@ class QoreWidgetLiveService : Service() {
             .put("total_runtimes", runtimes.length())
             .put("account_count", accounts.length())
             .put("account_providers", accountProviders)
+            .put("account_lines", accountLines)
             .put("freshness", portfolio.optString("freshness", "unknown"))
             .put(
                 "mode",

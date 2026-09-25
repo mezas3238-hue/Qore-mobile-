@@ -11,6 +11,7 @@ class WidgetSnapshot {
     required this.mode,
     required this.traderNames,
     required this.accountProviders,
+    required this.accountLines,
     this.balance,
     this.equity,
     this.realizedPnlToday,
@@ -36,6 +37,7 @@ class WidgetSnapshot {
   final DateTime? lastHeartbeat;
   final List<String> traderNames;
   final List<String> accountProviders;
+  final List<String> accountLines;
 
   factory WidgetSnapshot.fromDashboard(
     DashboardSnapshot dashboard, {
@@ -74,6 +76,13 @@ class WidgetSnapshot {
       traderNames: dashboard.traders.map((trader) => trader.name).toList(),
       accountProviders:
           dashboard.accounts.map((account) => account.provider).toList(),
+      accountLines: dashboard.accounts
+          .map(
+            (account) =>
+                '${account.label} · '
+                '${account.equity == null ? '—' : account.equity!.toStringAsFixed(2)}',
+          )
+          .toList(),
     );
   }
 
@@ -96,6 +105,7 @@ class WidgetSnapshot {
       'trader_names': traderNames,
       'account_count': accountProviders.length,
       'account_providers': accountProviders,
+      'account_lines': accountLines,
     };
   }
 }

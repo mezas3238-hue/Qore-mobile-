@@ -84,14 +84,21 @@ class QoreWidgetProvider : AppWidgetProvider() {
                 val status = if (appearance.optBoolean("show_heartbeat_age", true) && age != null) "$freshness · ${age}s" else freshness
                 views.setTextViewText(R.id.qore_widget_status, status)
                 views.setTextColor(R.id.qore_widget_status, freshnessColor(freshness))
+                val accountLines = json.optJSONArray("account_lines")
                 val names = json.optJSONArray("trader_names")
                 val lines = mutableListOf<String>()
-                if (names != null) {
-                    val keep = minOf(3, names.length())
-                    for (i in 0 until keep) lines += "• ${names.optString(i)}"
-                    if (names.length() > keep) lines += "+${names.length() - keep} más"
+                if (accountLines != null) {
+                    val keepAccounts = minOf(2, accountLines.length())
+                    for (i in 0 until keepAccounts) {
+                        lines += "• ${accountLines.optString(i)}"
+                    }
                 }
-                views.setTextViewText(R.id.qore_widget_traders, if (lines.isEmpty()) "Sin traders" else lines.joinToString("\n"))
+                if (names != null) {
+                    val keepTraders = if (lines.isEmpty()) minOf(3, names.length()) else minOf(2, names.length())
+                    for (i in 0 until keepTraders) lines += "• ${names.optString(i)}"
+                    if (names.length() > keepTraders) lines += "+${names.length() - keepTraders} traders"
+                }
+                views.setTextViewText(R.id.qore_widget_traders, if (lines.isEmpty()) "Sin cuentas/traders" else lines.joinToString("\n"))
                 views.setTextViewText(R.id.qore_widget_updated, if (appearance.optBoolean("show_exact_time", false)) "Actualizado: ${formatTime(generated)}" else "Snapshot seguro")
             } catch (_: Exception) {
                 unavailable(views, "ERROR")
