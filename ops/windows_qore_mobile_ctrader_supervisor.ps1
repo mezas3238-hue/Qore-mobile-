@@ -1,5 +1,5 @@
 param(
-    [string]$Root = 'C:\QORE_CTRADER_DEMO_FREE',
+    [string]$Root = 'C:\QORE_CIBO_PHASE20_RUNTIME',
     [string]$Python = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe',
     [string]$Bridge = 'C:\QORE_MOBILE_BRIDGE_SRC\ops\ctrader_demo_mobile_telemetry_bridge.py',
     [string]$GatewayUrl = 'https://qore-mobile-gateway-production.up.railway.app',
@@ -37,7 +37,9 @@ while ($true) {
     try {
         . (Join-Path $Root 'scripts\load_ctrader_demo_credentials.ps1')
         $env:PYTHONPATH = "$Root\src;$Root\scripts"
+        $ErrorActionPreference = 'Continue'
     } catch {
+        $ErrorActionPreference = 'Continue'
         Add-Content -LiteralPath $LogFile -Value "$((Get-Date).ToString('o')) WAIT cTrader DEMO credentials unavailable"
         Start-Sleep -Seconds 5
         continue
