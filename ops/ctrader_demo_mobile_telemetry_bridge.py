@@ -13,6 +13,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+SEQUENCE_EPOCH_FLOOR = int(time.time() * 1000)
+
+
 TRADER_DISPLAY = {
     "VT08_FOREX": ("VT08 Forex", "AUDJPY / GBPUSD / GBPJPY"),
     "R34_XAUUSD": ("Turtle Soup XAUUSD R34", "XAUUSD"),
@@ -68,7 +71,7 @@ def _next_sequence(path: Path) -> int:
             current = int(path.read_text(encoding="utf-8").strip() or "0")
         except ValueError:
             current = 0
-    value = current + 1
+    value = max(current + 1, SEQUENCE_EPOCH_FLOOR)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(str(value), encoding="utf-8")
