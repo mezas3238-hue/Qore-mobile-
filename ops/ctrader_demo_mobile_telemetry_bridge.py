@@ -64,6 +64,23 @@ def _freshness(now: datetime, last_seen: datetime | None) -> str:
     return "offline"
 
 
+def _mobile_health_time(now: datetime, source_heartbeat: datetime | None) -> datetime | None:
+    """Use transport time while the source runtime is demonstrably healthy.
+
+    The cTrader runtime performs broker/reconciliation work that can make its
+    persisted heartbeat 5-15 seconds old even while the process and mobile
+    bridge are healthy. Mobile connection health should represent the active
+    telemetry channel, while trader.last_market_read retains source cadence.
+    Once the source heartbeat exceeds the delayed bound, stop masking its age.
+    """
+    if source_heartbeat is None:
+        return None
+    age = (now - source_heartbeat).total_seconds()
+    if 0 <= age <= 15:
+        return now
+    return source_heartbeat
+
+
 def _next_sequence(path: Path) -> int:
     current = 0
     if path.exists():
@@ -135,7 +152,9 @@ def build_snapshot(
     binding = _read_json(root / "var" / "ctrader_demo_free" / "binding.json")
     activation = _read_json(root / "var" / "ctrader_demo_free" / "demo-runtime.json")
     heartbeat = _parse_time(runtime_state.get("heartbeat_at"))
-    freshness = _freshness(now, heartbeat)
+    source_freshness = _freshness(now, heartbeat)
+    mobile_heartbeat = _mobile_health_time(now, heartbeat)
+    mobile_freshness = _freshness(now, mobile_heartbeat)
 
     binding_schema = str(binding.get("schema", ""))
     binding_environment = str(binding.get("environment", "")).upper()
@@ -215,7 +234,7 @@ def build_snapshot(
                 "state": "running",
                 "last_market_read": heartbeat.isoformat() if heartbeat else None,
                 "last_signal_or_abstention": None,
-                "freshness": freshness,
+                "freshness": source_freshness,
                 "as_of": now.isoformat(),
             }
         )
@@ -233,9 +252,11 @@ def build_snapshot(
         "daily_drawdown_fraction": None,
         "total_drawdown_fraction": None,
         "open_positions": len(positions),
-        "last_heartbeat": heartbeat.isoformat() if heartbeat else None,
+        "last_heartbeat": (
+            mobile_heartbeat.isoformat() if mobile_heartbeat else None
+        ),
         "as_of": now.isoformat(),
-        "freshness": freshness,
+        "freshness": mobile_freshness,
     }
 
     return {
@@ -243,7 +264,7 @@ def build_snapshot(
         "runtime_id": runtime_id,
         "account_id": account_id,
         "sequence": sequence,
-        "event_time": (heartbeat or now).isoformat(),
+        "event_time": (mobile_heartbeat or heartbeat or now).isoformat(),
         "emitted_at": now.isoformat(),
         "account": account_snapshot,
         "traders": traders,
