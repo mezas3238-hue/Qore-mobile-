@@ -130,10 +130,21 @@ def build_snapshot(
         root / "var" / "ctrader_demo_signal_runtime" / "runtime-state.json"
     )
     binding = _read_json(root / "var" / "ctrader_demo_free" / "binding.json")
+    activation = _read_json(root / "var" / "ctrader_demo_free" / "demo-runtime.json")
     heartbeat = _parse_time(runtime_state.get("heartbeat_at"))
     freshness = _freshness(now, heartbeat)
 
-    if str(binding.get("environment", "")).upper() != "DEMO":
+    binding_schema = str(binding.get("schema", ""))
+    binding_environment = str(binding.get("environment", "")).upper()
+    activation_environment = str(activation.get("environment", "")).upper()
+    phase20_demo_binding = (
+        binding_schema == "qore.cibo.phase20d.ctrader_demo_runtime_binding.v1"
+        and activation_environment == "DEMO"
+        and activation.get("fundednext_allowed") is False
+        and activation.get("live_allowed") is False
+        and activation.get("real_capital_allowed") is False
+    )
+    if binding_environment != "DEMO" and not phase20_demo_binding:
         raise RuntimeError("cTrader mobile bridge refuses non-DEMO binding")
 
     balance_raw = runtime_state.get("balance")
@@ -183,6 +194,8 @@ def build_snapshot(
     allocations = binding.get("allocations", {})
     if not isinstance(allocations, dict):
         allocations = {}
+    if not allocations and phase20_demo_binding:
+        allocations = {trader_id: None for trader_id in TRADER_DISPLAY}
 
     traders: list[dict[str, Any]] = []
     for raw_trader in allocations:
