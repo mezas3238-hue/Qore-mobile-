@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qore.invalid/contracts/widget-snapshot-v1.schema.json",
+  "title": "QORE Widget Snapshot V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "expires_at",
+    "active_positions",
+    "healthy_runtimes",
+    "total_runtimes",
+    "freshness"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "equity": {
+      "type": ["number", "null"]
+    },
+    "realized_pnl_today": {
+      "type": ["number", "null"]
+    },
+    "floating_pnl": {
+      "type": ["number", "null"]
+    },
+    "daily_drawdown_fraction": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "active_positions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "healthy_runtimes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_runtimes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "freshness": {
+      "enum": ["live", "delayed", "stale", "offline", "unknown"]
+    }
+  }
+}

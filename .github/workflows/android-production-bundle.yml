@@ -1,0 +1,59 @@
+name: Android Production Bundle
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/android-production-bundle.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qore-mobile-production-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-production-bundle:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build production AAB without signing material
+        run: >
+          flutter build appbundle
+          --release
+          --dart-define=QORE_GATEWAY_URL=https://qore-mobile-gateway-production.up.railway.app
+
+      - name: Verify bundle and checksum
+        run: |
+          test -f build/app/outputs/bundle/release/app-release.aab
+          sha256sum build/app/outputs/bundle/release/app-release.aab             > build/app/outputs/bundle/release/app-release.aab.sha256
+
+      - name: Upload unsigned production bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-mobile-android-production-unsigned
+          path: |
+            apps/mobile/build/app/outputs/bundle/release/app-release.aab
+            apps/mobile/build/app/outputs/bundle/release/app-release.aab.sha256
+          if-no-files-found: error
+          retention-days: 7

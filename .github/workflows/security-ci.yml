@@ -1,0 +1,21 @@
+name: Security Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  no-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Reject tracked credentials and high-confidence secrets
+        run: python3 tool/check_no_secrets.py
+      - name: Enforce Android release signing isolation
+        run: python3 tool/check_android_release_security.py
