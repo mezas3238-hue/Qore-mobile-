@@ -20,6 +20,7 @@
 - https://bolt.eu/es-py/driver/guide/commissions/
 - https://bolt.eu/es-py/support/articles/8602349313682/
 - https://bolt.eu/es-py/driver/guide/categories/
+- https://bolt.eu/en-gb/cities/asuncion/route/shopping-del-sol-to-mercado-municipal-numero-4/ (página orientativa histórica: **no tarifa vigente auditada 2026**)
 - https://bolt.eu/es-py/driver/guide/driver-insurance/
 - https://bolt.eu/es-py/driver/guide/motorcycle-driver/
 - https://www.uber.com/py/es/blog/tasa-de-servicio/ (2019, contextual, no tasa vigente universal)
@@ -29,6 +30,8 @@
 - https://www.petropar.gov.py/?page_id=4460 (nafta 88: G 6.990/L, 93: G 7.490/L, según página vigente observada)
 - https://www.asuncion.gov.py/transito/municipalidad-aclara-que-no-habra-caceria-de-conductores-de-plataformas-y-que-forma-parte-de-una-campana-de-desinformacion
 - https://www.bacn.gov.py/leyes-paraguayas/12771/ley-n-7503-2025-sistema-nacional-de-pagos
+
+**Precios por categoría publicados, pero no verificados como vigentes:** una página de rutas de Bolt Asunción, indexada con contenido antiguo, muestra como referencia orientativa Economy: Gs. 3.100 de base + 1.700/km + 270/min, mínimo 9.200; Bolt Auto: 3.300 + 1.900/km + 300/min, mínimo 10.100; y Motor: 1.550 + 1.050/km + 150/min, mínimo 6.000. **NO usar estos valores para ofertar QORE ni afirmar que son las tarifas actuales de 2026.** Las cotizaciones efectivas en apps son pendientes de verificar en hora y ciudad. Fuente: enlace histórico de la lista.
 
 La discrepancia de porcentajes Bolt en idiomas y las condiciones cambiantes son **riesgos de verificación**, no argumentos para afirmar superioridad de QORE sin recibos. Para Uber Moto solicitar capturas VOLUNTARIAS del precio y vigencia del pase.
 
@@ -84,7 +87,7 @@ No hay cotizaciones reales todavía para seguros, pasarelas y soporte. Para no p
 
 Cifras redondeadas a guaraní. El modelo muestra **por qué un 8% indiscriminado para motos pequeñas puede perder dinero**, aunque atraiga conductores. Incluso margen 108 Gs es prácticamente cero antes de gastos fijos y adquisición.
 
-**Condición de punto muerto por viaje:** con mix digital d, MDR m, costo fijo variable C y comisión c, margen = P(c-d×m)−C. Cuando c>d×m, el precio mínimo para no perder contribución es P>=C/(c-d×m). Ejemplo moto 8%, d=60%, m=2,8%, C=650: punto muerto ≈ **10.484 Gs**. Pero esto NO debe convertirse en tarifa mínima comercial hasta auditar supuestos/cotizaciones.
+**Condición de punto muerto por viaje:** con mix digital d, MDR m, costo fijo variable C y comisión c, margen = P(c-d×m)−C. Cuando c>d×m, el precio mínimo para no perder contribución es P>=C/(c-d×m). Ejemplo moto 8%, d=60%, m=2,8%, C=650: punto muerto ≈ **10.285 Gs**. Pero esto NO debe convertirse en tarifa mínima comercial hasta auditar supuestos/cotizaciones.
 
 ## 5. Mejorar productividad, no solo porcentaje
 
