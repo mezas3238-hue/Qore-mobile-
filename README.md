@@ -87,3 +87,11 @@ Comprobaciones locales puras: `npm test`. Se necesita CI remoto para validar ins
 La **DEMO** ilustra una comisión de QORE del **10%** (antes 15%). Esto **NO** modifica configuraciones del backend Supabase existente, no activa cobros, ni constituye una oferta contractual. En producción el valor debe calcularlo exclusivamente el servidor, respaldado por auditoría de tarifas, pagos, costos, impuestos y consentimiento contractual. El operador deberá revisar la rentabilidad antes del lanzamiento.
 
 Investigación y estrategia: [docs/research/COMPETENCIA_BOLT_UBER_PARAGUAY_CONDUCTORES_2026-10-15.md](docs/research/COMPETENCIA_BOLT_UBER_PARAGUAY_CONDUCTORES_2026-10-15.md).
+
+
+## Investigación de precios y diferenciación — QORE FairPrice V1 (15/10/2026)
+- Motor de precios de investigación para autos y motos, piso conductor + plataforma + tarifa, sin llamadas reales y sin activar viajes ni cobros.
+- Cotizaciones orientativas publicadas por Bolt Paraguay con enlaces y advertencias de antigüedad; Uber no se comparó vía cotizaciones pareadas en vivo.
+- Informe: docs/research/QORE_MOBILE_TARIFAS_FAIRPRICE_VANGUARDIA_2026-10-15.md
+- UI de laboratorio Expo: /precios (escenarios, no precios comerciales). Tests puros: src/domain/fairprice.test.ts.
+- Backend productivo permanece sin cambios, conserva comisiones 15% y no soporta motos aún.
