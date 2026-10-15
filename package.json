@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/domain/rides.test.ts",
+    "test": "node --experimental-strip-types --test src/domain/*.test.ts",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {
@@ -28,7 +28,14 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "@supabase/supabase-js": "^2.58.0",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "react-native-url-polyfill": "^2.0.0",
+    "base64-arraybuffer": "^1.0.2",
+    "expo-image-picker": "~57.0.17",
+    "expo-location": "~57.0.7",
+    "expo-maps": "~57.0.3"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

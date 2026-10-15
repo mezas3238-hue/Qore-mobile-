@@ -14,6 +14,13 @@ export default function DriverDemo() {
     <Headline eyebrow="Conductor · entorno simulado" title="Conducí a tu ritmo" description="Probá cómo un conductor acepta solicitudes y actualiza el estado de un viaje." />
     <Note>Conductor ficticio aprobado SOLO en demo. Los conductores reales deben validar identidad, vehículo, habilitaciones y seguros antes de recibir solicitudes.</Note>
     <Card>
+      <Text style={textStyles.heading}>Registro obligatorio para conductores reales</Text>
+      <Text style={textStyles.body}>Creá una cuenta, registrá tu licencia y el vehículo. El equipo administrativo debe aprobar antes de poder operar.</Text>
+      <Button secondary text="Registrar conductor y vehículo" onPress={() => router.push('/registro-conductor')} />
+      <Button secondary text="Ver estado de mi solicitud" onPress={() => router.push('/perfil')} />
+    </Card>
+    {active && <Button secondary text="Navegar con Maps / Waze al destino DEMO" onPress={() => router.push('/mapas')} />}
+    <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <View style={{ flex: 1 }}><Text style={textStyles.heading}>Disponibilidad</Text><Text style={textStyles.subtitle}>{state.driverAvailable ? 'Disponible para viajes DEMO' : 'No disponible'}</Text></View>
         <Switch accessibilityLabel="Disponibilidad simulada del conductor" value={state.driverAvailable} onValueChange={available => act({ type: 'availability', available })} trackColor={{ true: C.teal }} />

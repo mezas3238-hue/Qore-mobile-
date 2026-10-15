@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, C, Card, CategoryChoices, Choice, Headline, MapSketch, Navigation, Note, Page, Status, textStyles, Top } from '../src/components/UI';
 import { useRides } from '../src/context/RideContext';
+import { NavigationLinks } from '../src/components/NavigationLinks';
 import { Category, formatGs, PLACES, quoteDemo } from '../src/domain/rides';
 
 export default function PassengerDemo() {
@@ -19,6 +20,7 @@ export default function PassengerDemo() {
     <Top subtitle="Experiencia del pasajero" />
     <Headline eyebrow="Pasajero" title={active ? 'Tu viaje, paso a paso' : '¿A dónde vamos?'} description="Probá cómo funciona una solicitud. Ningún vehículo real recibirá este pedido." />
     <MapSketch origin={active?.origin || origin} destination={active?.destination || destination} />
+    <NavigationLinks destination={active?.destination || destination} origin={active?.origin || origin} label="Consultar ruta en Google Maps o Waze" />
     {active ? <>
       <Status ride={active} />
       <Note>La asignación es ficticia. Para continuar, abrí «Conductor» y aceptá la solicitud como conductor DEMO.</Note>

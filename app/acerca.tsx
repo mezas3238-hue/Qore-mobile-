@@ -11,8 +11,8 @@ export default function About() {
       <Text style={textStyles.body}>• Restricciones locales de transición de estados y tests de dominio.</Text>
     </Card>
     <Card><Text style={textStyles.heading}>No implementado / NO operativo</Text>
-      <Text style={textStyles.body}>• Registro/login real, separación segura de roles y base de datos conectada.</Text>
-      <Text style={textStyles.body}>• Geolocalización GPS real, mapa/cartografía, ruteo y seguimiento en vivo.</Text>
+      <Text style={textStyles.body}>• Registro/login de pasajeros y solicitudes de conductor + vehículo implementados, pero requieren variables públicas de Supabase y auditoría final; la demo continúa sin conexión.</Text>
+      <Text style={textStyles.body}>• Google Maps y Waze: navegación externa real; mapa nativo Android al configurar clave restringida. GPS en primer plano opcional; no existe seguimiento en vivo ni cálculo real de tarifa.</Text>
       <Text style={textStyles.body}>• Matching geográfico real, eventos push, KYC, seguros y licencias.</Text>
       <Text style={textStyles.body}>• Pagos por tarjeta, billeteras, efectivo verificado y facturación real.</Text>
       <Text style={textStyles.body}>• Atención al cliente, sistema antifraude y despliegue comercial.</Text>

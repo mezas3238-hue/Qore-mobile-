@@ -106,7 +106,8 @@ export function Navigation() {
     <Link href="/" asChild><Pressable style={s.navItem}><Text style={s.navIcon}>⌂</Text><Text style={s.navText}>Inicio</Text></Pressable></Link>
     <Link href="/demo" asChild><Pressable style={s.navItem}><Text style={s.navIcon}>🚗</Text><Text style={s.navText}>Viajes</Text></Pressable></Link>
     <Link href="/conductor" asChild><Pressable style={s.navItem}><Text style={s.navIcon}>◉</Text><Text style={s.navText}>Conductor</Text></Pressable></Link>
-    <Link href="/admin" asChild><Pressable style={s.navItem}><Text style={s.navIcon}>▦</Text><Text style={s.navText}>Panel</Text></Pressable></Link>
+    <Link href="/mapas" asChild><Pressable style={s.navItem}><Text style={s.navIcon}>🗺️</Text><Text style={s.navText}>Mapas</Text></Pressable></Link>
+    <Link href="/perfil" asChild><Pressable style={s.navItem}><Text style={s.navIcon}>●</Text><Text style={s.navText}>Cuenta</Text></Pressable></Link>
   </View>;
 }
 export function Note({ children }: { children: React.ReactNode }) {

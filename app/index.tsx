@@ -18,6 +18,13 @@ export default function Home() {
       <View style={styles.gridItem}><Text style={styles.emoji}>📍</Text><Text style={styles.itemTitle}>Tu destino</Text><Text style={styles.itemText}>Elegí dónde querés ir</Text></View>
       <View style={styles.gridItem}><Text style={styles.emoji}>💵</Text><Text style={styles.itemTitle}>Precio claro</Text><Text style={styles.itemText}>Cotización ilustrativa</Text></View>
     </View>
+    <Card>
+      <Text style={styles.supertitle}>Registro de usuarios y vehículos</Text>
+      <Button text="Crear cuenta de pasajero" onPress={() => router.push('/registro')} />
+      <Button text="Ingresar a mi cuenta" secondary onPress={() => router.push('/acceso')} />
+      <Button text="Registrar conductor y vehículo" secondary onPress={() => router.push('/registro-conductor')} />
+      <Button text="Abrir Google Maps o Waze" secondary onPress={() => router.push('/mapas')} />
+    </Card>
     <Note>Antes de operar realmente se necesitan permisos, seguros, verificación de conductores, GPS, tarifas autorizadas y soporte.</Note>
     <Navigation />
   </Page>;

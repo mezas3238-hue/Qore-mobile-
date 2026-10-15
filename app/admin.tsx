@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Button, C, Card, Headline, Navigation, Note, Page, textStyles, Top } from '../src/components/UI';
@@ -29,6 +30,11 @@ export default function AdminDemo() {
         <Text style={{ color: C.ink, fontWeight: '700' }}>{ride.origin.label} → {ride.destination.label}</Text>
         <Text style={textStyles.subtitle}>{STATUS_LABEL[ride.stage]} · {CATEGORY_LABEL[ride.category]} · {formatGs(ride.quote.priceGs)}</Text>
       </View>)}
+    </Card>
+    <Card>
+      <Text style={textStyles.heading}>Verificación real del conductor y vehículo</Text>
+      <Text style={textStyles.body}>Solo administradores del backend pueden revisar documentación y aprobar conductores reales.</Text>
+      <Button text="Abrir revisión administrativa protegida" secondary onPress={() => router.push('/revision')} />
     </Card>
     <Card>
       <Text style={textStyles.heading}>Tabla de tarifas ilustrativas</Text>
