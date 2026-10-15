@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Switch, Text, View, Linking } from 'react-native';
 import { Button, Card, Headline, Navigation, Note, Page, Top, textStyles, C } from '../src/components/UI';
 import { useAuth } from '../src/context/AuthContext';
+import { FormField } from '../src/components/Form';
 import { requireBackend, backendConfigured } from '../src/services/supabase';
 
 type Application = { id:string;user_id:string;full_name:string;phone:string;license_number:string;license_doc_path:string|null;status:string;created_at:string };
@@ -69,6 +70,7 @@ export default function Reviews() {
               <Switch value={Boolean(checks[app.id])} onValueChange={v=>setChecks(x=>({...x,[app.id]:v}))} accessibilityLabel="Verifiqué los documentos y habilitaciones de esta solicitud" trackColor={{true:C.teal}} />
               <Text style={[textStyles.subtitle,{flex:1}]}>Confirmo que revisé físicamente licencia profesional, documento de vehículo, seguro y habilitaciones requeridas.</Text>
             </View>
+            <FormField label="Notas de revisión (obligatorias para rechazar)" value={notes} onChangeText={setNotes} maxLength={500} />
             <Button text="Aprobar conductor" disabled={working||!app.license_doc_path||!car||!checks[app.id]} onPress={()=>void review(app,true)} />
             <Button secondary text="Rechazar solicitud" disabled={working} onPress={()=>void review(app,false)} />
           </>}
