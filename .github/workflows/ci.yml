@@ -22,3 +22,6 @@ jobs:
           cache-dependency-path: package.json
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - run: npx expo export --platform web
+        env:
+          CI: '1'
