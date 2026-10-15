@@ -8,12 +8,12 @@ import { CATEGORY_LABEL, DEMO_FARES, formatGs, STATUS_LABEL } from '../src/domai
 export default function AdminDemo() {
   const { state, act } = useRides();
   const finished = state.rides.filter(r => r.stage === 'completed');
-  const gross = finished.reduce((sum, r) => sum + r.quote.priceGs, 0);
+  const demoCommission = finished.reduce((sum, r) => sum + Math.round(r.quote.priceGs * DEMO_FARES[r.category].commissionPercent / 100), 0);
   const cards = [
     { label: 'Solicitudes demo', value: state.rides.length.toString() },
     { label: 'Finalizados', value: finished.length.toString() },
     { label: 'Activos', value: state.rides.filter(r => r.stage !== 'cancelled' && r.stage !== 'completed').length.toString() },
-    { label: 'Comisión simulada', value: formatGs(gross * 0.15) },
+    { label: 'Comisión simulada', value: formatGs(demoCommission) },
   ];
   return <Page>
     <Top subtitle="Administración del prototipo" />

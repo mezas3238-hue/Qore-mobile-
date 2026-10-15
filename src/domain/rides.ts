@@ -20,9 +20,9 @@ export const PLACES: readonly Place[] = [
 
 /** Tarifas inventadas PARA DEMOSTRACIÓN, sujetas a revisión. */
 export const DEMO_FARES: Record<Category, Fare> = {
-  economico: { base: 7000, perKm: 3200, perMinute: 250, commissionPercent: 15 },
-  confort: { base: 11000, perKm: 4300, perMinute: 350, commissionPercent: 15 },
-  xl: { base: 15000, perKm: 5500, perMinute: 450, commissionPercent: 15 },
+  economico: { base: 7000, perKm: 3200, perMinute: 250, commissionPercent: 10 },
+  confort: { base: 11000, perKm: 4300, perMinute: 350, commissionPercent: 10 },
+  xl: { base: 15000, perKm: 5500, perMinute: 450, commissionPercent: 10 },
 };
 export const CATEGORY_LABEL: Record<Category, string> = {
   economico: 'Económico', confort: 'Confort', xl: 'XL',

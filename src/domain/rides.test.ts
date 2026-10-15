@@ -8,7 +8,7 @@ test('cotización DEMO positiva y reproducible', () => {
   const b = quoteDemo(PLACES[0], PLACES[1], 'confort');
   assert.equal(a.priceGs > 0, true);
   assert.equal(b.priceGs > a.priceGs, true);
-  assert.equal(DEMO_FARES.economico.commissionPercent, 15);
+  assert.equal(DEMO_FARES.economico.commissionPercent, 10);
   assert.throws(() => quoteDemo(PLACES[0], PLACES[0], 'xl'));
 });
 test('no permite viajes activos duplicados ni aceptación sin disponibilidad', () => {

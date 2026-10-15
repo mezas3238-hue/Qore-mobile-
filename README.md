@@ -81,3 +81,9 @@ También se incorporó `Google Maps` y `Waze` mediante enlaces oficiales para na
 5. **Los viajes continúan DEMO** y `LIVE_TRIPS_ENABLED` sigue en `false`. GPS obtenido para navegación no se envía a bases de datos ni se comparte con conductores.
 
 Comprobaciones locales puras: `npm test`. Se necesita CI remoto para validar instalabilidad completa y Expo export con dependencias actualizadas.
+
+## Propuesta comercial de comisión favorable al conductor (15-oct-2026)
+
+La **DEMO** ilustra una comisión de QORE del **10%** (antes 15%). Esto **NO** modifica configuraciones del backend Supabase existente, no activa cobros, ni constituye una oferta contractual. En producción el valor debe calcularlo exclusivamente el servidor, respaldado por auditoría de tarifas, pagos, costos, impuestos y consentimiento contractual. El operador deberá revisar la rentabilidad antes del lanzamiento.
+
+Investigación y estrategia: [docs/research/COMPETENCIA_BOLT_UBER_PARAGUAY_CONDUCTORES_2026-10-15.md](docs/research/COMPETENCIA_BOLT_UBER_PARAGUAY_CONDUCTORES_2026-10-15.md).

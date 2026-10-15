@@ -3,12 +3,12 @@ import React from 'react';
 import { Switch, Text, View } from 'react-native';
 import { Button, C, Card, Headline, Navigation, Note, Page, Status, textStyles, Top } from '../src/components/UI';
 import { useRides } from '../src/context/RideContext';
-import { formatGs, STATUS_LABEL } from '../src/domain/rides';
+import { DEMO_FARES, formatGs, STATUS_LABEL } from '../src/domain/rides';
 
 export default function DriverDemo() {
   const { active, state, act } = useRides();
   const completed = state.rides.filter(r => r.stage === 'completed');
-  const demoGross = completed.reduce((sum, r) => sum + r.quote.priceGs, 0);
+  const demoNet = completed.reduce((sum, r) => sum + r.quote.priceGs - Math.round(r.quote.priceGs * DEMO_FARES[r.category].commissionPercent / 100), 0);
   return <Page>
     <Top subtitle="Portal del conductor" />
     <Headline eyebrow="Conductor · entorno simulado" title="Conducí a tu ritmo" description="Probá cómo un conductor acepta solicitudes y actualiza el estado de un viaje." />
@@ -44,8 +44,8 @@ export default function DriverDemo() {
     </Card>}
     <Card>
       <Text style={textStyles.heading}>Resumen de ganancias DEMO</Text>
-      <Text style={{ color: C.ink, fontWeight: '900', fontSize: 29 }}>{formatGs(Math.round(demoGross * 0.85))}</Text>
-      <Text style={textStyles.subtitle}>{completed.length} viajes completados · comisión simulada del 15% · no hay saldo real.</Text>
+      <Text style={{ color: C.ink, fontWeight: '900', fontSize: 29 }}>{formatGs(demoNet)}</Text>
+      <Text style={textStyles.subtitle}>{completed.length} viajes completados · comisión simulada del 10% · no hay saldo real.</Text>
     </Card>
     <Navigation />
   </Page>;
