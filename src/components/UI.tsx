@@ -112,9 +112,6 @@ export function Navigation() {
 export function Note({ children }: { children: React.ReactNode }) {
   return <View style={s.note}><Text style={s.noteText}>{children}</Text></View>;
 }
-export const textStyles = { body: s.bodyMuted, subtitle: s.small, heading: s.cardTitle, number: s.number, link: s.link, small: s.small };
-export const containers = { row: s.twoCol, divider: s.divider };
-
 const s = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 28 },
   page: { width: '100%', maxWidth: 640, alignSelf: 'center', gap: 14 },
@@ -172,3 +169,6 @@ const s = StyleSheet.create({
   noteText: { fontSize: 12, color: C.amberInk, lineHeight: 18, fontWeight: '600' },
   link: { color: C.darkTeal, fontWeight: '700', fontSize: 14 },
 });
+
+export const textStyles = { body: s.bodyMuted, subtitle: s.small, heading: s.cardTitle, number: s.number, link: s.link, small: s.small };
+export const containers = { row: s.twoCol, divider: s.divider };
