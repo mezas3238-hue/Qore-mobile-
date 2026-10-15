@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "ViajeYa | QORE Mobile",
+    "slug": "qore-mobile-viajes",
+    "scheme": "qoreviajes",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#F4F7F8",
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.qore.viajeya" },
+    "android": { "package": "com.qore.viajeya", "edgeToEdgeEnabled": true },
+    "web": { "name": "ViajeYa | QORE Mobile", "bundler": "metro" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
