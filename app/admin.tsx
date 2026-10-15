@@ -37,6 +37,11 @@ export default function AdminDemo() {
       <Button text="Abrir revisión administrativa protegida" secondary onPress={() => router.push('/revision')} />
     </Card>
     <Card>
+      <Text style={textStyles.heading}>QORE FairPrice — Laboratorio</Text>
+      <Text style={textStyles.body}>Análisis experimental de cotizaciones para autos y motos. No representa el tarifario oficial de QORE.</Text>
+      <Button text="Explorar precios investigados" secondary onPress={() => router.push('/precios')} />
+    </Card>
+    <Card>
       <Text style={textStyles.heading}>Tabla de tarifas ilustrativas</Text>
       {Object.entries(DEMO_FARES).map(([category, fare]) => <View key={category} style={{ gap: 2, paddingVertical: 7, borderBottomWidth: 1, borderColor: C.line }}>
         <Text style={{ fontWeight: '800', color: C.ink }}>{CATEGORY_LABEL[category as keyof typeof DEMO_FARES]}</Text>

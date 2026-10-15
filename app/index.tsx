@@ -24,6 +24,7 @@ export default function Home() {
       <Button text="Ingresar a mi cuenta" secondary onPress={() => router.push('/acceso')} />
       <Button text="Registrar conductor y vehículo" secondary onPress={() => router.push('/registro-conductor')} />
       <Button text="Abrir Google Maps o Waze" secondary onPress={() => router.push('/mapas')} />
+      <Button text="Simulador FairPrice · autos y motos" secondary onPress={() => router.push('/precios')} />
     </Card>
     <Note>Antes de operar realmente se necesitan permisos, seguros, verificación de conductores, GPS, tarifas autorizadas y soporte.</Note>
     <Navigation />
