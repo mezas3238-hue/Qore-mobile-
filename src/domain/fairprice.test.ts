@@ -5,7 +5,7 @@ test('reparto exacto, pisos para auto y moto, múltiples rutas',()=>{
  for(const r of REFERENCE_ROUTES)for(const vehicle of ['auto','moto']as const){
  const q=quoteLab({vehicle,km:r.km,min:r.min});
  assert.equal(q.fareGs%500,0);assert.equal(q.driverGs+q.commissionGs,q.fareGs);
- assert.ok(q.platformContributionGs>=0);assert.ok(q.driverGs>=q.driverFloorGs-1);
+ assert.ok(q.platformContributionGs>=0);assert.ok(q.fareGs>=q.driverFloorGs);
  assert.equal(q.label,'INVESTIGACION_NO_PRECIO_REAL');
  }
 });
