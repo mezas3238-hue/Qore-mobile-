@@ -25,6 +25,8 @@ export interface VehicleApplicationDraft {
  municipalPermitSelected:boolean;
  motorcycleHelmetEvidenceSelected:boolean;
  motorcycleHelmetCount:number;
+ motorcycleReflectiveVestEvidenceSelected:boolean;
+ motorcycleReflectiveVestCount:number;
  personalDataConsent:boolean;
 }
 export interface ApplicationDraftForReview {
@@ -74,8 +76,9 @@ export function prepareVehicleApplication(input:VehicleApplicationDraft):DraftVa
  if(input.kind==='MOTO'){
   if(input.service!=='moto_pasajero'||capacity!==1)
    return{ok:false,reason:'Moto: un solo pasajero'};
-  if(!input.motorcycleHelmetEvidenceSelected||input.motorcycleHelmetCount!==2)
-   return{ok:false,reason:'Moto: dos cascos y evidencia pendientes'};
+  if(!input.motorcycleHelmetEvidenceSelected||input.motorcycleHelmetCount!==2||
+     !input.motorcycleReflectiveVestEvidenceSelected||input.motorcycleReflectiveVestCount!==2)
+   return{ok:false,reason:'Moto: dos cascos, dos chalecos reflectivos y evidencias pendientes'};
  } else {
   if(input.service==='xl'&&capacity<6)return{ok:false,reason:'XL requiere capacidad declarada de al menos 6'};
   if(capacity<3)return{ok:false,reason:'Auto requiere capacidad mínima declarada'};
