@@ -26,6 +26,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: TypeScript and pure unit tests
         run: npm run check
+      - name: Verify staging gateway Auth and no-LIVE isolation
+        run: node --test server/*.test.mjs
       - name: Verify live operations remain disabled
         run: node scripts/check-safety.mjs
       - name: Expo web export (not Android/iOS E2E)
