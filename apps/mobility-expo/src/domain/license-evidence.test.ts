@@ -21,7 +21,7 @@ test('base64 adulterado o imagen demasiado grande falla cerrado',()=>{
 
 test('storage privado exige máximo de 5 MiB; no admite archivo mayor',()=>{
  const excessive=Buffer.concat([Buffer.from([255,216,255,224]),Buffer.alloc(5*1024*1024,1)]).toString('base64');
- assert.throws(()=>inspectLicenseImage(excessive),/límite|tamaño/i);
+ assert.throws(()=>inspectLicenseImage(excessive),/5 MiB|tamaño/i);
 });
 test('configuración backend restringe MIME sin volver público el bucket',async()=>{
  const {readFileSync}=await import('node:fs');
