@@ -32,3 +32,32 @@ jobs:
         run: npx expo export --platform web
         env:
           CI: '1'
+
+  g2-postgres-contract:
+    name: G2 PostgreSQL staging schema + RLS
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci_fixture_only
+          POSTGRES_DB: qore_mobility_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_mobility_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure PostgreSQL client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+          fi
+      - name: Test G2 DDL, grants, RLS and server preflight in disposable Postgres
+        env:
+          PGPASSWORD: ci_fixture_only
+        run: |
+          psql -h localhost -p 5432 -U postgres -d qore_mobility_ci -v ON_ERROR_STOP=1 -f apps/mobility-expo/scripts/sql/g2_postgres_smoke.sql
