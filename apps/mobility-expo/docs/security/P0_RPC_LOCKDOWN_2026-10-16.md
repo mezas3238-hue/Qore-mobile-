@@ -1,5 +1,5 @@
 # P0-SEC-001 — Bloqueo de RPC operativas y endurecimiento de roles
-Fecha: 2026-10-16. Estado: migración propuesta y versionada; revisar ejecución real y CI en GitHub.
+Fecha: 2026-10-16. **Estado actual: migración P0 APLICADA y verificada** en Lovable antiguo; ver comprobaciones documentadas al final.
 
 ## Evidencia contra base aplicada (lectura solo de metadatos)
 - Supabase habilitado en proyecto Lovable `2fa91fe1-e7a0-4fff-a16f-7d457b2d6eed`, ref `qdqrlgzlotnfdxzpacxs`.
