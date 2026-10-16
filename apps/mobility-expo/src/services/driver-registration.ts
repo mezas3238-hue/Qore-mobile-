@@ -1,18 +1,21 @@
 import { decode } from 'base64-arraybuffer';
 import { requireBackend } from './supabase';
 import { DriverInput, validateDriver } from '../domain/registration';
+import { inspectLicenseImage } from '../domain/license-evidence';
 
-/** Stores private license under auth.uid()/..., submits driver + vehicle through one server RPC. */
+/** Stores private license under auth.uid()/..., submits driver + vehicle through one server RPC.
+ * A filename/signature check is NOT identity verification; admin + server policies decide approval.
+ */
 export async function submitDriverRegistration(input: DriverInput, licenseBase64: string): Promise<void> {
   const error = validateDriver(input);
   if (error) throw new Error(error);
-  if (!licenseBase64 || licenseBase64.length > 14_000_000) throw new Error('La imagen de licencia no es válida o pesa demasiado.');
+  const image = inspectLicenseImage(licenseBase64);
   const client = requireBackend();
   const { data: { user }, error: userError } = await client.auth.getUser();
   if (userError || !user) throw new Error('Iniciá sesión antes de registrar un vehículo.');
-  const path = `${user.id}/licencia-${Date.now()}.jpg`;
-  const { error: uploadError } = await client.storage.from('driver-docs').upload(path, decode(licenseBase64), {
-    contentType: 'image/jpeg', upsert: false, cacheControl: '3600',
+  const path = `${user.id}/licencia-${Date.now()}.${image.extension}`;
+  const { error: uploadError } = await client.storage.from('driver-docs').upload(path, decode(image.base64), {
+    contentType: image.mimeType, upsert: false, cacheControl: '3600',
   });
   if (uploadError) throw new Error(`No se pudo guardar la licencia en almacenamiento privado: ${uploadError.message}`);
   const { error: rpcError } = await client.rpc('submit_driver_application', {
