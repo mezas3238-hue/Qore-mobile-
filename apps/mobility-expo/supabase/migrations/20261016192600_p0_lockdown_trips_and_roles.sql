@@ -18,7 +18,7 @@ BEGIN
  IF n <> 8 THEN
    RAISE EXCEPTION 'QORE Mobility lockdown expected 8 RPC functions; found %. No changes applied.',n;
  END IF;
-END
+END;
 $guard$;
 
 -- All eight are unavailable to mobile clients and anonymous callers.
