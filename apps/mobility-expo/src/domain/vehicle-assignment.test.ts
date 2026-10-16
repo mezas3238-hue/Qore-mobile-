@@ -6,6 +6,7 @@ const driverId='22222222-2222-4222-8222-222222222222';
 const passengerId='11111111-1111-4111-8111-111111111111';
 const vehicleId='33333333-3333-4333-8333-333333333333';
 const rideId='44444444-4444-4444-8444-444444444444';
+const otherDriver='55555555-5555-4555-8555-555555555555';
 const base:AssignmentProposalInput={
  rideId,passengerId,rideStatus:'searching',existingDriverId:null,requestedService:'economico',
  rideVersion:5,actorId:driverId,driverId,vehicleId,vehicleOwnerId:driverId,vehicleRevision:9,
@@ -28,7 +29,8 @@ test('propuesta auto enlaza vehículo concreto, conductor, versiones y TTL',()=>
  assert.equal(Object.isFrozen(r.proposal),true);
 });
 test('rechaza suplantación del conductor o vehículo ajeno',()=>{
- assert.deepEqual(prepareVehicleAssignment({...base,actorId:passengerId},now),{ok:false,code:'VEHICLE_OWNERSHIP'});
+ assert.deepEqual(prepareVehicleAssignment({...base,actorId:otherDriver},now),{ok:false,code:'VEHICLE_OWNERSHIP'});
+ assert.deepEqual(prepareVehicleAssignment({...base,actorId:passengerId},now),{ok:false,code:'INVALID_CONTEXT'});
  assert.deepEqual(prepareVehicleAssignment({...base,vehicleOwnerId:passengerId},now),{ok:false,code:'VEHICLE_OWNERSHIP'});
 });
 test('rechaza viaje ya tomado y asignación doble',()=>{
