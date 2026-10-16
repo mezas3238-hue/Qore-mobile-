@@ -9,7 +9,8 @@ const base:VehicleApplicationDraft={
  model:'Corolla',year:'2021',passengerCapacity:4,vehicleRegistrationSelected:true,
  commercialPassengerInsuranceSelected:true,inspectionEvidenceSelected:true,
  municipalPermitSelected:true,motorcycleHelmetEvidenceSelected:false,
- motorcycleHelmetCount:0,personalDataConsent:true,
+ motorcycleHelmetCount:0,motorcycleReflectiveVestCount:0,
+ motorcycleReflectiveVestEvidenceSelected:false,personalDataConsent:true,
 };
 test('AUTO prepara solicitud pendiente y normaliza la chapa sin certificar documentos',()=>{
  const result=prepareVehicleApplication(base);
@@ -25,13 +26,16 @@ test('AUTO prepara solicitud pendiente y normaliza la chapa sin certificar docum
 });
 test('MOTO solicita un pasajero y prueba de dos cascos, sin activar transporte',()=>{
  const moto:VehicleApplicationDraft={...base,kind:'MOTO',service:'moto_pasajero',
-  passengerCapacity:1,motorcycleHelmetCount:2,motorcycleHelmetEvidenceSelected:true};
+  passengerCapacity:1,motorcycleHelmetCount:2,motorcycleHelmetEvidenceSelected:true,
+  motorcycleReflectiveVestCount:2,motorcycleReflectiveVestEvidenceSelected:true};
  const r=prepareVehicleApplication(moto);
  assert.equal(r.ok,true);
  if(r.ok)assert.equal(r.draft.service,'moto_pasajero');
  for(const c of [
   {...moto,motorcycleHelmetCount:1},
   {...moto,motorcycleHelmetEvidenceSelected:false},
+  {...moto,motorcycleReflectiveVestCount:1},
+  {...moto,motorcycleReflectiveVestEvidenceSelected:false},
   {...moto,passengerCapacity:2}
  ])assert.equal(prepareVehicleApplication(c).ok,false);
 });
