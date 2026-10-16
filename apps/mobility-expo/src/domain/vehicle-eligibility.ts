@@ -23,6 +23,8 @@ export interface OfferCandidate {
  inspectionExpiryDate: string;
  municipalAuthorizationVerified: boolean;
  motoHelmetsVerified: number;
+ motoReflectiveVestsVerified: number;
+ motoPassengerAgeVerified12Plus: boolean;
  motoRouteSafetyAllowed: boolean;
  locationOptIn: boolean;
  locationUpdatedAtMs: number|null;
@@ -48,9 +50,10 @@ export function checkOfferCandidate(candidate:OfferCandidate,nowMs:number):Eligi
     !validThrough(candidate.insuranceExpiryDate,nowMs))return invalid('Seguro de pasajeros remunerados inválido o vencido');
  if(!candidate.inspectionVerified||!validThrough(candidate.inspectionExpiryDate,nowMs))
   return invalid('Inspección inválida o vencida');
- if(candidate.vehicleKind==='MOTO'&&(candidate.motoHelmetsVerified<2||
-    !Number.isInteger(candidate.motoHelmetsVerified)||!candidate.motoRouteSafetyAllowed))
-  return invalid('Seguridad de moto no verificada');
+ if(candidate.vehicleKind==='MOTO'&&(!Number.isInteger(candidate.motoHelmetsVerified)||candidate.motoHelmetsVerified!==2||
+    !Number.isInteger(candidate.motoReflectiveVestsVerified)||candidate.motoReflectiveVestsVerified!==2||
+    !candidate.motoPassengerAgeVerified12Plus||!candidate.motoRouteSafetyAllowed))
+  return invalid('Moto: casco y chaleco de ambos, edad mínima y ruta no verificados');
  if(!candidate.locationOptIn)return invalid('GPS sin consentimiento');
  const ts=candidate.locationUpdatedAtMs;
  if(ts===null||!Number.isFinite(ts)||ts>nowMs+15000||nowMs-ts>120000)
