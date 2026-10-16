@@ -15,7 +15,8 @@ const base:AssignmentProposalInput={
   driverLicenseVerified:true,vehicleRegistrationVerified:true,
   insuranceVerified:true,insuranceCoversPaidPassengers:true,insuranceExpiryDate:'2026-12-31',
   inspectionVerified:true,inspectionExpiryDate:'2026-12-31',municipalAuthorizationVerified:true,
-  motoHelmetsVerified:0,motoRouteSafetyAllowed:false,locationOptIn:true,locationUpdatedAtMs:now-2000,
+  motoHelmetsVerified:0,motoReflectiveVestsVerified:0,
+ motoPassengerAgeVerified12Plus:false,motoRouteSafetyAllowed:false,locationOptIn:true,locationUpdatedAtMs:now-2000,
  }
 };
 test('propuesta auto enlaza vehículo concreto, conductor, versiones y TTL',()=>{
@@ -44,10 +45,12 @@ test('no acepta moto para pedido auto ni auto para pedido moto',()=>{
 });
 test('moto habilitada solo con dos cascos, zona y cobertura acreditadas',()=>{
  const moto={...base,requestedService:'moto_pasajero' as const,
-  candidate:{...base.candidate,vehicleKind:'MOTO' as const,service:'moto_pasajero' as const,motoHelmetsVerified:2,motoRouteSafetyAllowed:true}};
+  candidate:{...base.candidate,vehicleKind:'MOTO' as const,service:'moto_pasajero' as const,motoHelmetsVerified:2,motoReflectiveVestsVerified:2,
+   motoPassengerAgeVerified12Plus:true,motoRouteSafetyAllowed:true}};
  assert.equal(prepareVehicleAssignment(moto,now).ok,true);
  assert.deepEqual(prepareVehicleAssignment({...moto,candidate:{...moto.candidate,motoHelmetsVerified:1}},now),{ok:false,code:'COMPLIANCE_DENIED'});
  assert.deepEqual(prepareVehicleAssignment({...moto,candidate:{...moto.candidate,motoRouteSafetyAllowed:false}},now),{ok:false,code:'COMPLIANCE_DENIED'});
+ assert.deepEqual(prepareVehicleAssignment({...moto,candidate:{...moto.candidate,motoPassengerAgeVerified12Plus:false}},now),{ok:false,code:'COMPLIANCE_DENIED'});
 });
 test('vencimientos, seguro, estado, revocación GPS niegan propuesta',()=>{
  const changes=[
