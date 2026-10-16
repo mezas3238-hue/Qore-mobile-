@@ -49,3 +49,17 @@ Consulta HEAD PR #2 `4608aeb2519262cef42f722b43caffdfd455701b`: los últimos wor
 4. G5/G6: PSP/QR en sandbox, ledger de doble entrada, liquidaciones, atención incidentes y pólizas; legal/seguro previo a piloto.
 
 **No confundir cobertura de pruebas puras con certificación de operación.**
+
+## Segunda ronda — Seguridad backend G1, 2026-10-16 (hora PY)
+**RESULTADO VERIFICADO EN LA BASE SUPABASE DE LOVABLE:**
+- Proyecto `2fa91fe1-e7a0-4fff-a16f-7d457b2d6eed`, ref `qdqrlgzlotnfdxzpacxs`. No se creó ni configuró un proyecto STAGING independiente.
+- Lectura pre-migración: 0 perfiles, 0 solicitudes de conductor, 0 viajes, 0 viajes activos. Todas las 10 tablas públicas tenían RLS habilitada; índices contra viajes simultáneos y políticas del bucket documentos observadas en `pg_catalog`/`pg_policies`.
+- Verificación de grants antes del cambio: 8 RPC operativas autorizaban `authenticated`; `has_role`, `is_approved_driver` y `handle_new_user` autorizaban PUBLIC/anon.
+- Se creó y aplicó exitosamente la migración reversible `supabase/migrations/20261016192600_p0_lockdown_trips_and_roles.sql` a la **base Lovable existente**, sin insertar, borrar ni editar datos de usuarios o viajes. Transacción `BEGIN/COMMIT` y comprobación previa de ocho funciones. Las RPC request/accept/advance/cancel/availability/nearby/counterpart/rating siguen existiendo pero inaccesibles a anon/authenticated.
+- **Verificación post-aplicación con `has_function_privilege`: 8/8 denegadas para anon y authenticated; `submit_driver_application` y `admin_review_driver` conservaron permiso authenticated; 3 helpers denegadas para anon. La definición aplicada de `has_role` y `is_approved_driver` exige el propio `auth.uid()`.** Service_role conserva permiso de administración y no debe distribuirse.
+- El CI inicial de los nuevos tests falló **2/40 por patrones de test incorrectos en funciones sin argumentos**; se corrigió regex y punto y coma PL/pgSQL antes de aplicar. CI posterior del commit `cb6cf33d439b8a3565efd30b0edb247d079d00ec`: [push SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/38976203904) y [PR SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/38976208465), **40/40 pruebas**, export web.
+- Se agregó comprobación de claves públicas Supabase en cliente Expo (commit `88d11a5998b137b0eba1fb413ee24a64653670c7`): no acepta `service_role`/clave secreta en variables `EXPO_PUBLIC`; CI de este commit requiere verificación separada.
+
+**Aún no verificado:** E2E con JWT de dos pasajeros, permisos de operaciones de administrador, email confirmado, recuperación, sesión en dos dispositivos, documentación conductor auto, STAGING independiente, validación legal/seguro. La revocación RPC es gate protectivo **y no equivale a certificar producción**. `LIVE_TRIPS_ENABLED=false` sigue intacto. PR #2 Flutter trading sigue separado y sin cambios.
+
+**Siguiente acción inequívoca:** provisionar STAGING Supabase *diferente* del ref `qdqrlgzlotnfdxzpacxs`, instalar esquema mediante migraciones revisadas y ejecutar `scripts/staging-auth-readonly.mjs` con dos cuentas precreadas de prueba. NO utilizar el proyecto Lovable existente para esas credenciales de prueba hasta confirmar segmentación. Luego preparar registros conductor AUTO y moto con aprobación server-side y snapshots seguros.
