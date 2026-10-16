@@ -5,30 +5,11 @@ CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN BYPASSRLS;
 CREATE SCHEMA auth;
 CREATE TABLE auth.users (id uuid PRIMARY KEY);
-CREATE TYPE public.app_role AS ENUM ('admin','driver','passenger');
-CREATE TABLE public.user_roles (
- user_id uuid NOT NULL REFERENCES auth.users(id),
- role public.app_role NOT NULL,
- PRIMARY KEY (user_id,role)
-);
-CREATE TABLE public.driver_locations (
- driver_id uuid PRIMARY KEY REFERENCES auth.users(id),
- available boolean NOT NULL DEFAULT false,
- lat double precision, lng double precision,
- updated_at timestamptz NOT NULL DEFAULT now()
-);
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $f$
  SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid
 $f$;
-CREATE FUNCTION public.has_role(_uid uuid,_role public.app_role)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
-AS $f$
- SELECT COALESCE(_uid=auth.uid() AND EXISTS(
-  SELECT 1 FROM public.user_roles WHERE user_id=_uid AND role=_role
- ),false)
-$f$;
 GRANT USAGE ON SCHEMA auth TO authenticated,service_role;
-GRANT SELECT ON public.user_roles,public.driver_locations TO service_role;
+\ir ../../docs/backend/staging_only/G1_ISOLATED_SUPABASE_BASELINE_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_AUTO_MOTO_COMPLIANCE_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_SERVER_PREFLIGHT_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
@@ -39,11 +20,24 @@ INSERT INTO auth.users (id) VALUES
  ('22222222-2222-4222-8222-222222222222'),
  ('33333333-3333-4333-8333-333333333333'),
  ('44444444-4444-4444-8444-444444444444');
+-- Signup trigger granted only passenger; testing driver/admin requires privileged server.
 INSERT INTO public.user_roles (user_id,role) VALUES
  ('11111111-1111-4111-8111-111111111111','driver'),
  ('22222222-2222-4222-8222-222222222222','admin'),
- ('33333333-3333-4333-8333-333333333333','passenger'),
  ('44444444-4444-4444-8444-444444444444','driver');
+DO $check$
+BEGIN
+ IF (SELECT count(*) FROM public.profiles)<>4
+ THEN RAISE EXCEPTION 'Staging Auth trigger did not create profiles'; END IF;
+ IF (SELECT count(*) FROM public.user_roles WHERE role='passenger')<>4
+ THEN RAISE EXCEPTION 'Staging signup mistakenly assigns elevated role'; END IF;
+ IF has_table_privilege('authenticated','public.user_roles','INSERT')
+ OR has_table_privilege('authenticated','public.user_roles','UPDATE')
+ OR has_table_privilege('authenticated','public.profiles','UPDATE')
+ OR has_function_privilege('anon','public.has_role(uuid,public.app_role)','EXECUTE')
+ THEN RAISE EXCEPTION 'Baseline auth permissions unsafe'; END IF;
+END
+$check$;
 INSERT INTO public.driver_locations(driver_id,available,lat,lng,updated_at)
 VALUES ('11111111-1111-4111-8111-111111111111',true,-25.29,-57.58,now()-interval '5 seconds');
 INSERT INTO public.mobility_vehicles
@@ -325,3 +319,18 @@ END
 $check$;
 RESET ROLE;
 \echo PASS: G2 AUTO/MOTO pending-only intake queue, JWT RLS and idempotency.
+
+-- Baseline profile/role isolation under authenticated JWT; public read forbidden.
+SET ROLE authenticated;
+SET request.jwt.claim.sub='33333333-3333-4333-8333-333333333333';
+DO $check$
+BEGIN
+ IF (SELECT count(*) FROM public.profiles)<>1
+ OR (SELECT count(*) FROM public.user_roles)<>1
+ THEN RAISE EXCEPTION 'Staging identity RLS exposed other accounts'; END IF;
+ IF public.has_role('22222222-2222-4222-8222-222222222222','admin'::public.app_role)
+ THEN RAISE EXCEPTION 'has_role leaked another account admin role'; END IF;
+END
+$check$;
+RESET ROLE;
+\echo PASS: G1 fresh isolated Supabase baseline, user signup, own profiles and no role escalation.
