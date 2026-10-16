@@ -32,6 +32,7 @@ GRANT SELECT ON public.user_roles,public.driver_locations TO service_role;
 \ir ../../docs/backend/staging_only/G2_AUTO_MOTO_COMPLIANCE_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_SERVER_PREFLIGHT_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
+\ir ../../docs/backend/staging_only/G2_APPLICATION_INTAKE_DO_NOT_APPLY_PRODUCTION.sql
 
 INSERT INTO auth.users (id) VALUES
  ('11111111-1111-4111-8111-111111111111'),
@@ -238,3 +239,89 @@ END
 $check$;
 RESET ROLE;
 \echo PASS: G2 admin-only audited review, idempotency and MOTO commercial freeze.
+
+-- Intake queue: the only creator is trusted service_role; drafts remain pending.
+DO $check$
+BEGIN
+ IF has_function_privilege('authenticated',
+  'public.mobility_submit_vehicle_draft(uuid,uuid,public.mobility_vehicle_kind,public.mobility_service_kind,text,text,text,text,integer,integer)',
+  'EXECUTE')
+ OR has_function_privilege('anon',
+  'public.mobility_submit_vehicle_draft(uuid,uuid,public.mobility_vehicle_kind,public.mobility_service_kind,text,text,text,text,integer,integer)',
+  'EXECUTE')
+ THEN RAISE EXCEPTION 'Vehicle intake RPC exposed to mobile'; END IF;
+ IF has_table_privilege('authenticated','public.mobility_vehicle_applications','INSERT')
+ OR has_table_privilege('authenticated','public.mobility_vehicle_applications','UPDATE')
+ THEN RAISE EXCEPTION 'Applicant can self-approve or insert bypassing gateway'; END IF;
+END
+$check$;
+SET ROLE service_role;
+DO $check$
+DECLARE id1 uuid; id2 uuid; blocked boolean;
+BEGIN
+ id1:=public.mobility_submit_vehicle_draft(
+  '11111111-1111-4111-8111-111111111111',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','AUTO','economico',
+  'ASUNCION','PRY123','Toyota','Vitz',2021,4);
+ id2:=public.mobility_submit_vehicle_draft(
+  '11111111-1111-4111-8111-111111111111',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','AUTO','economico',
+  'ASUNCION','PRY123','Toyota','Vitz',2021,4);
+ IF id1 IS NULL OR id1<>id2 THEN RAISE EXCEPTION 'Application retry was not idempotent'; END IF;
+ IF (SELECT count(*) FROM public.mobility_vehicle_applications WHERE request_key=
+     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')<>1
+ THEN RAISE EXCEPTION 'Duplicate application for identical idempotency key'; END IF;
+ IF (SELECT status FROM public.mobility_vehicle_applications WHERE id=id1)<>
+    'pending'::public.mobility_review_status
+ THEN RAISE EXCEPTION 'Application became approved from user payload'; END IF;
+ IF (SELECT evidence_unverified FROM public.mobility_vehicle_applications WHERE id=id1)<>true
+ THEN RAISE EXCEPTION 'Evidence was marked verified by applicant'; END IF;
+ blocked:=false;
+ BEGIN
+  PERFORM public.mobility_submit_vehicle_draft(
+   '11111111-1111-4111-8111-111111111111',
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','AUTO','economico',
+   'ASUNCION','FAKE999','Toyota','Vitz',2021,4);
+ EXCEPTION WHEN others THEN blocked:=true; END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Idempotency conflicting payload accepted'; END IF;
+ blocked:=false;
+ BEGIN
+  PERFORM public.mobility_submit_vehicle_draft(
+   '11111111-1111-4111-8111-111111111111',
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','MOTO','economico',
+   'ASUNCION','FAKE999','Honda','CG',2021,1);
+ EXCEPTION WHEN others THEN blocked:=true; END;
+ IF NOT blocked THEN RAISE EXCEPTION 'MOTO request claimed AUTO service'; END IF;
+ -- Moto drafts may be received for legal research, NEVER approved or offered.
+ PERFORM public.mobility_submit_vehicle_draft(
+  '44444444-4444-4444-8444-444444444444',
+  'cccccccc-cccc-4ccc-8ccc-cccccccccccc','MOTO','moto_pasajero',
+  'ASUNCION','MOT999','Honda','CG',2021,1);
+END
+$check$;
+RESET ROLE;
+
+SET ROLE authenticated;
+SET request.jwt.claim.sub='33333333-3333-4333-8333-333333333333';
+DO $check$
+BEGIN
+ IF (SELECT count(*) FROM public.mobility_vehicle_applications)<>0
+ THEN RAISE EXCEPTION 'Passenger sees unrelated private driver applications'; END IF;
+END
+$check$;
+SET request.jwt.claim.sub='11111111-1111-4111-8111-111111111111';
+DO $check$
+BEGIN
+ IF (SELECT count(*) FROM public.mobility_vehicle_applications)<>1
+ THEN RAISE EXCEPTION 'Driver cannot read only own application'; END IF;
+END
+$check$;
+SET request.jwt.claim.sub='22222222-2222-4222-8222-222222222222';
+DO $check$
+BEGIN
+ IF (SELECT count(*) FROM public.mobility_vehicle_applications)<>2
+ THEN RAISE EXCEPTION 'Administrator cannot review pending application summaries'; END IF;
+END
+$check$;
+RESET ROLE;
+\echo PASS: G2 AUTO/MOTO pending-only intake queue, JWT RLS and idempotency.
