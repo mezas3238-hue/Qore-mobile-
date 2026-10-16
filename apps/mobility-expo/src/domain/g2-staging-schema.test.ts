@@ -32,6 +32,7 @@ test('G2 SQL pide vigencias, seguro remunerado, casco y revisores',()=>{
   assert.ok(statements.includes(field+' date NOT NULL'),field);
  assert.match(statements,/paid_passenger_insurance_covered boolean NOT NULL DEFAULT false/);
  assert.match(statements,/moto_helmets_verified integer NOT NULL DEFAULT 0/);
+ assert.match(statements,/moto_reflective_vests_verified integer NOT NULL DEFAULT 0/);
  assert.match(statements,/moto_routes_authorized boolean NOT NULL DEFAULT false/);
  assert.match(statements,/review_status public\.mobility_review_status NOT NULL DEFAULT 'pending'/);
  assert.match(statements,/driver_review_status public\.mobility_review_status NOT NULL DEFAULT 'pending'/);
