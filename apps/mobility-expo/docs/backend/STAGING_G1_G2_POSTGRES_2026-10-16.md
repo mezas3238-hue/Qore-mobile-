@@ -1,5 +1,7 @@
 # G1/G2 — STAGING separado y certificación PostgreSQL efímera
-Fecha: 2026-10-16. **No habilitado para viajes ni clientes reales**.
+Fecha: 2026-10-16. **Estado ACTUAL: Supabase staging nuevo HABILITADO con G1 + G2 APLICADOS, 9 tablas y 0 usuarios, postcondiciones verificadas. No habilitado para viajes ni clientes reales.**
+
+Las notas con `enabled=false` posteriores son el **historial anterior** a la activación; el estado final certificado se describe en la última sección.
 
 ## Recursos realmente provisionados
 
