@@ -13,6 +13,8 @@ if(process.env.QORE_MOBILITY_ENV!=='staging')throw Error('Solo se permite QORE_M
 for(const key of required)if(!process.env[key])throw Error('Falta variable staging: '+key);
 const ref=process.env.QORE_STAGING_PROJECT_REF;
 if(!/^[a-z0-9]{12,30}$/.test(ref))throw Error('Proyecto staging inválido');
+// Hard stop: existing Lovable database must NEVER be used as a staging fixture.
+if(ref==='qdqrlgzlotnfdxzpacxs')throw Error('Se prohíbe ejecutar staging contra el backend Lovable existente');
 const endpoint='https://'+ref+'.supabase.co';
 const anon=process.env.QORE_STAGING_ANON_KEY;
 if(!anon.startsWith('sb_publishable_')){
@@ -38,7 +40,9 @@ async function getRows(table,field,id,token){
  const url=new URL(endpoint+'/rest/v1/'+table);
  url.searchParams.set('select',table==='user_roles'?'user_id,role':'id');
  url.searchParams.set(field,'eq.'+id);url.searchParams.set('limit','3');
- const r=await fetch(url,{headers:{apikey:anon,Authorization:'Bearer '+token}});
+ const headers={apikey:anon};
+ if(token)headers.Authorization='Bearer '+token;
+ const r=await fetch(url,{headers});
  // Some RLS policies reject instead of returning empty. Both are acceptable for
  // FOREIGN rows; OWN profile reads MUST succeed separately.
  if(r.status===401||r.status===403)return {denied:true,rows:[]};
@@ -60,7 +64,7 @@ for(const [actor,other] of [[a,b],[b,a]]){
  assert.equal(roles.rows.length,0,'FUGA: roles de otra cuenta');
 }
 for(const actor of [a,b]){
- const anonymous=await getRows('profiles','id',actor.id,anon);
+ const anonymous=await getRows('profiles','id',actor.id,undefined);
  assert.equal(anonymous.rows.length,0,'FUGA: perfil accesible sin sesión');
 }
 console.log('PASS: staging RLS smoke lectura propia/cuenta ajena/anon. NO valida escrituras ni documentos.');
