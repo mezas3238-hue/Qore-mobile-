@@ -418,6 +418,7 @@ J. Costos/latencia razonables: telemetría, métricas, presupuesto de API Maps, 
 - Movilidad PR #3: https://github.com/mezas3238-hue/Qore-mobile-/pull/3
 - Trading Supervision PR #2: https://github.com/mezas3238-hue/Qore-mobile-/pull/2
 - Trading Issue #1: https://github.com/mezas3238-hue/Qore-mobile-/issues/1
+- **Arquitectura conflictiva Issue #6 P0:** https://github.com/mezas3238-hue/Qore-mobile-/issues/6
 - Autos y motos Issue #4: https://github.com/mezas3238-hue/Qore-mobile-/issues/4
 - FairPrice Issue #5: https://github.com/mezas3238-hue/Qore-mobile-/issues/5
 - Investigación Bolt/Uber: https://github.com/mezas3238-hue/Qore-mobile-/blob/feature/viajeya-expo-mvp-20261015/docs/research/COMPETENCIA_BOLT_UBER_PARAGUAY_CONDUCTORES_2026-10-15.md
