@@ -56,6 +56,7 @@ CREATE TABLE public.mobility_vehicle_compliance (
  municipal_authorization_valid_through date NOT NULL,
  municipal_authorization_verified_at timestamptz NOT NULL,
  moto_helmets_verified integer NOT NULL DEFAULT 0 CHECK (moto_helmets_verified BETWEEN 0 AND 2),
+ moto_reflective_vests_verified integer NOT NULL DEFAULT 0 CHECK (moto_reflective_vests_verified BETWEEN 0 AND 2),
  moto_routes_authorized boolean NOT NULL DEFAULT false,
  reviewed_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
  reviewed_at timestamptz NOT NULL DEFAULT now()
