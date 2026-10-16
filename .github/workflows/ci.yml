@@ -1,0 +1,27 @@
+name: ViajeYa checks
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/ci.yml'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run check
+      - run: npx expo export --platform web
+        env:
+          CI: '1'
