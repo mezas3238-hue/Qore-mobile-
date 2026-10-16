@@ -27,3 +27,8 @@ Archivo: `supabase/migrations/20261016192600_p0_lockdown_trips_and_roles.sql`.
 
 ## Aún bloqueado
 Staging Supabase independiente; E2E de permisos con cuentas test; backend seguro vehículo/insurance; rutas reales; pricing comercial aprobado; PSP, conciliación, SOS, pólizas y legislación. No confundir migración con plataforma operativa.
+
+## Estado de despliegue P0 verificado posteriormente
+- **La migración P0 sí fue ejecutada** en el backend Lovable viejo `2fa91fe1-e7a0-4fff-a16f-7d457b2d6eed`, con `rows=[]` y postconsulta `has_function_privilege` confirmando **8/8 RPC operativas bloqueadas a anon y authenticated** y `has_role/is_approved_driver` restringidas a identidad `auth.uid()`. El título inicial del documento describía el estado anterior a aplicación; esta es la resolución.
+- Un **proyecto distinto** `9c677bb2-746b-419f-ad9c-dd6d26bab944` tiene ya un Supabase STAGING nuevo con G1 baseline y cuatro SQL G2 aplicados, postcondiciones válidas (`auth_users=0`, 9 tablas públicas G1+G2, `client_can_insert_app=false`, `client_can_review=false`). No implica que el backend anterior reciba G2.
+- También se aplicó y confirmó whitelist MIME privada a `driver-docs` viejo. **El backend antiguo sigue SIN viajes comerciales; no restablecer `GRANT EXECUTE` legacy.**
