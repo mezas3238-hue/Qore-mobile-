@@ -1,0 +1,34 @@
+name: QORE Mobility Expo isolated CI
+on:
+  push:
+    branches: [main, 'feature/mobility-*']
+    paths:
+      - 'apps/mobility-expo/**'
+      - '.github/workflows/mobility-ci.yml'
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/**'
+      - '.github/workflows/mobility-ci.yml'
+permissions:
+  contents: read
+jobs:
+  mobility-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobility-expo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Expo dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript and pure unit tests
+        run: npm run check
+      - name: Verify live operations remain disabled
+        run: node scripts/check-safety.mjs
+      - name: Expo web export (not Android/iOS E2E)
+        run: npx expo export --platform web
+        env:
+          CI: '1'
