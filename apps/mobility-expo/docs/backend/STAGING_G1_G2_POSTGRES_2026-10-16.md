@@ -36,3 +36,12 @@ y `PASS: G2 admin-only audited review, idempotency and MOTO commercial freeze.`
 6. Completar valoración legal moto por municipio, seguro remunerado contractual y verificación de edad/consentimiento; servidor atómico de viaje con snapshot, GPS y quote firmado. Mantener 8 RPC legacy revocadas y `LIVE_TRIPS_ENABLED=false`.
 
 **Política de seguridad:** staging no se comunica con producción, Flutter trading ni servicios QORE Core; `service_role` jamás reside en cliente. PR #7 sigue borrador sin merge.
+
+## G2 Intake — ampliación del flujo de registro de conductor/vehículo
+- Se agregó `docs/backend/staging_only/G2_APPLICATION_INTAKE_DO_NOT_APPLY_PRODUCTION.sql`: `mobility_vehicle_applications` guarda AUTO/MOTO **solo en estado `pending`**, `evidence_unverified=true`, sin campos de `approved` ni capacidad de activar viajes.
+- `mobility_submit_vehicle_draft` se ejecuta **solo con service_role** bajo un gateway que deberá validar JWT de quien pide registro. Un pasajero autenticado NO tiene permiso SQL para saltar el gateway y escribir en esa tabla. Firma no acepta booleanos de verificación de documentos.
+- `request_key uuid UNIQUE` proporciona idempotencia; reintento idéntico devuelve ID original y payload conflictivo es rechazado. La categoría MOTO puede *solicitar* revisión, pero permanece sin autorización comercial.
+- Política RLS muestra únicamente solicitudes propias a su autor y al administrador autorizado; las pruebas PostgreSQL simulan los JWT de pasajero, conductor y admin.
+- El script `scripts/sql/g2_postgres_smoke.sql` amplió pruebas reales de PostgreSQL con este tercer gate. [Push CI #38979757291](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/38979757291) contiene los logs esperados:
+  `PASS: G2 AUTO/MOTO pending-only intake queue, JWT RLS and idempotency.`
+- **NO** se conectó cliente Expo a este método; el backend remoto nuevo de staging sigue sin habilitarse por cuota Lovable. Requiere gateway JWT real, validación upload KYC, revisión humana y normativa municipal.
