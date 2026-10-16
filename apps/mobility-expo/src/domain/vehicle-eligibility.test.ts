@@ -7,7 +7,8 @@ const base:OfferCandidate={
  driverLicenseVerified:true,vehicleRegistrationVerified:true,insuranceVerified:true,
  insuranceCoversPaidPassengers:true,insuranceExpiryDate:'2026-12-31',
  inspectionVerified:true,inspectionExpiryDate:'2026-12-31',municipalAuthorizationVerified:true,
- motoHelmetsVerified:0,motoRouteSafetyAllowed:false,locationOptIn:true,locationUpdatedAtMs:now-5000,
+ motoHelmetsVerified:0,motoReflectiveVestsVerified:0,
+ motoPassengerAgeVerified12Plus:false,motoRouteSafetyAllowed:false,locationOptIn:true,locationUpdatedAtMs:now-5000,
 };
 test('auto elegible bajo evidencias hipotéticas verificadas',()=>assert.deepEqual(checkOfferCandidate(base,now),{eligible:true}));
 test('no se puede ofrecer moto bajo categoría auto ni auto bajo moto',()=>{
@@ -18,7 +19,7 @@ test('moto requiere dos cascos, permiso de ruta y evidencias diferenciadas',()=>
  const moto={...base,vehicleKind:'MOTO' as const,service:'moto_pasajero' as const};
  assert.equal(checkOfferCandidate(moto,now).eligible,false);
  assert.equal(checkOfferCandidate({...moto,motoHelmetsVerified:2},now).eligible,false);
- assert.equal(checkOfferCandidate({...moto,motoHelmetsVerified:2,motoRouteSafetyAllowed:true},now).eligible,true);
+ assert.equal(checkOfferCandidate({...moto,motoHelmetsVerified:2,motoReflectiveVestsVerified:2,motoPassengerAgeVerified12Plus:true,motoRouteSafetyAllowed:true},now).eligible,true);
 });
 test('no conductor o vehículo pendiente, rechazado o suspendido',()=>{
  for(const status of ['pending','rejected','suspended'] as const){
@@ -47,4 +48,12 @@ test('evidencia insuficiente o reloj inválido nunca resulta elegible',()=>{
  assert.equal(checkOfferCandidate({...base,driverLicenseVerified:false},now).eligible,false);
  assert.equal(checkOfferCandidate({...base,vehicleRegistrationVerified:false},now).eligible,false);
  assert.equal(checkOfferCandidate(base,NaN).eligible,false);
+});
+
+test('moto exige chalecos reflectivos en ambos y pasajero >=12 verificado en servidor',()=>{
+ const moto={...base,vehicleKind:'MOTO' as const,service:'moto_pasajero' as const,
+  motoHelmetsVerified:2,motoReflectiveVestsVerified:2,motoPassengerAgeVerified12Plus:true,motoRouteSafetyAllowed:true};
+ assert.equal(checkOfferCandidate(moto,now).eligible,true);
+ assert.equal(checkOfferCandidate({...moto,motoReflectiveVestsVerified:1},now).eligible,false);
+ assert.equal(checkOfferCandidate({...moto,motoPassengerAgeVerified12Plus:false},now).eligible,false);
 });
