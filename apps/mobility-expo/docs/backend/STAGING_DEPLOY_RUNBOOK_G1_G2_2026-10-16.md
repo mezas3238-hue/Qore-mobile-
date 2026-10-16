@@ -1,6 +1,6 @@
 # G1/G2 — Guía de puesta en staging AISLADO (NO PRODUCCIÓN)
 
-**Proyecto aislado**: [QORE Mobility STAGING — NO LIVE](https://lovable.dev/projects/9c677bb2-746b-419f-ad9c-dd6d26bab944). La base Supabase se encontraba `enabled=false` en la última verificación, pendiente de que Lovable reponga el límite temporal de acciones DB. **Nunca ejecutar estos archivos en ref `qdqrlgzlotnfdxzpacxs`.**
+**Proyecto aislado**: [QORE Mobility STAGING — NO LIVE](https://lovable.dev/projects/9c677bb2-746b-419f-ad9c-dd6d26bab944). La base Supabase del proyecto nuevo **YA está habilitada** y se instalaron G1 + G2 con pre/postcondiciones atómicas. Esta guía conserva el procedimiento de auditoría y futuros despliegues, no debe volver a ejecutarse a ciegas. **Nunca ejecutar estos archivos en ref `qdqrlgzlotnfdxzpacxs`.**
 
 ## Preconditions / STOP
 - `get_database_status.enabled===true` en el **nuevo** proyecto STAGING; ref URL Supabase identificado de manera independiente, distinto del ref Lovable antiguo.
