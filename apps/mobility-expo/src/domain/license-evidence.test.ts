@@ -18,3 +18,16 @@ test('base64 adulterado o imagen demasiado grande falla cerrado',()=>{
  assert.throws(()=>inspectLicenseImage(jpg.slice(0,100)+'!'+jpg.slice(101)));
  assert.throws(()=>inspectLicenseImage('/9j/'+ 'A'.repeat(14_000_000)));
 });
+
+test('storage privado exige máximo de 5 MiB; no admite archivo mayor',()=>{
+ const excessive=Buffer.concat([Buffer.from([255,216,255,224]),Buffer.alloc(5*1024*1024,1)]).toString('base64');
+ assert.throws(()=>inspectLicenseImage(excessive),/límite|tamaño/i);
+});
+test('configuración backend restringe MIME sin volver público el bucket',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const sql=readFileSync(new URL('../../supabase/migrations/20261016195200_private_license_mime.sql',import.meta.url),'utf8');
+ assert.match(sql,/public=false/);
+ assert.match(sql,/file_size_limit=5242880/);
+ assert.match(sql,/allowed_mime_types=ARRAY\['image\/jpeg','image\/png'\]/);
+ assert.doesNotMatch(sql,/DROP\s+|DELETE\s+FROM\s+storage\.objects|public\s*=\s*true/i);
+});

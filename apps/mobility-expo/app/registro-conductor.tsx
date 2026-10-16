@@ -7,6 +7,7 @@ import { FormField, FormMessage } from '../src/components/Form';
 import { useAuth } from '../src/context/AuthContext';
 import { type DriverInput, validateDriver } from '../src/domain/registration';
 import { submitDriverRegistration } from '../src/services/driver-registration';
+import { inspectLicenseImage } from '../src/domain/license-evidence';
 
 const initial: DriverInput = {
   fullName: '', phone: '', licenseNumber: '', licensePhotoSelected: false,
@@ -30,12 +31,12 @@ export default function DriverRegistration() {
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset?.base64) throw new Error('No se pudo leer la imagen.');
-      if (asset.base64.length > 14_000_000) throw new Error('Elegí una foto más liviana (máximo aproximado 10 MB).');
-      setLicenseBase64(asset.base64);
+      const image = inspectLicenseImage(asset.base64);
+      setLicenseBase64(image.base64);
       update('licensePhotoSelected', true);
       setMessage('Licencia seleccionada. Se enviará a un depósito privado al confirmar.');
       setFailed(false);
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'Error al seleccionar documento'); setFailed(true); }
+    } catch (e) { setLicenseBase64(''); update('licensePhotoSelected', false); setMessage(e instanceof Error ? e.message : 'Error al seleccionar documento'); setFailed(true); }
   }
   async function submit() {
     const error = validateDriver(form);
@@ -61,7 +62,7 @@ export default function DriverRegistration() {
         <FormField label="Número de licencia profesional" value={form.licenseNumber} onChangeText={v => update('licenseNumber', v)} />
         <Text style={textStyles.subtitle}>Se verificará la clase de licencia, fecha de vencimiento y validez local antes de aprobarte.</Text>
         <Button secondary text={form.licensePhotoSelected ? '✓ Foto de licencia seleccionada · Cambiar' : 'Seleccionar fotografía de licencia'} onPress={() => void selectLicense()} />
-        <Text style={textStyles.subtitle}>Documento privado: solo vos y el personal autorizado podrán acceder a él mediante las políticas del servidor.</Text>
+        <Text style={textStyles.subtitle}>Foto JPG/PNG de hasta 5 MiB. El documento se guarda en almacenamiento privado; acceso sujeto a políticas del servidor.</Text>
       </Card>
       <Card>
         <Text style={textStyles.heading}>2. Datos del vehículo</Text>
