@@ -8,7 +8,7 @@
  * vacuous / falsely-green isolation test.
  */
 import assert from 'node:assert/strict';
-import {assertPublishableKey,safeStageRef} from './staging-auth-policy-gate.mjs';
+import {assertPublishableKey,safeStageRef,inspectStageSignup} from './staging-auth-policy-gate.mjs';
 
 const BUCKET='mobility-staging-driver-evidence';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,6 +90,8 @@ async function main(){
  const ref=safeStageRef(process.env.QORE_STAGING_PROJECT_REF);
  const key=process.env.QORE_STAGING_ANON_KEY;
  assertPublishableKey(key,ref);
+ const signupGate=await inspectStageSignup({ref,key});
+ if(!signupGate.certified)throw new Error('Registro público de STAGING sigue abierto; Auth G1 no certificado');
  const base='https://'+ref+'.supabase.co';
  const a=await authLogin(base,key,
   process.env.QORE_STAGING_PASSENGER_A_EMAIL,
