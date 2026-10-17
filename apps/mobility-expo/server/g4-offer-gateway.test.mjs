@@ -112,7 +112,7 @@ test('private offer expired, foreign, malformed or revoked is always NOT disclos
  for(const invalid of [
   {...data,driverId:other},
   {...data,expiresAtMs:100_000},
-  {...data,expiresAtMs:100_090},
+  {...data,expiresAtMs:140_000},
   {...data,status:'withdrawn'},
   {...data,service:'moto_pasajero'},
   {...data,originTag:'PRIVATE ADDRESS'},
