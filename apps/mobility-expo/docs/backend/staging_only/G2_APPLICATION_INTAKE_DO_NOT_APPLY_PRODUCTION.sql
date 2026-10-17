@@ -28,6 +28,8 @@ CREATE INDEX mobility_vehicle_applications_owner_idx
  ON public.mobility_vehicle_applications(driver_id,submitted_at DESC);
 ALTER TABLE public.mobility_vehicle_applications ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mobility_vehicle_applications FROM PUBLIC,anon,authenticated;
+-- Supabase default privileges grant service_role ALL: make submitted drafts immutable.
+REVOKE ALL ON public.mobility_vehicle_applications FROM service_role;
 GRANT SELECT ON public.mobility_vehicle_applications TO authenticated;
 GRANT SELECT,INSERT ON public.mobility_vehicle_applications TO service_role;
 CREATE POLICY mobility_applications_own_or_admin_read
