@@ -4,6 +4,7 @@
  * STAGING PROJECT. Never use this against production. No secrets are logged.
  */
 import assert from 'node:assert/strict';
+import {inspectStageSignup} from './staging-auth-policy-gate.mjs';
 const required=[
  'QORE_STAGING_PROJECT_REF','QORE_STAGING_ANON_KEY',
  'QORE_STAGING_PASSENGER_A_EMAIL','QORE_STAGING_PASSENGER_A_PASSWORD',
@@ -63,6 +64,8 @@ async function probeRole(uid,role,token){
  if(typeof value!=='boolean')throw Error('Invalid role RPC response type');
  return {denied:false,value};
 }
+const gate=await inspectStageSignup({ref,key:anon});
+assert.equal(gate.certified,true,'Registro público de Auth STAGING todavía abierto; smoke no autorizado');
 const a=await login(process.env.QORE_STAGING_PASSENGER_A_EMAIL,process.env.QORE_STAGING_PASSENGER_A_PASSWORD);
 const b=await login(process.env.QORE_STAGING_PASSENGER_B_EMAIL,process.env.QORE_STAGING_PASSENGER_B_PASSWORD);
 assert.notEqual(a.id,b.id,'Fixtures deben ser identidades diferentes');
