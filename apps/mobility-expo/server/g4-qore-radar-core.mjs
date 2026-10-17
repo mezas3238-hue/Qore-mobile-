@@ -139,7 +139,7 @@ export function buildQoreArrivalSnapshot({
   !ownUuid(assignedDriverId)||!asObj(driverProfile)||
   driverProfile.driverId!==assignedDriverId||
   driverProfile.verifiedForDisplay!==true||
-  !['AUTO','MOTO'].includes(driverProfile.vehicleKind)||
+  driverProfile.vehicleKind!=='AUTO'|| // G4 commercial MOTO gate remains CLOSED
   typeof driverProfile.displayName!=='string'||driverProfile.displayName.trim().length<2||
   driverProfile.displayName.length>70||
   typeof driverProfile.vehicleModel!=='string'||driverProfile.vehicleModel.length<2||
