@@ -51,6 +51,18 @@ async function getRows(table,field,id,token){
  if(!Array.isArray(rows))throw Error('Formato inesperado');
  return {denied:false,rows};
 }
+async function probeRole(uid,role,token){
+ const headers={apikey:anon,'Content-Type':'application/json'};
+ if(token)headers.Authorization='Bearer '+token;
+ const response=await fetch(endpoint+'/rest/v1/rpc/has_role',{
+  method:'POST',headers,body:JSON.stringify({_uid:uid,_role:role})
+ });
+ if(response.status===401||response.status===403)return {denied:true,value:false};
+ if(!response.ok)throw Error('Role RPC rejected unexpectedly HTTP '+response.status);
+ const value=await response.json();
+ if(typeof value!=='boolean')throw Error('Invalid role RPC response type');
+ return {denied:false,value};
+}
 const a=await login(process.env.QORE_STAGING_PASSENGER_A_EMAIL,process.env.QORE_STAGING_PASSENGER_A_PASSWORD);
 const b=await login(process.env.QORE_STAGING_PASSENGER_B_EMAIL,process.env.QORE_STAGING_PASSENGER_B_PASSWORD);
 assert.notEqual(a.id,b.id,'Fixtures deben ser identidades diferentes');
@@ -62,9 +74,18 @@ for(const [actor,other] of [[a,b],[b,a]]){
  assert.equal(stranger.rows.length,0,'FUGA: lectura de perfil de otro pasajero');
  const roles=await getRows('user_roles','user_id',other.id,actor.token);
  assert.equal(roles.rows.length,0,'FUGA: roles de otra cuenta');
+ const ownPassengerRole=await probeRole(actor.id,'passenger',actor.token);
+ assert.equal(ownPassengerRole.denied,false,'RPC has_role no accesible al titular');
+ assert.equal(ownPassengerRole.value,true,'Rol pasajero esperado, fixtures no están configurados');
+ const foreignAdminRole=await probeRole(other.id,'admin',actor.token);
+ assert.equal(foreignAdminRole.value,false,'FUGA: lectura del rol de otro pasajero');
+ const foreignPassengerRole=await probeRole(other.id,'passenger',actor.token);
+ assert.equal(foreignPassengerRole.value,false,'FUGA: lectura incluso de rol ajeno de pasajero');
+ const promotedRole=await probeRole(actor.id,'admin',actor.token);
+ assert.equal(promotedRole.value,false,'ESCALADA: cuenta de pasajero con rol admin');
 }
 for(const actor of [a,b]){
  const anonymous=await getRows('profiles','id',actor.id,undefined);
  assert.equal(anonymous.rows.length,0,'FUGA: perfil accesible sin sesión');
 }
-console.log('PASS: staging RLS smoke lectura propia/cuenta ajena/anon. NO valida escrituras ni documentos.');
+console.log('PASS: staging RLS profile and role isolation, deny foreign role queries and admin promotion. NO validates uploads/writes.');
