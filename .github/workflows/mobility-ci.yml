@@ -28,6 +28,8 @@ jobs:
         run: npm run check
       - name: Verify staging gateway Auth and no-LIVE isolation
         run: node --test server/*.test.mjs
+      - name: Check staging smoke and local server syntax (without credentials)
+        run: node --check scripts/staging-auth-readonly.mjs && node --check server/run-g2-local-staging-gateway.mjs
       - name: Verify live operations remain disabled
         run: node scripts/check-safety.mjs
       - name: Expo web export (not Android/iOS E2E)
