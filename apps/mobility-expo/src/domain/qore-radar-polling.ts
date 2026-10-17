@@ -3,7 +3,8 @@
  *
  * This is NOT connected to the DEMO screens or any deployed endpoint.
  * Caller must supply a JWT from Supabase Auth and a reviewed HTTPS staging
- * API origin. Never creates a "live" GPS marker, mock driver, or countdown.
+ * API origin pinned in the signed app build. Never creates a "live" GPS
+ * marker, mock driver, or countdown.
  * Offline/revoked access cannot appear to be fresh server tracking.
  */
 import {
@@ -64,16 +65,18 @@ function validateEnvelope(json:unknown,state:RiderRadarState):TrustedRiderEvent|
 }
 /** Caller owns token lifecycle; it never leaves the Authorization header. */
 export async function pollQoreRadar({
- state,accessToken,apiOrigin,request=fetch as RadarRequest,
+ state,accessToken,apiOrigin,pinnedApiOrigin,request=fetch as RadarRequest,
  now=Date.now,enableLoopbackQA=false
 }:{
  state:RiderRadarState;accessToken:string|null;
- apiOrigin:string;request?:RadarRequest;now?:()=>number;
+ apiOrigin:string;pinnedApiOrigin:string;request?:RadarRequest;now?:()=>number;
  enableLoopbackQA?:boolean
 }):Promise<RadarPollResult>{
  if(!state||!UUID.test(state.tripId)||!UUID.test(state.passengerId))
   throw Error('A known passenger and ride are required');
  const origin=checkOrigin(apiOrigin,enableLoopbackQA);
+ const approved=checkOrigin(pinnedApiOrigin,enableLoopbackQA);
+ if(origin!==approved)throw Error('Refusing JWT transmission to a non-pinned staging API origin');
  if(!accessToken||typeof accessToken!=='string'||accessToken.length<20||
     /[\s]/.test(accessToken)){
   const reset=initialRiderRadar(state.tripId,state.passengerId);
