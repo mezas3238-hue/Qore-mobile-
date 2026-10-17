@@ -6,7 +6,7 @@
 import {
  createDemoRide,initialRideState,PLACES,rideReducer,type Action,
  type Ride,type RideStage,type RideState,
-} from './rides';
+} from './rides.ts';
 
 export type JourneyPhase='request'|'accept'|'arrive'|'start'|'complete'|'receipt'|'cancelled';
 export type JourneyActor='pasajero'|'conductor'|'sistema-demo';
