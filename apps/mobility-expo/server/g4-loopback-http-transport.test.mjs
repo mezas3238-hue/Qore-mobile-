@@ -230,6 +230,10 @@ test('HTTP: malformed bodies, CORS origins, cookie sessions and URL confusion de
 test('HTTP: listener rejects public/privileged ports; adapters cannot be missing',async()=>{
  assert.throws(()=>createQoreRadarLoopbackTransport({offerHandler:async()=>({})}));
  const {server}=fixture();
+ assert.throws(()=>server.listen(0,'0.0.0.0'));
+ assert.throws(()=>server.listen(4141,'::'));
+ assert.throws(()=>server.listen(0));
+ assert.throws(()=>server.listen({port:0,host:'127.0.0.1'}));
  await assert.rejects(listenQoreRadarLoopback(server,80));
  assert.equal(server.listening,false);
 });
