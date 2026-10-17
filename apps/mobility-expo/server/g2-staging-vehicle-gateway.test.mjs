@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createStagingVehicleGateway,assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
+import {createStagingVehicleGateway,createStagingRateLimiter,assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 
 const userId='11111111-1111-4111-8111-111111111111';
 const adminId='22222222-2222-4222-8222-222222222222';
@@ -25,7 +25,10 @@ const gateway=(hooks={})=>createStagingVehicleGateway({
  projectRef:'abcdeffedcba12345678',
  verifyAccessToken:async()=>identity,
  submitDraft:async()=>appId,
- reviewVehicle:async()=>auditId,...hooks
+ reviewVehicle:async()=>auditId,
+ authorizeAdmin:async()=>true,
+ allowRequest:()=>true,
+ ...hooks
 });
 
 test('never allows gateway configuration using Lovable production or malformed project reference',()=>{
@@ -180,4 +183,92 @@ test('pending stage remains closed when backend adapter is absent or role gate f
  const r=await reject(request(pendingBody,stageRoute));
  assert.equal(r.status,409);
  assert.doesNotMatch(JSON.stringify(r),/private|role absent/);
+});
+
+
+test('all privileged admin operations are double-checked server-side before RPC',async()=>{
+ let called=0,validatedId;
+ const h=gateway({
+  authorizeAdmin:async userId=>{validatedId=userId;return false;},
+  reviewVehicle:async()=>{called++;return auditId;},
+  stagePending:async()=>{called++;return appId;}
+ });
+ const deniedReview=await h(request(review,reviewRoute));
+ const deniedStaging=await h(request(pendingBody,stageRoute));
+ assert.equal(deniedReview.status,403);
+ assert.equal(deniedStaging.status,403);
+ assert.equal(validatedId,userId);
+ assert.equal(called,0);
+ const permittedDraft=await h(request(draft,draftRoute));
+ assert.equal(permittedDraft.status,202,'ordinary intake does not require admin status');
+});
+test('failed admin-role lookup never calls privileged database RPC',async()=>{
+ let called=0;
+ const h=gateway({
+  authorizeAdmin:async()=>{throw Error('private Postgres error')},
+  stagePending:async()=>{called++;return appId}
+ });
+ const r=await h(request(pendingBody,stageRoute));
+ assert.equal(r.status,503);
+ assert.equal(called,0);
+ assert.doesNotMatch(JSON.stringify(r),/private|Postgres/);
+});
+test('unavailable rate limiter never calls a DB adapter',async()=>{
+ let called=0;
+ const h=gateway({
+  allowRequest:()=>{throw Error('outage or saturated shared store')},
+  submitDraft:async()=>{called++;return appId}
+ });
+ const result=await h(request());
+ assert.equal(result.status,503);
+ assert.equal(called,0);
+});
+test('rate limited requests return 429 before database RPC, per JWT subject and route',async()=>{
+ let calls=0;
+ let now=100_000;
+ const limit=createStagingRateLimiter({now:()=>now,windowMs:1000,draftLimit:2,adminLimit:1,maxEntries:6});
+ const h=gateway({
+  allowRequest:limit,
+  submitDraft:async()=>{calls++;return appId},
+  stagePending:async()=>{calls++;return appId},
+  reviewVehicle:async()=>{calls++;return auditId},
+ });
+ assert.equal((await h(request())).status,202);
+ assert.equal((await h(request())).status,202);
+ assert.equal((await h(request())).status,429);
+ assert.equal((await h(request(review,reviewRoute))).status,200);
+ assert.equal((await h(request(review,reviewRoute))).status,429);
+ assert.equal((await h(request(pendingBody,stageRoute))).status,202);
+ assert.equal((await h(request(pendingBody,stageRoute))).status,429);
+ assert.equal(calls,4);
+ now=101_001;
+ assert.equal((await h(request())).status,202,'window renews after time');
+ assert.equal(calls,5);
+});
+test('limiter has bounded memory and fails closed when unique identities saturate',()=>{
+ let now=1_000;
+ const limit=createStagingRateLimiter({now:()=>now,windowMs:1000,maxEntries:1,draftLimit:2});
+ assert.equal(limit({userId,operation:'draft'}),true);
+ assert.equal(limit({userId:adminId,operation:'draft'}),false,'cannot evict an attacker to reset their quota');
+ assert.equal(limit({userId,operation:'draft'}),true);
+ assert.equal(limit({userId,operation:'draft'}),false);
+ now=2001;
+ assert.equal(limit({userId:adminId,operation:'draft'}),true,'expired entries pruned');
+ now=100;
+ assert.equal(limit({userId:adminId,operation:'draft'}),false,'clock rollback blocked');
+ assert.equal(limit({userId:userId,operation:'unexpected'}),false);
+});
+test('gateway refuses missing authorization or limiter adapters at startup',()=>{
+ const params={
+  projectRef:'abcdeffedcba12345678',
+  verifyAccessToken:async()=>identity,
+  submitDraft:async()=>appId,
+  reviewVehicle:async()=>auditId,
+  authorizeAdmin:async()=>true,
+  allowRequest:()=>true,
+ };
+ assert.throws(()=>createStagingVehicleGateway({...params,authorizeAdmin:null}));
+ assert.throws(()=>createStagingVehicleGateway({...params,allowRequest:null}));
+ for(const bad of [-1,0,100001,1.5,NaN])
+  assert.throws(()=>createStagingRateLimiter({maxEntries:bad}));
 });
