@@ -215,3 +215,26 @@ Consulta HEAD PR #2 `4608aeb2519262cef42f722b43caffdfd455701b`: los últimos wor
 - **Postcheck SQL remoto real, sin escrituras:** STAGING nuevo `9c677bb2-746b-419f-ad9c-dd6d26bab944`: 10 tablas públicas, 0 usuarios, solicitudes, vehículos, revisiones o documentos; `authenticated` no puede ejecutar RPC de review ni materialización y `service_role` no puede actualizar solicitudes.
 - **Próximo gate obligatorio:** `disable_signup=true` desde Cloud Auth nativo aún no certificado. Sin créditos en workspace de Lovable según la última consulta del agente; no insistir con llamadas pagas para verificar hasta saldo autorizado, y sin credenciales públicas/ref o test JWT no hay E2E. No se habilitan viajes, cobros, OTP/SOS ni MOTO comercial. Nunca mezclar Flutter trading PR #2.
 - Runbook/evidencia: `apps/mobility-expo/docs/security/G2_GATEWAY_ADMIN_AND_RATE_LIMIT_2026-10-17.md`. PostgreSQL/RLS/CI de esta ronda deben verificarse por HEAD antes de proclamar éxito definitivo.
+
+## Duodécima ronda — 17-10-2026: recorrido AUTO guiado + G3 SQL de viajes DEMO probado
+
+**Objetivo:** pasar de piezas aisladas a una experiencia completa de prueba de pasajero/conductor sin afirmar que transporte comercial está disponible.
+
+### En la app Expo (CÓDIGO INTEGRADO)
+- El repositorio **ya tenía** `RideContext`, `rideReducer`, `app/demo.tsx`, `app/conductor.tsx`, historia de viajes y recibo ficticio. **No se reconstruyeron.**
+- Nuevo módulo `src/domain/guided-journey.ts` y `src/domain/guided-journey.test.ts`; nueva pantalla `app/recorrido.tsx`, enlazada desde `app/index.tsx`, `app/demo.tsx` y `app/conductor.tsx`. Expone **6 pasos secuenciales** en el **mismo dispositivo**: pasajero pide → conductor ficticio acepta → llega → inicia → finaliza → comprobante demostrativo sin pago (`Gs. 0` cobrado/transferido). Los botones disparan acciones del reductor compartido; si el conductor demo está indisponible se detiene, y no se puede saltar estados. NO GPS compartido ni dos personas reales.
+- Tests Node de recorrido (5 casos nuevos) prueban ciclo completo, cancelación, disponibilidad desactivada, transiciones inválidas y prohibición de cobro/uso LIVE. Se corrigió un fallo intermedio de importación `.ts` de Node; CI posterior pasó.
+- **Evidencia** en `docs/backend/G3_AUTO_TRIP_VERTICAL_SLICE_ROADMAP_2026-10-17.md`, que distingue explícitamente la prueba local de G3 real con autenticación, routing, quote server-side, despacho, pagos y dispositivos.
+
+### Contrato backend G3 — SOLO PostgreSQL 16 CI
+- Se creó `docs/backend/staging_only/G3_AUTO_DEMO_TRIP_CONTRACT_POSTGRES_CI_ONLY.sql`. **NO APLICADO A SUPABASE REMOTO**. Agrega tablas `mobility_stage_auto_demo_trips` y `mobility_stage_auto_demo_events` + 3 RPC **service_role only** de solicitar viaje ficticio, aceptar y transicionar. Todas las rutas son AUTO, con etiquetas de puntos ficticios; **no** hay importes reales, ubicación compartida, cobros ni pasajeros reales.
+- Un solo viaje activo por pasajero/conductor mediante índices parciales; `SELECT FOR UPDATE` durante aceptación, validación de `mobility_vehicle_preflight`, request-key idempotente, prohibición de MOTO, estados ordenados, auditoría append-only y `RLS` lectura de viaje propio exclusivamente.
+- `scripts/sql/g2_postgres_smoke.sql` importa G3 para **Postgres desechable de CI** y ejecuta `scripts/sql/g3_auto_demo_trip_smoke.sql`: identidades, dos conductores AUTO sintéticos/vehículos elegibles, solicitud idempotente, roles y etapas inválidas, rechazo de doble asignación, RLS propia y ajena, MOTO bloqueada, evento de conclusión único.
+- `scripts/sql/g3_concurrent_accept_ci.sh` inicia **dos conexiones psql al mismo tiempo con dos conductores ficticios distintos elegibles**; ambas compiten por un mismo viaje, se exige un ganador y un perdedor, un evento `accepted` y coche/actor del ganador coherentes. **GitHub Actions CI aprobó el contrato y la carrera real** (push `39039096241`, PR `39039099333`). No se ha ejecutado la carrera en Supabase remoto ni con teléfonos.
+- Documento técnico: `docs/backend/G3_AUTO_DEMO_SQL_DISPATCH_CI_2026-10-17.md`.
+
+### Gates y bloqueo
+- El Supabase Lovable STAGING nuevo `9c677bb2-746b-419f-ad9c-dd6d26bab944` sigue solo en G1/G2; G3 aún es CI-only. NO tocar el anterior `qdqrlgzlotnfdxzpacxs`.
+- **G1 Auth invite-only sigue bloqueado:** última evidencia `disable_signup=false`; el proyecto Lovable se quedó sin créditos para revisión por agente, aunque consultas SQL de solo lectura sí funcionaron. No usuarios/JWT reales, Storage REST E2E ni publicación.
+- Faltan quotes server-side con mapas y rutas, asignación con dos teléfonos, GPS con consentimiento, pagos, cumplimiento legal/municipal y seguros. El piloto solo AUTO requiere gates independientes y autorización final. MOTO comercial suspendida.
+- PR #7 continúa DRAFT, Flutter PR #2 sin cambios/mezclas, `LIVE_TRIPS_ENABLED=false`, CI Expo web no equivale a Android/iOS E2E.
