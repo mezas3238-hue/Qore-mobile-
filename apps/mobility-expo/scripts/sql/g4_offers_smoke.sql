@@ -191,15 +191,23 @@ RESET ROLE;
 
 SET ROLE authenticated;
 SET request.jwt.claim.sub='88888888-8888-4888-8888-888888888888';
-DO $check$ BEGIN
- IF (SELECT count(*) FROM public.mobility_stage_auto_demo_offers)<>0
- OR (SELECT count(*) FROM public.mobility_stage_auto_demo_push_outbox)<>0
- THEN RAISE EXCEPTION 'Offers/notification metadata leaked to passenger'; END IF;
+DO $check$
+DECLARE denied_offer boolean:=false; denied_outbox boolean:=false; n bigint;
+BEGIN
+ BEGIN SELECT count(*) INTO n FROM public.mobility_stage_auto_demo_offers;
+ EXCEPTION WHEN insufficient_privilege THEN denied_offer:=true; END;
+ BEGIN SELECT count(*) INTO n FROM public.mobility_stage_auto_demo_push_outbox;
+ EXCEPTION WHEN insufficient_privilege THEN denied_outbox:=true; END;
+ IF NOT denied_offer OR NOT denied_outbox
+ THEN RAISE EXCEPTION 'Passenger can query private driver offers/outbox'; END IF;
 END $check$;
 SET request.jwt.claim.sub='11111111-1111-4111-8111-111111111111';
-DO $check$ BEGIN
- IF (SELECT count(*) FROM public.mobility_stage_auto_demo_offers)<>0
- THEN RAISE EXCEPTION 'Driver can enumerate private offers bypassing API'; END IF;
+DO $check$
+DECLARE denied boolean:=false; n bigint;
+BEGIN
+ BEGIN SELECT count(*) INTO n FROM public.mobility_stage_auto_demo_offers;
+ EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'Driver can enumerate private offers without API'; END IF;
 END $check$;
 RESET ROLE;
 \echo PASS: G4 expiring per-driver private offers, replay, decline, atomic winner, outbox and client RLS.
