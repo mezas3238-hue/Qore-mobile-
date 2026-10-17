@@ -272,3 +272,27 @@ test('gateway refuses missing authorization or limiter adapters at startup',()=>
  for(const bad of [-1,0,100001,1.5,NaN])
   assert.throws(()=>createStagingRateLimiter({maxEntries:bad}));
 });
+
+test('rate limiter must synchronously return literal true; Promise or truthy are denied',async()=>{
+ let calls=0;
+ for(const decision of ['yes',1,{},Promise.resolve(true),undefined,null,false]){
+  const h=gateway({
+   allowRequest:()=>decision,
+   submitDraft:async()=>{calls++;return appId}
+  });
+  const r=await h(request());
+  assert.equal(r.status,429,'unrecognized rate decision should fail closed');
+ }
+ assert.equal(calls,0);
+});
+test('admin verifier must return literal true; truthy or missing verdict cannot stage',async()=>{
+ let calls=0;
+ for(const verdict of [1,'admin',{},null,false]){
+  const h=gateway({
+   authorizeAdmin:async()=>verdict,
+   stagePending:async()=>{calls++;return appId}
+  });
+  assert.equal((await h(request(pendingBody,stageRoute))).status,403);
+ }
+ assert.equal(calls,0);
+});
