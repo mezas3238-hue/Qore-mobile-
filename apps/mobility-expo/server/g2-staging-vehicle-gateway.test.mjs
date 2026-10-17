@@ -132,3 +132,52 @@ test('DB errors and internal details are never echoed to client',async()=>{
  const invalid=gateway({submitDraft:async()=>({id:appId})});
  assert.equal((await invalid(request())).status,503);
 });
+
+const stageRoute='/v1/staging/admin/materialize-pending';
+const pendingBody={
+ requestKey:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+ applicationId:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+};
+test('pending inventory stage takes reviewer from verified Auth, never payload',async()=>{
+ let params,checked;
+ const h=gateway({
+  verifyAccessToken:async t=>{checked=t;return {...identity,id:adminId}},
+  stagePending:async p=>{params=p;return appId}
+ });
+ const r=await h(request(pendingBody,stageRoute));
+ assert.deepEqual(r,{status:202,body:{
+  vehicleId:appId,status:'pending',evidenceVerified:false,commercialRidesEnabled:false
+ }});
+ assert.equal(params._reviewer_id,adminId);
+ assert.equal(params._application_id,pendingBody.applicationId);
+ assert.equal(params._request_key,pendingBody.requestKey);
+ assert.equal('role' in params,false);
+ assert.ok(checked.startsWith('aaaa'));
+});
+test('pending inventory stage rejects spoofed reviewer/approved flags, unknown fields and invalid UUIDs',async()=>{
+ let calls=0;
+ const h=gateway({stagePending:async()=>{calls++;return appId}});
+ for(const invalid of [
+  {...pendingBody,reviewerId:adminId},
+  {...pendingBody,_reviewer_id:adminId},
+  {...pendingBody,driverId:userId},
+  {...pendingBody,role:'admin'},
+  {...pendingBody,status:'approved'},
+  {...pendingBody,evidenceVerified:true},
+  {...pendingBody,commercialRidesEnabled:true},
+  {...pendingBody,requestKey:'not-uuid'},
+  {...pendingBody,applicationId:'not-uuid'}
+ ]){
+  const r=await h(request(invalid,stageRoute));
+  assert.equal(r.status,400,JSON.stringify(invalid));
+ }
+ assert.equal(calls,0);
+});
+test('pending stage remains closed when backend adapter is absent or role gate fails',async()=>{
+ const noAdapter=gateway();
+ assert.equal((await noAdapter(request(pendingBody,stageRoute))).status,503);
+ const reject=gateway({stagePending:async()=>{throw new Error('admin role absent SQL private')}})
+ const r=await reject(request(pendingBody,stageRoute));
+ assert.equal(r.status,409);
+ assert.doesNotMatch(JSON.stringify(r),/private|role absent/);
+});
