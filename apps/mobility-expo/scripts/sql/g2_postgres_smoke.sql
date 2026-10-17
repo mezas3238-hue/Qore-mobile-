@@ -16,6 +16,7 @@ GRANT USAGE ON SCHEMA auth TO authenticated,service_role;
 \ir ../../docs/backend/staging_only/G2_SERVER_PREFLIGHT_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_APPLICATION_INTAKE_DO_NOT_APPLY_PRODUCTION.sql
+\ir ../../docs/backend/staging_only/G2_APPLICATION_TO_PENDING_INVENTORY_STAGING_ONLY.sql
 
 INSERT INTO auth.users (id) VALUES
  ('11111111-1111-4111-8111-111111111111'),
@@ -409,3 +410,107 @@ END
 $check$;
 RESET ROLE;
 \echo PASS: G1 private storage owner/JWT RLS, cross-driver denial, path and MIME restrictions.
+
+-- Staging-only application -> pending inventory; no commercial approval.
+DO $check$
+BEGIN
+ IF has_function_privilege('authenticated',
+  'public.mobility_stage_vehicle_pending(uuid,uuid,uuid)','EXECUTE')
+ OR has_function_privilege('anon',
+  'public.mobility_stage_vehicle_pending(uuid,uuid,uuid)','EXECUTE')
+ OR has_table_privilege('authenticated','public.mobility_vehicle_intake_audit','SELECT')
+ OR has_table_privilege('service_role','public.mobility_vehicle_intake_audit','UPDATE')
+ OR has_table_privilege('service_role','public.mobility_vehicle_intake_audit','DELETE')
+ THEN RAISE EXCEPTION 'Pending intake function or immutable audit exposed'; END IF;
+END
+$check$;
+
+SET ROLE service_role;
+DO $check$
+DECLARE
+ application_auto uuid; application_moto uuid; vehicle_auto uuid;
+ replay_id uuid; moto_id uuid; rejected boolean;
+BEGIN
+ SELECT id INTO application_auto FROM public.mobility_vehicle_applications
+  WHERE request_key='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ SELECT id INTO application_moto FROM public.mobility_vehicle_applications
+  WHERE request_key='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+ IF application_auto IS NULL OR application_moto IS NULL
+ THEN RAISE EXCEPTION 'Missing synthetic vehicle intake fixtures'; END IF;
+ vehicle_auto:=public.mobility_stage_vehicle_pending(
+  application_auto,'22222222-2222-4222-8222-222222222222',
+  'e1111111-1111-4111-8111-111111111111');
+ replay_id:=public.mobility_stage_vehicle_pending(
+  application_auto,'22222222-2222-4222-8222-222222222222',
+  'e1111111-1111-4111-8111-111111111111');
+ IF vehicle_auto<>replay_id OR
+   (SELECT review_status FROM public.mobility_vehicles WHERE id=vehicle_auto)
+     <>'pending'::public.mobility_review_status
+ THEN RAISE EXCEPTION 'Staged vehicle not idempotent or incorrectly approved'; END IF;
+ IF (SELECT driver_id FROM public.mobility_vehicles WHERE id=vehicle_auto)
+    <>'11111111-1111-4111-8111-111111111111'
+ THEN RAISE EXCEPTION 'Wrong driver assigned to draft'; END IF;
+ IF (SELECT count(*) FROM public.mobility_vehicle_intake_audit
+    WHERE application_id=application_auto)<>1
+ THEN RAISE EXCEPTION 'Duplicate materialization audit'; END IF;
+ IF (SELECT count(*) FROM public.mobility_vehicles
+    WHERE plate_normalized='PRY123')<>1
+ THEN RAISE EXCEPTION 'Duplicate plate inventory'; END IF;
+
+ rejected:=false;
+ BEGIN
+  PERFORM public.mobility_stage_vehicle_pending(
+   application_auto,'22222222-2222-4222-8222-222222222222',
+   'e2222222-2222-4222-8222-222222222222');
+ EXCEPTION WHEN others THEN rejected:=true; END;
+ IF NOT rejected THEN RAISE EXCEPTION 'Different key re-staged same application'; END IF;
+
+ rejected:=false;
+ BEGIN
+  PERFORM public.mobility_stage_vehicle_pending(
+   application_moto,'22222222-2222-4222-8222-222222222222',
+   'e1111111-1111-4111-8111-111111111111');
+ EXCEPTION WHEN others THEN rejected:=true; END;
+ IF NOT rejected THEN RAISE EXCEPTION 'Same key reused for another application'; END IF;
+
+ rejected:=false;
+ BEGIN
+  PERFORM public.mobility_stage_vehicle_pending(
+   application_moto,'11111111-1111-4111-8111-111111111111',
+   'e3333333-3333-4333-8333-333333333333');
+ EXCEPTION WHEN others THEN rejected:=true; END;
+ IF NOT rejected THEN RAISE EXCEPTION 'Unprivileged reviewer materialized draft'; END IF;
+
+ moto_id:=public.mobility_stage_vehicle_pending(
+   application_moto,'22222222-2222-4222-8222-222222222222',
+   'e4444444-4444-4444-8444-444444444444');
+ IF (SELECT review_status FROM public.mobility_vehicles WHERE id=moto_id)
+    <>'pending'::public.mobility_review_status
+ THEN RAISE EXCEPTION 'MOTO was commercially approved by staging'; END IF;
+ IF public.mobility_vehicle_preflight(
+   '44444444-4444-4444-8444-444444444444',moto_id,'moto_pasajero')
+ THEN RAISE EXCEPTION 'MOTO commercial preflight accidentally authorized'; END IF;
+END
+$check$;
+RESET ROLE;
+SET ROLE authenticated;
+SET request.jwt.claim.sub='33333333-3333-4333-8333-333333333333';
+DO $check$
+DECLARE n integer;
+BEGIN
+ SELECT count(*) INTO n FROM public.mobility_vehicles
+  WHERE plate_normalized IN ('PRY123','MOT999');
+ IF n<>0 THEN RAISE EXCEPTION 'Stranger saw new pending vehicles'; END IF;
+END
+$check$;
+SET request.jwt.claim.sub='11111111-1111-4111-8111-111111111111';
+DO $check$
+DECLARE n integer;
+BEGIN
+ SELECT count(*) INTO n FROM public.mobility_vehicles
+  WHERE plate_normalized='PRY123';
+ IF n<>1 THEN RAISE EXCEPTION 'Owner cannot read pending auto inventory'; END IF;
+END
+$check$;
+RESET ROLE;
+\echo PASS: G2 audited application-to-pending inventory, unique vehicle, idempotency, MOTO denied.
