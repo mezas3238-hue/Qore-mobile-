@@ -125,7 +125,7 @@ export function createStagingVehicleGateway({
   // All identities and roles are obtained on the SERVER, never from JSON.
   const operation=draftRoute?'draft':reviewRoute?'review':'stage';
   try {
-   if(!allowRequest({userId:user.id,operation}))
+   if(allowRequest({userId:user.id,operation})!==true)
     return reply(429,{error:'Staging request rate limit exceeded'});
   }catch{return reply(503,{error:'Staging rate limiter unavailable'});}
   if(!draftRoute){
