@@ -16,7 +16,7 @@ const pickup={lat:-25.28,lng:-57.63};
 const gps={lat:-25.29,lng:-57.57,available:true,consentGranted:true,capturedAtMs:at-5_000,accuracyMeters:15};
 const candidates=[
  {driverId:a,vehicleId:x,kind:'AUTO',location:gps,idleSeconds:0},
- {driverId:b,vehicleId:ride,kind:'AUTO',location:{...gps,lat:-25.30},idleSeconds:3600}
+ {driverId:b,vehicleId:ride,kind:'AUTO',location:{...gps,lat:-25.30},idleSeconds:12000}
 ];
 const route=(driverId,etaSeconds,roadMeters=1800)=>({
  driverId,etaSeconds,roadMeters,calculatedAtMs:at-1000,
