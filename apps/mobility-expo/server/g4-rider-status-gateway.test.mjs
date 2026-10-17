@@ -176,3 +176,15 @@ test('limiter, incorrect clock and missing adapters never leak data',async()=>{
   assert.throws(()=>createQoreRiderStatusGateway({...args,[key]:null}));
  }
 });
+
+test('G4 AUTO-only passenger snapshots never expose even verified MOTO profiles',async()=>{
+ const {handler}=fixture({
+  loadOwnTrip:async()=>accepted,
+  loadArrivalEvidence:async()=>({
+   driverProfile:{...profile,vehicleKind:'MOTO'},location:gps,route
+  })
+ });
+ const r=await handler(request());
+ assert.equal(r.status,503);
+ assert.doesNotMatch(JSON.stringify(r),/TEST999|-25.28|QORE Prueba/);
+});
