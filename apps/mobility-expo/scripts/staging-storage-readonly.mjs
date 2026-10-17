@@ -12,7 +12,7 @@ import {assertPublishableKey,safeStageRef} from './staging-auth-policy-gate.mjs'
 
 const BUCKET='mobility-staging-driver-evidence';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const OBJECT=/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/licencia-[A-Za-z0-9_-]{12,80}\.(jpg|jpeg|png)$/i;
+const OBJECT=/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/licencia-SYNTHETIC[A-Za-z0-9_-]{4,71}\.(jpg|jpeg|png)$/i;
 const denyStatuses=new Set([400,401,403,404]);
 
 export function assertFixturePath(path,identity){
