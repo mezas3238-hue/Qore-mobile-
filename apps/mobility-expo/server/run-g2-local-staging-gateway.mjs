@@ -49,6 +49,7 @@ const handler=createStagingVehicleGateway({
  },
  submitDraft:params=>invoke('mobility_submit_vehicle_draft',params),
  reviewVehicle:params=>invoke('mobility_review_vehicle',params),
+ stagePending:params=>invoke('mobility_stage_vehicle_pending',params),
 });
 const send=(res,status,body)=>{
  res.writeHead(status,{
@@ -66,7 +67,8 @@ const server=createServer(async(req,res)=>{
   send(res,405,{error:'Method not allowed'});return;
  }
  if(req.url!=='/v1/staging/vehicle-applications'&&
-    req.url!=='/v1/staging/admin/vehicle-reviews'){
+    req.url!=='/v1/staging/admin/vehicle-reviews'&&
+    req.url!=='/v1/staging/admin/materialize-pending'){
   send(res,404,{error:'Not found'});return;
  }
  if(!/^application\/json(?:\s*;.*)?$/i.test(req.headers['content-type']??'')){
