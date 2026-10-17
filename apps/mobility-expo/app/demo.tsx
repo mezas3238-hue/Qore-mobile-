@@ -19,6 +19,7 @@ export default function PassengerDemo() {
   return <Page>
     <Top subtitle="Experiencia del pasajero" />
     <Headline eyebrow="Pasajero" title={active ? 'Tu viaje, paso a paso' : '¿A dónde vamos?'} description="Probá cómo funciona una solicitud. Ningún vehículo real recibirá este pedido." />
+    <Button secondary text="Ver recorrido guiado de principio a fin" onPress={() => router.push('/recorrido')} />
     <MapSketch origin={active?.origin || origin} destination={active?.destination || destination} />
     <NavigationLinks destination={active?.destination || destination} origin={active?.origin || origin} label="Consultar ruta en Google Maps o Waze" />
     {active ? <>
