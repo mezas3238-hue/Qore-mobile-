@@ -5,7 +5,7 @@ set -euo pipefail
 psql_cli() {
   psql -h localhost -p 5432 -U postgres -d qore_mobility_ci -X -qAt -v ON_ERROR_STOP=1 "$@"
 }
-trip_id="$(psql_cli -c "SELECT id FROM public.mobility_stage_auto_demo_trips WHERE request_key='a1000000-0000-4000-8000-000000000004' AND status='searching'")"
+trip_id="$(psql_cli -c "SELECT id FROM public.mobility_stage_auto_demo_trips WHERE request_key='a1000000-0000-4000-8000-000000000005' AND status='searching'")"
 if [[ ! "$trip_id" =~ ^[0-9a-f-]{36}$ ]]; then
  echo "G3 synthetic pending AUTO fixture missing" >&2
  exit 1
@@ -13,7 +13,7 @@ fi
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 sql_a="SET ROLE service_role; SELECT public.mobility_stage_auto_demo_accept('$trip_id','11111111-1111-4111-8111-111111111111','55555555-5555-4555-8555-555555555555','a2000000-0000-4000-8000-000000000011');"
-sql_b="SET ROLE service_role; SELECT public.mobility_stage_auto_demo_accept('$trip_id','11111111-1111-4111-8111-111111111111','55555555-5555-4555-8555-555555555555','a2000000-0000-4000-8000-000000000012');"
+sql_b="SET ROLE service_role; SELECT public.mobility_stage_auto_demo_accept('$trip_id','44444444-4444-4444-8444-444444444444','77777777-7777-4777-8777-777777777777','a2000000-0000-4000-8000-000000000012');"
 psql_cli -c "$sql_a" >"$tmpdir/a.log" 2>&1 &
 pid_a=$!
 psql_cli -c "$sql_b" >"$tmpdir/b.log" 2>&1 &
@@ -36,5 +36,10 @@ BEGIN
  OR (SELECT count(*) FROM public.mobility_stage_auto_demo_events
   WHERE trip_id=trip AND next_status='accepted')<>1
  THEN RAISE EXCEPTION 'Race accepted two drivers or duplicate event'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips
+   WHERE id=trip AND (
+    (driver_id='11111111-1111-4111-8111-111111111111' AND vehicle_id='55555555-5555-4555-8555-555555555555')
+    OR (driver_id='44444444-4444-4444-8444-444444444444' AND vehicle_id='77777777-7777-4777-8777-777777777777')))
+ THEN RAISE EXCEPTION 'Fake driver/vehicle pair was mismatched during race'; END IF;
 END \$check\$;"
-echo "PASS: G3 two competing SQL clients, exactly one fictional AUTO acceptance and one audit event."
+echo "PASS: G3 two different eligible fictional AUTO drivers, only one winner and one audit event."
