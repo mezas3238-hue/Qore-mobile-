@@ -82,15 +82,21 @@ export async function pollQoreRadar({
  }
  const url=origin+'/v1/staging/rider/trips/'+state.tripId+'/status';
  let response:ResponseLike;
+ // AbortController is available in React Native; AbortSignal.timeout may
+ // not exist on every Android/Hermes version, so do not depend on it here.
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),8_000);
  try {
   response=await request(url,{
    method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
    headers:{authorization:'Bearer '+accessToken,accept:'application/json'},
-   signal:AbortSignal.timeout(8000)
+   signal:controller.signal
   });
  }catch {
   return {state,view:offline(state,'Conexión interrumpida: sin ETA actualizada'),
    connection:'offline',commercialRidesEnabled:false};
+ }finally{
+  clearTimeout(timeout);
  }
  if(response.status===401||response.status===403||response.status===404){
   const cleared=initialRiderRadar(state.tripId,state.passengerId);
