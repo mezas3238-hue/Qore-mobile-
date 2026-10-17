@@ -39,8 +39,15 @@ BEGIN
     WHERE user_id=_reviewer_id AND role='admin'::public.app_role
   ) THEN RAISE EXCEPTION 'Administrator role required'; END IF;
 
+  -- The intake table is intentionally SELECT/INSERT only for service_role.
+  -- Row-level FOR UPDATE would force broader UPDATE privileges. Use a scoped
+  -- transaction advisory lock; UNIQUE application_id/request_key remains the
+  -- database backstop if any external writer bypasses this function.
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('qore-mobility:stage:' || _application_id::text,0)
+  );
   SELECT * INTO application FROM public.mobility_vehicle_applications
-   WHERE id=_application_id FOR UPDATE;
+   WHERE id=_application_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Application not found'; END IF;
   IF application.driver_id=_reviewer_id
   THEN RAISE EXCEPTION 'Self-staging forbidden'; END IF;
