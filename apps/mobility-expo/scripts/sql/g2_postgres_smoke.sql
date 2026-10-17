@@ -10,6 +10,8 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $f$
 $f$;
 GRANT USAGE ON SCHEMA auth TO authenticated,service_role;
 \ir ../../docs/backend/staging_only/G1_ISOLATED_SUPABASE_BASELINE_DO_NOT_APPLY_PRODUCTION.sql
+\ir g1_private_storage_ci_mock.sql
+\ir ../../docs/backend/staging_only/G1_PRIVATE_DOCS_BUCKET_STAGING_ONLY.sql
 \ir ../../docs/backend/staging_only/G2_AUTO_MOTO_COMPLIANCE_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_SERVER_PREFLIGHT_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
@@ -334,3 +336,76 @@ END
 $check$;
 RESET ROLE;
 \echo PASS: G1 fresh isolated Supabase baseline, user signup, own profiles and no role escalation.
+
+-- Real PostgreSQL RLS decisions on disposable Storage fixture, never Supabase.
+INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES
+ ('mobility-staging-driver-evidence',
+  '11111111-1111-4111-8111-111111111111/licencia-123456789012.jpg',
+  '11111111-1111-4111-8111-111111111111'),
+ ('mobility-staging-driver-evidence',
+  '44444444-4444-4444-8444-444444444444/licencia-123456789012.png',
+  '44444444-4444-4444-8444-444444444444');
+SET ROLE authenticated;
+SET request.jwt.claim.sub='11111111-1111-4111-8111-111111111111';
+DO $check$
+DECLARE denied boolean;
+BEGIN
+ IF (SELECT count(*) FROM storage.objects)<>1
+ THEN RAISE EXCEPTION 'Driver can read someone else private document'; END IF;
+ INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES
+ ('mobility-staging-driver-evidence',
+  '11111111-1111-4111-8111-111111111111/licencia-ABCDEF123456.jpg',
+  '11111111-1111-4111-8111-111111111111');
+ IF (SELECT count(*) FROM storage.objects)<>2
+ THEN RAISE EXCEPTION 'Own-file upload denied unexpectedly'; END IF;
+
+ denied:=false;
+ BEGIN
+  INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES
+   ('mobility-staging-driver-evidence',
+    '44444444-4444-4444-8444-444444444444/licencia-SPOOF123456.jpg',
+    '44444444-4444-4444-8444-444444444444');
+ EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'Cross-driver upload was accepted'; END IF;
+
+ denied:=false;
+ BEGIN
+  INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES
+   ('mobility-staging-driver-evidence',
+    '11111111-1111-4111-8111-111111111111/licencia-FAKEOWNER1234.jpg',
+    '44444444-4444-4444-8444-444444444444');
+ EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'Owner_id spoofing was accepted'; END IF;
+
+ denied:=false;
+ BEGIN
+  INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES
+   ('mobility-staging-driver-evidence',
+    '11111111-1111-4111-8111-111111111111/deep/licencia-NESTED123456.jpg',
+    '11111111-1111-4111-8111-111111111111');
+ EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'Nested folder bypass was accepted'; END IF;
+
+ denied:=false;
+ BEGIN
+  INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES
+   ('mobility-staging-driver-evidence',
+    '11111111-1111-4111-8111-111111111111/licencia-BADTYPE123456.svg',
+    '11111111-1111-4111-8111-111111111111');
+ EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'Unexpected file extension accepted'; END IF;
+
+ IF has_table_privilege('authenticated','storage.objects','UPDATE')
+   OR has_table_privilege('authenticated','storage.objects','DELETE')
+ THEN RAISE EXCEPTION 'Driver has unwanted document edit/remove privilege'; END IF;
+END
+$check$;
+SET request.jwt.claim.sub='44444444-4444-4444-8444-444444444444';
+DO $check$
+BEGIN
+ IF (SELECT count(*) FROM storage.objects)<>1 THEN
+  RAISE EXCEPTION 'Other driver sees first driver private documents'; END IF;
+END
+$check$;
+RESET ROLE;
+\echo PASS: G1 private storage owner/JWT RLS, cross-driver denial, path and MIME restrictions.
