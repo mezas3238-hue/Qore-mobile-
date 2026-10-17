@@ -90,3 +90,14 @@ test('unverified or malformed driver description never becomes passenger card',(
   status:'accepted',serverRevision:2,acceptedDriver:{...profile,plate:'bad plate'},tracking:gps});
  assert.equal(presentRiderRadar(state,10000).driver,null);
 });
+
+test('G4 AUTO-only feed rejects MOTO until separate regulatory and insurance approval',()=>{
+ const incoming={...base,serverRevision:4,status:'accepted' as const,
+  acceptedDriver:{...profile,vehicleKind:'MOTO' as const},tracking:gps};
+ const state=receiveRiderRadar(initialRiderRadar(trip,passenger),incoming);
+ const view=presentRiderRadar(state,10000);
+ assert.equal(view.driver,null);
+ assert.equal(view.etaMinutes,null);
+ assert.equal(view.driverPosition,null);
+ assert.equal(view.isCommercialRideEnabled,false);
+});
