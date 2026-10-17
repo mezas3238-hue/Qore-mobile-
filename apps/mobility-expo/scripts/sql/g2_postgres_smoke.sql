@@ -17,6 +17,7 @@ GRANT USAGE ON SCHEMA auth TO authenticated,service_role;
 \ir ../../docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_APPLICATION_INTAKE_DO_NOT_APPLY_PRODUCTION.sql
 \ir ../../docs/backend/staging_only/G2_APPLICATION_TO_PENDING_INVENTORY_STAGING_ONLY.sql
+\ir ../../docs/backend/staging_only/G3_AUTO_DEMO_TRIP_CONTRACT_POSTGRES_CI_ONLY.sql
 
 INSERT INTO auth.users (id) VALUES
  ('11111111-1111-4111-8111-111111111111'),
@@ -514,3 +515,6 @@ END
 $check$;
 RESET ROLE;
 \echo PASS: G2 audited application-to-pending inventory, unique vehicle, idempotency, MOTO denied.
+
+-- G3 is a fully isolated **demo** state machine, not deployable real dispatch.
+\ir g3_auto_demo_trip_smoke.sql
