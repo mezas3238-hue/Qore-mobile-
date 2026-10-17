@@ -66,9 +66,48 @@ function accessToken(headers) {
  const match=/^Bearer ([A-Za-z0-9._~-]{20,8000})$/.exec(h);
  return match?.[1]??null;
 }
-export function createStagingVehicleGateway({projectRef,verifyAccessToken,submitDraft,reviewVehicle,stagePending}) {
+/**
+ * Bounded, fail-closed per-identity staging limiter. No IPs, tokens or PII stored.
+ * Sliding windows are anchored per actor/operation. Global saturation DENIES
+ * new identities rather than evicting limits for an existing attacker.
+ * Not a distributed/cloud rate limiter: external deployment needs Redis/WAF.
+ */
+export function createStagingRateLimiter({
+ now=Date.now,windowMs=60_000,maxEntries=1024,
+ draftLimit=4,adminLimit=6
+}={}) {
+ if(typeof now!=='function'||![windowMs,maxEntries,draftLimit,adminLimit]
+   .every(n=>Number.isSafeInteger(n)&&n>0)||
+   windowMs>3_600_000||maxEntries>100_000||draftLimit>100||adminLimit>100)
+  throw new Error('Invalid staging rate limit policy');
+ const entries=new Map();
+ return function allow({userId,operation}) {
+  if(typeof userId!=='string'||!UUID.test(userId)||
+     !['draft','review','stage'].includes(operation))return false;
+  const at=now();
+  if(!Number.isSafeInteger(at)||at<0)return false;
+  const key=operation+':'+userId.toLowerCase();
+  for(const [k,v] of entries)if(at>=v.until)entries.delete(k);
+  const prior=entries.get(key);
+  if(prior){
+   if(at<prior.started)return false; // time rollback
+   if(prior.count>= (operation==='draft'?draftLimit:adminLimit))return false;
+   prior.count++;
+   return true;
+  }
+  if(entries.size>=maxEntries)return false;
+  entries.set(key,{started:at,until:at+windowMs,count:1});
+  return true;
+ };
+}
+
+export function createStagingVehicleGateway({
+ projectRef,verifyAccessToken,submitDraft,reviewVehicle,stagePending,
+ authorizeAdmin,allowRequest
+}) {
  assertStagingRef(projectRef);
- if(![verifyAccessToken,submitDraft,reviewVehicle].every(f=>typeof f==='function'))
+ if(![verifyAccessToken,submitDraft,reviewVehicle,authorizeAdmin,allowRequest]
+  .every(f=>typeof f==='function'))
   throw new Error('Server-only Auth and DB adapters are mandatory');
  return async function handle({method,path,headers,body}) {
   if(method!=='POST')return reply(405,{error:'Method not allowed'});
@@ -83,6 +122,18 @@ export function createStagingVehicleGateway({projectRef,verifyAccessToken,submit
   let user;
   try {user=await verifyAccessToken(token);}catch {return reply(401,{error:'Session verification failed'});}
   if(!eligibleIdentity(user))return reply(401,{error:'Verified and confirmed user required'});
+  // All identities and roles are obtained on the SERVER, never from JSON.
+  const operation=draftRoute?'draft':reviewRoute?'review':'stage';
+  try {
+   if(!allowRequest({userId:user.id,operation}))
+    return reply(429,{error:'Staging request rate limit exceeded'});
+  }catch{return reply(503,{error:'Staging rate limiter unavailable'});}
+  if(!draftRoute){
+   let authorized=false;
+   try { authorized=await authorizeAdmin(user.id); }
+   catch {return reply(503,{error:'Admin verification unavailable'});}
+   if(authorized!==true)return reply(403,{error:'Administrator permission required'});
+  }
   try {
    const id=draftRoute
      ? await submitDraft({
