@@ -12,6 +12,7 @@ export default function DriverDemo() {
   return <Page>
     <Top subtitle="Portal del conductor" />
     <Headline eyebrow="Conductor · entorno simulado" title="Conducí a tu ritmo" description="Probá cómo un conductor acepta solicitudes y actualiza el estado de un viaje." />
+    <Button secondary text="Recorrido guiado pasajero y conductor" onPress={() => router.push('/recorrido')} />
     <Note>Conductor ficticio aprobado SOLO en demo. Los conductores reales deben validar identidad, vehículo, habilitaciones y seguros antes de recibir solicitudes.</Note>
     <Card>
       <Text style={textStyles.heading}>Registro obligatorio para conductores reales</Text>
