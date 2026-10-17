@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {assertFixturePath,assertDistinctFixtures,authLogin,verifyStorageIsolation} from './staging-storage-readonly.mjs';
 const ref='staging1234567890abcd';
 const key='sb_publishable_abcdefghijklmnopqrstuvwxyz';
@@ -91,4 +92,15 @@ test('fixture email Auth login enforces test-domain, confirmed user and verifies
  assert.deepEqual(accesses.map(a=>a.method),['POST','GET']);
  assert.ok(accesses[1].auth.startsWith('Bearer '));
  await assert.rejects(authLogin(endpoint,key,'real@company.com',pw,request));
+});
+
+test('both remote JWT/Storage smoke executables require server-side Disable sign-up before first login',()=>{
+ for(const script of ['staging-auth-readonly.mjs','staging-storage-readonly.mjs']){
+  const src=readFileSync(new URL('./'+script,import.meta.url),'utf8');
+  const gate=src.lastIndexOf('await inspectStageSignup({ref,key');
+  const login=script==='staging-auth-readonly.mjs'
+   ?src.indexOf('const a=await login('):src.indexOf('const a=await authLogin(');
+  assert.ok(gate>0&&login>gate,script+' must gate signups before sessions');
+  assert.match(src,/signupGate\.certified|gate\.certified/);
+ }
 });
