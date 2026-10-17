@@ -23,6 +23,40 @@ UPDATE public.mobility_location_consents SET revoked_at=NULL
 UPDATE public.driver_locations SET updated_at=now()-interval '2 seconds'
  WHERE driver_id='11111111-1111-4111-8111-111111111111';
 
+-- Independently eligible SECOND fictional AUTO driver. This is not a real KYC.
+INSERT INTO public.mobility_vehicles
+ (id,driver_id,vehicle_kind,service_kind,municipality_code,plate_normalized,
+  brand,model,manufacture_year,passenger_capacity,review_status)
+VALUES
+ ('77777777-7777-4777-8777-777777777777',
+  '44444444-4444-4444-8444-444444444444',
+  'AUTO','economico','ASUNCION','CISECOND7','Nissan','March',2021,4,'approved');
+INSERT INTO public.mobility_driver_compliance
+ (driver_id,license_class,license_valid_through,license_verified_at,
+  license_verified_by,driver_review_status)
+VALUES
+ ('44444444-4444-4444-8444-444444444444',
+  'PROFESIONAL',CURRENT_DATE+30,now()-interval '1 day',
+  '22222222-2222-4222-8222-222222222222','approved');
+INSERT INTO public.mobility_vehicle_compliance
+ (vehicle_id,registration_valid_through,registration_verified_at,
+  insurance_valid_through,insurance_verified_at,paid_passenger_insurance_covered,
+  inspection_valid_through,inspection_verified_at,municipal_authorization_valid_through,
+  municipal_authorization_verified_at,reviewed_by)
+VALUES
+ ('77777777-7777-4777-8777-777777777777',
+  CURRENT_DATE+30,now()-interval '1 day',
+  CURRENT_DATE+30,now()-interval '1 day',true,
+  CURRENT_DATE+30,now()-interval '1 day',
+  CURRENT_DATE+30,now()-interval '1 day',
+  '22222222-2222-4222-8222-222222222222');
+INSERT INTO public.driver_locations(driver_id,available,lat,lng,updated_at)
+VALUES ('44444444-4444-4444-8444-444444444444',true,-25.29,-57.58,
+ now()-interval '2 seconds');
+INSERT INTO public.mobility_location_consents(driver_id,opted_in_at)
+VALUES ('44444444-4444-4444-8444-444444444444',now()-interval '1 hour');
+
+
 SET ROLE service_role;
 DO $check$
 DECLARE
@@ -32,7 +66,10 @@ BEGIN
  IF NOT public.mobility_vehicle_preflight(
   '11111111-1111-4111-8111-111111111111',
   '55555555-5555-4555-8555-555555555555','economico'
- ) THEN RAISE EXCEPTION 'Required CI-only approved AUTO fixture absent'; END IF;
+ ) OR NOT public.mobility_vehicle_preflight(
+  '44444444-4444-4444-8444-444444444444',
+  '77777777-7777-4777-8777-777777777777','economico')
+ THEN RAISE EXCEPTION 'Two independently eligible fictional AUTO drivers required'; END IF;
  trip:=public.mobility_stage_auto_demo_request(
   '33333333-3333-4333-8333-333333333333',
   'a1000000-0000-4000-8000-000000000001','PANTEON','SHOPPING','economico');
@@ -64,7 +101,8 @@ BEGIN
  EXCEPTION WHEN others THEN blocked:=true; END;
  IF NOT blocked THEN RAISE EXCEPTION 'G3 MOTO commercial route opened'; END IF;
 
- -- Fake competitor has only MOTO and no eligible AUTO, cannot accept.
+ -- A second driver must not claim the FIRST driver's vehicle, even if both
+ -- are independently eligible for the same AUTO service.
  blocked:=false;
  BEGIN
   PERFORM public.mobility_stage_auto_demo_accept(
@@ -136,6 +174,12 @@ BEGIN
  OR (SELECT status FROM public.mobility_stage_auto_demo_trips WHERE id=trip)<>'completed'
  OR (SELECT count(*) FROM public.mobility_stage_auto_demo_events WHERE trip_id=trip)<>4
  THEN RAISE EXCEPTION 'Invalid completed demo trip and append-only trace'; END IF;
+ -- Completed passenger can request another fake AUTO journey for two-driver race.
+ IF public.mobility_stage_auto_demo_request(
+  '33333333-3333-4333-8333-333333333333',
+  'a1000000-0000-4000-8000-000000000005',
+  'PANTEON','AIRPORT','economico') IS NULL
+ THEN RAISE EXCEPTION 'Next pending fake AUTO race trip not created'; END IF;
  blocked:=false;
  BEGIN
   PERFORM public.mobility_stage_auto_demo_transition(
@@ -151,8 +195,8 @@ RESET ROLE;
 SET ROLE authenticated;
 SET request.jwt.claim.sub='33333333-3333-4333-8333-333333333333';
 DO $check$ BEGIN
- IF (SELECT count(*) FROM public.mobility_stage_auto_demo_trips)<>1
- THEN RAISE EXCEPTION 'Passenger saw other passenger demo trip'; END IF;
+ IF (SELECT count(*) FROM public.mobility_stage_auto_demo_trips)<>2
+ THEN RAISE EXCEPTION 'Passenger sees wrong number of own demo trips'; END IF;
 END $check$;
 SET request.jwt.claim.sub='11111111-1111-4111-8111-111111111111';
 DO $check$ BEGIN
