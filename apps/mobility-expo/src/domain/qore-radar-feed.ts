@@ -76,7 +76,7 @@ export function presentRiderRadar(state:RiderRadarState,nowMs:number):RiderRadar
   return none(evt.status,evt.status==='completed'?'Viaje finalizado':'Viaje cancelado');
  const details=evt.acceptedDriver;
  if(!details||typeof details.name!=='string'||details.name.length<2||
-    !['AUTO','MOTO'].includes(details.vehicleKind)||
+    details.vehicleKind!=='AUTO'||
     typeof details.model!=='string'||details.model.length<2||
     typeof details.plate!=='string'||!/^[A-Z0-9-]{4,12}$/.test(details.plate)||
     !finite(details.rating)||details.rating<0||details.rating>5)
