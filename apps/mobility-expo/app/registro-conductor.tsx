@@ -53,6 +53,7 @@ export default function DriverRegistration() {
   return <Page>
     <Top subtitle="Alta de conductor y vehículo" />
     <Headline eyebrow="Solicitud sujeta a revisión" title="Registrá tu vehículo" description="Tu registro no te habilita automáticamente para operar. Un administrador debe verificar identidad, licencia, vehículo y seguros." />
+    <Button secondary text="¿Tenés motocicleta? Revisar requisitos (sin viajes habilitados)" onPress={() => router.push('/requisitos-moto')} />
     {!configured && <Note>Servicio de registro inactivo: se requiere configurar Supabase. Tus datos no se guardarán localmente.</Note>}
     {!user && !loading ? <Card><Text style={textStyles.heading}>Primero creá o ingresá a tu cuenta</Text><Button text="Ingresar" onPress={() => router.push('/acceso')} /><Button secondary text="Registrarme como pasajero" onPress={() => router.push('/registro')} /></Card> : <>
       <Card>
