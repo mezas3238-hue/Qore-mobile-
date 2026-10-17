@@ -31,7 +31,7 @@ function remote(result:unknown,code=200){
 }
 const poll=(args:Record<string,unknown>={})=>
  pollQoreRadar({
-  state,apiOrigin:origin,accessToken:token,now:()=>15_000,
+  state,apiOrigin:origin,pinnedApiOrigin:origin,accessToken:token,now:()=>15_000,
   ...args
  });
 test('network bridge calls only stage HTTP endpoint with JWT and no cached credentials',async()=>{
@@ -135,8 +135,31 @@ test('reject insecure/public/different environment origins before reaching fetch
   await assert.rejects(poll({apiOrigin,request}));
  }
  const acceptedLocal=await poll({
-  apiOrigin:'http://127.0.0.1:4141',enableLoopbackQA:true,
+  apiOrigin:'http://127.0.0.1:4141',pinnedApiOrigin:'http://127.0.0.1:4141',enableLoopbackQA:true,
   request:remote(wrap(base)).request
  });
  assert.equal(acceptedLocal.connection,'connected');
+});
+
+test('same HTTPS scheme is not enough: pin the approved STAGING hostname before any JWT leaves',async()=>{
+ let calls=0;
+ const request:RadarRequest=async()=>{
+  calls++;throw Error('never reached');
+ };
+ await assert.rejects(poll({
+  apiOrigin:'https://attacker.example.test',
+  pinnedApiOrigin:origin,
+  request,
+ }),/non-pinned/);
+ await assert.rejects(poll({
+  apiOrigin:origin,
+  pinnedApiOrigin:'https://different.example.test',
+  request,
+ }),/non-pinned/);
+ await assert.rejects(poll({
+  apiOrigin:origin,
+  pinnedApiOrigin:'http://localhost:4141',
+  request,
+ }));
+ assert.equal(calls,0,'must not leak Auth bearer to an attacker HTTPS origin');
 });
