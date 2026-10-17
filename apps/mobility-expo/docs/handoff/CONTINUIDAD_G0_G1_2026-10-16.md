@@ -127,3 +127,29 @@ Consulta HEAD PR #2 `4608aeb2519262cef42f722b43caffdfd455701b`: los últimos wor
 - El SQL de G1+G2 continúa aplicado **solo** al Supabase STAGING nuevo `9c677bb2-746b-419f-ad9c-dd6d26bab944`, 9 tablas, 0 usuarios, sin viajes, clientes sin permiso INSERT en solicitudes ni EXECUTE review.
 - Ambos cambios son independientes: en Lovable viejo se aplicó únicamente whitelist MIME y P0 lockdown anterior; en STAGING nuevo se aplicaron esquema identidad + G2. **Nunca cruzar keys, usuarios ni roles**. Falta ref específico del nuevo Supabase, fixtures y E2E reales.
 - Guías/status: `docs/security/G1_DOCUMENT_UPLOAD_BUCKET_2026-10-16.md`, `docs/security/P0_RPC_LOCKDOWN_2026-10-16.md`, `docs/backend/STAGING_G1_G2_POSTGRES_2026-10-16.md`.
+
+## Sexta ronda (17-10-2026 PY) — Auditoría REMOTA staging + interfaz MOTO + Storage G1
+
+### Base remota efectivamente auditada
+- Lovable STAGING nuevo `9c677bb2-746b-419f-ad9c-dd6d26bab944` (NO el antiguo), SQL read-only confirmó `auth_users=0`, `applications=0`, `audit_events=0`, `vehicles=0`, `public_tables=9`, `rls_required_tables=true` en tablas críticas.
+- `has_function_privilege` devolvió **false** a acceso `anon`/ `authenticated` para intake, review y preflight; `has_table_privilege` false para alta de roles y lectura de cumplimiento privado; UPDATE de auditoría denegada a `service_role`.
+- Es evidencia remota del esquema + ACL/RLS encendido, NO certificación E2E JWT con dos cuentas. Sin pasajeros/usuarios reales.
+
+### Nuevo storage STAGING — aplicado y verificado
+- SQL staged `docs/backend/staging_only/G1_PRIVATE_DOCS_BUCKET_STAGING_ONLY.sql` aplicado REMOTAMENTE a la base NUEVA (guard de 0 usuarios/0 buckets/0 objetos y sin políticas previas). Crea bucket exclusivo `mobility-staging-driver-evidence`, privado, 5242880 bytes, JPEG/PNG. Políticas INSERT/SELECT por `authenticated` con `auth.uid()`, `owner_id` y carpeta propia; sin permiso explícito UPDATE/DELETE para clientes.
+- Consulta SQL posterior **independiente** devolvió `public=false`, límite 5242880, MIME `[image/jpeg,image/png]`, 0 archivos y exactamente 2 políticas con expresiones verificadas en pg_policies (owner_insert y owner_select). Sin datos personales.
+- Se añadieron test de contrato `src/domain/staging-private-docs.test.ts` y pruebas PostgreSQL RLS con esquema Storage simulado `scripts/sql/g1_private_storage_ci_mock.sql` + `scripts/sql/g2_postgres_smoke.sql`, incluyendo conductor A/B, SELECT ajeno denegado, intento insert folder ajeno, owner_id falso, carpeta anidada, extensión SVG y prohibición UPDATE/DELETE. **Esto es Postgres CI con fixtures, no Storage REST real de Supabase**. Ver `docs/security/G1_STAGING_PRIVATE_DRIVER_EVIDENCE_2026-10-17.md`.
+
+### App Expo avanzó
+- Nueva pantalla `app/requisitos-moto.tsx` enlazada desde `app/registro-conductor.tsx`, con autoevaluación de documentos, póliza comercial, municipio, inspección, dos cascos y chalecos, ruta. Sin PII ni tráfico de red ni acción de registro, muestra expresamente MOTO no comercial. No interfiere con alta AUTO heredada.
+- Módulo puro `src/domain/moto-precheck.ts` y pruebas `moto-precheck.test.ts` verifican que incluso con 100% de casillas marcadas `commercialTripsAllowed=false`.
+- Script de smoke `scripts/staging-auth-readonly.mjs` reforzado: cuando haya **dos cuentas JWT ficticias en STAGING**, verificará perfiles propios, cuentas ajenas, anon y `has_role` self-only sin fuga de roles o admin. **No ejecutado**: faltan URL/ref publicable propia y fixtures precreados.
+- Workflow `.github/workflows/mobility-ci.yml` añade `node --check` del smoke y servidor staging local sin secretos; CI Expo/Pg sigue requerido.
+
+### Gates reales abiertos
+1. Obtener ref/URL pública del Supabase STAGING nuevo y crear test fixtures por Auth API sin compartir contraseñas/secret keys en repositorio, ejecutar JWT E2E y Storage REST con owner/cuenta ajena; no simular éxito.
+2. Adaptar alta AUTO del Expo heredado: todavía usa `driver-docs` y `submit_driver_application` del backend antiguo. No apuntar Expo a STAGING hasta implementar API/migraciones y revisión documental compatibles; la pantalla MOTO es SOLO informativa.
+3. Aseguradora que cubra pasajeros remunerados, permiso local escrito para moto, KYC, verificación documental real/retención, rutas, quoted prices, GPS, idempotencia atómica de viajes, riesgos e incidentes. MOTO comercial sin habilitar.
+4. El backend viejo `2fa91fe1-e7a0-4fff-a16f-7d457b2d6eed` conserva 8 RPC viaje bloqueadas y bucket viejo privado JPEG/PNG 5 MiB; **no transferir datos ni claves**. Flutter trading PR #2 sin tocar. PR #7 DRAFT, `LIVE_TRIPS_ENABLED=false`.
+
+**Nota de alcance:** PostgreSQL CI prueba expresiones RLS y políticas con roles sintéticos; la llamada real `storage/v1/object` y los JWT Auth remotos permanecen sin ejecutar. Web export no implica E2E Android/iOS físicos.
