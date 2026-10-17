@@ -6,7 +6,7 @@
  */
 import {createServer} from 'node:http';
 import {createClient} from '@supabase/supabase-js';
-import {createStagingVehicleGateway,assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
+import {createStagingVehicleGateway,createStagingRateLimiter,assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 
 if(process.env.QORE_MOBILITY_ENV!=='staging')
  throw new Error('QORE_MOBILITY_ENV=staging mandatory');
@@ -50,6 +50,17 @@ const handler=createStagingVehicleGateway({
  submitDraft:params=>invoke('mobility_submit_vehicle_draft',params),
  reviewVehicle:params=>invoke('mobility_review_vehicle',params),
  stagePending:params=>invoke('mobility_stage_vehicle_pending',params),
+ // Extra authorization before the privileged RPC runs; SQL repeats this gate.
+ authorizeAdmin:async userId=>{
+  const {data,error}=await admin.from('user_roles')
+   .select('role').eq('user_id',userId).eq('role','admin').limit(1);
+  if(error)throw new Error('Staging admin role could not be verified');
+  return Array.isArray(data)&&data.length===1&&data[0]?.role==='admin';
+ },
+ // Local in-memory backstop, not sufficient for horizontal deployment.
+ allowRequest:createStagingRateLimiter({
+  windowMs:60_000,maxEntries:1024,draftLimit:4,adminLimit:6
+ }),
 });
 const send=(res,status,body)=>{
  res.writeHead(status,{
@@ -90,6 +101,10 @@ const server=createServer(async(req,res)=>{
   send(res,400,{error:'Invalid or oversized JSON'});
  }
 });
+// Avoid slow-body connections monopolizing the loopback prototype.
+server.requestTimeout=15_000;
+server.headersTimeout=10_000;
+server.maxRequestsPerSocket=100;
 server.listen(port,'127.0.0.1',()=>{
  console.log('QORE Mobility local STAGING gateway listening on loopback port '+port+'; NO LIVE operations');
 });
