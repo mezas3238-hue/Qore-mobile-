@@ -52,6 +52,13 @@ function parseReview(data) {
   return null;
  return data;
 }
+function parsePendingStage(data) {
+ const keys=['requestKey','applicationId'];
+ if(!exact(data,keys)||typeof data.requestKey!=='string'||!UUID.test(data.requestKey)||
+    typeof data.applicationId!=='string'||!UUID.test(data.applicationId))
+  return null;
+ return data;
+}
 const reply=(status,body)=>({status,body});
 function accessToken(headers) {
  const h=headers?.authorization??headers?.Authorization;
@@ -59,7 +66,7 @@ function accessToken(headers) {
  const match=/^Bearer ([A-Za-z0-9._~-]{20,8000})$/.exec(h);
  return match?.[1]??null;
 }
-export function createStagingVehicleGateway({projectRef,verifyAccessToken,submitDraft,reviewVehicle}) {
+export function createStagingVehicleGateway({projectRef,verifyAccessToken,submitDraft,reviewVehicle,stagePending}) {
  assertStagingRef(projectRef);
  if(![verifyAccessToken,submitDraft,reviewVehicle].every(f=>typeof f==='function'))
   throw new Error('Server-only Auth and DB adapters are mandatory');
@@ -67,10 +74,11 @@ export function createStagingVehicleGateway({projectRef,verifyAccessToken,submit
   if(method!=='POST')return reply(405,{error:'Method not allowed'});
   const draftRoute=path==='/v1/staging/vehicle-applications';
   const reviewRoute=path==='/v1/staging/admin/vehicle-reviews';
-  if(!draftRoute&&!reviewRoute)return reply(404,{error:'Not found'});
+  const stagingRoute=path==='/v1/staging/admin/materialize-pending';
+  if(!draftRoute&&!reviewRoute&&!stagingRoute)return reply(404,{error:'Not found'});
   const token=accessToken(headers);
   if(!token)return reply(401,{error:'Valid bearer session required'});
-  const payload=draftRoute?parseDraft(body):parseReview(body);
+  const payload=draftRoute?parseDraft(body):reviewRoute?parseReview(body):parsePendingStage(body);
   if(payload===null)return reply(400,{error:'Invalid or unsupported payload'});
   let user;
   try {user=await verifyAccessToken(token);}catch {return reply(401,{error:'Session verification failed'});}
@@ -84,16 +92,25 @@ export function createStagingVehicleGateway({projectRef,verifyAccessToken,submit
        _brand:payload.brand,_model:payload.model,
        _year:payload.year,_capacity:payload.passengerCapacity
       })
-     : await reviewVehicle({
-       _vehicle_id:payload.vehicleId,_reviewer_id:user.id,
-       _approve:payload.approve,_reason:payload.reason,
-       _request_key:payload.requestKey
-      });
+     : reviewRoute
+       ? await reviewVehicle({
+         _vehicle_id:payload.vehicleId,_reviewer_id:user.id,
+         _approve:payload.approve,_reason:payload.reason,
+         _request_key:payload.requestKey
+        })
+       : typeof stagePending==='function'
+         ? await stagePending({
+           _application_id:payload.applicationId,
+           _reviewer_id:user.id,_request_key:payload.requestKey
+          })
+         : null;
    if(typeof id!=='string'||!UUID.test(id))return reply(503,{error:'Database contract unavailable'});
    // Audit record != commercial authorization. Even approved AUTO is not a LIVE ride.
    return draftRoute
     ? reply(202,{applicationId:id,status:'pending',evidenceVerified:false,liveTripsEnabled:false})
-    : reply(200,{auditId:id,commercialRidesEnabled:false});
+    : reviewRoute
+      ? reply(200,{auditId:id,commercialRidesEnabled:false})
+      : reply(202,{vehicleId:id,status:'pending',evidenceVerified:false,commercialRidesEnabled:false});
   }catch {
    // Never echo SQL detail or storage paths to clients.
    return reply(409,{error:'Request rejected by staging compliance checks'});
