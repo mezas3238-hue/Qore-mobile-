@@ -93,6 +93,19 @@ export function createQoreRadarLoopbackTransport({riderHandler,offerHandler}){
  server.headersTimeout=8_000;
  server.maxRequestsPerSocket=60;
  server.keepAliveTimeout=3_000;
+ // The exported test-server object itself must not be bindable to all
+ // interfaces, even if a future caller bypasses listenQoreRadarLoopback().
+ const nativeListen=server.listen.bind(server);
+ Object.defineProperty(server,'listen',{
+  configurable:false,writable:false,
+  value:(port,host,callback)=>{
+   if(!Number.isInteger(port)||port<0||port>65535||
+      (port!==0&&port<1024)||host!=='127.0.0.1')
+    throw new Error('Only 127.0.0.1 QA listener is supported');
+   return typeof callback==='function'?
+    nativeListen(port,host,callback):nativeListen(port,host);
+  }
+ });
  return server;
 }
 export async function listenQoreRadarLoopback(server,port=0){
