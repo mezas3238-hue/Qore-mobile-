@@ -11,6 +11,7 @@ export default function Home() {
     <Card style={styles.hero}>
       <Text style={styles.supertitle}>Tu próximo viaje comienza acá</Text>
       <Button text="Pedir un viaje · Explorar demo →" onPress={() => router.push('/demo')} />
+      <Button text="Recorrido completo: pasajero → conductor → recibo" secondary onPress={() => router.push('/recorrido')} />
       <Button text="Soy conductor" secondary onPress={() => router.push('/conductor')} />
       <Text style={styles.disclaimer}>Versión demostrativa. No solicita vehículos reales ni procesa pagos.</Text>
     </Card>
