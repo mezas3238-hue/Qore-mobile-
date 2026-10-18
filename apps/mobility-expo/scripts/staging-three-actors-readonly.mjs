@@ -83,6 +83,8 @@ export async function verifyThreeActorIsolation({
   const rows=await readJson(fetcher,url.toString(),{
    method:'GET',headers:actor.headers
   });
+  // Never accept truncated results as proof of role uniqueness or RLS.
+  // PostgREST pagination is capped explicitly; >3 rows fails closed.
   if(!Array.isArray(rows)||rows.length>3)
    throw Error('Unexpected private RLS response shape');
   return rows;
