@@ -26,6 +26,7 @@ function harness(overrides={}){
   workerId,environment:'staging',liveTripsEnabled:false,now:()=>nowMs,
   claim:async()=>{actions.claimed++;if(first){first=false;return {...queued};}return null;},
   readCurrentOffer:async()=>{actions.rechecked++;return {...live};},
+  verifyCurrentEligibility:async()=>true,
   findVerifiedDevice:async()=>{actions.tokenLookups++;return{
    driverId,active:true,pushOptIn:true,token
   };},
@@ -117,12 +118,27 @@ test('provider failures, invalid ticket and ACK errors fail closed without fabri
 test('worker startup requires server-only interfaces and forbids any LIVE environment',()=>{
  const required={workerId,environment:'staging',liveTripsEnabled:false,
   claim:async()=>null,readCurrentOffer:async()=>live,
+  verifyCurrentEligibility:async()=>true,
   findVerifiedDevice:async()=>({}),sendVerifiedOffer:async()=>({}),
   ackTicket:async()=>true};
  for(const x of [
   {environment:'production'}, {liveTripsEnabled:true},
-  {workerId:'not-a-uuid'}, {claim:null}, {ackTicket:null}
+  {workerId:'not-a-uuid'}, {claim:null}, {verifyCurrentEligibility:null}, {ackTicket:null}
  ]){
   assert.throws(()=>createQoreG4PrivatePushWorker({...required,...x}));
  }
+});
+
+test('driver loses preflight/availability after offer creation: no push or token lookup',async()=>{
+ for(const policy of [async()=>false,async()=>undefined]){
+  const h=harness({verifyCurrentEligibility:policy});
+  const r=await h.fn();
+  assert.equal(r.status,'driver_no_longer_eligible');
+  assert.equal(h.actions.tokenLookups,0);
+  assert.equal(h.actions.send,0);
+ }
+ const gone=harness({verifyCurrentEligibility:async()=>{throw Error('private compliance DB')}});
+ assert.equal((await gone.fn()).status,'driver_eligibility_unavailable');
+ assert.equal(gone.actions.tokenLookups,0);
+ assert.equal(gone.actions.send,0);
 });
