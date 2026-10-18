@@ -225,3 +225,11 @@ test('more than 20 eligible drivers are routed in bounded batches without droppi
  assert.deepEqual(sizes,[20,1]);
  assert.equal(result.offers.length,5);
 });
+
+test('foreign driver IDs returned by routing provider invalidate discovery',async()=>{
+ const result=await discover({candidates:[candidates[0]],
+  calculateRoutes:async()=>[route(b,150)]});
+ assert.equal(result.ok,false);
+ assert.deepEqual(result.commercialRidesEnabled,false);
+ assert.ok(!('offers' in result));
+});
