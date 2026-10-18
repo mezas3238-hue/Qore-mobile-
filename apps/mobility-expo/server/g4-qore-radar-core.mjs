@@ -79,6 +79,10 @@ export async function discoverQoreDrivers({
    });
    if(!Array.isArray(rows)||rows.length>batch.length)
     return fail('Routing service unavailable');
+   const batchIds=new Set(batch.map(c=>c.driverId));
+   // A route from another batch must never be attributed to this batch.
+   if(rows.some(route=>!ownUuid(route?.driverId)||!batchIds.has(route.driverId)))
+    return fail('Ambiguous route matrix');
    matrix.push(...rows);
   }
   const routes=new Map();
