@@ -106,7 +106,7 @@ test('malformed input, huge candidate list and MOTO service are closed',async()=
  for(const opt of [
   {service:'moto_pasajero'}, {pickup:{lat:999,lng:20}},
   {candidates:Array.from({length:301},()=>candidates[0])},
-  {maxOffers:0},{calculateRoutes:null}
+  {maxOffers:0},{maxOffers:6},{calculateRoutes:null}
  ]){
   const r=await discover(opt);
   assert.equal(r.ok,false);
@@ -198,4 +198,13 @@ test('GPS 30-second freshness and 75m accuracy are explicit boundaries',()=>{
  assert.equal(freshVerifiedLocation({...gps,capturedAtMs:at-30_000,accuracyMeters:75},at),true);
  assert.equal(freshVerifiedLocation({...gps,capturedAtMs:at-30_001},at),false);
  assert.equal(freshVerifiedLocation({...gps,capturedAtMs:at+10_001},at),false);
+});
+
+test('fanout never exceeds five offers even if caller requests more',async()=>{
+ const rejected=await discover({maxOffers:6});
+ assert.equal(rejected.ok,false);
+ assert.deepEqual(rejected.commercialRidesEnabled,false);
+ const permitted=await discover({maxOffers:5});
+ assert.equal(permitted.ok,true);
+ assert.ok(permitted.offers.length<=5);
 });
