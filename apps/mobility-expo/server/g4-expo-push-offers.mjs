@@ -49,6 +49,7 @@ export function createExpoPrivateOfferSender({request=fetch,now=Date.now}={}){
    throw new Error('Expo did not accept push for processing');
   // No logging of tokens or third party errors. Ticket is only pending delivery.
   return {acceptedForProcessing:true,delivered:false,rideAccepted:false,
-   offerId:payload.data.offerId,commercialRidesEnabled:false};
+   offerId:payload.data.offerId,providerTicketId:ticket.id,
+   commercialRidesEnabled:false};
  };
 }
