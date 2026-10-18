@@ -82,8 +82,12 @@ export async function discoverQoreDrivers({
    matrix.push(...rows);
   }
   const routes=new Map();
+  const expectedDriverIds=new Set(eligible.map(c=>c.driverId));
   for(const route of matrix){
-   if(!ownUuid(route?.driverId)||routes.has(route.driverId))return fail('Ambiguous route matrix');
+   // Provider responses may only contain drivers sent in this discovery.
+   // Reject foreign IDs instead of silently ignoring injected rows.
+   if(!ownUuid(route?.driverId)||!expectedDriverIds.has(route.driverId)||
+      routes.has(route.driverId))return fail('Ambiguous route matrix');
    routes.set(route.driverId,route);
   }
   const ranked=[];
