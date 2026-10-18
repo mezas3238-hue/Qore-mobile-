@@ -208,3 +208,20 @@ test('fanout never exceeds five offers even if caller requests more',async()=>{
  assert.equal(permitted.ok,true);
  assert.ok(permitted.offers.length<=5);
 });
+
+test('more than 20 eligible drivers are routed in bounded batches without dropping candidates',async()=>{
+ const many=Array.from({length:21},(_,i)=>({
+  ...candidates[0],driverId:`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,
+  vehicleId:x,idleSeconds:0
+ }));
+ const sizes=[];
+ const result=await discover({candidates:many,maxOffers:5,
+  calculateRoutes:async({origins})=>{
+   sizes.push(origins.length);
+   return origins.map(o=>route(o.driverId,300));
+  }
+ });
+ assert.equal(result.ok,true);
+ assert.deepEqual(sizes,[20,1]);
+ assert.equal(result.offers.length,5);
+});
