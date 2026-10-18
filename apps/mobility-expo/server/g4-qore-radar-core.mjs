@@ -67,12 +67,20 @@ export async function discoverQoreDrivers({
    eligible.push(c);
   }
   if(!eligible.length)return {ok:true,offers:[],...noLive};
-  const matrix=await calculateRoutes({
-   origins:eligible.map(c=>({driverId:c.driverId,lat:c.location.lat,lng:c.location.lng})),
-   destination:{lat:pickup.lat,lng:pickup.lng},
-   service,trafficAware:true
-  });
-  if(!Array.isArray(matrix)||matrix.length>eligible.length*2)return fail('Routing service unavailable');
+  // Google Routes matrix adapter permits at most 20 origins per request.
+  // Batch server-side; never silently drop eligible drivers or invent ETA.
+  const matrix=[];
+  for(let offset=0;offset<eligible.length;offset+=20){
+   const batch=eligible.slice(offset,offset+20);
+   const rows=await calculateRoutes({
+    origins:batch.map(c=>({driverId:c.driverId,lat:c.location.lat,lng:c.location.lng})),
+    destination:{lat:pickup.lat,lng:pickup.lng},
+    service,trafficAware:true
+   });
+   if(!Array.isArray(rows)||rows.length>batch.length)
+    return fail('Routing service unavailable');
+   matrix.push(...rows);
+  }
   const routes=new Map();
   for(const route of matrix){
    if(!ownUuid(route?.driverId)||routes.has(route.driverId))return fail('Ambiguous route matrix');
