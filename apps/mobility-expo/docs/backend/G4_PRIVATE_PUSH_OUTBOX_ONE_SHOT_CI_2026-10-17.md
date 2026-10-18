@@ -20,10 +20,11 @@ QORE Radar ya creaba ofertas privadas para cada conductor y un registro `mobilit
 
 1. Reclama una oferta mediante un adaptador DB exclusivo de servidor.
 2. Valida IDs, tiempo restante, estado `offered` y viaje `searching` de un servicio autoritativo antes de enviar.
-3. Recupera el push token de un registro de dispositivo **verificado y opt-in del conductor exacto**, no de la petición cliente. Si no hay permiso o token, no envía.
-4. Crea una notificación privada mediante `makePrivateDriverPush` con solo `rideId` y `offerId` y TTL corto; pasa el paquete a `sendVerifiedOffer` (interfaz Expo Push server-only).
-5. Solo cuando Expo responde con un ticket de procesamiento válido, el trabajador invoca `ackTicket`. Si falla el ACK, devuelve `ack_unavailable_no_retry` y **no supone entrega**.
-6. Devuelve siempre `commercialRidesEnabled:false`, `delivered:false`, `rideAccepted:false`. Ni el worker ni los tests están conectados a un programador/scheduler.
+3. Ejecuta un **segundo preflight obligatorio de elegibilidad en backend** inmediatamente antes del envío (`verifyCurrentEligibility`): si la habilitación, seguro o disponibilidad ya cambió, no manda la notificación.
+4. Recupera el push token de un registro de dispositivo **verificado y opt-in del conductor exacto**, no de la petición cliente. Si no hay permiso o token, no envía.
+5. Crea una notificación privada mediante `makePrivateDriverPush` con solo `rideId` y `offerId` y TTL corto; pasa el paquete a `sendVerifiedOffer` (interfaz Expo Push server-only).
+6. Solo cuando Expo responde con un ticket de procesamiento válido, el trabajador invoca `ackTicket`. Si falla el ACK, devuelve `ack_unavailable_no_retry` y **no supone entrega**.
+7. Devuelve siempre `commercialRidesEnabled:false`, `delivered:false`, `rideAccepted:false`. Ni el worker ni los tests están conectados a un programador/scheduler.
 
 En `server/g4-expo-push-offers.mjs` se conservó el `providerTicketId` del proveedor en la **respuesta al backend** para auditoría interna; no se envía el ID ni claves al pasajero. El resultado aún dice `acceptedForProcessing:true` y `delivered:false`.
 
@@ -31,7 +32,7 @@ En `server/g4-expo-push-offers.mjs` se conservó el `providerTicketId` del prove
 
 - `scripts/sql/g4_push_outbox_smoke.sql`: test real sobre PostgreSQL 16 desechable, verifica sólo un claim de ofertas válidas, que expiradas/declinadas/perdedoras no entren, y que ACK de un worker ajeno o repetido falle. Crea datos ficticios sin usar Auth real.
 - `scripts/sql/g4_push_claim_concurrency_ci.sh`: dos procesos `psql` simultáneos compiten por **una sola** oferta privada. Se exige que un proceso obtenga el ID y el otro `NONE`, con un único claimant auditado. Esto demuestra competencia SQL real, no entrega push.
-- `server/g4-private-push-outbox-worker.test.mjs`: pruebas de consentimiento, token de otro conductor, oferta retirada/vencida, cambio de estado, revalidación, ticket del proveedor y fallos de ACK, sin llamadas de red a Expo.
+- `server/g4-private-push-outbox-worker.test.mjs`: pruebas de consentimiento, preflight revocado/indisponible, token de otro conductor, oferta retirada/vencida, cambio de estado, revalidación, ticket del proveedor y fallos de ACK, sin llamadas de red a Expo.
 - `server/g4-expo-push-offers.test.mjs`: verificación del ticket como procesamiento, no entrega.
 - Workflow `.github/workflows/mobility-ci.yml`: ejecuta smoke G4 después de la carrera previa de aceptación y luego dos consumidores SQL en PostgreSQL desechable.
 - No marcar aprobado hasta que el último HEAD de PR #7 esté `success` en push y pull_request.
