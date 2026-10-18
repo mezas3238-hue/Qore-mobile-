@@ -51,8 +51,10 @@ async function assertDatabaseG4(admin){
  }
 }
 async function roleHas(admin,id,role){
+ // A second privileged role must never be masked by filtering for the
+ // requested role. Fetch all assigned roles and fail closed on dual roles.
  const {data,error}=await admin.from('user_roles').select('role')
-  .eq('user_id',id).eq('role',role).limit(1);
+  .eq('user_id',id).limit(3);
  if(error)throw Error('Role lookup failed');
  return Array.isArray(data)&&data.length===1&&data[0].role===role;
 }
