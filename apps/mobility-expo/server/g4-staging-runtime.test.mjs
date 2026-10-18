@@ -18,7 +18,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  driver:'syntheticDriverBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
- const state={policy:true,missing:null,rolesLookups:0,authCalls:0,rpcs:[],clients:[],
+ const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -50,9 +50,9 @@ function mockSupabase(){
        async limit(n){
         if(table==='user_roles'){
          state.rolesLookups++;
-         const ok=(filter.user_id===passenger&&filter.role==='passenger')||
-          (filter.user_id===driver&&filter.role==='driver');
-         return {data:ok?[{role:filter.role}]:[],error:null};
+         const roles=filter.user_id===passenger?['passenger']:
+          filter.user_id===driver?(state.dualRoleDriver?['driver','admin']:['driver']):[];
+         return {data:roles.map(role=>({role})),error:null};
         }
         assert.equal(options?.head,true);
         assert.equal(n,0);
@@ -182,5 +182,15 @@ test('private service key and internal SQL data never appear in HTTP response',a
    assert.equal(response.status,200);
    assert.doesNotMatch(JSON.stringify(response),/sb_secret|sb_publishable|service_role/);
   }
+ });
+});
+
+test('dual-role driver with admin privileges is denied private offers and acceptance',async()=>{
+ const m=mockSupabase();m.state.dualRoleDriver=true;
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,offerPath,'driver')).status,403);
+  assert.equal((await req(base,acceptPath,'driver','POST',{offerId:offer,requestKey})).status,403);
+  assert.equal(m.state.rpcs.length,0);
  });
 });
