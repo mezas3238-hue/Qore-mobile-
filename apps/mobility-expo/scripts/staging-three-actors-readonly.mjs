@@ -91,6 +91,8 @@ export async function verifyThreeActorIsolation({
   const profile=await query(me,'profiles','id',me.id);
   if(profile.length!==1||profile[0].id!==me.id)
    throw Error('Self profile not visible or profile mismatch');
+  // Query ALL roles for the actor, not a filtered expected role: detect admin
+  // or secondary privileges even when the primary role looks correct.
   const roles=await query(me,'user_roles','user_id',me.id);
   if(roles.length!==1||roles[0].user_id!==me.id||roles[0].role!==me.role)
    throw Error('Fixture role incorrect: admin, dual-role or missing role');
