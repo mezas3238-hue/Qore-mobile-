@@ -385,3 +385,16 @@ Consulta HEAD PR #2 `4608aeb2519262cef42f722b43caffdfd455701b`: los últimos wor
 - **Alcance limitado:** esta es evidencia capturada por el usuario y no una ejecución E2E iniciada desde GitHub CI/servidor por el arquitecto; el criterio documentado de 'RLS solicitudes y vehículos' muestra 0 solicitudes y 0 vehículos, de modo que no demuestra aislamiento con registros de terceros. No certifica GPS, Push, G3/G4 ni viajes.
 - **Matriz de 3 actores:** Pasajero = PASS V3; Conductor A = PENDIENTE; Conductor B = PENDIENTE (su anterior captura V2 no vincula inequívocamente el PASS con el actor). No declarar 3/3 hasta recibir la evidencia V3 de ambas cuentas driver.
 - Siguiente acción guiada: en V3 cerrar sesión, cambiar a Conductor A, hacer login privado y obtener `PASS · Conductor A`; repetir con Conductor B. Ningún secreto se solicita o almacena. Proyecto STAGING sin viajes/pagos comerciales.
+
+
+## Handoff maestro de transferencia total — 18 de octubre de 2026 (PREFERENTE)
+
+Se ha publicado **el nuevo documento de referencia prioritario para iniciar otro chat y continuar hacia la plataforma funcional al 100 %**:
+
+**[HANDOFF MAESTRO QORE MOBILE — 100 POR CIENTO](HANDOFF_MAESTRO_QORE_MOBILE_100_POR_CIENTO_2026-10-18.md)**
+
+Ruta: `apps/mobility-expo/docs/handoff/HANDOFF_MAESTRO_QORE_MOBILE_100_POR_CIENTO_2026-10-18.md`.
+
+Contiene 417 líneas de inventario histórico, estado REAL de 3 usuarios y roles (1 passenger, 2 driver), `disable_signup=true` Auth, PASS V3 únicamente del pasajero, PR #7 / Flutter #2, última CI 207/207 + G1–G4 PostgreSQL, fallas Lovable build/créditos, diferencia entre contratos CI y servicios reales, matriz de funciones actuales/futuras, roadmap de seis fases hacia viajes/ETA/notificaciones/pagos/compliance/app stores, problemas y prompt listo para copiar al nuevo chat.
+
+**IMPORTANTE:** Este documento nuevo prevalece sobre los snapshots históricos de este archivo (0 usuarios, registro Auth abierto, ausencia de la nueva prueba desde Android). Reconfirmar HEAD y CI tras cada commit.
