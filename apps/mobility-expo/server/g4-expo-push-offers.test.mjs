@@ -17,7 +17,7 @@ test('Expo driver push carries only opaque ride and offer IDs, short TTL and no 
  }});
  const result=await send({token,verifiedDriverId:driver,offer});
  assert.deepEqual(result,{acceptedForProcessing:true,delivered:false,
-  rideAccepted:false,offerId,commercialRidesEnabled:false});
+  rideAccepted:false,offerId,providerTicketId:'ticket-1234567',commercialRidesEnabled:false});
  const p=JSON.parse(params.init.body);
  assert.equal(params.url,'https://exp.host/--/api/v2/push/send');
  assert.equal(p.to,token);
