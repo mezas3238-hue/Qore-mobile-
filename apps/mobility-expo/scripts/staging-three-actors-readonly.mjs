@@ -10,18 +10,29 @@ import {inspectStageSignup,safeStageRef,assertPublishableKey} from './staging-au
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEST_EMAIL=/^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.invalid$/i;
+const GMAIL_QA=/^[A-Za-z0-9._+-]+@gmail\.com$/i;
+// Users explicitly authorized confirmed Gmail QA accounts on this isolated
+// backend; never accept unpinned real-email QA on other projects.
+const PINNED_QA_REF='hylgkfgkcyrddokloljm';
 const fixtureRoles=['passenger','driver','driver'];
 const noLive={mode:'STAGING_ONLY',commercialRidesEnabled:false};
 
-function validateFixtures(input){
+function validateFixtures(input,{ref,allowApprovedGmailFixtures=false}={}){
  if(!Array.isArray(input)||input.length!==3)throw Error('Three distinct fixture accounts required');
- const seen=new Set();
+ const seen=new Set(),seenIds=new Set();
  input.forEach((f,i)=>{
-  if(!f||!TEST_EMAIL.test(f.email??'')||
+  const synthetic=typeof f?.email==='string'&&TEST_EMAIL.test(f.email);
+  const authorizedGmail=typeof f?.email==='string'&&
+   allowApprovedGmailFixtures===true&&ref===PINNED_QA_REF&&
+   GMAIL_QA.test(f.email)&&UUID.test(f.expectedUserId??'');
+  if(!f||(!synthetic&&!authorizedGmail)||
      typeof f.password!=='string'||f.password.length<12||
-     f.role!==fixtureRoles[i]||seen.has(f.email.toLowerCase()))
-   throw Error('Only distinct .invalid confirmed passenger + driver + driver fixtures allowed');
+     f.role!==fixtureRoles[i]||seen.has(f.email.toLowerCase())||
+     (f.expectedUserId!==undefined&&!UUID.test(f.expectedUserId))||
+     (f.expectedUserId!==undefined&&seenIds.has(f.expectedUserId)))
+   throw Error('Only explicitly pinned, distinct confirmed staging QA accounts allowed');
   seen.add(f.email.toLowerCase());
+  if(f.expectedUserId)seenIds.add(f.expectedUserId);
  });
 }
 async function readJson(fetcher,url,options){
@@ -33,13 +44,13 @@ async function readJson(fetcher,url,options){
  * mock fetch+signupGate; NEVER derive actor identity by decoding a raw JWT. */
 export async function verifyThreeActorIsolation({
  ref,anonKey,fixtures,environment,liveTripsEnabled,fetcher=fetch,
- signupGate=inspectStageSignup
+ signupGate=inspectStageSignup,allowApprovedGmailFixtures=false
 }){
  if(environment!=='staging'||liveTripsEnabled!==false)
   throw Error('Isolated staging and LIVE_TRIPS_ENABLED=false required');
  const safe=safeStageRef(ref);
  assertPublishableKey(anonKey,safe);
- validateFixtures(fixtures);
+ validateFixtures(fixtures,{ref:safe,allowApprovedGmailFixtures});
  if(typeof fetcher!=='function'||typeof signupGate!=='function')
   throw Error('Missing trusted staging network adapters');
  const gate=await signupGate({ref:safe,key:anonKey,request:fetcher});
@@ -58,7 +69,9 @@ export async function verifyThreeActorIsolation({
   const own=await readJson(fetcher,endpoint+'/auth/v1/user',{method:'GET',headers});
   if(!UUID.test(own?.id??'')||own?.is_anonymous===true||
      !own?.email_confirmed_at||
+     typeof own?.email!=='string'||
      own.email.toLowerCase()!==fixture.email.toLowerCase()||
+     (fixture.expectedUserId&&own.id!==fixture.expectedUserId)||
      identities.some(x=>x.id===own.id))
    throw Error('Distinct confirmed synthetic Auth identity required');
   identities.push({id:own.id,role:fixture.role,headers});
@@ -92,14 +105,14 @@ export async function verifyThreeActorIsolation({
 if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]){
  const get=key=>process.env[key];
  const fixtures=[
-  {email:get('QORE_STAGING_PASSENGER_EMAIL'),password:get('QORE_STAGING_PASSENGER_PASSWORD'),role:'passenger'},
-  {email:get('QORE_STAGING_DRIVER_A_EMAIL'),password:get('QORE_STAGING_DRIVER_A_PASSWORD'),role:'driver'},
-  {email:get('QORE_STAGING_DRIVER_B_EMAIL'),password:get('QORE_STAGING_DRIVER_B_PASSWORD'),role:'driver'}
+  {email:get('QORE_STAGING_PASSENGER_EMAIL'),password:get('QORE_STAGING_PASSENGER_PASSWORD'),role:'passenger',expectedUserId:get('QORE_STAGING_PASSENGER_USER_ID')},
+  {email:get('QORE_STAGING_DRIVER_A_EMAIL'),password:get('QORE_STAGING_DRIVER_A_PASSWORD'),role:'driver',expectedUserId:get('QORE_STAGING_DRIVER_A_USER_ID')},
+  {email:get('QORE_STAGING_DRIVER_B_EMAIL'),password:get('QORE_STAGING_DRIVER_B_PASSWORD'),role:'driver',expectedUserId:get('QORE_STAGING_DRIVER_B_USER_ID')}
  ];
  await verifyThreeActorIsolation({
   ref:get('QORE_STAGING_PROJECT_REF'),anonKey:get('QORE_STAGING_ANON_KEY'),
   environment:get('QORE_MOBILITY_ENV'),liveTripsEnabled:get('LIVE_TRIPS_ENABLED')==='false'?false:null,
-  fixtures
+  fixtures,allowApprovedGmailFixtures:get('QORE_STAGING_APPROVED_GMAIL_QA')==='true'
  });
  console.log('PASS: 3 confirmed STAGING JWTs, one passenger and two drivers; RLS own/foreign and role isolation. NO LIVE.');
 }
