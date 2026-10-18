@@ -55,7 +55,7 @@ export async function discoverQoreDrivers({
  if(!kinds.has(service)||!coord(pickup)||!validClock(nowMs)||
   !Array.isArray(candidates)||candidates.length>300||
   typeof checkCompliance!=='function'||typeof calculateRoutes!=='function'||
-  !safeInt(maxOffers,1,20))return fail('Discovery inputs/provider invalid');
+  !safeInt(maxOffers,1,5))return fail('Discovery inputs/provider invalid');
  const eligible=[];
  const seen=new Set();
  try {
