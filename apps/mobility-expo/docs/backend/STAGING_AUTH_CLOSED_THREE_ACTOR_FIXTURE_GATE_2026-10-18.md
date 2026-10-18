@@ -62,3 +62,15 @@ Luego `node apps/mobility-expo/scripts/staging-three-actors-readonly.mjs` desde 
 5. Resolver seguros, requisitos municipales y proveedor de cobro antes de cualquier piloto comercial AUTO. MOTO comercial necesita aprobación legal y seguros separados.
 
 **Aislamiento:** no se modificó `auth.users`, `user_roles`, G3/G4 remoto, RLS, Storage, Flutter trading PR #2 ni backend antiguo. PR #7 continúa DRAFT.
+
+## 18 de octubre — identidad QA real de staging: asignación certificada
+
+**Actualización posterior que sustituye el inventario inicial de 0 usuarios:** el propietario confirmó que las tres cuentas Gmail del panel Cloud → Users son exclusivamente cuentas de ensayo, y autorizó expresamente esta asignación: **primera cuenta pasajero, otras dos conductores**. En el proyecto Lovable STAGING nuevo se verificó antes de actuar que existían exactamente tres usuarios confirmados y tres roles passenger, sin administradores ni permisos de escritura sobre `user_roles` para el rol authenticated.
+
+Se ejecutó una única transacción SQL `DO` con precondiciones estrictas de identidad/rol/contaje y actualización de **dos** filas en `public.user_roles` de passenger a driver; no se alteró `auth.users`. El bloque comprobó atómicamente su resultado (1 passenger, 2 driver, 0 admin, exactamente 3 roles) y no devolvió error. Después una inspección **independiente** por el agente Lovable `supabase--read_query` confirmó las tres asignaciones, que no hay roles dobles y que el proyecto continúa sin publicar.
+
+**Nueva condición P1:** la certificación de roles administrativos está **aprobada**. Los **JWT reales con RLS cruzada y Storage** siguen **NO ejecutados**: las cuentas no han iniciado sesión y no se deben solicitar ni poner contraseñas en chat, CI o GitHub. G3/G4 siguen sin instalación en la base real; LIVE_TRIPS_ENABLED=false y MOTO comercial bloqueada.
+
+El archivo `scripts/staging-three-actors-readonly.mjs` permite ahora esas cuentas Gmail ficticias bajo controles adicionales en vez de las cuentas .invalid anteriores: se exige `QORE_STAGING_APPROVED_GMAIL_QA=true`, project ref estrictamente `hylgkfgkcyrddokloljm` y **tres UUID de Auth exactos** aportados por el operador mediante `QORE_STAGING_PASSENGER_USER_ID`, `QORE_STAGING_DRIVER_A_USER_ID` y `QORE_STAGING_DRIVER_B_USER_ID`. Jamás se almacenan correos, contraseñas o JWT en el repositorio. Revisa `staging-three-actors-readonly.test.mjs` para los casos de host diferente, identidad falsa y rol cruzado.
+
+Los valores de email/password/UUID se inyectan privadamente desde el equipo del operador y nunca mediante commits, scripts con secretos incrustados, capturas de sesiones o mensajes. El script realiza POST exclusivamente para iniciar sesión en Auth, después lecturas GET de identidad, perfil y rol propio/ajeno. La ejecución auténtica sigue pendiente.
