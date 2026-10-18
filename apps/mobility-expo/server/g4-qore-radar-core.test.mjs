@@ -233,3 +233,21 @@ test('foreign driver IDs returned by routing provider invalidate discovery',asyn
  assert.deepEqual(result.commercialRidesEnabled,false);
  assert.ok(!('offers' in result));
 });
+
+test('cross-batch route identity injection fails closed even when driver is eligible globally',async()=>{
+ const many=Array.from({length:21},(_,i)=>({
+  ...candidates[0],driverId:`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,
+  vehicleId:x,idleSeconds:0
+ }));
+ let calls=0;
+ const result=await discover({candidates:many,maxOffers:5,
+  calculateRoutes:async({origins})=>{
+   calls++;
+   if(calls===1)return [route(many[20].driverId,150)];
+   return origins.map(o=>route(o.driverId,150));
+  }
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.commercialRidesEnabled,false);
+ assert.equal(calls,1);
+});
