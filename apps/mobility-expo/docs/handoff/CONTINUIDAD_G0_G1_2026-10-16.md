@@ -376,3 +376,12 @@ Consulta HEAD PR #2 `4608aeb2519262cef42f722b43caffdfd455701b`: los últimos wor
 - Se verificó código JS V3 con `node --check` y prueba de VM+DOM simulado: login B → PASS B, cambiar a A → PASS eliminado/token B revocado, login A → PASS A, cambiar servidor → PASS eliminado/token A revocado. **Estas pruebas V3 son locales y sintéticas, no JWT reales**.
 - Próximo paso: usuario descarga/abre V3, selecciona cada una de las tres cuentas y pulsa el botón de prueba; la captura debe incluir el **PASS con nombre de rol/cuenta** vinculado a la sesión. Solo entonces pasar a gates de Storage con objetos sintéticos. Las tablas de solicitudes/vehículos estaban vacías: consultas vacías no certifican aislamiento entre objetos de terceros. No declarar 3 JWT E2E completos antes de esas evidencias.
 - `LIVE_TRIPS_ENABLED=false`, G3/G4 sin instalar remoto, proyecto Lovable sigue staging no publicado, Flutter trading PR #2 separado. No transmitir contraseñas ni capturas con tokens.
+
+
+## 18 de octubre de 2026 — evidencia V3 de pasajero QA: PASS auténtico desde Android
+
+- El propietario envió dos capturas del **HTML QA V3** abierto en Chrome Android, con la cuenta de prueba **Pasajero** seleccionada y resultado explícito `PASS · Pasajero — acceso y permisos verificados`, vinculado a la cuenta autenticada a las 14:19:58 según la UI. Supera la ambigüedad de V2, donde un selector cambiado podía dejar el PASS previo.
+- La UI reporta `PASS` para signup cerrado, identidad confirmada por Auth antes/después, un único perfil propio, único rol propio sin admin, consultas no filtradas a solicitudes y vehículos sin filas visibles ajenas. El usuario no expuso contraseña ni token.
+- **Alcance limitado:** esta es evidencia capturada por el usuario y no una ejecución E2E iniciada desde GitHub CI/servidor por el arquitecto; el criterio documentado de 'RLS solicitudes y vehículos' muestra 0 solicitudes y 0 vehículos, de modo que no demuestra aislamiento con registros de terceros. No certifica GPS, Push, G3/G4 ni viajes.
+- **Matriz de 3 actores:** Pasajero = PASS V3; Conductor A = PENDIENTE; Conductor B = PENDIENTE (su anterior captura V2 no vincula inequívocamente el PASS con el actor). No declarar 3/3 hasta recibir la evidencia V3 de ambas cuentas driver.
+- Siguiente acción guiada: en V3 cerrar sesión, cambiar a Conductor A, hacer login privado y obtener `PASS · Conductor A`; repetir con Conductor B. Ningún secreto se solicita o almacena. Proyecto STAGING sin viajes/pagos comerciales.
