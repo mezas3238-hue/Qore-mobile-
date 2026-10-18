@@ -16,10 +16,10 @@ const okInt=x=>Number.isSafeInteger(x)&&x>=0;
 const record=(status)=>({status,commercialRidesEnabled:false,delivered:false,rideAccepted:false});
 export function createQoreG4PrivatePushWorker({
  workerId,environment,liveTripsEnabled,claim,readCurrentOffer,
- findVerifiedDevice,sendVerifiedOffer,ackTicket,now=Date.now
+ verifyCurrentEligibility,findVerifiedDevice,sendVerifiedOffer,ackTicket,now=Date.now
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||!UUID.test(workerId??'')||
-    ![claim,readCurrentOffer,findVerifiedDevice,sendVerifiedOffer,ackTicket,now]
+    ![claim,readCurrentOffer,verifyCurrentEligibility,findVerifiedDevice,sendVerifiedOffer,ackTicket,now]
       .every(f=>typeof f==='function'))
   throw new Error('Private G4 worker requires staging, no LIVE, worker ID and server-only adapters');
  return async function processOne(){
@@ -45,6 +45,13 @@ export function createQoreG4PrivatePushWorker({
      fresh.status!=='offered'||fresh.tripStatus!=='searching'||
      fresh.expiresAtMs!==selected.expiresAtMs)
    return record('no_longer_eligible');
+  // Eligibility is required again immediately before notifying, not only
+  // when the original SQL offer was created. False/missing SQL denies push.
+  try{
+   if(await verifyCurrentEligibility({
+     driverId:selected.driverId,tripId:selected.tripId,offerId:selected.offerId
+   })!==true)return record('driver_no_longer_eligible');
+  }catch{return record('driver_eligibility_unavailable');}
   const timestamp=now();
   if(!okInt(timestamp)||timestamp+3_000>=selected.expiresAtMs)
    return record('expired_before_delivery');
