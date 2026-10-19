@@ -70,6 +70,8 @@ export async function discoverQoreDrivers({
   // Google Routes matrix adapter permits at most 20 origins per request.
   // Batch server-side; never silently drop eligible drivers or invent ETA.
   const matrix=[];
+  // A single discovery uses one immutable time reference; prevent a slow
+  // routing provider from returning ETAs that have already expired.
   for(let offset=0;offset<eligible.length;offset+=20){
    const batch=eligible.slice(offset,offset+20);
    const rows=await calculateRoutes({
