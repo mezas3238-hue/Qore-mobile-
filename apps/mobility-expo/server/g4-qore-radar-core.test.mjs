@@ -251,3 +251,16 @@ test('cross-batch route identity injection fails closed even when driver is elig
  assert.equal(result.commercialRidesEnabled,false);
  assert.equal(calls,1);
 });
+
+test('routing provider returning a malformed batch response fails closed without querying later batches',async()=>{
+ const many=Array.from({length:21},(_,i)=>({
+  ...candidates[0],driverId:`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,vehicleId:x
+ }));
+ let calls=0;
+ const result=await discover({candidates:many,
+  calculateRoutes:async()=>{calls++;return null;}
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.commercialRidesEnabled,false);
+ assert.equal(calls,1);
+});
