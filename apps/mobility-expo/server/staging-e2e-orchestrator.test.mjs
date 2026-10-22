@@ -20,3 +20,12 @@ test('zone and driver eligibility prevent offers',()=>{
  assert.equal(t.propose({rideId:'r',driverId:'a',driver:{...driver('a'),suspended:true},vehicle:vehicle('a'),expiresAtMs:2000}).ok,false);
  assert.equal(t.accept({rideId:'r',driverId:'a'}).ok,false);
 });
+
+test('driver offer expires when license or insurance expires before offer deadline',()=>{
+ let clock=1000;
+ const s=createSyntheticScenario({now:()=>clock,insidePolygon:()=>true});
+ assert.equal(s.start({rideId:'exp1',passengerId:'p1',zone,point}).ok,true);
+ assert.equal(s.propose({rideId:'exp1',driverId:'a',driver:{...driver('a'),licenseExpiresAtMs:1500},vehicle:vehicle('a'),expiresAtMs:2000}).ok,true);
+ clock=1500;
+ assert.equal(s.accept({rideId:'exp1',driverId:'a'}).ok,false);
+});
