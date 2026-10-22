@@ -22,7 +22,9 @@ export function createDeliveryPushWorker({claim,ack,sendToProvider,workerId,now=
     if(claimed.expiresAtMs<=now()+3000)
      return fail('Delivery offer expired before provider dispatch');
     const sent=await sendToProvider({offerId:claimed.offerId,courierId:claimed.courierId,
-      deliveryId:claimed.deliveryId,expiresAtMs:claimed.expiresAtMs});
+      deliveryId:claimed.deliveryId,expiresAtMs:claimed.expiresAtMs,
+      // Stable across retries: provider adapters must deduplicate by this key.
+      idempotencyKey:`delivery-offer-${claimed.offerId}`});
     if(!object(sent)||sent.accepted!==true||
       typeof sent.ticketId!=='string'||!/^[A-Za-z0-9_-]{8,120}$/.test(sent.ticketId))
      return fail('Push provider did not accept delivery ticket');
