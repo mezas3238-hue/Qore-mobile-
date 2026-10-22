@@ -47,7 +47,8 @@ no acepta coordenadas, texto libre ni identidad del reportante en el JSON. La
 suite local pasa 203/203 pruebas de servidor, 102/102 de dominio, TypeScript y
 guard NO-LIVE. El primer CI SQL G8 encontró acceso a campos incompatibles en
 un trigger genérico; se corrigió usando una representación JSONB de `NEW/OLD`
-y el nuevo commit queda sujeto a PostgreSQL 16 efímero.
+y el commit remoto `4a441f16` pasó Node STAGING #60 y Expo #551, incluido
+PostgreSQL 16 G1→G8.
 
 ## Límites
 

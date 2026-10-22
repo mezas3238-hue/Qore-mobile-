@@ -13,12 +13,17 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R9:** G9 elimina fixtures como única vía de alta
+  comercial: onboarding idempotente, aprobación/suspensión admin, sucursales y
+  catálogo mutables solo por owner/manager persistido, con auditoría privada
+  append-only. OTC permanece limitado a farmacias; no hay prescripción ni
+  controlados. Ver `docs/backend/G9_MERCHANT_MANAGEMENT_2026-10-22.md`.
 - **Actualización Work R8:** G8 ya tiene repositorio server-only, cinco rutas
   HTTP autenticadas, rol admin revalidado y runtime loopback. Reportante/admin
   provienen del JWT; no se aceptan coordenadas ni texto libre. Suite local:
-  203/203 servidor, 102/102 dominio, TypeScript y NO-LIVE PASS. El primer gate
-  PostgreSQL detectó columnas incompatibles en el trigger genérico; la
-  corrección JSONB queda pendiente del siguiente CI.
+  203/203 servidor, 102/102 dominio, TypeScript y NO-LIVE PASS. Commit remoto
+  `4a441f16`, Node STAGING #60 y Expo #551 SUCCESS, incluido PostgreSQL 16
+  G1→G8 tras corregir el trigger genérico con `NEW/OLD` normalizados a JSONB.
 - **Actualización Work R7:** G8 agrega incidentes ligados a participantes,
   SOS crítico solo para servicio activo, flujo administrativo auditable y
   suspensiones operativas con enforcement en triggers sobre nuevas acciones
