@@ -17,6 +17,10 @@ export function createDeliveryPushWorker({claim,ack,sendToProvider,workerId}={})
       !uuid(claimed.courierId)||!uuid(claimed.deliveryId)||
       !Number.isSafeInteger(claimed.expiresAtMs)||claimed.expiresAtMs<=Date.now()+3000)
      return fail('Invalid or expired delivery push claim');
+    // A claim may have been queued for seconds before this worker received it.
+    // Never contact the provider if the private offer is now too close to expiry.
+    if(claimed.expiresAtMs<=Date.now()+3000)
+     return fail('Delivery offer expired before provider dispatch');
     const sent=await sendToProvider({offerId:claimed.offerId,courierId:claimed.courierId,
       deliveryId:claimed.deliveryId,expiresAtMs:claimed.expiresAtMs});
     if(!object(sent)||sent.accepted!==true||
