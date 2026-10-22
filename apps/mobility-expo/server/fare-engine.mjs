@@ -13,4 +13,9 @@ export function quoteSyntheticFare({mode,distanceMeters,durationSeconds,basePyg,
  const commissionPyg=round(subtotal*commissionBps,10000);
  return {ok:true,liveEnabled:false,mode,ruleVersion,totalPyg,subtotalPyg:subtotal,tollsPyg,commissionBps,commissionPyg,providerPyg:totalPyg-commissionPyg,breakdown:{basePyg,distanceChargePyg:distanceCharge,timeChargePyg:timeCharge,minPyg}};
 }
-export function verifySyntheticQuote(q){return q?.ok===true&&q.liveEnabled===false&&integer(q.totalPyg,0,100000000)&&integer(q.commissionPyg,0,q.totalPyg)&&q.providerPyg+q.commissionPyg===q.totalPyg;}
+export function verifySyntheticQuote(q){
+ if(q?.ok!==true||q.liveEnabled!==false||!modes.has(q.mode)||!integer(q.totalPyg,0,100000000)||!integer(q.subtotalPyg,0,100000000)||!integer(q.tollsPyg,0,1000000)||!integer(q.commissionBps,0,3000)||!integer(q.commissionPyg,0,q.totalPyg)||!integer(q.providerPyg,0,q.totalPyg))return false;
+ const b=q.breakdown;
+ if(!b||!integer(b.basePyg,0,1000000)||!integer(b.distanceChargePyg,0,50000000)||!integer(b.timeChargePyg,0,28800000)||!integer(b.minPyg,0,1000000))return false;
+ return q.subtotalPyg===Math.max(b.minPyg,b.basePyg+b.distanceChargePyg+b.timeChargePyg)&&q.totalPyg===q.subtotalPyg+q.tollsPyg&&q.commissionPyg===round(q.subtotalPyg*q.commissionBps,10000)&&q.providerPyg+q.commissionPyg===q.totalPyg;
+}
