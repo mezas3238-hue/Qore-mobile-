@@ -39,8 +39,8 @@ La verificación local actual pasa 190/190 pruebas de servidor, 102/102 de
 dominio, TypeScript y guard NO-LIVE. El workflow remoto detectó que
 `SELECT ... FOR UPDATE` sobre la cotización inmutable exigía permiso UPDATE;
 se reemplazó por bloqueo asesor transaccional por cotización, preservando la
-inmutabilidad y serializando autorizaciones concurrentes. La ejecución
-PostgreSQL 16 del commit de corrección sigue siendo el gate definitivo.
+inmutabilidad y serializando autorizaciones concurrentes. El commit remoto
+`abb5958e` pasó Node STAGING #56 y Expo #547, incluido PostgreSQL 16 G1→G7.
 
 ## Límites
 
