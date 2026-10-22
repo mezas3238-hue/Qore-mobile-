@@ -125,3 +125,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G13_DELIVERY_PUSH_FENCED_DISPOSABLE_CI_ONLY.sql
       - name: Test G13 lease fencing, legacy revocation, ACK and ambiguous outcomes
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G13_FENCED_DELIVERY_PUSH_FULL_CHAIN_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Verify G13 with two independent PostgreSQL sessions
+        run: |
+          python3 -m pip install 'psycopg[binary]>=3.2,<4'
+          python3 apps/mobility-expo/server/g13-fenced-delivery-push-concurrency-ci.py
