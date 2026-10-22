@@ -33,7 +33,8 @@ export async function readStagingCourierOffers({
  let response:JsonResponse;
  try{
   response=await request(base.origin+'/v1/staging/courier/delivery-offers',{
-   method:'GET',headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
+   method:'GET',cache:'no-store',credentials:'omit',
+   headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
   });
  }catch{throw Error('G15 private courier polling unavailable');}
  if(response.status===401)throw Error('G15 verified session expired');
