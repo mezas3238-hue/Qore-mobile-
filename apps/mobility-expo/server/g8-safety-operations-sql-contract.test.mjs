@@ -36,6 +36,8 @@ test('G8 admin actions recheck persisted admin role and reject free-form reason'
 });
 test('G8 suspension is enforced below HTTP on all money and service writes',()=>{
  const body=fn('mobility_stage_reject_suspended_operation');
+ assert.match(body,/pg_catalog\.to_jsonb\(NEW\)/);
+ assert.doesNotMatch(body,/NEW\.(passenger_id|driver_id|sender_id|courier_id|buyer_id|customer_id)/);
  for(const table of ['mobility_stage_auto_demo_trips','mobility_stage_auto_demo_offers',
   'mobility_stage_deliveries','mobility_stage_merchant_orders',
   'mobility_stage_fare_quotes','mobility_stage_payment_intents'])

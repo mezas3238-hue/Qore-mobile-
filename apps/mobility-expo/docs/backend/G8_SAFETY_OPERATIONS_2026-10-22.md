@@ -33,9 +33,21 @@ rechazo de tercero, gate de SOS, flujo administrativo, suspensión/lift,
 bloqueo efectivo de una asignación y auditorías no mutables.
 
 Las pruebas estáticas del contrato están en
-`server/g8-safety-operations-sql-contract.test.mjs`. El siguiente bloque debe
-conectar repositorio y API autenticada, manteniendo los endpoints de admin
-separados de los del usuario.
+`server/g8-safety-operations-sql-contract.test.mjs`. El repositorio server-only
+y el gateway autenticado exponen rutas separadas para usuario y admin:
+
+- `POST /v1/staging/safety/incidents/report`
+- `GET /v1/staging/safety/incidents/:incidentId/status`
+- `POST /v1/staging/admin/safety/incidents/:incidentId/transition`
+- `POST /v1/staging/admin/safety/suspensions/apply`
+- `POST /v1/staging/admin/safety/suspensions/:suspensionId/lift`
+
+El runtime deriva reportante/admin de Auth, revalida el rol administrativo y
+no acepta coordenadas, texto libre ni identidad del reportante en el JSON. La
+suite local pasa 203/203 pruebas de servidor, 102/102 de dominio, TypeScript y
+guard NO-LIVE. El primer CI SQL G8 encontró acceso a campos incompatibles en
+un trigger genérico; se corrigió usando una representación JSONB de `NEW/OLD`
+y el nuevo commit queda sujeto a PostgreSQL 16 efímero.
 
 ## Límites
 

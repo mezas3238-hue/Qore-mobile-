@@ -27,6 +27,11 @@ const fareQuoteRoute=/^\/v1\/staging\/fares\/quote$/;
 const paymentAuthorizeRoute=/^\/v1\/staging\/payments\/authorize$/;
 const paymentTransitionRoute=/^\/v1\/staging\/payments\/[0-9a-f-]{36}\/transition$/i;
 const paymentStatusRoute=/^\/v1\/staging\/payments\/[0-9a-f-]{36}\/status$/i;
+const safetyReportRoute=/^\/v1\/staging\/safety\/incidents\/report$/;
+const safetyStatusRoute=/^\/v1\/staging\/safety\/incidents\/[0-9a-f-]{36}\/status$/i;
+const safetyTransitionRoute=/^\/v1\/staging\/admin\/safety\/incidents\/[0-9a-f-]{36}\/transition$/i;
+const suspensionApplyRoute=/^\/v1\/staging\/admin\/safety\/suspensions\/apply$/;
+const suspensionLiftRoute=/^\/v1\/staging\/admin\/safety\/suspensions\/[0-9a-f-]{36}\/lift$/i;
 const safe=(code,body)=>({status:code,body});
 const maxBody=2048;
 const JSON_HEADERS={
@@ -46,12 +51,13 @@ function send(res,status,body) {
 }
 export function createQoreRadarLoopbackTransport({
  riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
- financeHandler,
+ financeHandler,safetyHandler,
 }){
  if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
-   typeof merchantHandler!=='function'||typeof financeHandler!=='function')
-  throw new Error('All G4/G5/G6/G7 authenticated gateways required');
+   typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
+   typeof safetyHandler!=='function')
+  throw new Error('All G4/G5/G6/G7/G8 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
   const path=req.url;
@@ -77,21 +83,26 @@ export function createQoreRadarLoopbackTransport({
   const financePost=req.method==='POST'&&
    (fareQuoteRoute.test(path)||paymentAuthorizeRoute.test(path)||
     paymentTransitionRoute.test(path));
+  const safetyGet=req.method==='GET'&&safetyStatusRoute.test(path);
+  const safetyPost=req.method==='POST'&&
+   (safetyReportRoute.test(path)||safetyTransitionRoute.test(path)||
+    suspensionApplyRoute.test(path)||suspensionLiftRoute.test(path));
   if(!rider&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost&&
-    !merchantGet&&!merchantPost&&!financeGet&&!financePost){
+    !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
+    !safetyGet&&!safetyPost){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||offerGet||deliveryGet||merchantGet||financeGet)&&
+  if((rider||offerGet||deliveryGet||merchantGet||financeGet||safetyGet)&&
      (req.headers['transfer-encoding']!==undefined||
       (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0'))){
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
-  if(offerPost||tripPost||deliveryPost||merchantPost||financePost){
+  if(offerPost||tripPost||deliveryPost||merchantPost||financePost||safetyPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -113,7 +124,8 @@ export function createQoreRadarLoopbackTransport({
    const handler=rider?riderHandler:tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
     (merchantGet||merchantPost)?merchantHandler:
-    (financeGet||financePost)?financeHandler:offerHandler;
+    (financeGet||financePost)?financeHandler:
+    (safetyGet||safetyPost)?safetyHandler:offerHandler;
    const out=await handler({
     method:req.method,path,headers:req.headers,body
    });

@@ -283,37 +283,46 @@ $body$;
 CREATE FUNCTION public.mobility_stage_reject_suspended_operation()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=''
 AS $body$
-DECLARE blocked boolean:=false;
+DECLARE blocked boolean:=false; new_row jsonb:=pg_catalog.to_jsonb(NEW);
+ old_row jsonb:=COALESCE(pg_catalog.to_jsonb(OLD),'{}'::jsonb);
 BEGIN
  blocked:=CASE TG_TABLE_NAME
   WHEN 'mobility_stage_auto_demo_trips' THEN
    (TG_OP='INSERT' AND EXISTS(SELECT 1 FROM public.mobility_stage_operational_suspensions
-     WHERE subject_user_id=NEW.passenger_id AND scope='BUYER' AND active=true))
-   OR (TG_OP='UPDATE' AND OLD.driver_id IS DISTINCT FROM NEW.driver_id
-    AND NEW.driver_id IS NOT NULL AND
+     WHERE subject_user_id=(new_row->>'passenger_id')::uuid
+      AND scope='BUYER' AND active=true))
+   OR (TG_OP='UPDATE' AND old_row->>'driver_id' IS DISTINCT FROM new_row->>'driver_id'
+    AND new_row->>'driver_id' IS NOT NULL AND
     EXISTS(SELECT 1 FROM public.mobility_stage_operational_suspensions
-     WHERE subject_user_id=NEW.driver_id AND scope='DRIVER' AND active=true))
+     WHERE subject_user_id=(new_row->>'driver_id')::uuid
+      AND scope='DRIVER' AND active=true))
   WHEN 'mobility_stage_auto_demo_offers' THEN
-   (TG_OP='INSERT' OR (TG_OP='UPDATE' AND OLD.status IS DISTINCT FROM NEW.status
-    AND NEW.status='accepted')) AND EXISTS(SELECT 1
+   (TG_OP='INSERT' OR (TG_OP='UPDATE' AND old_row->>'status' IS DISTINCT FROM new_row->>'status'
+    AND new_row->>'status'='accepted')) AND EXISTS(SELECT 1
      FROM public.mobility_stage_operational_suspensions
-     WHERE subject_user_id=NEW.driver_id AND scope='DRIVER' AND active=true)
+     WHERE subject_user_id=(new_row->>'driver_id')::uuid
+      AND scope='DRIVER' AND active=true)
   WHEN 'mobility_stage_deliveries' THEN
    (TG_OP='INSERT' AND EXISTS(SELECT 1 FROM public.mobility_stage_operational_suspensions
-     WHERE subject_user_id=NEW.sender_id AND scope='BUYER' AND active=true))
-   OR (TG_OP='UPDATE' AND OLD.courier_id IS DISTINCT FROM NEW.courier_id
-    AND NEW.courier_id IS NOT NULL AND
+     WHERE subject_user_id=(new_row->>'sender_id')::uuid
+      AND scope='BUYER' AND active=true))
+   OR (TG_OP='UPDATE' AND old_row->>'courier_id' IS DISTINCT FROM new_row->>'courier_id'
+    AND new_row->>'courier_id' IS NOT NULL AND
     EXISTS(SELECT 1 FROM public.mobility_stage_operational_suspensions
-     WHERE subject_user_id=NEW.courier_id AND scope='DRIVER' AND active=true))
+     WHERE subject_user_id=(new_row->>'courier_id')::uuid
+      AND scope='DRIVER' AND active=true))
   WHEN 'mobility_stage_merchant_orders' THEN TG_OP='INSERT' AND EXISTS(SELECT 1
    FROM public.mobility_stage_operational_suspensions
-   WHERE subject_user_id=NEW.buyer_id AND scope='BUYER' AND active=true)
+   WHERE subject_user_id=(new_row->>'buyer_id')::uuid
+    AND scope='BUYER' AND active=true)
   WHEN 'mobility_stage_fare_quotes' THEN EXISTS(SELECT 1
    FROM public.mobility_stage_operational_suspensions
-   WHERE subject_user_id=NEW.customer_id AND scope='BUYER' AND active=true)
+   WHERE subject_user_id=(new_row->>'customer_id')::uuid
+    AND scope='BUYER' AND active=true)
   WHEN 'mobility_stage_payment_intents' THEN EXISTS(SELECT 1
    FROM public.mobility_stage_operational_suspensions
-   WHERE subject_user_id=NEW.customer_id AND scope='BUYER' AND active=true)
+   WHERE subject_user_id=(new_row->>'customer_id')::uuid
+    AND scope='BUYER' AND active=true)
   ELSE true END;
  IF blocked THEN RAISE EXCEPTION 'Operational suspension blocks action'; END IF;
  RETURN NEW;

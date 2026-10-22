@@ -19,6 +19,8 @@ import {createSupabaseStagingMerchantRepository} from './g6-supabase-merchant-re
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
 import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repository.mjs';
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
+import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
+import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -42,6 +44,10 @@ const STAGE_TABLES=[
  'mobility_stage_payment_intents',
  'mobility_stage_payment_operations',
  'mobility_stage_ledger_entries',
+ 'mobility_stage_safety_incidents',
+ 'mobility_stage_safety_incident_events',
+ 'mobility_stage_operational_suspensions',
+ 'mobility_stage_suspension_events',
 ];
 const required=(v,name)=>{
  if(typeof v!=='string'||!v.trim())throw Error('Missing '+name);
@@ -83,6 +89,12 @@ async function singleRole(admin,id){
   ['passenger','driver'].includes(data[0].role)?data[0].role:null;
 }
 const roleHas=(admin,id,role)=>singleRole(admin,id).then(actual=>actual===role);
+async function adminRole(admin,id){
+ const {data,error}=await admin.from('user_roles').select('role')
+  .eq('user_id',id).eq('role','admin').limit(2);
+ if(error)throw Error('Admin role lookup failed');
+ return Array.isArray(data)&&data.length===1&&data[0]?.role==='admin';
+}
 function checkedIsoToMs(iso){
  if(typeof iso!=='string')return NaN;
  const at=Date.parse(iso);
@@ -131,6 +143,7 @@ export async function prepareQoreG4StagingRuntime({
  const deliveryPersistence=createSupabaseStagingDeliveryRepository(admin);
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
+ const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -264,6 +277,25 @@ export async function prepareQoreG4StagingRuntime({
    modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const safety=createQoreSafetyGateway({
+  projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
+  allowRequest,
+  reportIncident:params=>safetyPersistence.report({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  transitionIncident:params=>safetyPersistence.transition({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  applySuspension:params=>safetyPersistence.applySuspension({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  liftSuspension:params=>safetyPersistence.liftSuspension({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  loadIncident:params=>safetyPersistence.incidentSnapshot({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -283,6 +315,7 @@ export async function prepareQoreG4StagingRuntime({
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
    financeHandler:guard(finance),
+   safetyHandler:guard(safety),
   }),
  };
 }

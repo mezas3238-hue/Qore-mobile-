@@ -163,6 +163,7 @@ function fixture(){
   deliveryHandler:deliveries,
   merchantHandler:async()=>({status:404,body:{error:'Not found'}}),
   financeHandler:async()=>({status:404,body:{error:'Not found'}}),
+  safetyHandler:async()=>({status:404,body:{error:'Not found'}}),
  });
  return {state,server};
 }
@@ -375,4 +376,23 @@ test('HTTP: listener rejects public/privileged ports; adapters cannot be missing
  assert.throws(()=>server.listen({port:0,host:'127.0.0.1'}));
  await assert.rejects(listenQoreRadarLoopback(server,80));
  assert.equal(server.listening,false);
+});
+
+test('HTTP: G8 safety routes remain loopback-only and reach only safety gateway',async t=>{
+ const calls=[];
+ const unused=async()=>({status:404,body:{error:'Not found'}});
+ const server=createQoreRadarLoopbackTransport({riderHandler:unused,
+  offerHandler:unused,tripCommandHandler:unused,deliveryHandler:unused,
+  merchantHandler:unused,financeHandler:unused,safetyHandler:async input=>{
+   calls.push(input);return {status:201,body:{incidentId:deliveryId,
+    externalResponseDispatched:false}};
+  }});
+ const base=await listenQoreRadarLoopback(server);t.after(()=>close(server));
+ const response=await fetch(base+'/v1/staging/safety/incidents/report',{method:'POST',
+  headers:{authorization:'Bearer synthetic_safety_fixture_never_real_12345',
+   'content-type':'application/json'},body:JSON.stringify({requestKey:keyA})});
+ assert.equal(response.status,201);
+ assert.equal((await response.json()).externalResponseDispatched,false);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].path,'/v1/staging/safety/incidents/report');
 });
