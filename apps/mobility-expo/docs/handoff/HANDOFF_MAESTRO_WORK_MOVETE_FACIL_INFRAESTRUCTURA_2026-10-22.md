@@ -13,6 +13,15 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R1 (posterior al handoff):** se confirmó que
+  `.github/workflows/mobility-ci.yml` ya ejecuta G1→G4 sobre PostgreSQL 16
+  desechable, incluidas carreras de dos conductores y dos workers. El punto P0.1
+  original estaba desactualizado. Se implementó y conectó el adaptador real
+  `server/g4-supabase-dispatch-repository.mjs`: RPC transaccionales para
+  request/offer/accept/transition y snapshot autorizado por participante
+  persistido, no por IDs declarados por cliente. Ver
+  `docs/backend/G4_SUPABASE_PERSISTENCE_ADAPTER_2026-10-22.md`. Verificación
+  local: TypeScript PASS, 102/102 dominio, 145/145 servidor y safety guard PASS.
 - Monorepo `apps/mobility-expo/` (Expo SDK 57, backend Node ESM `server/`).
 - Workflow `QORE Mobility STAGING Node contracts`: **138/138 PASS, 0 FAIL**, run #40, commit `69dcf58b5b77be0b1a86f84c65ef0ad1f15c890f`, https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39833613306.
 - Workflow `QORE Mobility Expo isolated CI`: **SUCCESS**, run #531, mismo commit, https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39833613454.
@@ -74,9 +83,9 @@ No hay matriz de cotizaciones directas verificadas de Bolt/Uber Paraguay; los va
 
 ## 7. BLOQUEOS / RIESGOS CONCRETOS
 **P0**
-1. No existe prueba de **dos transacciones concurrentes** sobre PostgreSQL 16 desechable con dos conductores y una sola aceptación; el workflow `mobility-g4-postgres-disposable.yml` es solo smoke manual, no prueba G4.
-2. Identidad actor de cliente no es autoridad: resolver sesión en servidor y contrastar participantes del viaje en BD. Snapshot actual valida IDs **suministrados**; NO confiar en ellos para autorización.
-3. Falta repositorio SQL real implementando interfaz `request/offer/accept/transition/snapshot`, RLS comprobada con usuarios adversarios, fixtures G2/G3/G4 y políticas legales por zona.
+1. **RESUELTO en el workflow principal:** PostgreSQL 16 desechable prueba carreras G3/G4 con dos conductores y outbox con dos workers. El workflow manual separado sigue siendo solo smoke y no debe citarse como única evidencia.
+2. **RESUELTO para runtime local G4:** actor derivado de sesión y snapshot filtrado en BD contra pasajero/conductor persistidos. Falta ampliar el mismo patrón a todos los endpoints nuevos.
+3. **PARCIAL:** adaptador Supabase real implementa `request/offer/accept/transition/snapshot` y está conectado a status/accept. Persisten gates de despliegue remoto, HTTP completo, zonas legales y pruebas con JWT/dispositivos reales.
 4. Sin backend conectado a dispositivos, push ni GPS reales; NO declarar MVP funcional.
 5. Sin decisión documentada sobre licitud moto-pasajero y entregas farmacéuticas por municipio/categoría.
 6. No se ha demostrado un flujo económico real ni integridad de cobros, reembolsos, saldos y liquidaciones.

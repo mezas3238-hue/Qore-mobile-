@@ -47,6 +47,7 @@ function mockSupabase(){
      select(cols,options){
       return {
        eq(k,v){filter[k]=v;return this;},
+       or(expression){filter.$or=expression;return this;},
        async limit(n){
         if(table==='user_roles'){
          state.rolesLookups++;
@@ -65,8 +66,9 @@ function mockSupabase(){
         }
         if(table==='mobility_stage_auto_demo_trips'){
          const t=state.trip;
-         const ok=t.id===filter.id&&(!filter.passenger_id||
-          t.passenger_id===filter.passenger_id);
+         const actor=filter.$or?.match(/passenger_id\.eq\.([^,]+)/)?.[1];
+         const ok=t.id===filter.id&&(!actor||
+          t.passenger_id===actor||t.driver_id===actor);
          return {data:ok?{...t}:null,error:null};
         }
         return {data:null,error:null};

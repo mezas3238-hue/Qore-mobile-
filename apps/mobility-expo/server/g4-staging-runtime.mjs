@@ -11,6 +11,7 @@ import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
 import {createStagingRateLimiter} from './g2-staging-vehicle-gateway.mjs';
+import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-repository.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -98,6 +99,7 @@ export async function prepareQoreG4StagingRuntime({
  // Prevent even local test listener creation with a wrong DB or Auth config.
  await inspect();
  await assertDatabaseG4(admin);
+ const persistence=createSupabaseStagingDispatchRepository(admin);
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -116,14 +118,15 @@ export async function prepareQoreG4StagingRuntime({
   allowRequest,
   loadOwnTrip:async({tripId,passengerId})=>{
    if(!UUID.test(tripId)||!UUID.test(passengerId))return null;
-   const {data,error}=await admin.from('mobility_stage_auto_demo_trips')
-    .select('id,passenger_id,driver_id,vehicle_id,status,revision')
-    .eq('id',tripId).eq('passenger_id',passengerId).maybeSingle();
-   if(error)throw Error('Own trip lookup failed');
-   if(!data)return null;
+   let result;
+   try{result=await persistence.snapshot({
+    mode:'SYNTHETIC_STAGING',liveEnabled:false,
+    actorId:passengerId,tripId,
+   });}catch{return null;}
+   const data=result.trip;
    return {
-    id:data.id,passengerId:data.passenger_id,driverId:data.driver_id,
-    vehicleId:data.vehicle_id,status:data.status,revision:data.revision,
+    id:data.id,passengerId:data.passengerId,driverId:data.driverId,
+    vehicleId:data.vehicleId,status:data.status,revision:data.revision,
     trackingSequence:0 // Until a verified per-trip GPS revision exists.
    };
   },
@@ -154,9 +157,12 @@ export async function prepareQoreG4StagingRuntime({
    };
   },
   acceptOffer:async params=>{
-   const {data,error}=await admin.rpc('mobility_stage_auto_demo_accept_offer',params);
-   if(error)throw Error('G4 database rejected acceptance');
-   return data;
+   const result=await persistence.accept({
+    mode:'SYNTHETIC_STAGING',liveEnabled:false,
+    actorId:params._driver_id,offerId:params._offer_id,
+    decisionKey:params._decision_key,
+   });
+   return result.eventId;
   },
   declineOffer:async params=>{
    const {data,error}=await admin.rpc('mobility_stage_auto_demo_decline_offer',params);
