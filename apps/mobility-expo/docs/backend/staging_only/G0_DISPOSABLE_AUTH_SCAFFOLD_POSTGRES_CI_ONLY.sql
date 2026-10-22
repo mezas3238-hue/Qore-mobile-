@@ -3,8 +3,8 @@
 DO $guard$
 BEGIN
  IF current_database()<>'qore_disposable_chain'
- OR inet_server_addr() IS DISTINCT FROM '127.0.0.1'::inet
- THEN RAISE EXCEPTION 'Refusing non-local/non-disposable full-chain scaffold'; END IF;
+ OR current_setting('application_name')<>'qore_ci_disposable_chain'
+ THEN RAISE EXCEPTION 'Refusing non-disposable full-chain scaffold'; END IF;
 END $guard$;
 BEGIN;
 CREATE ROLE anon NOLOGIN;
