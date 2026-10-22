@@ -9,6 +9,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
       - 'apps/mobility-expo/server/g13-*'
+      - 'apps/mobility-expo/server/g14-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G0_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G1_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G2_*'
@@ -129,3 +130,5 @@ jobs:
         run: |
           python3 -m pip install 'psycopg[binary]>=3.2,<4'
           python3 apps/mobility-expo/server/g13-fenced-delivery-push-concurrency-ci.py
+      - name: Test two courier acceptances racing for one delivery
+        run: python3 apps/mobility-expo/server/g14-competing-courier-acceptance-ci.py
