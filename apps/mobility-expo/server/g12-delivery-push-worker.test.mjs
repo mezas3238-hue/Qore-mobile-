@@ -45,3 +45,13 @@ test('G12 provider failure and ACK failure fail closed',async()=>{
   sendToProvider:async()=>({accepted:true,ticketId:'ticket_12345'}),ack:async()=>false});
  assert.equal((await worker.processOne()).ok,false);
 });
+
+test('G12 rechecks expiry after claim and before provider send',async()=>{
+ let sends=0;
+ const worker=createDeliveryPushWorker({workerId:a,
+  claim:async()=>{const claimed=claimData();claimed.expiresAtMs=Date.now()+4000;await new Promise(resolve=>setTimeout(resolve,1100));return claimed;},
+  sendToProvider:async()=>{sends++;return {accepted:true,ticketId:'ticket_12345'};},
+  ack:async()=>true});
+ assert.equal((await worker.processOne()).ok,false);
+ assert.equal(sends,0);
+});
