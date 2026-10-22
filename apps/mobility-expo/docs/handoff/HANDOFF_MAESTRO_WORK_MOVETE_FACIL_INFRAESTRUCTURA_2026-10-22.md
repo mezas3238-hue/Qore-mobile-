@@ -13,6 +13,12 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R4:** G6 incorpora contrato persistente de comercios,
+  sucursales, personal, catálogo, reserva/reposición de inventario, pedidos y
+  preparación para supermercado/farmacia OTC/restaurante/retail/otros. El
+  pedido se enlaza a G5 y solo avanza con los estados reales de custodia. Ver
+  `docs/backend/G6_MERCHANT_CATALOG_ORDERS_2026-10-22.md`. Pruebas estáticas
+  incluidas; PostgreSQL 16 desechable es el gate de ejecución.
 - **Actualización Work R3:** G5 añade entregas persistentes AUTO/MOTO con
   capacidad, habilitación privada de carga, seguro, GPS/consentimiento,
   asignación atómica, prueba obligatoria de entrega, disputa/devolución,

@@ -122,7 +122,7 @@ AS $body$
     AND c.cargo_insurance_verified_at<=now() AND c.reviewed_at<=now()
     AND d.grams<=c.max_grams
     AND d.length_cm*d.width_cm*d.height_cm<=c.max_volume_cm3
-    AND pg_catalog.greatest(d.length_cm,d.width_cm,d.height_cm)<=c.max_edge_cm
+    AND GREATEST(d.length_cm,d.width_cm,d.height_cm)<=c.max_edge_cm
     AND loc.available=true AND loc.updated_at>=now()-interval '120 seconds'
     AND loc.updated_at<=now()+interval '15 seconds'
     AND consent.revoked_at IS NULL AND consent.opted_in_at<=loc.updated_at
@@ -158,7 +158,7 @@ BEGIN
  OR _pickup_tag=_delivery_tag THEN RAISE EXCEPTION 'Invalid delivery request'; END IF;
  volume:=_length_cm::bigint*_width_cm::bigint*_height_cm::bigint;
  IF (_vehicle_kind='MOTO' AND (_grams>10000 OR volume>45000 OR
-     pg_catalog.greatest(_length_cm,_width_cm,_height_cm)>60))
+     GREATEST(_length_cm,_width_cm,_height_cm)>60))
  OR (_vehicle_kind='AUTO' AND volume>1000000)
  THEN RAISE EXCEPTION 'Requested vehicle capacity exceeded'; END IF;
  SELECT * INTO old FROM public.mobility_stage_deliveries WHERE request_key=_request_key;
