@@ -20,3 +20,23 @@ export function createStagingDispatchPersistence(repository){
  }
  return Object.freeze(Object.fromEntries(methods.map(m=>[m,params=>call(m,params)])));
 }
+
+/** Server-only boundary: caller-supplied actorId is never authoritative.
+ * resolveActor must validate the session on the server and return its user UUID.
+ * No request is dispatched if identity cannot be resolved.
+ */
+export function createAuthenticatedStagingDispatchPersistence(repository,resolveActor){
+ if(typeof resolveActor!=='function')throw Error('Missing server identity resolver');
+ const dispatch=createStagingDispatchPersistence(repository);
+ return Object.freeze(Object.fromEntries(['request','offer','accept','transition','snapshot'].map(method=>[
+  method,async (params,session)=>{
+   try{
+    const actorId=await resolveActor(session);
+    if(!validId(actorId))return fail('Unverified server identity');
+    if(!params||typeof params!=='object'||Array.isArray(params))return fail('Invalid dispatch input');
+    const {actorId:ignored,...safeParams}=params;
+    return dispatch[method]({...safeParams,actorId});
+   }catch{return fail('Identity verification unavailable');}
+  }
+ ])));
+}
