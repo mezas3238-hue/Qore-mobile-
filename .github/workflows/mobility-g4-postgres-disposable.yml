@@ -7,6 +7,13 @@ on:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G0_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G1_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G2_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G3_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G4_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G5_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
       - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
 permissions:
   contents: read
@@ -58,3 +65,55 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "UPDATE public.mobility_stage_delivery_offer_outbox SET claimed_at=NULL,claimed_by=NULL,accepted_for_processing_at=NULL,provider_ticket_id=NULL WHERE offer_id='00000000-0000-4000-8000-000000000012'"
           python3 -m pip install 'psycopg[binary]>=3.2,<4'
           python3 apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py
+
+  real-schema-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qore_ci
+          POSTGRES_PASSWORD: qore_ci_only
+          POSTGRES_DB: qore_disposable_chain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qore_ci -d qore_disposable_chain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: qore_ci
+      PGPASSWORD: qore_ci_only
+      PGDATABASE: qore_disposable_chain
+      PGAPPNAME: qore_ci_disposable_chain
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard isolated local chain database
+        run: |
+          test "$PGHOST" = "localhost"
+          test "$PGDATABASE" = "qore_disposable_chain"
+          test "$PGAPPNAME" = "qore_ci_disposable_chain"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(),current_setting('application_name')"
+      - name: Install synthetic Auth scaffold (CI only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G0_DISPOSABLE_AUTH_SCAFFOLD_POSTGRES_CI_ONLY.sql
+      - name: Apply real isolated G1 G2 G3 G4 G5 G10 G12 SQL
+        run: |
+          set -euo pipefail
+          base=apps/mobility-expo/docs/backend/staging_only
+          for migration in \
+            G1_ISOLATED_SUPABASE_BASELINE_DO_NOT_APPLY_PRODUCTION.sql \
+            G2_AUTO_MOTO_COMPLIANCE_DO_NOT_APPLY_PRODUCTION.sql \
+            G2_SERVER_PREFLIGHT_DO_NOT_APPLY_PRODUCTION.sql \
+            G3_AUTO_DEMO_TRIP_CONTRACT_POSTGRES_CI_ONLY.sql \
+            G4_PRIVATE_AUTO_OFFERS_POSTGRES_CI_ONLY.sql \
+            G5_DELIVERY_CUSTODY_POSTGRES_CI_ONLY.sql \
+            G10_PRIVATE_DELIVERY_OFFERS_POSTGRES_CI_ONLY.sql \
+            G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$base/$migration"
+          done
+      - name: Validate real schema, RLS and service-role RPC invocations
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_FULL_CHAIN_SCHEMA_ASSERT_POSTGRES_CI_ONLY.sql
