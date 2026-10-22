@@ -17,3 +17,12 @@ test('ledger refuses internally balanced but forged fare component breakdown',()
  assert.equal(buildSyntheticSettlement({quote:forged,transactionId:'forged_breakdown'}).ok,false);
  assert.equal(buildSyntheticSettlement({quote:{...quote,ruleVersion:'../../unsafe'},transactionId:'forged_rule'}).ok,false);
 });
+
+test('ledger verification requires the canonical three accounts and debit-credit direction',()=>{
+ const valid=buildSyntheticSettlement({quote,transactionId:'canonical_1'});
+ assert.equal(valid.ok,true);
+ assert.equal(verifyBalancedEntries(valid.entries),true);
+ assert.equal(verifyBalancedEntries([...valid.entries,{account:'synthetic_extra',side:'debit',amountPyg:0}]),false);
+ assert.equal(verifyBalancedEntries(valid.entries.map((entry,i)=>i===1?{...entry,account:'synthetic_unrelated'}:entry)),false);
+ assert.equal(verifyBalancedEntries(valid.entries.map((entry,i)=>i===0?{...entry,side:'credit'}:entry)),false);
+});
