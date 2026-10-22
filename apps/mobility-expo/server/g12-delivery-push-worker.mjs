@@ -26,6 +26,7 @@ export function createDeliveryPushWorker({claim,ack,sendToProvider,workerId}={})
     if(!object(sent)||sent.accepted!==true||
       typeof sent.ticketId!=='string'||!/^[A-Za-z0-9_-]{8,120}$/.test(sent.ticketId))
      return fail('Push provider did not accept delivery ticket');
+    // Provider acceptance is not device delivery. Persist only the provider ticket.
     const stored=await ack({workerId,offerId:claimed.offerId,ticketId:sent.ticketId});
     if(stored!==true)return fail('Delivery push ACK persistence unavailable');
     return {ok:true,liveEnabled:false,offerId:claimed.offerId,
