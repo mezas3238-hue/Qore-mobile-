@@ -2,6 +2,12 @@
 -- Apply AFTER G12. Fencing prevents stale CLAIMED workers from starting a send.
 -- SENDING is deliberately NOT reclaimable (ambiguous provider outcome -> poll/manual reconciliation).
 -- No promise of provider or device delivery. Never retry an ambiguous send automatically.
+DO $guard$
+BEGIN
+ IF current_database()<>'qore_disposable_chain'
+ OR current_setting('application_name')<>'qore_ci_disposable_chain'
+ THEN RAISE EXCEPTION 'Refusing non-disposable G13/G15 migration'; END IF;
+END $guard$;
 BEGIN;
 
 ALTER TABLE public.mobility_stage_delivery_offer_outbox
