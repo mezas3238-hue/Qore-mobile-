@@ -46,3 +46,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_SMOKE_POSTGRES_CI_ONLY.sql
           psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql
           psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G12 two independent PostgreSQL sessions compete for same offer
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "UPDATE public.mobility_stage_delivery_offer_outbox SET claimed_at=NULL,claimed_by=NULL,accepted_for_processing_at=NULL,provider_ticket_id=NULL WHERE offer_id='00000000-0000-4000-8000-000000000012'"
+          python3 apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py
