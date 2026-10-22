@@ -51,6 +51,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_SMOKE_POSTGRES_CI_ONLY.sql
           psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql
           psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_ASSERT_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_EXPIRE_ASSERT_POSTGRES_CI_ONLY.sql
 
       - name: G12 two independent PostgreSQL sessions compete for same offer
         run: |
