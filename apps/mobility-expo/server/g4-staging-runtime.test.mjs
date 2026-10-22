@@ -13,6 +13,8 @@ const ride='44444444-4444-4444-8444-444444444444';
 const offer='55555555-5555-4555-8555-555555555555';
 const vehicle='66666666-6666-4666-8666-666666666666';
 const requestKey='77777777-7777-4777-8777-777777777777';
+const deliveryId='88888888-8888-4888-8888-888888888888';
+const deliveryProof='99999999-9999-4999-8999-999999999999';
 const now=100_000;
 const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  driver:'syntheticDriverBearerTokenNoRealJwt12345',
@@ -23,7 +25,8 @@ function mockSupabase(){
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
   offer:{id:offer,trip_id:ride,driver_id:driver,status:'offered',
-   expires_at:new Date(now+20_000).toISOString()}};
+   expires_at:new Date(now+20_000).toISOString()},
+  delivery:null};
  const request=async(url,opt)=>{
   assert.equal(url,'https://'+ref+'.supabase.co/auth/v1/settings');
   assert.equal(opt.method,'GET');
@@ -71,6 +74,13 @@ function mockSupabase(){
           t.passenger_id===actor||t.driver_id===actor);
          return {data:ok?{...t}:null,error:null};
         }
+        if(table==='mobility_stage_deliveries'){
+         const d=state.delivery;
+         const actor=filter.$or?.match(/sender_id\.eq\.([^,]+)/)?.[1];
+         const ok=d&&d.id===filter.id&&
+          (d.sender_id===actor||d.courier_id===actor);
+         return {data:ok?{...d}:null,error:null};
+        }
         return {data:null,error:null};
        }
       };
@@ -98,6 +108,37 @@ function mockSupabase(){
        (params._next==='cancelled'?params._actor_id!==passenger:
         params._actor_id!==driver))return {error:{message:'Transition denied'}};
      state.trip={...state.trip,status:params._next,revision:state.trip.revision+1};
+     return {data:params._request_key,error:null};
+    }
+    if(name==='mobility_stage_delivery_request'){
+     if(params._sender_id!==passenger||state.delivery)
+      return {error:{message:'Delivery request denied'}};
+     state.delivery={id:deliveryId,sender_id:passenger,courier_id:null,
+      vehicle_id:null,requested_vehicle_kind:params._vehicle_kind,
+      category:params._category,grams:params._grams,length_cm:params._length_cm,
+      width_cm:params._width_cm,height_cm:params._height_cm,
+      pickup_tag:params._pickup_tag,delivery_tag:params._delivery_tag,
+      restricted_item_declared:false,status:'requested',revision:1,proof_ref:null};
+     return {data:deliveryId,error:null};
+    }
+    if(name==='mobility_stage_delivery_accept'){
+     if(params._courier_id!==driver||params._delivery_id!==deliveryId||
+        state.delivery?.status!=='requested')return {error:{message:'Accept denied'}};
+     state.delivery={...state.delivery,courier_id:driver,vehicle_id:params._vehicle_id,
+      status:'accepted',revision:2};
+     return {data:params._request_key,error:null};
+    }
+    if(name==='mobility_stage_delivery_transition'){
+     const expected={pickup:'accepted',deliver:'picked_up',dispute:'delivered',
+      return:'disputed',cancel:'requested'};
+     const actor=params._action==='dispute'||params._action==='cancel'?passenger:driver;
+     if(params._delivery_id!==deliveryId||params._actor_id!==actor||
+        state.delivery?.status!==expected[params._action])
+      return {error:{message:'Custody transition denied'}};
+     const next={pickup:'picked_up',deliver:'delivered',dispute:'disputed',
+      return:'returned',cancel:'cancelled'}[params._action];
+     state.delivery={...state.delivery,status:next,revision:state.delivery.revision+1,
+      proof_ref:params._action==='deliver'?params._proof_ref:state.delivery.proof_ref};
      return {data:params._request_key,error:null};
     }
     return {data:offer,error:null};
@@ -130,6 +171,10 @@ const offerPath='/v1/staging/driver/offers/'+offer;
 const acceptPath='/v1/staging/driver/offers/accept';
 const requestPath='/v1/staging/rider/trips/request';
 const transitionPath='/v1/staging/trips/'+ride+'/transition';
+const deliveryRequestPath='/v1/staging/sender/deliveries/request';
+const deliveryAcceptPath='/v1/staging/courier/deliveries/'+deliveryId+'/accept';
+const deliveryTransitionPath='/v1/staging/deliveries/'+deliveryId+'/transition';
+const deliveryStatusPath='/v1/staging/deliveries/'+deliveryId+'/status';
 
 test('boot refuses even loopback listener when native Auth signup remains public',async()=>{
  const m=mockSupabase();m.state.policy=false;
@@ -205,6 +250,34 @@ test('runtime persists passenger request and driver transition through shared re
   assert.equal((await req(base,transitionPath,'rider','POST',
    {event:'pickup',eventKey})).status,403);
   assert.equal(m.state.rpcs.length,before);
+ });
+});
+test('runtime persists AUTO delivery custody and returns only participant status',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const created=await req(base,deliveryRequestPath,'rider','POST',{
+   requestKey,vehicleKind:'AUTO',category:'RESTAURANT',grams:3500,
+   lengthCm:40,widthCm:30,heightCm:25,pickupTag:'RESTAURANT_A',
+   deliveryTag:'CUSTOMER_A',restrictedItemDeclared:false,
+  });
+  assert.equal(created.status,201);
+  assert.equal(created.body.deliveryId,deliveryId);
+  assert.equal((await req(base,deliveryAcceptPath,'driver','POST',{
+   vehicleId:vehicle,requestKey,
+  })).status,200);
+  assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
+   event:'pickup',eventKey:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  })).status,200);
+  assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
+   event:'deliver',eventKey:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+   proofRef:deliveryProof,
+  })).status,200);
+  const status=await req(base,deliveryStatusPath,'rider');
+  assert.equal(status.status,200);
+  assert.equal(status.body.delivery.status,'delivered');
+  assert.equal(status.body.delivery.proofRef,deliveryProof);
+  assert.equal((await req(base,deliveryStatusPath,'stranger')).status,403);
+  assert.doesNotMatch(JSON.stringify(status),/sb_secret|service_role/);
  });
 });
 test('turning public signup ON after start stops every request BEFORE Auth/SQL',async()=>{

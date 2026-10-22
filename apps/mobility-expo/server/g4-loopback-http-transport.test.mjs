@@ -9,6 +9,7 @@ import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback} from './g4-loo
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
+import {createQoreDeliveryCommandGateway} from './g5-delivery-command-gateway.mjs';
 import {makePrivateDriverPush} from './g4-qore-radar-core.mjs';
 import {createExpoPrivateOfferSender} from './g4-expo-push-offers.mjs';
 
@@ -24,6 +25,8 @@ const carA='88888888-8888-4888-8888-888888888888';
 const carB='99999999-9999-4999-8999-999999999999';
 const keyA='aaaa0000-0000-4000-8000-000000000001';
 const keyB='bbbb0000-0000-4000-8000-000000000002';
+const deliveryId='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const deliveryProof='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const fakeBearer=id=>'synthetic_fixture_'+id.replaceAll('-','')+'_never_real';
 const auth=id=>({authorization:'Bearer '+fakeBearer(id)});
 const offerPath=id=>'/v1/staging/driver/offers/'+id;
@@ -34,6 +37,7 @@ function fixture(){
   gpsAt:198_000,
   routeAt:199_000,
   accepted:0,
+  delivery:null,
   trip:{id:tripId,passengerId:riderId,driverId:null,vehicleId:null,
    status:'searching',revision:1,trackingSequence:0},
   offers:new Map([
@@ -117,8 +121,46 @@ function fixture(){
    return {ok:true,liveEnabled:false,eventId:input.eventKey};
   },
  });
+ const deliveries=createQoreDeliveryCommandGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  resolveRole:async id=>id===riderId?'passenger':
+   (id===driverA||id===driverB)?'driver':null,
+  allowRequest:()=>true,
+  requestDelivery:async input=>{
+   if(input.actorId!==riderId||state.delivery)throw Error('Not available');
+   state.delivery={id:deliveryId,senderId:riderId,courierId:null,vehicleId:null,
+    requestedVehicleKind:input.vehicleKind,category:input.category,grams:input.grams,
+    dimensionsCm:{length:input.lengthCm,width:input.widthCm,height:input.heightCm},
+    pickupTag:input.pickupTag,deliveryTag:input.deliveryTag,status:'requested',
+    revision:1,proofRef:null};
+   return {ok:true,liveEnabled:false,deliveryId};
+  },
+  acceptDelivery:async input=>{
+   if(input.actorId!==driverA||input.deliveryId!==deliveryId||
+      state.delivery?.status!=='requested')throw Error('Cannot accept');
+   state.delivery={...state.delivery,courierId:driverA,vehicleId:input.vehicleId,
+    status:'accepted',revision:2};
+   return {ok:true,liveEnabled:false,eventId:input.requestKey};
+  },
+  transitionDelivery:async input=>{
+   const next={pickup:'picked_up',deliver:'delivered'};
+   if(input.actorId!==driverA||state.delivery?.courierId!==driverA||
+      !next[input.event])throw Error('Cannot transition');
+   state.delivery={...state.delivery,status:next[input.event],
+    revision:state.delivery.revision+1,
+    proofRef:input.event==='deliver'?input.proofRef:state.delivery.proofRef};
+   return {ok:true,liveEnabled:false,eventId:input.eventKey};
+  },
+  loadDelivery:async input=>{
+   if(input.deliveryId!==deliveryId||!state.delivery||
+      ![state.delivery.senderId,state.delivery.courierId].includes(input.actorId))
+    throw Error('Not a participant');
+   return {ok:true,liveEnabled:false,delivery:{...state.delivery}};
+  },
+ });
  const server=createQoreRadarLoopbackTransport({
-  riderHandler:rider,offerHandler:offer,tripCommandHandler:commands
+  riderHandler:rider,offerHandler:offer,tripCommandHandler:commands,
+  deliveryHandler:deliveries,
  });
  return {state,server};
 }
@@ -250,6 +292,39 @@ test('HTTP: authenticated passenger request and driver lifecycle commands persis
  assert.equal(done.body.event.status,'completed');
  assert.equal(done.body.event.acceptedDriver,null);
  assert.equal(done.body.event.tracking,null);
+});
+
+test('HTTP: authenticated delivery request, courier custody and participant status',async t=>{
+ const {state,server}=fixture(),base=await listenQoreRadarLoopback(server);
+ t.after(()=>close(server));
+ const request=await client(base,'/v1/staging/sender/deliveries/request',{
+  method:'POST',id:riderId,body:{requestKey:keyA,vehicleKind:'AUTO',
+   category:'GROCERIES',grams:12000,lengthCm:60,widthCm:40,heightCm:30,
+   pickupTag:'SUPERMARKET_A',deliveryTag:'CUSTOMER_A',restrictedItemDeclared:false}
+ });
+ assert.equal(request.status,201);
+ assert.equal(request.body.deliveryId,deliveryId);
+ assert.equal(request.body.liveDeliveriesEnabled,false);
+ const accept=await client(base,`/v1/staging/courier/deliveries/${deliveryId}/accept`,{
+  method:'POST',id:driverA,body:{vehicleId:carA,requestKey:keyB}
+ });
+ assert.equal(accept.status,200);
+ for(const [event,eventKey,extra,status] of [
+  ['pickup','cccc0000-0000-4000-8000-000000000011',{},'picked_up'],
+  ['deliver','cccc0000-0000-4000-8000-000000000012',
+   {proofRef:deliveryProof},'delivered'],
+ ]){
+  const out=await client(base,`/v1/staging/deliveries/${deliveryId}/transition`,{
+   method:'POST',id:driverA,body:{event,eventKey,...extra}
+  });
+  assert.equal(out.status,200);
+  assert.equal(state.delivery.status,status);
+ }
+ const own=await client(base,`/v1/staging/deliveries/${deliveryId}/status`,{id:riderId});
+ assert.equal(own.status,200);
+ assert.equal(own.body.delivery.proofRef,deliveryProof);
+ assert.equal((await client(base,`/v1/staging/deliveries/${deliveryId}/status`,
+  {id:outsider})).status,403);
 });
 
 test('HTTP: malformed bodies, CORS origins, cookie sessions and URL confusion denied',async t=>{

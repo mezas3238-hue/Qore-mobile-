@@ -13,6 +13,15 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R3:** G5 añade entregas persistentes AUTO/MOTO con
+  capacidad, habilitación privada de carga, seguro, GPS/consentimiento,
+  asignación atómica, prueba obligatoria de entrega, disputa/devolución,
+  auditoría append-only y RLS por participante. Incluye repositorio Supabase,
+  cuatro endpoints autenticados y recorrido HTTP loopback. Farmacia queda
+  limitada explícitamente a OTC. Ver
+  `docs/backend/G5_PERSISTENT_DELIVERY_CUSTODY_2026-10-22.md`. Verificación
+  local al implementar: 164/164 pruebas de servidor PASS; el workflow G1→G5
+  PostgreSQL 16 desechable queda como autoridad de sintaxis/concurrencia SQL.
 - **Actualización Work R2:** API HTTP local autenticada para crear solicitud de
   pasajero y ejecutar transiciones persistentes de conductor/pasajero. Usa el
   adaptador común y RPC SQL; no admite identidades declaradas en JSON. Ver
@@ -91,17 +100,20 @@ No hay matriz de cotizaciones directas verificadas de Bolt/Uber Paraguay; los va
 1. **RESUELTO en el workflow principal:** PostgreSQL 16 desechable prueba carreras G3/G4 con dos conductores y outbox con dos workers. El workflow manual separado sigue siendo solo smoke y no debe citarse como única evidencia.
 2. **RESUELTO para runtime local G4:** actor derivado de sesión y snapshot filtrado en BD contra pasajero/conductor persistidos. Falta ampliar el mismo patrón a todos los endpoints nuevos.
 3. **PARCIAL AVANZADO:** adaptador Supabase implementa `request/offer/accept/transition/snapshot`; status, request, accept y transition ya están conectados a HTTP local autenticado. Persisten gates de despliegue remoto, dispatch automático, zonas legales y pruebas con JWT/dispositivos reales.
-4. Sin backend conectado a dispositivos, push ni GPS reales; NO declarar MVP funcional.
-5. Sin decisión documentada sobre licitud moto-pasajero y entregas farmacéuticas por municipio/categoría.
-6. No se ha demostrado un flujo económico real ni integridad de cobros, reembolsos, saldos y liquidaciones.
+4. **PARCIAL AVANZADO:** envíos ya tienen contrato PostgreSQL, adapter y API
+   autenticada; faltan despacho automático de couriers, prueba/OTP almacenada
+   de forma privada, incidencias operativas y dispositivos reales.
+5. Sin backend conectado a dispositivos, push ni GPS reales; NO declarar MVP funcional.
+6. Sin decisión documentada sobre licitud moto-pasajero y entregas farmacéuticas por municipio/categoría.
+7. No se ha demostrado un flujo económico real ni integridad de cobros, reembolsos, saldos y liquidaciones.
 **P1**
-7. Datos y precios competitivos contemporáneos insuficientes; falta modelo económico por servicio.
-8. Onboarding/KYC, documentos/vehículos, verificación, seguros, SOS, soporte, prevención de fraude y privacidad.
-9. Catálogo comercial, inventario, pedidos, preparación, courier, entrega/retorno, pruebas de entrega y portal comerciante.
-10. Escalabilidad, disponibilidad, observabilidad, contingencia de GPS, notificaciones y pasarelas.
-11. Faltan apps reales piloto pasajero/conductor/comerciante y pruebas de dispositivos Android/iOS.
+8. Datos y precios competitivos contemporáneos insuficientes; falta modelo económico por servicio.
+9. Onboarding/KYC, documentos/vehículos, verificación, seguros, SOS, soporte, prevención de fraude y privacidad.
+10. Catálogo comercial, inventario, pedidos, preparación, sustituciones y portal comerciante; entrega/retorno base ya persiste en G5.
+11. Escalabilidad, disponibilidad, observabilidad, contingencia de GPS, notificaciones y pasarelas.
+12. Faltan apps reales piloto pasajero/conductor/comerciante y pruebas de dispositivos Android/iOS.
 **P2**
-12. Cobertura nacional, acuerdos comerciales, idiomas, accesibilidad, operaciones, marketing y crecimiento.
+13. Cobertura nacional, acuerdos comerciales, idiomas, accesibilidad, operaciones, marketing y crecimiento.
 
 ## 8. ROADMAP EJECUTABLE Y CRITERIOS DE SALIDA
 **G0 / integridad (inmediato):** inspeccionar rama, PR, últimas CI y árbol; verificar 138 tests y reproducir; mantener tests sin regresiones. Corregir workflow PostgreSQL (SQL quoting y automatización) y conectar fixtures. No invertir ciclos solo en añadir validaciones triviales cuando falta integración.

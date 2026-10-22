@@ -13,14 +13,19 @@ import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs
 import {createStagingRateLimiter} from './g2-staging-vehicle-gateway.mjs';
 import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-repository.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
+import {createSupabaseStagingDeliveryRepository} from './g5-supabase-delivery-repository.mjs';
+import {createQoreDeliveryCommandGateway} from './g5-delivery-command-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
-const G4_TABLES=[
+const STAGE_TABLES=[
  'mobility_stage_auto_demo_trips',
  'mobility_stage_auto_demo_offers',
  'mobility_stage_auto_demo_events',
  'mobility_stage_auto_demo_push_outbox',
+ 'mobility_stage_delivery_vehicle_clearance',
+ 'mobility_stage_deliveries',
+ 'mobility_stage_delivery_events',
 ];
 const required=(v,name)=>{
  if(typeof v!=='string'||!v.trim())throw Error('Missing '+name);
@@ -45,11 +50,11 @@ function validClients(auth,admin){
   admin&&typeof admin.from==='function'&&typeof admin.rpc==='function';
 }
 async function assertDatabaseG4(admin){
- for(const table of G4_TABLES){
+ for(const table of STAGE_TABLES){
   // Head-only, SELECT id, zero returned rows; strictly no writes or fixtures.
   const q=admin.from(table).select('id',{head:true,count:'exact'}).limit(0);
   const {error}=await q;
-  if(error)throw Error('G4 ephemeral-only schema not installed in target staging');
+  if(error)throw Error('G4/G5 ephemeral-only schema not installed in target staging');
  }
 }
 async function singleRole(admin,id){
@@ -103,6 +108,7 @@ export async function prepareQoreG4StagingRuntime({
  await inspect();
  await assertDatabaseG4(admin);
  const persistence=createSupabaseStagingDispatchRepository(admin);
+ const deliveryPersistence=createSupabaseStagingDeliveryRepository(admin);
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -184,6 +190,22 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const deliveries=createQoreDeliveryCommandGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  resolveRole:id=>singleRole(admin,id),allowRequest,
+  requestDelivery:params=>deliveryPersistence.request({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  acceptDelivery:params=>deliveryPersistence.accept({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  transitionDelivery:params=>deliveryPersistence.transition({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  loadDelivery:params=>deliveryPersistence.snapshot({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -200,6 +222,7 @@ export async function prepareQoreG4StagingRuntime({
   server:createQoreRadarLoopbackTransport({
    riderHandler:guard(rider),offerHandler:guard(driver),
    tripCommandHandler:guard(commands),
+   deliveryHandler:guard(deliveries),
   }),
  };
 }
