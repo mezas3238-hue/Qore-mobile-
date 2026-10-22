@@ -1,6 +1,12 @@
 -- G15 private courier polling fallback when push never reaches device.
 -- Disposable PostgreSQL CI only, apply AFTER G10/G13. NEVER REMOTE/LIVE.
 -- A push provider ticket or send_started_at is NOT necessary to discover offers.
+DO $guard$
+BEGIN
+ IF current_database()<>'qore_disposable_chain'
+ OR current_setting('application_name')<>'qore_ci_disposable_chain'
+ THEN RAISE EXCEPTION 'Refusing non-disposable G13/G15 migration'; END IF;
+END $guard$;
 BEGIN;
 CREATE FUNCTION public.mobility_stage_poll_courier_delivery_offers(
  _courier_id uuid
