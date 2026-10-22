@@ -17,7 +17,8 @@ export function createSyntheticScenario({now,insidePolygon}={}){
   if(driver?.id!==driverId)return fail('Driver identity mismatch');
   const eligibility=evaluateStagingDriver({driver,vehicle,service,nowMs:now()});
   if(!eligibility.ok)return fail('Eligibility gate denied');
-  return dispatch.offer({rideId,driverId,expiresAtMs});
+  const eligibilityExpiresAtMs=Math.min(driver.licenseExpiresAtMs,vehicle.insuranceExpiresAtMs);
+  return dispatch.offer({rideId,driverId,expiresAtMs:Math.min(expiresAtMs,eligibilityExpiresAtMs)});
  }
  return Object.freeze({start,propose,accept:dispatch.accept,transition:dispatch.transition,snapshot:dispatch.snapshot});
 }
