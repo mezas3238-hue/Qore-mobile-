@@ -47,8 +47,8 @@ test('G6 links only matching G5 delivery and completes after delivery proof stat
  const transition=fn('mobility_stage_merchant_order_transition');
  assert.match(attach,/d\.sender_id<>o\.buyer_id/);
  assert.match(attach,/d\.requested_vehicle_kind<>o\.requested_vehicle_kind/);
- assert.match(attach,/d\.pickup_tag<>/);
- assert.match(attach,/d\.category<>CASE/);
+ assert.match(attach,/d\.pickup_tag<>expected_pickup/);
+ assert.match(attach,/d\.category<>expected_category/);
  assert.match(transition,/delivery_status='picked_up'/);
  assert.match(transition,/delivery_status='delivered'/);
 });

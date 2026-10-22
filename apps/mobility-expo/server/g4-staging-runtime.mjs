@@ -15,6 +15,8 @@ import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-re
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 import {createSupabaseStagingDeliveryRepository} from './g5-supabase-delivery-repository.mjs';
 import {createQoreDeliveryCommandGateway} from './g5-delivery-command-gateway.mjs';
+import {createSupabaseStagingMerchantRepository} from './g6-supabase-merchant-repository.mjs';
+import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -26,6 +28,13 @@ const STAGE_TABLES=[
  'mobility_stage_delivery_vehicle_clearance',
  'mobility_stage_deliveries',
  'mobility_stage_delivery_events',
+ 'mobility_stage_merchants',
+ 'mobility_stage_merchant_staff',
+ 'mobility_stage_merchant_branches',
+ 'mobility_stage_catalog_items',
+ 'mobility_stage_merchant_orders',
+ 'mobility_stage_merchant_order_lines',
+ 'mobility_stage_merchant_order_events',
 ];
 const required=(v,name)=>{
  if(typeof v!=='string'||!v.trim())throw Error('Missing '+name);
@@ -109,6 +118,7 @@ export async function prepareQoreG4StagingRuntime({
  await assertDatabaseG4(admin);
  const persistence=createSupabaseStagingDispatchRepository(admin);
  const deliveryPersistence=createSupabaseStagingDeliveryRepository(admin);
+ const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -206,6 +216,25 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const merchants=createQoreMerchantOrderGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeBuyer:id=>roleHas(admin,id,'passenger'),allowRequest,
+  authorizeMerchantOrder:({actorId,orderId})=>
+   merchantPersistence.isMerchantParticipant({mode:'SYNTHETIC_STAGING',
+    liveEnabled:false,actorId,orderId}),
+  requestOrder:params=>merchantPersistence.request({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  transitionOrder:params=>merchantPersistence.transition({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  attachDelivery:params=>merchantPersistence.attachDelivery({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  loadOrder:params=>merchantPersistence.snapshot({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -223,6 +252,7 @@ export async function prepareQoreG4StagingRuntime({
    riderHandler:guard(rider),offerHandler:guard(driver),
    tripCommandHandler:guard(commands),
    deliveryHandler:guard(deliveries),
+   merchantHandler:guard(merchants),
   }),
  };
 }

@@ -16,9 +16,11 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 - **Actualización Work R4:** G6 incorpora contrato persistente de comercios,
   sucursales, personal, catálogo, reserva/reposición de inventario, pedidos y
   preparación para supermercado/farmacia OTC/restaurante/retail/otros. El
-  pedido se enlaza a G5 y solo avanza con los estados reales de custodia. Ver
+  pedido se enlaza a G5 y solo avanza con los estados reales de custodia. Ya
+  dispone de repositorio Supabase y cinco rutas HTTP autenticadas. Ver
   `docs/backend/G6_MERCHANT_CATALOG_ORDERS_2026-10-22.md`. Pruebas estáticas
-  incluidas; PostgreSQL 16 desechable es el gate de ejecución.
+  incluidas; 176/176 pruebas de servidor locales PASS y PostgreSQL 16
+  desechable permanece como gate de ejecución SQL.
 - **Actualización Work R3:** G5 añade entregas persistentes AUTO/MOTO con
   capacidad, habilitación privada de carga, seguro, GPS/consentimiento,
   asignación atómica, prueba obligatoria de entrega, disputa/devolución,

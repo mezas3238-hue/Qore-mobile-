@@ -33,9 +33,21 @@ G5 sobre la misma base PostgreSQL 16 efímera. La prueba cubre reserva de stock,
 replay, rechazo OTC fuera de farmacia, preparación, entrega vinculada,
 comprobante, cancelación/reposición y RLS.
 
-El contrato todavía no expone API HTTP ni administración de onboarding,
-catálogo o horarios. Tampoco implementa sustituciones, carrito persistente,
+El repositorio `server/g6-supabase-merchant-repository.mjs` y el gateway
+`server/g6-merchant-order-gateway.mjs` conectan el contrato a las rutas:
+
+- `POST /v1/staging/buyer/orders/request`
+- `POST /v1/staging/merchant/orders/:orderId/transition`
+- `POST /v1/staging/buyer/orders/:orderId/transition`
+- `POST /v1/staging/merchant/orders/:orderId/attach-delivery`
+- `GET /v1/staging/orders/:orderId/status`
+
+El runtime loopback deriva comprador/personal del JWT y de membresía persistida;
+no acepta precios, subtotal, identidad o estados declarados por el cliente. La
+suite local alcanza 176/176 pruebas de servidor.
+
+Todavía no hay administración HTTP de onboarding, catálogo o horarios.
+Tampoco implementa sustituciones, carrito persistente,
 impuestos, pago, reembolso, promociones, cadena de frío ni prescripciones. El
-siguiente bloque conecta repositorio/API autenticada y luego amplía las
-operaciones comerciales, siempre antes de Lovable.
+siguiente bloque amplía operaciones comerciales, siempre antes de Lovable.
 

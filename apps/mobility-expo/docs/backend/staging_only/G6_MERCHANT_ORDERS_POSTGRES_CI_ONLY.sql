@@ -284,6 +284,8 @@ DECLARE o public.mobility_stage_merchant_orders%ROWTYPE;
  d public.mobility_stage_deliveries%ROWTYPE;
  old public.mobility_stage_merchant_order_events%ROWTYPE;
  event_id uuid; ver bigint; staff_allowed boolean;
+ expected_pickup text;
+ expected_category public.mobility_stage_delivery_category;
 BEGIN
  IF _order_id IS NULL OR _actor_id IS NULL OR _delivery_id IS NULL OR _request_key IS NULL
  THEN RAISE EXCEPTION 'Invalid merchant delivery link'; END IF;
@@ -300,17 +302,18 @@ BEGIN
   WHERE s.merchant_id=o.merchant_id AND s.user_id=_actor_id AND s.active=true)
  INTO staff_allowed;
  SELECT * INTO d FROM public.mobility_stage_deliveries WHERE id=_delivery_id FOR UPDATE;
- IF o.status<>'ready' OR o.delivery_id IS NOT NULL OR NOT staff_allowed OR NOT FOUND
-  OR d.sender_id<>o.buyer_id OR d.requested_vehicle_kind<>o.requested_vehicle_kind
-  OR d.pickup_tag<>(SELECT pickup_tag FROM public.mobility_stage_merchant_branches WHERE id=o.branch_id)
-  OR d.category<>CASE
-   WHEN (SELECT kind FROM public.mobility_stage_merchants WHERE id=o.merchant_id)='SUPERMARKET'
-    THEN 'GROCERIES'::public.mobility_stage_delivery_category
-   WHEN (SELECT kind FROM public.mobility_stage_merchants WHERE id=o.merchant_id)='PHARMACY'
-    THEN 'PHARMACY_OTC'::public.mobility_stage_delivery_category
-   WHEN (SELECT kind FROM public.mobility_stage_merchants WHERE id=o.merchant_id)='RESTAURANT'
-    THEN 'RESTAURANT'::public.mobility_stage_delivery_category
+ SELECT b.pickup_tag,CASE m.kind
+   WHEN 'SUPERMARKET' THEN 'GROCERIES'::public.mobility_stage_delivery_category
+   WHEN 'PHARMACY' THEN 'PHARMACY_OTC'::public.mobility_stage_delivery_category
+   WHEN 'RESTAURANT' THEN 'RESTAURANT'::public.mobility_stage_delivery_category
    ELSE 'PARCEL'::public.mobility_stage_delivery_category END
+ INTO expected_pickup,expected_category
+ FROM public.mobility_stage_merchant_branches b
+ JOIN public.mobility_stage_merchants m ON m.id=b.merchant_id
+ WHERE b.id=o.branch_id;
+ IF o.status<>'ready' OR o.delivery_id IS NOT NULL OR NOT staff_allowed OR d.id IS NULL
+  OR d.sender_id<>o.buyer_id OR d.requested_vehicle_kind<>o.requested_vehicle_kind
+  OR d.pickup_tag<>expected_pickup OR d.category<>expected_category
   OR d.status NOT IN ('requested','accepted')
  THEN RAISE EXCEPTION 'Delivery does not match merchant order'; END IF;
  UPDATE public.mobility_stage_merchant_orders SET delivery_id=d.id,

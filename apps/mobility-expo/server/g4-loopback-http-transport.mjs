@@ -19,6 +19,10 @@ const deliveryRequestRoute=/^\/v1\/staging\/sender\/deliveries\/request$/;
 const deliveryAcceptRoute=/^\/v1\/staging\/courier\/deliveries\/[0-9a-f-]{36}\/accept$/i;
 const deliveryTransitionRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/transition$/i;
 const deliveryStatusRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/status$/i;
+const merchantRequestRoute=/^\/v1\/staging\/buyer\/orders\/request$/;
+const merchantTransitionRoute=/^\/v1\/staging\/(?:merchant|buyer)\/orders\/[0-9a-f-]{36}\/transition$/i;
+const merchantAttachRoute=/^\/v1\/staging\/merchant\/orders\/[0-9a-f-]{36}\/attach-delivery$/i;
+const merchantStatusRoute=/^\/v1\/staging\/orders\/[0-9a-f-]{36}\/status$/i;
 const safe=(code,body)=>({status:code,body});
 const maxBody=2048;
 const JSON_HEADERS={
@@ -37,11 +41,12 @@ function send(res,status,body) {
  res.end(JSON.stringify(body));
 }
 export function createQoreRadarLoopbackTransport({
- riderHandler,offerHandler,tripCommandHandler,deliveryHandler,
+ riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
 }){
  if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
-   typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function')
-  throw new Error('All G4/G5 authenticated gateways required');
+   typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
+   typeof merchantHandler!=='function')
+  throw new Error('All G4/G5/G6 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
   const path=req.url;
@@ -59,20 +64,25 @@ export function createQoreRadarLoopbackTransport({
   const deliveryPost=req.method==='POST'&&
    (deliveryRequestRoute.test(path)||deliveryAcceptRoute.test(path)||
     deliveryTransitionRoute.test(path));
-  if(!rider&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost){
+  const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
+  const merchantPost=req.method==='POST'&&
+   (merchantRequestRoute.test(path)||merchantTransitionRoute.test(path)||
+    merchantAttachRoute.test(path));
+  if(!rider&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost&&
+    !merchantGet&&!merchantPost){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||offerGet||deliveryGet)&&
+  if((rider||offerGet||deliveryGet||merchantGet)&&
      (req.headers['transfer-encoding']!==undefined||
       (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0'))){
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
-  if(offerPost||tripPost||deliveryPost){
+  if(offerPost||tripPost||deliveryPost||merchantPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -92,7 +102,8 @@ export function createQoreRadarLoopbackTransport({
   }
   try {
    const handler=rider?riderHandler:tripPost?tripCommandHandler:
-    (deliveryGet||deliveryPost)?deliveryHandler:offerHandler;
+    (deliveryGet||deliveryPost)?deliveryHandler:
+    (merchantGet||merchantPost)?merchantHandler:offerHandler;
    const out=await handler({
     method:req.method,path,headers:req.headers,body
    });
