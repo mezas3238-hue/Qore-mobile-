@@ -8,13 +8,17 @@ const fail=reason=>({ok:false,reason,liveEnabled:false});
 export function createSyntheticScenario({now,insidePolygon}={}){
  if(typeof now!=='function'||typeof insidePolygon!=='function')throw Error('Missing staging adapters');
  const dispatch=createSyntheticDispatch({now});
+ const rideServices=new Map();
  function start({rideId,passengerId,zone,point,service='AUTO'}){
   const z=evaluateSyntheticZone({zone,service,point,insidePolygon});
   if(!z.ok)return fail('Zone gate denied');
-  return dispatch.request({rideId,passengerId});
+  const result=dispatch.request({rideId,passengerId});
+  if(result.ok)rideServices.set(rideId,service);
+  return result;
  }
  function propose({rideId,driverId,driver,vehicle,service='AUTO',expiresAtMs}){
   if(driver?.id!==driverId)return fail('Driver identity mismatch');
+  if(rideServices.get(rideId)!==service)return fail('Requested service mismatch');
   const eligibility=evaluateStagingDriver({driver,vehicle,service,nowMs:now()});
   if(!eligibility.ok)return fail('Eligibility gate denied');
   const eligibilityExpiresAtMs=Math.min(driver.licenseExpiresAtMs,vehicle.insuranceExpiresAtMs);
