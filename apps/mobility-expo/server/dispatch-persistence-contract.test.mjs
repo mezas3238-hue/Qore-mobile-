@@ -32,3 +32,15 @@ test('passenger ownership and transition events are validated before repository'
  assert.equal((await api.transition({...args,event:'arrive',eventKey:id})).ok,true);
  assert.equal(calls,1);
 });
+
+test('dispatch persistence rejects array, null and scalar input without backend calls',async()=>{
+ let calls=0;
+ const repo=Object.fromEntries(['request','offer','accept','transition','snapshot'].map(k=>[k,async()=>{calls++;return {ok:true,liveEnabled:false};}]));
+ const api=createStagingDispatchPersistence(repo);
+ for(const invalid of [null,undefined,[],42,'SYNTHETIC_STAGING']){
+  const response=await api.request(invalid);
+  assert.equal(response.ok,false);
+  assert.equal(response.liveEnabled,false);
+ }
+ assert.equal(calls,0);
+});
