@@ -143,6 +143,8 @@ BEGIN
  WHERE id=_offer_id FOR UPDATE;
  IF offered.driver_id<>_driver_id
  THEN RAISE EXCEPTION 'Driver cannot accept someone else''s offer'; END IF;
+ IF offered.decision_key IS NOT NULL AND offered.decision_key<>_decision_key
+ THEN RAISE EXCEPTION 'Conflicting acceptance decision key'; END IF;
  IF offered.status='accepted' AND offered.decision_key=_decision_key
  THEN RETURN offered.decision_event_id; END IF;
  IF offered.status<>'offered' OR trip.status<>'searching'
