@@ -15,6 +15,8 @@ test('forged subtotal, toll and commission cannot pass quote verification',()=>{
   {commissionPyg:q.commissionPyg+100,providerPyg:q.providerPyg-100},
   {commissionBps:1200},
   {breakdown:{...q.breakdown,distanceChargePyg:q.breakdown.distanceChargePyg+100}},
-  {mode:'UNKNOWN'}
+  {mode:'UNKNOWN'},
+  {ruleVersion:'../../unsafe'},
+  {ruleVersion:''}
  ])assert.equal(verifySyntheticQuote({...q,...change}),false);
 });
