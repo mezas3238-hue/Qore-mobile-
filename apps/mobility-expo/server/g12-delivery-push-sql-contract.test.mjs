@@ -21,3 +21,12 @@ test('G12 RPCs are service-role only',()=>{
  assert.match(sql,/TO service_role/);
  assert.doesNotMatch(sql,/GRANT EXECUTE[^;]+TO authenticated/);
 });
+
+test('G12 expiry cleanup is bounded, nonblocking and service-only',()=>{
+ assert.match(sql,/CREATE FUNCTION public\.mobility_stage_expire_delivery_push_claims\(\)/);
+ assert.match(sql,/FOR UPDATE OF o SKIP LOCKED LIMIT 100/);
+ assert.match(sql,/f\.expires_at<=pg_catalog\.clock_timestamp\(\)/);
+ assert.match(sql,/o\.accepted_for_processing_at IS NULL/);
+ assert.match(sql,/REVOKE ALL ON FUNCTION public\.mobility_stage_expire_delivery_push_claims\(\)/);
+ assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.mobility_stage_expire_delivery_push_claims\(\) TO service_role/);
+});
