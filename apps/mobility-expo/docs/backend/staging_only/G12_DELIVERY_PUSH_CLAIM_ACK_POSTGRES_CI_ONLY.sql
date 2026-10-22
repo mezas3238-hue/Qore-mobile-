@@ -1,5 +1,5 @@
 -- G12: private delivery push outbox, POSTGRES 16 DISPOSABLE CI ONLY.
--- Apply AFTER G10. NEVER remote / LIVE. Claim is at-most-once; no automatic retry.
+-- Apply AFTER G10. NEVER remote / LIVE. Claim is at-most-once; no automatic retry. Expired claims may be cleared safely.
 BEGIN;
 ALTER TABLE public.mobility_stage_delivery_offer_outbox
  ADD COLUMN claimed_at timestamptz,
@@ -72,4 +72,24 @@ REVOKE ALL ON FUNCTION public.mobility_stage_ack_delivery_push(uuid,uuid,text)
  FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.mobility_stage_claim_delivery_push(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.mobility_stage_ack_delivery_push(uuid,uuid,text) TO service_role;
+
+-- Recovery is deliberately limited to expired offers: never resend an active offer
+-- after an ambiguous provider outcome without verified provider-side deduplication.
+CREATE FUNCTION public.mobility_stage_expire_delivery_push_claims()
+ RETURNS integer LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=''
+AS $fn$
+DECLARE affected integer;
+BEGIN
+ UPDATE public.mobility_stage_delivery_offer_outbox o
+ SET claimed_at=NULL,claimed_by=NULL
+ FROM public.mobility_stage_delivery_offers f
+ WHERE f.id=o.offer_id AND o.claimed_at IS NOT NULL
+   AND o.accepted_for_processing_at IS NULL
+   AND f.expires_at<=pg_catalog.clock_timestamp();
+ GET DIAGNOSTICS affected = ROW_COUNT;
+ RETURN affected;
+END $fn$;
+REVOKE ALL ON FUNCTION public.mobility_stage_expire_delivery_push_claims()
+ FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.mobility_stage_expire_delivery_push_claims() TO service_role;
 COMMIT;
