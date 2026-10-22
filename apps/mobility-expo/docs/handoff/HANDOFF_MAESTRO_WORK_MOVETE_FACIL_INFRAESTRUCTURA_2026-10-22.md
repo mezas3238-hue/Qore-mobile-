@@ -13,12 +13,21 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R11:** G10 implementa despacho privado AUTO/MOTO para
+  envíos particulares y entregas comerciales: ranking por ruta vial confiable,
+  revalidación de capacidad/seguro/GPS, fanout máximo 5, TTL, outbox privado y
+  aceptación PostgreSQL con un solo ganador. Tras G10 se revoca el atajo G5 de
+  aceptación directa por `delivery_id`. API autenticada recipient-only y
+  repositorio Supabase conectados al runtime. Suite local inicial: 234/234
+  servidor PASS. Ver
+  `docs/backend/G10_PRIVATE_DELIVERY_DISPATCH_2026-10-22.md`.
 - **Actualización Work R10:** G9 incorpora repositorio server-only, cuatro
   endpoints autenticados y runtime loopback para onboarding, review, sucursal
   y catálogo. Owner/admin provienen de Auth y PostgreSQL revalida autoridad.
   Suite local: 216/216 servidor, 102/102 dominio, TypeScript y NO-LIVE PASS.
-  El primer gate SQL detectó un cast texto→enum en review; ya fue reemplazado
-  por casts explícitos y queda pendiente de confirmación en el siguiente CI.
+  El primer gate SQL detectó un cast texto→enum en review; fue reemplazado
+  por casts explícitos. Commit remoto `d9ba2a1`, Node STAGING #64 y Expo #555
+  SUCCESS, incluido PostgreSQL 16 G1→G9.
 - **Actualización Work R9:** G9 elimina fixtures como única vía de alta
   comercial: onboarding idempotente, aprobación/suspensión admin, sucursales y
   catálogo mutables solo por owner/manager persistido, con auditoría privada
@@ -144,9 +153,10 @@ No hay matriz de cotizaciones directas verificadas de Bolt/Uber Paraguay; los va
 1. **RESUELTO en el workflow principal:** PostgreSQL 16 desechable prueba carreras G3/G4 con dos conductores y outbox con dos workers. El workflow manual separado sigue siendo solo smoke y no debe citarse como única evidencia.
 2. **RESUELTO para runtime local G4:** actor derivado de sesión y snapshot filtrado en BD contra pasajero/conductor persistidos. Falta ampliar el mismo patrón a todos los endpoints nuevos.
 3. **PARCIAL AVANZADO:** adaptador Supabase implementa `request/offer/accept/transition/snapshot`; status, request, accept y transition ya están conectados a HTTP local autenticado. Persisten gates de despliegue remoto, dispatch automático, zonas legales y pruebas con JWT/dispositivos reales.
-4. **PARCIAL AVANZADO:** envíos ya tienen contrato PostgreSQL, adapter y API
-   autenticada; faltan despacho automático de couriers, prueba/OTP almacenada
-   de forma privada, incidencias operativas y dispositivos reales.
+4. **PARCIAL AVANZADO:** envíos ya tienen contrato PostgreSQL, adapter, API y
+   despacho privado de couriers con aceptación exclusiva. Faltan prueba/OTP
+   almacenada de forma privada, reintentos/fallo de entrega y dispositivos
+   reales; el ranking ya posee adaptadores fail-closed para GPS/rutas reales.
 5. Sin backend conectado a dispositivos, push ni GPS reales; NO declarar MVP funcional.
 6. Sin decisión documentada sobre licitud moto-pasajero y entregas farmacéuticas por municipio/categoría.
 7. No se ha demostrado un flujo económico real ni integridad de cobros, reembolsos, saldos y liquidaciones.

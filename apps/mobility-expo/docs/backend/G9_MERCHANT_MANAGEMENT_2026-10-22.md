@@ -27,10 +27,10 @@ El repositorio server-only, gateway autenticado y runtime loopback exponen:
 
 Owner/admin siempre se derivan de Auth y PostgreSQL vuelve a comprobar rol o
 membresía. El cliente no puede autoaprobarse ni enviar un owner alternativo.
-La suite local pasa 216/216 pruebas de servidor, 102/102 de dominio, TypeScript
-y guard NO-LIVE. Después de confirmar el smoke PostgreSQL remoto quedará cerrar
-pruebas integrales/capacidad antes de conectar Lovable.
+La suite local pasó 216/216 pruebas de servidor, 102/102 de dominio, TypeScript
+y guard NO-LIVE. El commit remoto `d9ba2a1` quedó validado por Node STAGING #64
+y Expo #555, incluido PostgreSQL 16 G1→G9.
 
 El primer gate G9 detectó que PostgreSQL no convierte implícitamente un `CASE`
 de texto al enum de estado comercial. La corrección usa casts explícitos a
-`mobility_stage_merchant_status` y queda sujeta al siguiente CI efímero.
+`mobility_stage_merchant_status`; el CI efímero posterior confirmó la corrección.

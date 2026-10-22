@@ -23,6 +23,8 @@ import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-reposi
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-merchant-management-repository.mjs';
 import {createQoreMerchantManagementGateway} from './g9-merchant-management-gateway.mjs';
+import {createSupabaseStagingDeliveryOfferRepository} from './g10-supabase-delivery-offer-repository.mjs';
+import {createQoreDeliveryOfferGateway} from './g10-delivery-offer-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -51,6 +53,8 @@ const STAGE_TABLES=[
  'mobility_stage_operational_suspensions',
  'mobility_stage_suspension_events',
  'mobility_stage_merchant_management_events',
+ 'mobility_stage_delivery_offers',
+ 'mobility_stage_delivery_offer_outbox',
 ];
 const required=(v,name)=>{
  if(typeof v!=='string'||!v.trim())throw Error('Missing '+name);
@@ -149,6 +153,7 @@ export async function prepareQoreG4StagingRuntime({
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
   createSupabaseStagingMerchantManagementRepository(admin);
+ const deliveryOfferPersistence=createSupabaseStagingDeliveryOfferRepository(admin);
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -317,6 +322,19 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const deliveryOffers=createQoreDeliveryOfferGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeCourier:id=>roleHas(admin,id,'driver'),allowRequest,now,
+  loadOffer:params=>deliveryOfferPersistence.snapshot({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  acceptOffer:params=>deliveryOfferPersistence.accept({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  declineOffer:params=>deliveryOfferPersistence.decline({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -338,6 +356,7 @@ export async function prepareQoreG4StagingRuntime({
    financeHandler:guard(finance),
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
+   deliveryOfferHandler:guard(deliveryOffers),
   }),
  };
 }

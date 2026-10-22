@@ -28,7 +28,7 @@ function mockSupabase(){
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
   offer:{id:offer,trip_id:ride,driver_id:driver,status:'offered',
    expires_at:new Date(now+20_000).toISOString()},
-  delivery:null,quote:null,payment:null};
+  delivery:null,deliveryOffer:null,quote:null,payment:null};
  const request=async(url,opt)=>{
   assert.equal(url,'https://'+ref+'.supabase.co/auth/v1/settings');
   assert.equal(opt.method,'GET');
@@ -76,11 +76,16 @@ function mockSupabase(){
           t.passenger_id===actor||t.driver_id===actor);
          return {data:ok?{...t}:null,error:null};
         }
+        if(table==='mobility_stage_delivery_offers'){
+         const o=state.deliveryOffer;
+         return {data:o&&o.id===filter.id&&o.courier_id===filter.courier_id?
+          {...o}:null,error:null};
+        }
         if(table==='mobility_stage_deliveries'){
          const d=state.delivery;
          const actor=filter.$or?.match(/sender_id\.eq\.([^,]+)/)?.[1];
-         const ok=d&&d.id===filter.id&&
-          (d.sender_id===actor||d.courier_id===actor);
+         const ok=d&&d.id===filter.id&&(filter.status!==undefined?
+          d.status===filter.status:(d.sender_id===actor||d.courier_id===actor));
          return {data:ok?{...d}:null,error:null};
         }
         if(table==='mobility_stage_fare_quotes'){
@@ -139,6 +144,15 @@ function mockSupabase(){
      state.delivery={...state.delivery,courier_id:driver,vehicle_id:params._vehicle_id,
       status:'accepted',revision:2};
      return {data:params._request_key,error:null};
+    }
+    if(name==='mobility_stage_delivery_accept_offer'){
+     if(params._courier_id!==driver||params._offer_id!==offer||
+        state.delivery?.status!=='requested'||state.deliveryOffer?.status!=='offered')
+      return {error:{message:'Private delivery offer denied'}};
+     state.delivery={...state.delivery,courier_id:driver,vehicle_id:vehicle,
+      status:'accepted',revision:2};
+     state.deliveryOffer.status='accepted';
+     return {data:params._decision_key,error:null};
     }
     if(name==='mobility_stage_delivery_transition'){
      const expected={pickup:'accepted',deliver:'picked_up',dispute:'delivered',
@@ -214,6 +228,8 @@ const deliveryTransitionPath='/v1/staging/deliveries/'+deliveryId+'/transition';
 const deliveryStatusPath='/v1/staging/deliveries/'+deliveryId+'/status';
 const fareQuotePath='/v1/staging/fares/quote';
 const paymentAuthorizePath='/v1/staging/payments/authorize';
+const deliveryOfferPath='/v1/staging/courier/delivery-offers/'+offer;
+const deliveryOfferAcceptPath='/v1/staging/courier/delivery-offers/accept';
 
 test('boot refuses even loopback listener when native Auth signup remains public',async()=>{
  const m=mockSupabase();m.state.policy=false;
@@ -317,6 +333,28 @@ test('runtime persists AUTO delivery custody and returns only participant status
   assert.equal(status.body.delivery.proofRef,deliveryProof);
   assert.equal((await req(base,deliveryStatusPath,'stranger')).status,403);
   assert.doesNotMatch(JSON.stringify(status),/sb_secret|service_role/);
+ });
+});
+test('runtime keeps G10 delivery offer private and accepts through atomic offer RPC',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,deliveryRequestPath,'rider','POST',{
+   requestKey,vehicleKind:'AUTO',category:'PARCEL',grams:1000,
+   lengthCm:20,widthCm:15,heightCm:10,pickupTag:'SHOP_A',
+   deliveryTag:'CLIENT_A',restrictedItemDeclared:false,
+  })).status,201);
+  m.state.deliveryOffer={id:offer,delivery_id:deliveryId,courier_id:driver,
+   vehicle_id:vehicle,status:'offered',expires_at:new Date(now+30_000).toISOString()};
+  assert.equal((await req(base,deliveryOfferPath,'stranger')).status,403);
+  const preview=await req(base,deliveryOfferPath,'driver');
+  assert.equal(preview.status,200);assert.equal(preview.body.deliveryId,deliveryId);
+  assert.equal(preview.body.confirmedAcceptance,false);
+  const accepted=await req(base,deliveryOfferAcceptPath,'driver','POST',{
+   offerId:offer,requestKey});
+  assert.equal(accepted.status,200);assert.equal(accepted.body.eventId,requestKey);
+  assert.deepEqual(m.state.rpcs.at(-1),{
+   name:'mobility_stage_delivery_accept_offer',params:{_offer_id:offer,
+    _courier_id:driver,_decision_key:requestKey}});
  });
 });
 test('runtime derives fare context server-side and exposes only simulated payment state',async()=>{
