@@ -11,3 +11,9 @@ test('reject altered toll, subtotal and commission components even when entries 
   assert.equal(buildSyntheticSettlement({quote:altered,transactionId:'tamper_1'}).ok,false);
  }
 });
+
+test('ledger refuses internally balanced but forged fare component breakdown',()=>{
+ const forged={...quote,breakdown:{...quote.breakdown,basePyg:quote.breakdown.basePyg+1000}};
+ assert.equal(buildSyntheticSettlement({quote:forged,transactionId:'forged_breakdown'}).ok,false);
+ assert.equal(buildSyntheticSettlement({quote:{...quote,ruleVersion:'../../unsafe'},transactionId:'forged_rule'}).ok,false);
+});
