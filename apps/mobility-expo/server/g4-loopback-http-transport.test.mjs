@@ -162,6 +162,7 @@ function fixture(){
   riderHandler:rider,offerHandler:offer,tripCommandHandler:commands,
   deliveryHandler:deliveries,
   merchantHandler:async()=>({status:404,body:{error:'Not found'}}),
+  financeHandler:async()=>({status:404,body:{error:'Not found'}}),
  });
  return {state,server};
 }

@@ -46,4 +46,11 @@ test('G7 capture and refund create canonical opposite three-line ledger entries'
  assert.match(body,/CASE WHEN _action='capture' THEN 'debit' ELSE 'credit' END/);
  assert.match(sql,/UNIQUE\(payment_id,event,sequence\)/);
 });
+test('G7 serializes authorization without granting quote mutation',()=>{
+ const body=fn('mobility_stage_payment_authorize');
+ assert.match(body,/pg_catalog\.pg_advisory_xact_lock/);
+ assert.match(body,/pg_catalog\.hashtextextended\(_quote_id::text,0\)/);
+ assert.doesNotMatch(body,/fare_quotes WHERE id=_quote_id FOR UPDATE/);
+ assert.doesNotMatch(sql,/GRANT UPDATE ON public\.mobility_stage_fare_quotes/);
+});
 

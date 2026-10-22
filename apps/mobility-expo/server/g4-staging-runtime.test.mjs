@@ -15,6 +15,8 @@ const vehicle='66666666-6666-4666-8666-666666666666';
 const requestKey='77777777-7777-4777-8777-777777777777';
 const deliveryId='88888888-8888-4888-8888-888888888888';
 const deliveryProof='99999999-9999-4999-8999-999999999999';
+const fareQuote='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const payment='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const now=100_000;
 const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  driver:'syntheticDriverBearerTokenNoRealJwt12345',
@@ -26,7 +28,7 @@ function mockSupabase(){
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
   offer:{id:offer,trip_id:ride,driver_id:driver,status:'offered',
    expires_at:new Date(now+20_000).toISOString()},
-  delivery:null};
+  delivery:null,quote:null,payment:null};
  const request=async(url,opt)=>{
   assert.equal(url,'https://'+ref+'.supabase.co/auth/v1/settings');
   assert.equal(opt.method,'GET');
@@ -80,6 +82,16 @@ function mockSupabase(){
          const ok=d&&d.id===filter.id&&
           (d.sender_id===actor||d.courier_id===actor);
          return {data:ok?{...d}:null,error:null};
+        }
+        if(table==='mobility_stage_fare_quotes'){
+         const q=state.quote;
+         const ok=q&&q.id===filter.id&&q.customer_id===filter.customer_id;
+         return {data:ok?{...q}:null,error:null};
+        }
+        if(table==='mobility_stage_payment_intents'){
+         const p=state.payment;
+         const ok=p&&p.id===filter.id&&p.customer_id===filter.customer_id;
+         return {data:ok?{...p}:null,error:null};
         }
         return {data:null,error:null};
        }
@@ -141,6 +153,31 @@ function mockSupabase(){
       proof_ref:params._action==='deliver'?params._proof_ref:state.delivery.proof_ref};
      return {data:params._request_key,error:null};
     }
+    if(name==='mobility_stage_fare_quote'){
+     if(params._customer_id!==passenger||params._subject_id!==ride)
+      return {error:{message:'Fare subject denied'}};
+     state.quote={id:fareQuote,customer_id:passenger,mode:params._mode,
+      subject_kind:params._subject_kind,subject_id:params._subject_id,
+      subtotal_pyg:12000,tolls_pyg:1000,total_pyg:13000,commission_bps:1000,
+      commission_pyg:1200,provider_pyg:11800,
+      expires_at:'2026-10-22T12:05:00Z',
+      mobility_stage_fare_rules:{rule_key:'auto-staging-v1'}};
+     return {data:fareQuote,error:null};
+    }
+    if(name==='mobility_stage_payment_authorize'){
+     if(params._customer_id!==passenger||params._quote_id!==fareQuote)
+      return {error:{message:'Quote denied'}};
+     state.payment={id:payment,quote_id:fareQuote,customer_id:passenger,
+      method:params._method,amount_pyg:13000,status:'authorized',revision:1};
+     return {data:payment,error:null};
+    }
+    if(name==='mobility_stage_payment_transition'){
+     if(params._actor_id!==passenger||params._payment_id!==payment)
+      return {error:{message:'Payment denied'}};
+     state.payment={...state.payment,status:params._action==='cancel'?'cancelled':'captured',
+      revision:state.payment.revision+1};
+     return {data:params._request_key,error:null};
+    }
     return {data:offer,error:null};
    },
   };
@@ -175,6 +212,8 @@ const deliveryRequestPath='/v1/staging/sender/deliveries/request';
 const deliveryAcceptPath='/v1/staging/courier/deliveries/'+deliveryId+'/accept';
 const deliveryTransitionPath='/v1/staging/deliveries/'+deliveryId+'/transition';
 const deliveryStatusPath='/v1/staging/deliveries/'+deliveryId+'/status';
+const fareQuotePath='/v1/staging/fares/quote';
+const paymentAuthorizePath='/v1/staging/payments/authorize';
 
 test('boot refuses even loopback listener when native Auth signup remains public',async()=>{
  const m=mockSupabase();m.state.policy=false;
@@ -278,6 +317,32 @@ test('runtime persists AUTO delivery custody and returns only participant status
   assert.equal(status.body.delivery.proofRef,deliveryProof);
   assert.equal((await req(base,deliveryStatusPath,'stranger')).status,403);
   assert.doesNotMatch(JSON.stringify(status),/sb_secret|service_role/);
+ });
+});
+test('runtime derives fare context server-side and exposes only simulated payment state',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m,{pricingContext:async input=>{
+  assert.deepEqual(input,{actorId:passenger,fareMode:'AUTO',subjectKind:'RIDE',
+   subjectId:ride});
+  return {zoneTag:'ASUNCION_FIXTURE',distanceMeters:4000,durationSeconds:600,
+   tollsPyg:1000,trafficAware:true,fallbackUsed:false};
+ }});
+ await http(runtime,async base=>{
+  const quoted=await req(base,fareQuotePath,'rider','POST',{requestKey,
+   fareMode:'AUTO',subjectKind:'RIDE',subjectId:ride});
+  assert.equal(quoted.status,201);
+  assert.equal(quoted.body.quote.totalPyg,13000);
+  assert.equal(quoted.body.serverPriced,true);
+  const authorized=await req(base,paymentAuthorizePath,'rider','POST',{
+   requestKey,quoteId:fareQuote,method:'SIMULATED_CARD'});
+  assert.equal(authorized.status,201);
+  assert.equal(authorized.body.paymentId,payment);
+  const status=await req(base,`/v1/staging/payments/${payment}/status`);
+  assert.equal(status.status,200);
+  assert.equal(status.body.payment.status,'authorized');
+  assert.equal((await req(base,paymentAuthorizePath,'rider','POST',{
+   requestKey,quoteId:fareQuote,method:'CARD'})).status,400);
+  assert.equal((await req(base,fareQuotePath,'stranger','POST',{requestKey,
+   fareMode:'AUTO',subjectKind:'RIDE',subjectId:ride})).status,403);
  });
 });
 test('turning public signup ON after start stops every request BEFORE Auth/SQL',async()=>{

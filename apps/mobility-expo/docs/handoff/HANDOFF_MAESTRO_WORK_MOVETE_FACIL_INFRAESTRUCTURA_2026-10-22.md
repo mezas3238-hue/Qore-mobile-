@@ -13,6 +13,14 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R6:** G7 ya dispone de repositorio Supabase, cuatro rutas
+  HTTP autenticadas y runtime loopback. El cliente no declara métricas, precio,
+  comisión ni actor: un adaptador confiable aporta zona/distancia/tiempo/peajes
+  y PostgreSQL liga la cotización al servicio persistido. Solo admite métodos
+  simulados. Verificación local: 190/190 servidor, 102/102 dominio, TypeScript
+  y guard NO-LIVE PASS. El gate PostgreSQL remoto del lote anterior descubrió
+  un bloqueo incompatible con la inmutabilidad de cotizaciones; la corrección
+  usa advisory lock transaccional y queda sujeta al siguiente CI.
 - **Actualización Work R5:** G7 añade reglas versionadas de tarifa, cotizaciones
   enteras PYG ligadas a servicios persistidos y pagos exclusivamente simulados
   con autorización/captura/reembolso, más ledger privado balanceado. No hay PSP

@@ -189,13 +189,18 @@ DECLARE q public.mobility_stage_fare_quotes%ROWTYPE;
 BEGIN
  IF _customer_id IS NULL OR _quote_id IS NULL OR _method IS NULL OR _request_key IS NULL
  THEN RAISE EXCEPTION 'Invalid simulated payment authorization'; END IF;
+ -- Quotes are immutable and service_role intentionally has no UPDATE grant.
+ -- Serialize every authorization attempt for the quote without weakening that
+ -- permission boundary, then re-check idempotency inside the critical section.
+ PERFORM pg_catalog.pg_advisory_xact_lock(
+  pg_catalog.hashtextextended(_quote_id::text,0));
  SELECT * INTO old FROM public.mobility_stage_payment_intents WHERE request_key=_request_key;
  IF FOUND THEN
   IF old.customer_id<>_customer_id OR old.quote_id<>_quote_id OR old.method<>_method
   THEN RAISE EXCEPTION 'Conflicting payment authorization replay'; END IF;
   RETURN old.id;
  END IF;
- SELECT * INTO q FROM public.mobility_stage_fare_quotes WHERE id=_quote_id FOR UPDATE;
+ SELECT * INTO q FROM public.mobility_stage_fare_quotes WHERE id=_quote_id;
  IF NOT FOUND OR q.customer_id<>_customer_id OR q.expires_at<=statement_timestamp()
  THEN RAISE EXCEPTION 'Fare quote expired or unavailable'; END IF;
  INSERT INTO public.mobility_stage_payment_intents

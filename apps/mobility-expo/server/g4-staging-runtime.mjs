@@ -17,6 +17,8 @@ import {createSupabaseStagingDeliveryRepository} from './g5-supabase-delivery-re
 import {createQoreDeliveryCommandGateway} from './g5-delivery-command-gateway.mjs';
 import {createSupabaseStagingMerchantRepository} from './g6-supabase-merchant-repository.mjs';
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
+import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repository.mjs';
+import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -35,6 +37,11 @@ const STAGE_TABLES=[
  'mobility_stage_merchant_orders',
  'mobility_stage_merchant_order_lines',
  'mobility_stage_merchant_order_events',
+ 'mobility_stage_fare_rules',
+ 'mobility_stage_fare_quotes',
+ 'mobility_stage_payment_intents',
+ 'mobility_stage_payment_operations',
+ 'mobility_stage_ledger_entries',
 ];
 const required=(v,name)=>{
  if(typeof v!=='string'||!v.trim())throw Error('Missing '+name);
@@ -87,10 +94,14 @@ function checkedIsoToMs(iso){
 async function unavailableArrivalEvidence(){
  throw Error('No independently verified driver display/GPS/road ETA adapter');
 }
+async function unavailablePricingContext(){
+ throw Error('No independently verified road pricing context adapter');
+}
 export async function prepareQoreG4StagingRuntime({
  environment,liveTripsEnabled,allowQa,
  projectRef,anonKey,serviceKey,
- createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,now=Date.now,
+ createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
+ pricingContext=unavailablePricingContext,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -99,7 +110,7 @@ export async function prepareQoreG4StagingRuntime({
  parseServiceRole(serviceKey,ref);
  if(anonKey===serviceKey||typeof createClient!=='function'||
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
-   typeof now!=='function')
+   typeof pricingContext!=='function'||typeof now!=='function')
   throw Error('G4 server-only secret separation and adapters required');
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
@@ -119,6 +130,7 @@ export async function prepareQoreG4StagingRuntime({
  const persistence=createSupabaseStagingDispatchRepository(admin);
  const deliveryPersistence=createSupabaseStagingDeliveryRepository(admin);
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
+ const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -235,6 +247,23 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const finance=createQoreFinanceGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
+  loadPricingContext:params=>pricingContext(params),
+  quoteFare:params=>financePersistence.quote({
+   modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  authorizePayment:params=>financePersistence.authorize({
+   modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  transitionPayment:params=>financePersistence.transition({
+   modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  loadPayment:params=>financePersistence.paymentSnapshot({
+   modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -253,6 +282,7 @@ export async function prepareQoreG4StagingRuntime({
    tripCommandHandler:guard(commands),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
+   financeHandler:guard(finance),
   }),
  };
 }
