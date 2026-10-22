@@ -10,7 +10,7 @@ export function createStagingDispatchPersistence(repository){
  const methods=['request','offer','accept','transition','snapshot'];
  if(!repository||methods.some(m=>typeof repository[m]!=='function'))throw Error('Incomplete dispatch repository');
  async function call(method,params){
-  if(!params||params.mode!=='SYNTHETIC_STAGING'||params.liveEnabled!==false||!validId(params.actorId)||!validId(params.tripId))return fail('Unauthenticated or non-staging request');
+  if(!params||typeof params!=='object'||Array.isArray(params)||params.mode!=='SYNTHETIC_STAGING'||params.liveEnabled!==false||!validId(params.actorId)||!validId(params.tripId))return fail('Unauthenticated or non-staging request');
   if(method==='accept'&&(!validId(params.offerId)||!validId(params.decisionKey)))return fail('Invalid idempotency key or offer');
   if(method==='accept'&&params.driverId!==undefined&&params.driverId!==params.actorId)return fail('Driver identity mismatch');
   if(method==='request'&&params.passengerId!==undefined&&params.passengerId!==params.actorId)return fail('Passenger identity mismatch');
