@@ -14,7 +14,9 @@ export function buildSyntheticSettlement({quote,transactionId}={}){
  return {ok:true,liveEnabled:false,transactionId,entries};
 }
 export function verifyBalancedEntries(entries){
- if(!Array.isArray(entries)||entries.length===0)return false;
+ if(!Array.isArray(entries)||entries.length!==3)return false;
+ const expected=['synthetic_cash_clearing','synthetic_provider_payable','synthetic_platform_commission'];
+ if(entries.some((e,i)=>e?.account!==expected[i]||e.side!==(i===0?'debit':'credit')))return false;
  let debits=0,credits=0;
  for(const e of entries){
   if(!e||!['debit','credit'].includes(e.side)||!integer(e.amountPyg)||typeof e.account!=='string'||!/^synthetic_[a-z_]+$/.test(e.account))return false;
