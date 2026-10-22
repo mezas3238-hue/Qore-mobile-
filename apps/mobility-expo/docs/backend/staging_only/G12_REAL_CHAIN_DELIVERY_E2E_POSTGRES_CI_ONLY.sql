@@ -29,6 +29,23 @@ VALUES
  ('00000000-0000-4000-8000-000000000103','M',CURRENT_DATE+90,
   pg_catalog.clock_timestamp()-interval '1 day',
   '00000000-0000-4000-8000-000000000101','approved');
+-- Even with passenger documents synthetically approved, the deliberate
+-- MOTO passenger authorization gate must stay closed in G2.
+INSERT INTO public.mobility_vehicle_compliance
+ (vehicle_id,registration_valid_through,registration_verified_at,
+  insurance_valid_through,insurance_verified_at,paid_passenger_insurance_covered,
+  inspection_valid_through,inspection_verified_at,
+  municipal_authorization_valid_through,municipal_authorization_verified_at,
+  moto_helmets_verified,moto_reflective_vests_verified,moto_routes_authorized,
+  reviewed_by,reviewed_at)
+VALUES
+ ('00000000-0000-4000-8000-000000000104',
+  CURRENT_DATE+90,pg_catalog.clock_timestamp()-interval '1 day',
+  CURRENT_DATE+90,pg_catalog.clock_timestamp()-interval '1 day',true,
+  CURRENT_DATE+90,pg_catalog.clock_timestamp()-interval '1 day',
+  CURRENT_DATE+90,pg_catalog.clock_timestamp()-interval '1 day',
+  2,2,true,'00000000-0000-4000-8000-000000000101',
+  pg_catalog.clock_timestamp()-interval '2 minutes');
 INSERT INTO public.mobility_stage_delivery_vehicle_clearance
  (vehicle_id,delivery_authorized,cargo_insurance_valid_through,
   cargo_insurance_verified_at,max_grams,max_volume_cm3,max_edge_cm,
@@ -91,7 +108,7 @@ BEGIN
  IF public.mobility_stage_ack_delivery_push(worker,offer_id,'ticket_12345')
  THEN RAISE EXCEPTION 'G12 duplicate provider ACK accepted'; END IF;
  IF (SELECT receipt_confirmed_at IS NOT NULL FROM
-     public.mobility_stage_delivery_offer_outbox WHERE offer_id=offer_id)
+     public.mobility_stage_delivery_offer_outbox WHERE offer_id=claim.offer_id)
  THEN RAISE EXCEPTION 'G12 falsely asserted device receipt'; END IF;
 
  -- G10 private acceptance must precede G5 custody state transitions.
