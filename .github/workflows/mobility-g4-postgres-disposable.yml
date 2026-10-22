@@ -1,0 +1,41 @@
+# QORE Mobile — PostgreSQL G4 concurrency CI (disposable only)
+# This workflow deliberately uses an isolated local PostgreSQL service, not Supabase.
+name: QORE G4 PostgreSQL disposable smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sql-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qore_ci
+          POSTGRES_PASSWORD: qore_ci_only
+          POSTGRES_DB: qore_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qore_ci -d qore_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: qore_ci
+      PGPASSWORD: qore_ci_only
+      PGDATABASE: qore_disposable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable PostgreSQL
+        run: |
+          psql -v ON_ERROR_STOP=1 -c 'SELECT current_setting(''server_version_num'')::integer >= 160000 AS postgres_16_or_later'
+          psql -v ON_ERROR_STOP=1 -c 'SELECT pg_advisory_lock(924001)'
+          psql -v ON_ERROR_STOP=1 -c 'SELECT pg_advisory_unlock(924001)'
+      - name: Explicitly keep G4 integration blocked until prerequisite schema and fixtures are wired
+        run: |
+          echo "PostgreSQL 16 service is available; this smoke test does NOT claim G4 transaction coverage."
