@@ -13,6 +13,12 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R12:** G11 agrega OpenAPI 3.1 versionado para los
+  endpoints autenticados G2–G10 y formaliza que Lovable será solo interfaz.
+  Todos los request bodies están cerrados y excluyen actor, conductor, precio,
+  comisión y ruta derivados. La aceptación directa G5 dejó de estar expuesta
+  por el transporte; G10 es la única vía de aceptación de entregas. Ver
+  `docs/backend/G11_OPENAPI_INTERFACE_BOUNDARY_2026-10-22.md`.
 - **Actualización Work R11:** G10 implementa despacho privado AUTO/MOTO para
   envíos particulares y entregas comerciales: ranking por ruta vial confiable,
   revalidación de capacidad/seguro/GPS, fanout máximo 5, TTL, outbox privado y

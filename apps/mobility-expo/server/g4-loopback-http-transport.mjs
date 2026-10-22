@@ -16,7 +16,6 @@ const offerDecisionRoute=/^\/v1\/staging\/driver\/offers\/(accept|decline)$/;
 const tripRequestRoute=/^\/v1\/staging\/rider\/trips\/request$/;
 const tripTransitionRoute=/^\/v1\/staging\/trips\/[0-9a-f-]{36}\/transition$/i;
 const deliveryRequestRoute=/^\/v1\/staging\/sender\/deliveries\/request$/;
-const deliveryAcceptRoute=/^\/v1\/staging\/courier\/deliveries\/[0-9a-f-]{36}\/accept$/i;
 const deliveryTransitionRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/transition$/i;
 const deliveryStatusRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/status$/i;
 const merchantRequestRoute=/^\/v1\/staging\/buyer\/orders\/request$/;
@@ -80,8 +79,7 @@ export function createQoreRadarLoopbackTransport({
    (tripRequestRoute.test(path)||tripTransitionRoute.test(path));
   const deliveryGet=req.method==='GET'&&deliveryStatusRoute.test(path);
   const deliveryPost=req.method==='POST'&&
-   (deliveryRequestRoute.test(path)||deliveryAcceptRoute.test(path)||
-    deliveryTransitionRoute.test(path));
+   (deliveryRequestRoute.test(path)||deliveryTransitionRoute.test(path));
   const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
   const merchantPost=req.method==='POST'&&
    (merchantRequestRoute.test(path)||merchantTransitionRoute.test(path)||

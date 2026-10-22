@@ -165,7 +165,17 @@ function fixture(){
   financeHandler:async()=>({status:404,body:{error:'Not found'}}),
   safetyHandler:async()=>({status:404,body:{error:'Not found'}}),
   merchantManagementHandler:async()=>({status:404,body:{error:'Not found'}}),
-  deliveryOfferHandler:async()=>({status:404,body:{error:'Not found'}}),
+  deliveryOfferHandler:async input=>{
+   if(input.method!=='POST'||input.path!=='/v1/staging/courier/delivery-offers/accept'||
+      input.body?.offerId!==offerA||input.body?.requestKey!==keyB||
+      input.headers.authorization!=='Bearer '+fakeBearer(driverA)||
+      state.delivery?.status!=='requested')
+    return {status:409,body:{error:'Private delivery offer rejected'}};
+   state.delivery={...state.delivery,courierId:driverA,vehicleId:carA,
+    status:'accepted',revision:2};
+   return {status:200,body:{mode:'STAGING_DEMO_ONLY',liveDeliveriesEnabled:false,
+    outcome:'accepted',eventId:keyB,serverPersisted:true}};
+  },
  });
  return {state,server};
 }
@@ -310,8 +320,8 @@ test('HTTP: authenticated delivery request, courier custody and participant stat
  assert.equal(request.status,201);
  assert.equal(request.body.deliveryId,deliveryId);
  assert.equal(request.body.liveDeliveriesEnabled,false);
- const accept=await client(base,`/v1/staging/courier/deliveries/${deliveryId}/accept`,{
-  method:'POST',id:driverA,body:{vehicleId:carA,requestKey:keyB}
+ const accept=await client(base,'/v1/staging/courier/delivery-offers/accept',{
+  method:'POST',id:driverA,body:{offerId:offerA,requestKey:keyB}
  });
  assert.equal(accept.status,200);
  for(const [event,eventKey,extra,status] of [

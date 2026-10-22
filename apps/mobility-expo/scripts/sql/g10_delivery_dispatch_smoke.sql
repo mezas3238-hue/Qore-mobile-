@@ -20,11 +20,19 @@ UPDATE public.driver_locations SET available=true,updated_at=now()-interval '1 s
 
 SET ROLE service_role;
 DO $check$
-DECLARE d uuid; offer_a uuid; offer_b uuid; event_id uuid; replay uuid;
+DECLARE d uuid; prior_delivery uuid; offer_a uuid; offer_b uuid; event_id uuid; replay uuid;
  blocked boolean:=false;
 BEGIN
+ SELECT id INTO prior_delivery FROM public.mobility_stage_deliveries
+  WHERE request_key='84000000-0000-4000-8000-000000000001';
+ IF prior_delivery IS NOT NULL AND (SELECT status FROM public.mobility_stage_deliveries
+   WHERE id=prior_delivery)='accepted' THEN
+  PERFORM public.mobility_stage_delivery_transition(prior_delivery,
+   '88888888-8888-4888-8888-888888888888','cancel',
+   'a0000000-0000-4000-8000-000000000001');
+ END IF;
  d:=public.mobility_stage_delivery_request(
-  '88888888-8888-4888-8888-888888888888',
+  '33333333-3333-4333-8333-333333333333',
   'a1000000-0000-4000-8000-000000000001','AUTO','PARCEL',
   2000,30,20,10,'DISPATCH_ORIGIN','DISPATCH_TARGET',false);
  offer_a:=public.mobility_stage_delivery_offer(
@@ -72,10 +80,10 @@ BEGIN
  -- Close the sequential fixture, then leave two active private offers for the
  -- following two-client concurrency gate.
  PERFORM public.mobility_stage_delivery_transition(d,
-  '88888888-8888-4888-8888-888888888888','cancel',
+  '33333333-3333-4333-8333-333333333333','cancel',
   'a3000000-0000-4000-8000-000000000004');
  d:=public.mobility_stage_delivery_request(
-  '99999999-9999-4999-8999-999999999999',
+  '33333333-3333-4333-8333-333333333333',
   'a1000000-0000-4000-8000-000000000002','AUTO','DOCUMENTS',
   1000,20,15,5,'RACE_ORIGIN','RACE_TARGET',false);
  PERFORM public.mobility_stage_delivery_offer(d,

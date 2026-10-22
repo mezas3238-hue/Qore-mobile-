@@ -223,7 +223,6 @@ const acceptPath='/v1/staging/driver/offers/accept';
 const requestPath='/v1/staging/rider/trips/request';
 const transitionPath='/v1/staging/trips/'+ride+'/transition';
 const deliveryRequestPath='/v1/staging/sender/deliveries/request';
-const deliveryAcceptPath='/v1/staging/courier/deliveries/'+deliveryId+'/accept';
 const deliveryTransitionPath='/v1/staging/deliveries/'+deliveryId+'/transition';
 const deliveryStatusPath='/v1/staging/deliveries/'+deliveryId+'/status';
 const fareQuotePath='/v1/staging/fares/quote';
@@ -317,8 +316,10 @@ test('runtime persists AUTO delivery custody and returns only participant status
   });
   assert.equal(created.status,201);
   assert.equal(created.body.deliveryId,deliveryId);
-  assert.equal((await req(base,deliveryAcceptPath,'driver','POST',{
-   vehicleId:vehicle,requestKey,
+  m.state.deliveryOffer={id:offer,delivery_id:deliveryId,courier_id:driver,
+   vehicle_id:vehicle,status:'offered',expires_at:new Date(now+30_000).toISOString()};
+  assert.equal((await req(base,deliveryOfferAcceptPath,'driver','POST',{
+   offerId:offer,requestKey,
   })).status,200);
   assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
    event:'pickup',eventKey:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
