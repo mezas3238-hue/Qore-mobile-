@@ -8,6 +8,8 @@ on:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
+      - 'apps/mobility-expo/server/g15-*'
       - 'apps/mobility-expo/server/g13-*'
       - 'apps/mobility-expo/server/g14-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G0_*'
@@ -132,3 +134,7 @@ jobs:
           python3 apps/mobility-expo/server/g13-fenced-delivery-push-concurrency-ci.py
       - name: Test two courier acceptances racing for one delivery
         run: python3 apps/mobility-expo/server/g14-competing-courier-acceptance-ci.py
+      - name: Apply G15 private courier polling fallback
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G15_COURIER_PRIVATE_OFFER_POLL_POSTGRES_CI_ONLY.sql
+      - name: Verify G15 polling without push, privacy and expiry
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G15_COURIER_PRIVATE_POLL_ASSERT_POSTGRES_CI_ONLY.sql
