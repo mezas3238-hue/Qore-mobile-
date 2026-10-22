@@ -44,3 +44,14 @@ test('dispatch persistence rejects array, null and scalar input without backend 
  }
  assert.equal(calls,0);
 });
+
+test('snapshot requires caller to identify as a trip participant before persistence',async()=>{
+ let calls=0;
+ const repo=Object.fromEntries(['request','offer','accept','transition','snapshot'].map(k=>[k,async()=>{calls++;return {ok:true,liveEnabled:false};}]));
+ const api=createStagingDispatchPersistence(repo);
+ assert.equal((await api.snapshot(args)).ok,false);
+ assert.equal((await api.snapshot({...args,passengerId:'00000000-0000-4000-8000-000000000002',driverId:'00000000-0000-4000-8000-000000000003'})).ok,false);
+ assert.equal(calls,0);
+ assert.equal((await api.snapshot({...args,passengerId:id})).ok,true);
+ assert.equal(calls,1);
+});
