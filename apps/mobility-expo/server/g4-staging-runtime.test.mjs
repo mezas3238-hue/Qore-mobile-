@@ -79,6 +79,10 @@ function mockSupabase(){
    },
    async rpc(name,params){
     state.rpcs.push({name,params});
+    if(name==='mobility_stage_auto_demo_request'){
+     if(params._passenger_id!==passenger)return {error:{message:'Wrong passenger'}};
+     return {data:ride,error:null};
+    }
     if(name==='mobility_stage_auto_demo_accept_offer'){
      if(state.trip.status!=='searching'||params._driver_id!==driver||
         params._offer_id!==offer||state.offer.status!=='offered')
@@ -87,6 +91,14 @@ function mockSupabase(){
       vehicle_id:vehicle,revision:2};
      state.offer.status='accepted';
      return {data:requestKey,error:null};
+    }
+    if(name==='mobility_stage_auto_demo_transition'){
+     const next={arriving:'accepted',in_progress:'arriving',completed:'in_progress',cancelled:'searching'};
+     if(params._trip_id!==ride||state.trip.status!==next[params._next]||
+       (params._next==='cancelled'?params._actor_id!==passenger:
+        params._actor_id!==driver))return {error:{message:'Transition denied'}};
+     state.trip={...state.trip,status:params._next,revision:state.trip.revision+1};
+     return {data:params._request_key,error:null};
     }
     return {data:offer,error:null};
    },
@@ -116,6 +128,8 @@ async function req(base,path,actor='rider',method='GET',body){
 const statusPath='/v1/staging/rider/trips/'+ride+'/status';
 const offerPath='/v1/staging/driver/offers/'+offer;
 const acceptPath='/v1/staging/driver/offers/accept';
+const requestPath='/v1/staging/rider/trips/request';
+const transitionPath='/v1/staging/trips/'+ride+'/transition';
 
 test('boot refuses even loopback listener when native Auth signup remains public',async()=>{
  const m=mockSupabase();m.state.policy=false;
@@ -162,6 +176,35 @@ test('real HTTP with Supabase-like adapters verifies role/JWT and uses server-de
   assert.equal(after.status,503);
   assert.doesNotMatch(JSON.stringify(after),/TEST777|Toyota|-25\./);
   assert.equal((await req(base,statusPath,'stranger')).status,403);
+ });
+});
+test('runtime persists passenger request and driver transition through shared repository',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const created=await req(base,requestPath,'rider','POST',{
+   requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
+  });
+  assert.equal(created.status,201);
+  assert.equal(created.body.tripId,ride);
+  assert.equal((await req(base,requestPath,'driver','POST',{
+   requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
+  })).status,403);
+  assert.equal((await req(base,acceptPath,'driver','POST',
+   {offerId:offer,requestKey})).status,200);
+  const eventKey='88888888-8888-4888-8888-888888888888';
+  const arriving=await req(base,transitionPath,'driver','POST',
+   {event:'arrive',eventKey});
+  assert.equal(arriving.status,200);
+  assert.equal(arriving.body.serverPersisted,true);
+  assert.equal(m.state.trip.status,'arriving');
+  const rpc=m.state.rpcs.at(-1);
+  assert.deepEqual(rpc,{name:'mobility_stage_auto_demo_transition',params:{
+   _trip_id:ride,_actor_id:driver,_next:'arriving',_request_key:eventKey
+  }});
+  const before=m.state.rpcs.length;
+  assert.equal((await req(base,transitionPath,'rider','POST',
+   {event:'pickup',eventKey})).status,403);
+  assert.equal(m.state.rpcs.length,before);
  });
 });
 test('turning public signup ON after start stops every request BEFORE Auth/SQL',async()=>{

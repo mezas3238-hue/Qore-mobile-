@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
+import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 import {makePrivateDriverPush} from './g4-qore-radar-core.mjs';
 import {createExpoPrivateOfferSender} from './g4-expo-push-offers.mjs';
 
@@ -93,8 +94,31 @@ function fixture(){
   },
   declineOffer:async()=>{throw Error('Not used in this fixture')},
  });
+ const commands=createQoreTripCommandGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  resolveRole:async id=>id===riderId?'passenger':
+   (id===driverA||id===driverB)?'driver':null,
+  allowRequest:()=>true,
+  requestTrip:async input=>{
+   if(input.actorId!==riderId)throw Error('Not passenger');
+   return {ok:true,liveEnabled:false,tripId};
+  },
+  transitionTrip:async input=>{
+   if(input.tripId!==tripId)throw Error('Wrong trip');
+   const expected={accepted:'arrive',arriving:'pickup',in_progress:'complete'};
+   if(input.actorId===riderId&&input.event==='cancel'&&
+      ['searching','accepted','arriving'].includes(state.trip.status)){
+    state.trip={...state.trip,status:'cancelled',revision:state.trip.revision+1};
+   }else if(input.actorId===state.trip.driverId&&
+      expected[state.trip.status]===input.event){
+    const status={arrive:'arriving',pickup:'in_progress',complete:'completed'}[input.event];
+    state.trip={...state.trip,status,revision:state.trip.revision+1};
+   }else throw Error('Transition rejected');
+   return {ok:true,liveEnabled:false,eventId:input.eventKey};
+  },
+ });
  const server=createQoreRadarLoopbackTransport({
-  riderHandler:rider,offerHandler:offer
+  riderHandler:rider,offerHandler:offer,tripCommandHandler:commands
  });
  return {state,server};
 }
@@ -186,6 +210,44 @@ test('HTTP: GPS/traffic expiry removes marker & countdown without forgetting ver
  state.trip={...state.trip,status:'completed',revision:3};
  const done=await client(base,riderPath);
  assert.equal(done.status,200);
+ assert.equal(done.body.event.acceptedDriver,null);
+ assert.equal(done.body.event.tracking,null);
+});
+
+test('HTTP: authenticated passenger request and driver lifecycle commands persist through gateway',async t=>{
+ const {state,server}=fixture(),base=await listenQoreRadarLoopback(server);
+ t.after(()=>close(server));
+ const request=await client(base,'/v1/staging/rider/trips/request',{
+  method:'POST',id:riderId,body:{requestKey:keyA,originTag:'PANTEON',
+   destinationTag:'SHOPPING',service:'economico'}
+ });
+ assert.equal(request.status,201);
+ assert.equal(request.body.tripId,tripId);
+ assert.equal(request.body.serverPersisted,true);
+ assert.equal((await client(base,'/v1/staging/rider/trips/request',{
+  method:'POST',id:driverA,body:{requestKey:keyA,originTag:'PANTEON',
+   destinationTag:'SHOPPING',service:'economico'}
+ })).status,403);
+ assert.equal((await client(base,'/v1/staging/driver/offers/accept',{
+  method:'POST',id:driverA,body:{offerId:offerA,requestKey:keyA}
+ })).status,200);
+ const transitions=[
+  ['arrive','cccc0000-0000-4000-8000-000000000003','arriving'],
+  ['pickup','dddd0000-0000-4000-8000-000000000004','in_progress'],
+  ['complete','eeee0000-0000-4000-8000-000000000005','completed'],
+ ];
+ for(const [event,eventKey,status] of transitions){
+  const result=await client(base,`/v1/staging/trips/${tripId}/transition`,{
+   method:'POST',id:driverA,body:{event,eventKey}
+  });
+  assert.equal(result.status,200);
+  assert.equal(result.body.event,event);
+  assert.equal(result.body.serverPersisted,true);
+  assert.equal(state.trip.status,status);
+ }
+ const done=await client(base,riderPath);
+ assert.equal(done.status,200);
+ assert.equal(done.body.event.status,'completed');
  assert.equal(done.body.event.acceptedDriver,null);
  assert.equal(done.body.event.tracking,null);
 });

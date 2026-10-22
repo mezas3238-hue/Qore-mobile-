@@ -13,6 +13,11 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R2:** API HTTP local autenticada para crear solicitud de
+  pasajero y ejecutar transiciones persistentes de conductor/pasajero. Usa el
+  adaptador común y RPC SQL; no admite identidades declaradas en JSON. Ver
+  `docs/backend/G4_AUTHENTICATED_TRIP_COMMANDS_2026-10-22.md`. Verificación:
+  102/102 dominio, 150/150 servidor, TypeScript, guard NO-LIVE y export web PASS.
 - **Actualización Work R1 (posterior al handoff):** se confirmó que
   `.github/workflows/mobility-ci.yml` ya ejecuta G1→G4 sobre PostgreSQL 16
   desechable, incluidas carreras de dos conductores y dos workers. El punto P0.1
@@ -85,7 +90,7 @@ No hay matriz de cotizaciones directas verificadas de Bolt/Uber Paraguay; los va
 **P0**
 1. **RESUELTO en el workflow principal:** PostgreSQL 16 desechable prueba carreras G3/G4 con dos conductores y outbox con dos workers. El workflow manual separado sigue siendo solo smoke y no debe citarse como única evidencia.
 2. **RESUELTO para runtime local G4:** actor derivado de sesión y snapshot filtrado en BD contra pasajero/conductor persistidos. Falta ampliar el mismo patrón a todos los endpoints nuevos.
-3. **PARCIAL:** adaptador Supabase real implementa `request/offer/accept/transition/snapshot` y está conectado a status/accept. Persisten gates de despliegue remoto, HTTP completo, zonas legales y pruebas con JWT/dispositivos reales.
+3. **PARCIAL AVANZADO:** adaptador Supabase implementa `request/offer/accept/transition/snapshot`; status, request, accept y transition ya están conectados a HTTP local autenticado. Persisten gates de despliegue remoto, dispatch automático, zonas legales y pruebas con JWT/dispositivos reales.
 4. Sin backend conectado a dispositivos, push ni GPS reales; NO declarar MVP funcional.
 5. Sin decisión documentada sobre licitud moto-pasajero y entregas farmacéuticas por municipio/categoría.
 6. No se ha demostrado un flujo económico real ni integridad de cobros, reembolsos, saldos y liquidaciones.

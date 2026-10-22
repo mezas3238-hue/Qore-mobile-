@@ -12,6 +12,7 @@ import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
 import {createStagingRateLimiter} from './g2-staging-vehicle-gateway.mjs';
 import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-repository.mjs';
+import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -51,14 +52,16 @@ async function assertDatabaseG4(admin){
   if(error)throw Error('G4 ephemeral-only schema not installed in target staging');
  }
 }
-async function roleHas(admin,id,role){
+async function singleRole(admin,id){
  // A second privileged role must never be masked by filtering for the
  // requested role. Fetch all assigned roles and fail closed on dual roles.
  const {data,error}=await admin.from('user_roles').select('role')
   .eq('user_id',id).limit(3);
  if(error)throw Error('Role lookup failed');
- return Array.isArray(data)&&data.length===1&&data[0].role===role;
+ return Array.isArray(data)&&data.length===1&&
+  ['passenger','driver'].includes(data[0].role)?data[0].role:null;
 }
+const roleHas=(admin,id,role)=>singleRole(admin,id).then(actual=>actual===role);
 function checkedIsoToMs(iso){
  if(typeof iso!=='string')return NaN;
  const at=Date.parse(iso);
@@ -171,6 +174,16 @@ export async function prepareQoreG4StagingRuntime({
   },
   now
  });
+ const commands=createQoreTripCommandGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  resolveRole:id=>singleRole(admin,id),allowRequest,
+  requestTrip:params=>persistence.request({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+  transitionTrip:params=>persistence.transition({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -185,7 +198,8 @@ export async function prepareQoreG4StagingRuntime({
   commercialRidesEnabled:false,
   /** A server object, NOT a listener. Even this object cannot bind publicly. */
   server:createQoreRadarLoopbackTransport({
-   riderHandler:guard(rider),offerHandler:guard(driver)
+   riderHandler:guard(rider),offerHandler:guard(driver),
+   tripCommandHandler:guard(commands),
   }),
  };
 }

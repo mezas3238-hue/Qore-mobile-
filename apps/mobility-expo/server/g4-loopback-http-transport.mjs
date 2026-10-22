@@ -4,7 +4,7 @@
  * This intentionally creates an UNBOUND Node HTTP server. It can be bound
  * only to 127.0.0.1 by listenQoreRadarLoopback(), and MUST NOT be deployed
  * or forwarded to a public interface. Auth, storage and DB are adapters
- * injected into the two existing G4 gateways, not invented here.
+ * injected into the authenticated G4 gateways, not invented here.
  * NO LIVE, NO PSP, NO GPS devices, NO push delivery.
  */
 import {createServer} from 'node:http';
@@ -13,6 +13,8 @@ import {once} from 'node:events';
 const riderRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/status$/i;
 const offerReadRoute=/^\/v1\/staging\/driver\/offers\/[0-9a-f-]{36}$/i;
 const offerDecisionRoute=/^\/v1\/staging\/driver\/offers\/(accept|decline)$/;
+const tripRequestRoute=/^\/v1\/staging\/rider\/trips\/request$/;
+const tripTransitionRoute=/^\/v1\/staging\/trips\/[0-9a-f-]{36}\/transition$/i;
 const safe=(code,body)=>({status:code,body});
 const maxBody=2048;
 const JSON_HEADERS={
@@ -30,9 +32,12 @@ function send(res,status,body) {
  res.writeHead(allowed,JSON_HEADERS);
  res.end(JSON.stringify(body));
 }
-export function createQoreRadarLoopbackTransport({riderHandler,offerHandler}){
- if(typeof riderHandler!=='function'||typeof offerHandler!=='function')
-  throw new Error('Both G4 authenticated gateways required');
+export function createQoreRadarLoopbackTransport({
+ riderHandler,offerHandler,tripCommandHandler,
+}){
+ if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
+   typeof tripCommandHandler!=='function')
+  throw new Error('All G4 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
   const path=req.url;
@@ -44,7 +49,9 @@ export function createQoreRadarLoopbackTransport({riderHandler,offerHandler}){
   const rider=req.method==='GET'&&riderRoute.test(path);
   const offerGet=req.method==='GET'&&offerReadRoute.test(path);
   const offerPost=req.method==='POST'&&offerDecisionRoute.test(path);
-  if(!rider&&!offerGet&&!offerPost){
+  const tripPost=req.method==='POST'&&
+   (tripRequestRoute.test(path)||tripTransitionRoute.test(path));
+  if(!rider&&!offerGet&&!offerPost&&!tripPost){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
@@ -57,7 +64,7 @@ export function createQoreRadarLoopbackTransport({riderHandler,offerHandler}){
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
-  if(offerPost){
+  if(offerPost||tripPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -76,7 +83,7 @@ export function createQoreRadarLoopbackTransport({riderHandler,offerHandler}){
    }catch{send(res,400,{error:'Invalid JSON'});return;}
   }
   try {
-   const handler=rider?riderHandler:offerHandler;
+   const handler=rider?riderHandler:tripPost?tripCommandHandler:offerHandler;
    const out=await handler({
     method:req.method,path,headers:req.headers,body
    });
