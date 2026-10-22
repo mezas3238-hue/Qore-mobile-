@@ -164,6 +164,7 @@ function fixture(){
   merchantHandler:async()=>({status:404,body:{error:'Not found'}}),
   financeHandler:async()=>({status:404,body:{error:'Not found'}}),
   safetyHandler:async()=>({status:404,body:{error:'Not found'}}),
+  merchantManagementHandler:async()=>({status:404,body:{error:'Not found'}}),
  });
  return {state,server};
 }
@@ -386,7 +387,7 @@ test('HTTP: G8 safety routes remain loopback-only and reach only safety gateway'
   merchantHandler:unused,financeHandler:unused,safetyHandler:async input=>{
    calls.push(input);return {status:201,body:{incidentId:deliveryId,
     externalResponseDispatched:false}};
-  }});
+  },merchantManagementHandler:unused});
  const base=await listenQoreRadarLoopback(server);t.after(()=>close(server));
  const response=await fetch(base+'/v1/staging/safety/incidents/report',{method:'POST',
   headers:{authorization:'Bearer synthetic_safety_fixture_never_real_12345',
@@ -395,4 +396,20 @@ test('HTTP: G8 safety routes remain loopback-only and reach only safety gateway'
  assert.equal((await response.json()).externalResponseDispatched,false);
  assert.equal(calls.length,1);
  assert.equal(calls[0].path,'/v1/staging/safety/incidents/report');
+});
+
+test('HTTP: G9 merchant management route reaches only management gateway',async t=>{
+ const calls=[];const unused=async()=>({status:404,body:{error:'Not found'}});
+ const server=createQoreRadarLoopbackTransport({riderHandler:unused,
+  offerHandler:unused,tripCommandHandler:unused,deliveryHandler:unused,
+  merchantHandler:unused,financeHandler:unused,safetyHandler:unused,
+  merchantManagementHandler:async input=>{calls.push(input);return {status:202,
+   body:{merchantId:deliveryId,status:'pending'}};}});
+ const base=await listenQoreRadarLoopback(server);t.after(()=>close(server));
+ const response=await fetch(base+'/v1/staging/merchant/onboarding/request',{method:'POST',
+  headers:{authorization:'Bearer synthetic_merchant_fixture_never_real_12345',
+   'content-type':'application/json'},body:JSON.stringify({requestKey:keyA})});
+ assert.equal(response.status,202);assert.equal((await response.json()).status,'pending');
+ assert.equal(calls.length,1);assert.equal(calls[0].path,
+  '/v1/staging/merchant/onboarding/request');
 });

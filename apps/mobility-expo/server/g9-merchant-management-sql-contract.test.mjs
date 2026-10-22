@@ -20,6 +20,7 @@ test('onboarding derives owner and cannot self-approve',()=>{
  assert.match(request,/INSERT INTO public\.mobility_stage_merchant_staff/);
  assert.match(review,/role='admin'::public\.app_role/);
  assert.match(review,/merchant\.status<>'pending'/);
+ assert.match(review,/'approved'::public\.mobility_stage_merchant_status/);
 });
 test('branch and catalog management require persisted owner or manager membership',()=>{
  for(const name of ['mobility_stage_merchant_branch_upsert','mobility_stage_catalog_item_upsert']){

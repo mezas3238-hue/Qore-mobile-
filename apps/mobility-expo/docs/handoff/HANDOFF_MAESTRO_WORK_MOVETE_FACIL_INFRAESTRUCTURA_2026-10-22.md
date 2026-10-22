@@ -13,6 +13,12 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R10:** G9 incorpora repositorio server-only, cuatro
+  endpoints autenticados y runtime loopback para onboarding, review, sucursal
+  y catálogo. Owner/admin provienen de Auth y PostgreSQL revalida autoridad.
+  Suite local: 216/216 servidor, 102/102 dominio, TypeScript y NO-LIVE PASS.
+  El primer gate SQL detectó un cast texto→enum en review; ya fue reemplazado
+  por casts explícitos y queda pendiente de confirmación en el siguiente CI.
 - **Actualización Work R9:** G9 elimina fixtures como única vía de alta
   comercial: onboarding idempotente, aprobación/suspensión admin, sucursales y
   catálogo mutables solo por owner/manager persistido, con auditoría privada

@@ -83,7 +83,9 @@ BEGIN
   OR (_action='suspend' AND merchant.status<>'approved')
  THEN RAISE EXCEPTION 'Merchant review state unavailable'; END IF;
  UPDATE public.mobility_stage_merchants
- SET status=CASE WHEN _action='approve' THEN 'approved' ELSE 'suspended' END,
+ SET status=CASE WHEN _action='approve'
+   THEN 'approved'::public.mobility_stage_merchant_status
+   ELSE 'suspended'::public.mobility_stage_merchant_status END,
   reviewed_by=_admin_id,reviewed_at=now() WHERE id=_merchant_id;
  IF _action='suspend' THEN
   UPDATE public.mobility_stage_merchant_branches
