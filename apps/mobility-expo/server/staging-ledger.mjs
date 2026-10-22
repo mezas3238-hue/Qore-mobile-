@@ -4,7 +4,7 @@ const integer=n=>Number.isSafeInteger(n)&&n>=0&&n<=100000000;
 const fail=reason=>({ok:false,reason,liveEnabled:false});
 /** Record customer payment allocation: provider earnings + platform commission. */
 export function buildSyntheticSettlement({quote,transactionId}={}){
- if(!quote||quote.ok!==true||quote.liveEnabled!==false||typeof transactionId!=='string'||!/^[a-zA-Z0-9_-]{1,64}$/.test(transactionId)||!integer(quote.totalPyg)||!integer(quote.commissionPyg)||!integer(quote.providerPyg)||quote.commissionPyg+quote.providerPyg!==quote.totalPyg)return fail('Invalid synthetic settlement');
+ if(!quote||quote.ok!==true||quote.liveEnabled!==false||typeof transactionId!=='string'||!/^[a-zA-Z0-9_-]{1,64}$/.test(transactionId)||!integer(quote.totalPyg)||!integer(quote.commissionPyg)||!integer(quote.providerPyg)||!integer(quote.subtotalPyg)||!integer(quote.tollsPyg)||!integer(quote.commissionBps)||quote.commissionBps>3000||quote.subtotalPyg+quote.tollsPyg!==quote.totalPyg||Math.floor((quote.subtotalPyg*quote.commissionBps+5000)/10000)!==quote.commissionPyg||quote.commissionPyg+quote.providerPyg!==quote.totalPyg)return fail('Invalid synthetic settlement');
  const entries=[
   {account:'synthetic_cash_clearing',side:'debit',amountPyg:quote.totalPyg},
   {account:'synthetic_provider_payable',side:'credit',amountPyg:quote.providerPyg},
