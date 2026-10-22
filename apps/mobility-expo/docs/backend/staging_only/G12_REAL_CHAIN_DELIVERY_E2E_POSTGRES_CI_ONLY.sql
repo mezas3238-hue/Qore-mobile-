@@ -108,7 +108,7 @@ BEGIN
  IF public.mobility_stage_ack_delivery_push(worker,offer_id,'ticket_12345')
  THEN RAISE EXCEPTION 'G12 duplicate provider ACK accepted'; END IF;
  IF (SELECT receipt_confirmed_at IS NOT NULL FROM
-     public.mobility_stage_delivery_offer_outbox WHERE offer_id=claim.offer_id)
+     public.mobility_stage_delivery_offer_outbox o WHERE o.offer_id=claim.offer_id)
  THEN RAISE EXCEPTION 'G12 falsely asserted device receipt'; END IF;
 
  -- G10 private acceptance must precede G5 custody state transitions.
