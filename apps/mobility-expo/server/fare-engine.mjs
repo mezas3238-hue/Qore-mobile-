@@ -3,7 +3,9 @@ export const FARE_LIVE_ENABLED=false;
 const modes=new Set(['AUTO','MOTO','DELIVERY','MERCHANT_DELIVERY']);
 const integer=(v,min,max)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
 const round=(a,b)=>Math.floor((a+Math.floor(b/2))/b);
-export function quoteSyntheticFare({mode,distanceMeters,durationSeconds,basePyg,perKmPyg,perMinutePyg,minPyg,tollsPyg=0,commissionBps,ruleVersion}){
+export function quoteSyntheticFare(input={}){
+ if(!input||typeof input!=='object'||Array.isArray(input))return {ok:false,reason:'Invalid synthetic fare inputs',liveEnabled:false};
+ const {mode,distanceMeters,durationSeconds,basePyg,perKmPyg,perMinutePyg,minPyg,tollsPyg=0,commissionBps,ruleVersion}=input;
  if(!modes.has(mode)||!integer(distanceMeters,0,500000)||!integer(durationSeconds,0,86400)||!integer(basePyg,0,1000000)||!integer(perKmPyg,0,100000)||!integer(perMinutePyg,0,20000)||!integer(minPyg,0,1000000)||!integer(tollsPyg,0,1000000)||!integer(commissionBps,0,3000)||typeof ruleVersion!=='string'||!/^[a-zA-Z0-9._-]{1,48}$/.test(ruleVersion))return {ok:false,reason:'Invalid synthetic fare inputs',liveEnabled:false};
  const distanceCharge=round(distanceMeters*perKmPyg,1000);
  const timeCharge=round(durationSeconds*perMinutePyg,60);
