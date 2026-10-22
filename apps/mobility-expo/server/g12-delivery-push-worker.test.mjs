@@ -17,6 +17,7 @@ test('G12 persists provider ticket without claiming device receipt',async()=>{
  assert.equal(result.deviceReceived,false);assert.equal(result.liveEnabled,false);
  assert.equal(ackArgs.workerId,a);assert.equal(ackArgs.offerId,a);
  assert.equal(ackArgs.ticketId,'ticket_12345');assert.equal(sendArgs.courierId,b);
+ assert.equal(sendArgs.idempotencyKey,`delivery-offer-${a}`);
 });
 test('G12 empty queue does not invoke push provider or ACK',async()=>{
  let calls=0;
@@ -54,4 +55,14 @@ test('G12 rechecks expiry after claim and before provider send',async()=>{
   ack:async()=>true});
  assert.equal((await worker.processOne()).ok,false);
  assert.equal(sends,0);
+});
+
+test('G12 retry uses the same provider idempotency key after ACK failure',async()=>{
+ const keys=[];
+ const worker=createDeliveryPushWorker({workerId:a,claim:async()=>claimData(),
+  sendToProvider:async x=>{keys.push(x.idempotencyKey);return {accepted:true,ticketId:'ticket_12345'};},
+  ack:async()=>false});
+ assert.equal((await worker.processOne()).ok,false);
+ assert.equal((await worker.processOne()).ok,false);
+ assert.deepEqual(keys,[`delivery-offer-${a}`,`delivery-offer-${a}`]);
 });
