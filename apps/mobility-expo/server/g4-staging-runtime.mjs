@@ -25,6 +25,8 @@ import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-m
 import {createQoreMerchantManagementGateway} from './g9-merchant-management-gateway.mjs';
 import {createSupabaseStagingDeliveryOfferRepository} from './g10-supabase-delivery-offer-repository.mjs';
 import {createQoreDeliveryOfferGateway} from './g10-delivery-offer-gateway.mjs';
+import {createCourierPrivatePollRepository} from './g15-courier-private-poll-repository.mjs';
+import {createCourierPrivatePollGateway} from './g15-courier-private-poll-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -154,6 +156,9 @@ export async function prepareQoreG4StagingRuntime({
  const merchantManagementPersistence=
   createSupabaseStagingMerchantManagementRepository(admin);
  const deliveryOfferPersistence=createSupabaseStagingDeliveryOfferRepository(admin);
+ const privatePollPersistence=createCourierPrivatePollRepository({
+  rpc:(name,params)=>admin.rpc(name,params)
+ });
  const verified=async token=>{
   const {data,error}=await auth.auth.getUser(token);
   if(error||!data?.user)throw Error('Supabase session not confirmed');
@@ -335,6 +340,11 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const courierPoll=createCourierPrivatePollGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeCourier:id=>roleHas(admin,id,'driver'),allowRequest,now,
+  listForCourier:params=>privatePollPersistence.listForCourier(params),
+ });
  // Recheck Auth policy on EACH sensitive request; if somebody re-opens
  // signup after startup, request is denied. This is loopback QA, not a
  // production throttled/distributed Auth-settings cache.
@@ -357,6 +367,7 @@ export async function prepareQoreG4StagingRuntime({
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
    deliveryOfferHandler:guard(deliveryOffers),
+   courierPollHandler:guard(courierPoll),
   }),
  };
 }
