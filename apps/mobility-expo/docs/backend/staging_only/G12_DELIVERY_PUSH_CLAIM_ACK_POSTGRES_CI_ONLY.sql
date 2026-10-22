@@ -80,12 +80,22 @@ CREATE FUNCTION public.mobility_stage_expire_delivery_push_claims()
 AS $fn$
 DECLARE affected integer;
 BEGIN
+ -- Bounded cleanup must never wait for a concurrent worker's row lock.
+ WITH expired AS (
+  SELECT o.offer_id
+  FROM public.mobility_stage_delivery_offer_outbox o
+  JOIN public.mobility_stage_delivery_offers f ON f.id=o.offer_id
+  WHERE o.claimed_at IS NOT NULL AND o.accepted_for_processing_at IS NULL
+    AND f.expires_at<=pg_catalog.clock_timestamp()
+  ORDER BY o.claimed_at,o.offer_id
+  FOR UPDATE OF o SKIP LOCKED LIMIT 100
+ )
  UPDATE public.mobility_stage_delivery_offer_outbox o
  SET claimed_at=NULL,claimed_by=NULL
- FROM public.mobility_stage_delivery_offers f
- WHERE f.id=o.offer_id AND o.claimed_at IS NOT NULL
+ FROM expired e
+ WHERE o.offer_id=e.offer_id
    AND o.accepted_for_processing_at IS NULL
-   AND f.expires_at<=pg_catalog.clock_timestamp();
+   AND o.claimed_at IS NOT NULL;
  GET DIAGNOSTICS affected = ROW_COUNT;
  RETURN affected;
 END $fn$;
