@@ -12,6 +12,7 @@ export function createStagingDispatchPersistence(repository){
  async function call(method,params){
   if(!params||params.mode!=='SYNTHETIC_STAGING'||params.liveEnabled!==false||!validId(params.actorId)||!validId(params.tripId))return fail('Unauthenticated or non-staging request');
   if(method==='accept'&&(!validId(params.offerId)||!validId(params.decisionKey)))return fail('Invalid idempotency key or offer');
+  if(method==='offer'&&(!validId(params.driverId)||!validId(params.vehicleId)||!validId(params.requestKey)||!Number.isSafeInteger(params.ttlSeconds)||params.ttlSeconds<5||params.ttlSeconds>30))return fail('Invalid private offer input');
   try{
    const result=await repository[method](Object.freeze({...params}));
    if(!result||result.ok!==true||result.liveEnabled!==false)return fail('Unverified persistence response');
