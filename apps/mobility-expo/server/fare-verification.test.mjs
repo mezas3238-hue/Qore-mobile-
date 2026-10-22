@@ -20,3 +20,11 @@ test('forged subtotal, toll and commission cannot pass quote verification',()=>{
   {ruleVersion:''}
  ])assert.equal(verifySyntheticQuote({...q,...change}),false);
 });
+
+test('fare engine fails closed instead of throwing for absent or malformed input',()=>{
+ for(const input of [undefined,null,42,'AUTO',[],{}]){
+  const result=quoteSyntheticFare(input);
+  assert.equal(result.ok,false);
+  assert.equal(result.liveEnabled,false);
+ }
+});
