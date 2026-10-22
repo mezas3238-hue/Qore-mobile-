@@ -10,6 +10,7 @@ const runtimePaths=[
  '/v1/staging/driver/offers/decline','/v1/staging/trips/{tripId}/transition',
  '/v1/staging/sender/deliveries/request','/v1/staging/deliveries/{deliveryId}/transition',
  '/v1/staging/deliveries/{deliveryId}/status',
+ '/v1/staging/courier/delivery-offers',
  '/v1/staging/courier/delivery-offers/{offerId}',
  '/v1/staging/courier/delivery-offers/accept',
  '/v1/staging/courier/delivery-offers/decline','/v1/staging/buyer/orders/request',
