@@ -15,6 +15,7 @@ export function createStagingDispatchPersistence(repository){
   if(method==='accept'&&params.driverId!==undefined&&params.driverId!==params.actorId)return fail('Driver identity mismatch');
   if(method==='request'&&params.passengerId!==undefined&&params.passengerId!==params.actorId)return fail('Passenger identity mismatch');
   if(method==='transition'&&(!validId(params.eventKey)||typeof params.event!=='string'||!['arrive','pickup','complete','cancel','dispute'].includes(params.event)))return fail('Invalid transition event');
+  if(method==='snapshot'&&params.actorId!==params.passengerId&&params.actorId!==params.driverId)return fail('Snapshot actor is not a trip participant');
   if(method==='offer'&&(!validId(params.driverId)||!validId(params.vehicleId)||!validId(params.requestKey)||!Number.isSafeInteger(params.ttlSeconds)||params.ttlSeconds<5||params.ttlSeconds>30))return fail('Invalid private offer input');
   try{
    const result=await repository[method](Object.freeze({...params}));
