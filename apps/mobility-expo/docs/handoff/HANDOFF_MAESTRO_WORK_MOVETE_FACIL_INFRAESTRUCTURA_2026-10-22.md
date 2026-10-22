@@ -13,6 +13,10 @@ Crear **Movete Fácil**, plataforma paraguaya de movilidad y logística, superio
 **Secuencia vinculante:** primero desarrollar, probar y cerrar infraestructura, APIs, BD, seguridad, pricing, dispatch, logística, pagos simulados y operaciones **en QORE Mobile**; **después** diseñar/integrar la interfaz final con Lovable. No bloquear backend por créditos Lovable. Expo actual puede servir para pruebas técnicas, no adelantar rediseño UI.
 
 ## 2. ESTADO REAL VERIFICADO
+- **Actualización Work R5:** G7 añade reglas versionadas de tarifa, cotizaciones
+  enteras PYG ligadas a servicios persistidos y pagos exclusivamente simulados
+  con autorización/captura/reembolso, más ledger privado balanceado. No hay PSP
+  ni dinero. Ver `docs/backend/G7_VERSIONED_FARES_SIMULATED_PAYMENTS_2026-10-22.md`.
 - **Actualización Work R4:** G6 incorpora contrato persistente de comercios,
   sucursales, personal, catálogo, reserva/reposición de inventario, pedidos y
   preparación para supermercado/farmacia OTC/restaurante/retail/otros. El

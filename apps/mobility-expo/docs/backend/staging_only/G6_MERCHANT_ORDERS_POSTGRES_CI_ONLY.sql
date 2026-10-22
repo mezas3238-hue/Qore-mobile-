@@ -192,7 +192,8 @@ BEGIN
  VALUES(_request_key,_buyer_id,merchant.id,branch.id,_vehicle_kind,_items,100)
  RETURNING id INTO out_id;
  FOR element IN SELECT value FROM jsonb_array_elements(_items) LOOP
-  IF jsonb_typeof(element)<>'object' OR jsonb_object_length(element)<>2
+  IF jsonb_typeof(element)<>'object'
+   OR (element-'itemId'-'quantity')<>'{}'::jsonb
    OR NOT element ? 'itemId' OR NOT element ? 'quantity'
    OR (element->>'quantity') !~ '^[1-9][0-9]{0,2}$'
   THEN RAISE EXCEPTION 'Invalid merchant order line'; END IF;
