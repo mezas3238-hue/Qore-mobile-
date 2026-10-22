@@ -117,3 +117,5 @@ jobs:
           done
       - name: Validate real schema, RLS and service-role RPC invocations
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_FULL_CHAIN_SCHEMA_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Exercise synthetic G5-G10-G12 delivery on real migration chain
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_REAL_CHAIN_DELIVERY_E2E_POSTGRES_CI_ONLY.sql
