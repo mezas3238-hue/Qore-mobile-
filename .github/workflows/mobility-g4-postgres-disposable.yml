@@ -39,3 +39,10 @@ jobs:
       - name: Explicitly keep G4 integration blocked until prerequisite schema and fixtures are wired
         run: |
           echo "PostgreSQL 16 service is available; this smoke test does NOT claim G4 transaction coverage."
+
+      - name: G12 disposable delivery push SQL contract
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_SMOKE_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_ASSERT_POSTGRES_CI_ONLY.sql
