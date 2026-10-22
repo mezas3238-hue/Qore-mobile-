@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify disposable PostgreSQL
         run: |
-          psql -v ON_ERROR_STOP=1 -c 'SELECT current_setting(''server_version_num'')::integer >= 160000 AS postgres_16_or_later'
+          psql -v ON_ERROR_STOP=1 -c "SELECT current_setting('server_version_num')::integer >= 160000 AS postgres_16_or_later"
           psql -v ON_ERROR_STOP=1 -c 'SELECT pg_advisory_lock(924001)'
           psql -v ON_ERROR_STOP=1 -c 'SELECT pg_advisory_unlock(924001)'
       - name: Explicitly keep G4 integration blocked until prerequisite schema and fixtures are wired
