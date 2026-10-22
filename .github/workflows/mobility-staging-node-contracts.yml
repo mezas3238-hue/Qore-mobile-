@@ -21,6 +21,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install Expo workspace dependencies
+        working-directory: apps/mobility-expo
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run synthetic staging server contracts
         working-directory: apps/mobility-expo/server
         run: node --test *.test.mjs
