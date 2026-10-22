@@ -4,7 +4,7 @@
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 export const G15_COURIER_POLL_LIVE_ENABLED=false;
 const PATH='/v1/staging/courier/delivery-offers';
-const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x);
+const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x);
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
  (Object.getPrototypeOf(x)===Object.prototype||Object.getPrototypeOf(x)===null);
 const resp=(status,body)=>({status,body});
