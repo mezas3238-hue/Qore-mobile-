@@ -18,3 +18,13 @@ test('unverified sessions cannot call repository',async()=>{
  assert.equal((await api.accept(args,{})).ok,false);
  assert.equal(calls,0);
 });
+
+test('authenticated acceptance rejects mismatched driver identity',async()=>{
+ let calls=0;
+ const repo=Object.fromEntries(['request','offer','accept','transition','snapshot'].map(k=>[k,async()=>{calls++;return {ok:true,liveEnabled:false};}]));
+ const api=createAuthenticatedStagingDispatchPersistence(repo,async()=>b);
+ assert.equal((await api.accept({...args,driverId:a},{})).ok,false);
+ assert.equal(calls,0);
+ assert.equal((await api.accept({...args,driverId:b},{})).ok,true);
+ assert.equal(calls,1);
+});
