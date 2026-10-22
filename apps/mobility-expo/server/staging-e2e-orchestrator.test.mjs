@@ -29,3 +29,11 @@ test('driver offer expires when license or insurance expires before offer deadli
  clock=1500;
  assert.equal(s.accept({rideId:'exp1',driverId:'a'}).ok,false);
 });
+
+test('a requested AUTO trip cannot receive an offer for a different service',()=>{
+ const s=createSyntheticScenario({now:()=>1000,insidePolygon:()=>true});
+ assert.equal(s.start({rideId:'service1',passengerId:'p1',zone,point,service:'AUTO'}).ok,true);
+ assert.equal(s.propose({rideId:'service1',driverId:'a',driver:driver('a'),vehicle:vehicle('a'),service:'DELIVERY',expiresAtMs:2000}).ok,false);
+ assert.equal(s.accept({rideId:'service1',driverId:'a'}).ok,false);
+ assert.equal(s.propose({rideId:'service1',driverId:'a',driver:driver('a'),vehicle:vehicle('a'),service:'AUTO',expiresAtMs:2000}).ok,true);
+});
