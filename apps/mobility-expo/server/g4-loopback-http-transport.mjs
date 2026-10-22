@@ -35,6 +35,7 @@ const merchantOnboardingRoute=/^\/v1\/staging\/merchant\/onboarding\/request$/;
 const merchantReviewRoute=/^\/v1\/staging\/admin\/merchants\/[0-9a-f-]{36}\/review$/i;
 const merchantBranchWriteRoute=/^\/v1\/staging\/merchant\/branches\/upsert$/;
 const merchantCatalogWriteRoute=/^\/v1\/staging\/merchant\/catalog\/upsert$/;
+const courierPollRoute=/^\/v1\/staging\/courier\/delivery-offers$/;
 const deliveryOfferReadRoute=/^\/v1\/staging\/courier\/delivery-offers\/[0-9a-f-]{36}$/i;
 const deliveryOfferDecisionRoute=/^\/v1\/staging\/courier\/delivery-offers\/(accept|decline)$/;
 const safe=(code,body)=>({status:code,body});
@@ -57,12 +58,14 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
+ courierPollHandler,
 }){
  if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
    typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
    typeof safetyHandler!=='function'||typeof merchantManagementHandler!=='function'||
-   typeof deliveryOfferHandler!=='function')
+   typeof deliveryOfferHandler!=='function'||
+   (courierPollHandler!==undefined&&typeof courierPollHandler!=='function'))
   throw new Error('All G4/G5/G6/G7/G8/G9/G10 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
@@ -95,12 +98,13 @@ export function createQoreRadarLoopbackTransport({
   const merchantManagementPost=req.method==='POST'&&
    (merchantOnboardingRoute.test(path)||merchantReviewRoute.test(path)||
     merchantBranchWriteRoute.test(path)||merchantCatalogWriteRoute.test(path));
+  const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
   if(!rider&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
-    !deliveryOfferGet&&!deliveryOfferPost){
+    !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
@@ -108,7 +112,7 @@ export function createQoreRadarLoopbackTransport({
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
   if((rider||offerGet||deliveryGet||merchantGet||financeGet||safetyGet||
-      deliveryOfferGet)&&
+      deliveryOfferGet||courierPollGet)&&
      (req.headers['transfer-encoding']!==undefined||
       (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0'))){
    send(res,400,{error:'GET body not supported'});return;
@@ -140,6 +144,7 @@ export function createQoreRadarLoopbackTransport({
     (financeGet||financePost)?financeHandler:
     (safetyGet||safetyPost)?safetyHandler:
     merchantManagementPost?merchantManagementHandler:
+    courierPollGet?(courierPollHandler??(()=>({status:503,body:{error:'Private courier polling not configured'}}))):
     (deliveryOfferGet||deliveryOfferPost)?deliveryOfferHandler:offerHandler;
    const out=await handler({
     method:req.method,path,headers:req.headers,body
