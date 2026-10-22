@@ -3,6 +3,11 @@
 name: QORE G4 PostgreSQL disposable smoke
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/mobility-g4-postgres-disposable.yml'
+      - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
+      - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
 permissions:
   contents: read
 jobs:
