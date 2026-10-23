@@ -95,6 +95,8 @@ test('G24/G25/G26 public Client DTOs are versioned, auth-bound, and sealed',()=>
   assert.ok(operation.responses['401']&&operation.responses['403']&&
    operation.responses['503'],`${path}: fail-closed Auth/infra response required`);
  }
- assert.equal(spec.components.schemas.RiderOwnHistoryV1.properties.nextCursor.type,'null');
+ assert.deepEqual(spec.components.schemas.RiderOwnHistoryV1.properties.nextCursor.type,['string','null']);
+ assert.ok(spec.paths['/v1/staging/rider/history'].get.parameters.some(p=>p.name==='X-Qore-History-Cursor'));
+ assert.equal(spec.paths['/v1/staging/rider/history'].get.responses['400'].$ref,'#/components/responses/Error');
  assert.equal(spec.components.schemas.RideCancellationV1.additionalProperties,false);
 });
