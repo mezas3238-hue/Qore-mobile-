@@ -34,6 +34,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G45_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G46_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G47_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G48_*'
+      - 'apps/mobility-expo/server/g48-*'
       - 'apps/mobility-expo/server/g47-*'
       - 'apps/mobility-expo/server/g45-*'
       - 'apps/mobility-expo/server/g43-*'
@@ -317,3 +319,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G47_PRIVATE_DRIVER_EVIDENCE_LEASES_POSTGRES_CI_ONLY.sql
       - name: G47 assert private Storage attestation, role isolation, revocation and immutable access audit
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G47_PRIVATE_DRIVER_EVIDENCE_LEASES_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G48 install no-login scoped gateway with single-use DB capabilities
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G48_SCOPED_DB_DELEGATION_POSTGRES_CI_ONLY.sql
+      - name: G48 prove least-privilege ticket, Driver status, Buyer server price and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G48_SCOPED_DB_DELEGATION_ASSERT_POSTGRES_CI_ONLY.sql
