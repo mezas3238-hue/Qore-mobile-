@@ -4,6 +4,8 @@ import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
 import type {AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
+import {projectIncidentPageTriage} from './incident-page-triage.mjs';
+import type {IncidentPageFilter,IncidentPageOrder} from './incident-page-triage.mjs';
 import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
@@ -179,25 +181,55 @@ function ZoneReadOnly({zones,allowed}:{
 function IncidentReadOnly({incidents,allowed}:{
  incidents:AdminSnapshot['incidents'];allowed:boolean;
 }){
+ const [filter,setFilter]=useState<IncidentPageFilter>('ALL');
+ const [order,setOrder]=useState<IncidentPageOrder>('PRIORITY');
+ const page=allowed&&incidents?projectIncidentPageTriage(incidents,{filter,order}):null;
  const severities:Record<string,string>={LOW:'Baja',MEDIUM:'Media',HIGH:'Alta',CRITICAL:'Crítica'};
  return <Panel className="detail">
   <div className="section-head"><div><h2>Bandeja privada de incidentes</h2>
-   <p>Solo metadatos operativos autorizados, sin nombres, teléfonos o documentación de personas.</p>
-  </div><span className="muted-tag">LECTURA · NO SOS</span></div>
+   <p>Metadatos autorizados únicamente, sin nombres, teléfonos, ubicación ni documentos personales.</p>
+  </div><span className="muted-tag">SOLO LECTURA · NO SOS</span></div>
   {!allowed?<div className="empty"><h3>Sin autorización Admin</h3>
-    <p>Los incidentes no se muestran a propietarios ni pasajeros sin un permiso específico.</p></div>
+    <p>Los incidentes no se muestran a propietarios ni pasajeros sin permiso específico.</p></div>
    :!incidents?<div className="empty"><h3>Sin conexión al canal seguro</h3>
     <p>No se puede afirmar que hay cero incidentes. No hay recepción ni respuesta de emergencias activa.</p></div>
-   :incidents.items.length===0?<div className="empty"><h3>Sin resultados en esta consulta</h3>
-    <p>No certifica que no haya incidentes pendientes en otras páginas.</p></div>
-   :<div className="zone-rows">{incidents.items.map(item=>
-    <div className="zone-row" key={item.incidentId}>
-     <div><strong>{item.category} · {severities[item.severity]??'Sin nivel'}</strong>
-      <small>Estado: {item.status}</small>
-      <small>Fecha de servidor: {new Date(item.createdAt).toLocaleString('es-PY')}</small>
-     </div><div className="zone-count">#{item.revision}<small>Revisión</small></div>
-    </div>)}</div>}
-  <p className="training-disclaimer">Sin acceso a detalles personales ni herramientas para suspender cuentas. Las decisiones requieren autorización y auditoría del backend.</p>
+   :!page?<div className="owner-warning" role="alert">
+    La página de incidentes está vencida o no cumple el contrato seguro. Actualizá antes de continuar.
+   </div>
+   :<>
+    <div className="kyc-counters" aria-label="Recuento exclusivo de la página consultada">
+     <span><strong>{page.counts.all}</strong> expedientes en esta página</span>
+     <span><strong>{page.counts.active}</strong> casos activos en esta página</span>
+     <span><strong>{page.counts.criticalActive}</strong> críticos activos en esta página</span>
+    </div>
+    <p className="kyc-notice" role="note">Estas cifras corresponden <strong>solo a esta página</strong>, no al total del servidor. La prioridad es exclusivamente visual; NO representa despacho, SOS ni atención confirmada.</p>
+    <div className="kyc-filters">
+     <label htmlFor="incident-page-filter">Filtrar casos de esta página</label>
+     <select id="incident-page-filter" value={filter}
+      onChange={event=>setFilter(event.target.value as IncidentPageFilter)}>
+      <option value="ALL">Todos los de esta página</option>
+      <option value="ACTIVE">Solo estados abiertos o en revisión</option>
+      <option value="CRITICAL_ACTIVE">Críticos activos de esta página</option>
+     </select>
+     <label htmlFor="incident-page-order">Ordenar los resultados de esta página</label>
+     <select id="incident-page-order" value={order}
+      onChange={event=>setOrder(event.target.value as IncidentPageOrder)}>
+      <option value="PRIORITY">Activos y mayor severidad primero</option>
+      <option value="RECENT">Fecha más reciente primero</option>
+     </select>
+     <small role="status">Mostrando {page.items.length} de {page.counts.all} casos de esta página. Para ver los siguientes registros usá la paginación del servidor.</small>
+    </div>
+    {page.items.length===0?<div className="empty"><h3>Sin coincidencias en esta página</h3>
+     <p>El filtro no revisa otras páginas. No significa que no existan incidentes pendientes en el resto de la plataforma.</p></div>
+    :<div className="zone-rows">{page.items.map(item=>
+     <div className="zone-row" key={item.incidentId}>
+      <div><strong>{item.category} · {severities[item.severity]??'Sin nivel'}</strong>
+       <small>Estado informado por servidor: {item.status}</small>
+       <small>Fecha de servidor: {new Date(item.createdAt).toLocaleString('es-PY')}</small>
+      </div><div className="zone-count">#{item.revision}<small>Revisión</small></div>
+     </div>)}</div>}
+   </>}
+  <p className="training-disclaimer">Sin detalle personal ni operaciones para suspender cuentas. Las decisiones y la respuesta de seguridad corresponden a servicios autorizados y auditados del backend.</p>
  </Panel>;
 }
 
