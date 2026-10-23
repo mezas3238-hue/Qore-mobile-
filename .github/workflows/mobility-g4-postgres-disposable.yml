@@ -14,6 +14,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
+      - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
       - 'apps/mobility-expo/server/g17-*'
@@ -173,3 +174,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_POSTGRES_CI_ONLY.sql
       - name: G26.4 attack 15 altered/backdated histories and retain lawful lifecycle updates
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G26.5 verify two-session PostgreSQL MVCC late commits and recovery by refresh
+        run: python3 apps/mobility-expo/server/g26-history-mvcc-concurrency-ci.py
