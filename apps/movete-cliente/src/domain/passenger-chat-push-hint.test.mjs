@@ -37,7 +37,8 @@ test('rechaza push con contenido privado, rol externo, vencimiento o actor cruza
   {...valid(),issuedAt:now-120001},
   {...valid(),expiresAt:now-1},
   {...valid(),expiresAt:now+300001},
-  {...valid(),unreadCount:100}
+  {...valid(),unreadCount:-1},
+  {...valid(),unreadCount:Number.MAX_SAFE_INTEGER+1}
  ];
  for(const payload of payloads)
   assert.equal(projectPassengerChatPushHint(payload,{subject:owner,now}),null);
@@ -76,4 +77,12 @@ test('push vencido desaparece localmente sin mostrar contenido viejo',()=>{
  assert.equal(store.accept(valid(),owner).ok,true);
  tick+=60001;
  assert.equal(store.snapshot(owner).length,0);
+});
+
+test('push no limita cantidad real de pendientes, solo muestra 99+ en insignia',()=>{
+ for(const unreadCount of [99,100,123456,Number.MAX_SAFE_INTEGER]){
+  const hint=projectPassengerChatPushHint({...valid(),unreadCount},{subject:owner,now});
+  assert.equal(hint.badgeText,'99+');
+  assert.equal(Object.hasOwn(hint,'unreadCount'),false);
+ }
 });

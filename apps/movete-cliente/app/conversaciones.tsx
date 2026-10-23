@@ -42,7 +42,7 @@ export default function PassengerConversationInbox(){
   renderItem={({item})=><Panel>
    <Text accessibilityRole="header" style={styles.heading}>{LABELS[item.serviceKind]}</Text>
    <Text style={styles.text}>Servicio con asignación verificada</Text>
-   <Text style={styles.small}>Mensajes pendientes de leer: {item.unreadCount}</Text>
+   <Text style={styles.small}>Mensajes pendientes de leer: {item.unreadCount>=99?'99+':item.unreadCount}</Text>
    <Action label="Abrir chat autorizado" secondary
     onPress={()=>router.push({pathname:'/mensajes',params:{
      serviceId:item.serviceId,serviceKind:item.serviceKind}})}/>

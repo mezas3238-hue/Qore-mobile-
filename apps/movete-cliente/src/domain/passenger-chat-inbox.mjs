@@ -41,7 +41,7 @@ function validatePage(dto,{ownerId,now,revision=null}){
    ||row.canSend!==true||!natural(row.revision)
    ||row.revision>dto.revision
    ||!Number.isSafeInteger(row.unreadCount)||row.unreadCount<0
-   ||row.unreadCount>99||!Number.isSafeInteger(row.updatedAt)
+   ||!Number.isSafeInteger(row.updatedAt)
    ||row.updatedAt<0||row.updatedAt>now
    ||local.has(row.conversationId))return null;
   local.add(row.conversationId);items.push(Object.freeze({...row}));

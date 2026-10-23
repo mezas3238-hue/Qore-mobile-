@@ -45,7 +45,8 @@ test('DTO falso, con PII, cierre de servicio o ownership distinto falla cerrado'
   {...page(),items:[{...row(1),assignmentVerified:false}]},
   {...page(),items:[{...row(1),counterpartRole:'passenger'}]},
   {...page(),items:[{...row(1),canSend:false}]},
-  {...page(),items:[{...row(1),unreadCount:100}]},
+  {...page(),items:[{...row(1),unreadCount:-1}]},
+  {...page(),items:[{...row(1),unreadCount:Number.MAX_SAFE_INTEGER+1}]},
   {...page(),expiresAt:now-1},
   {...page(),nextCursor:'../../driver'},
  ]){
@@ -130,4 +131,13 @@ test('loading no muestra identificadores privados y no inicia dos solicitudes',a
  assert.equal((await inbox.load()).code,'CHAT_INBOX_READ_IN_FLIGHT');
  release({ok:true,data:page()});
  assert.equal((await job).ok,true);
+});
+
+test('inbox soporta cantidades sin leer superiores a 99 sin truncar el DTO',async()=>{
+ for(const unreadCount of [99,100,101,12500,Number.MAX_SAFE_INTEGER]){
+  const inbox=make(flags({readInbox:async()=>({ok:true,
+   data:page([{...row(1),unreadCount}])})}));
+  assert.equal((await inbox.load()).ok,true);
+  assert.equal(inbox.snapshot().items[0].unreadCount,unreadCount);
+ }
 });

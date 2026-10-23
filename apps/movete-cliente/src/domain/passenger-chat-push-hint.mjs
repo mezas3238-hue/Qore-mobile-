@@ -11,7 +11,7 @@ const exact=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)
  &&Object.keys(x).length===REQUIRED.length
  &&REQUIRED.every(k=>Object.hasOwn(x,k));
 const validId=x=>typeof x==='string'&&SERVICE_ID.test(x);
-const safeCount=n=>Number.isSafeInteger(n)&&n>=1&&n<=99;
+const safeCount=n=>Number.isSafeInteger(n)&&n>=1;
 const validTime=n=>Number.isSafeInteger(n)&&n>=0;
 export function projectPassengerChatPushHint(raw,{subject,now=Date.now()}={}){
  if(!validId(subject)||!exact(raw)||!validId(raw.eventId)
@@ -31,7 +31,7 @@ export function projectPassengerChatPushHint(raw,{subject,now=Date.now()}={}){
   serviceKind:raw.serviceKind,revision:raw.revision,
   title:'Movete Fácil',
   body:'Tenés mensajes nuevos de tu servicio.',
-  badgeText:raw.unreadCount===99?'99+':String(raw.unreadCount),
+  badgeText:raw.unreadCount>=99?'99+':String(raw.unreadCount),
   expiresAt:raw.expiresAt,requiresServerAuthorization:true,
   containsMessageBody:false,containsSenderIdentity:false
  });
