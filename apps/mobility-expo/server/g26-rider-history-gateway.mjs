@@ -9,7 +9,8 @@ import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 import {HISTORY_PAGE_SIZE} from './g26-rider-history-repository.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PATH='/v1/staging/rider/history';
-const kinds=new Set(['RIDE','DELIVERY','MERCHANT_ORDER']);
+const kindNames=['RIDE','DELIVERY','MERCHANT_ORDER'];
+const kinds=new Set(kindNames);
 const states=new Set(['searching','assigned','in_progress','completed','cancelled','failed']);
 const plain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const respond=(status,body)=>({status,body});
@@ -27,7 +28,8 @@ function cursorCodec(secret,projectRef){
  return {
   encode({anchorMs,position,userId,at}){
    const payload=Buffer.from(JSON.stringify([
-    1,anchorMs,position.time,position.id,position.kind,at+lifetimeMs
+    1,anchorMs,position.time,position.id.replaceAll('-',''),
+    kindNames.indexOf(position.kind),at+lifetimeMs
    ])).toString('base64url');
    const base='v1.'+payload;
    const result=base+'.'+mac(base,userId).toString('base64url');
@@ -49,10 +51,14 @@ function cursorCodec(secret,projectRef){
       !Number.isSafeInteger(fields[1])||fields[1]<0||fields[1]>at||
       typeof fields[2]!=='string'||fields[2].length>35||
       !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(fields[2])||
-      !uuid(fields[3])||!kinds.has(fields[4])||
+      typeof fields[3]!=='string'||!/^[0-9a-f]{32}$/i.test(fields[3])||
+      !Number.isInteger(fields[4])||fields[4]<0||fields[4]>=kindNames.length||
       !Number.isSafeInteger(fields[5])||fields[5]<=at||
       fields[5]>at+lifetimeMs)return null;
-    return {anchorMs:fields[1],after:{time:fields[2],id:fields[3],kind:fields[4]}};
+    const hex=fields[3];
+    const id=[hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),
+     hex.slice(16,20),hex.slice(20)].join('-');
+    return {anchorMs:fields[1],after:{time:fields[2],id,kind:kindNames[fields[4]]}};
    }catch{return null;}
   }
  };
