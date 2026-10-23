@@ -68,6 +68,14 @@ BEGIN
  OR NOT public.mobility_vehicle_preflight(driver_auto,auto_vehicle,'economico')
  THEN RAISE EXCEPTION 'G20 approved current AUTO license not recognized'; END IF;
 
+ -- G16 already assigned a synthetic AUTO trip to driver 181. Cancel
+ -- that historic synthetic ride as its passenger before a second acceptance,
+ -- preserving the one-active-driver invariant instead of bypassing the index.
+ PERFORM public.mobility_stage_auto_demo_transition(
+  (SELECT id FROM public.mobility_stage_auto_demo_trips
+   WHERE request_key='00000000-0000-4000-8000-000000000185'),
+  '00000000-0000-4000-8000-000000000182',
+  'cancelled','00000000-0000-4000-8000-000000000259');
  -- A fresh AUTO offer can be prepared only after the gated preflight.
  SELECT public.mobility_stage_auto_demo_request(sender,
   '00000000-0000-4000-8000-000000000243',
