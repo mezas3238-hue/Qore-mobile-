@@ -29,11 +29,17 @@ DECLARE
 BEGIN
  SELECT z.zone_id,z.revision INTO zone,zone_rev
  FROM public.mobility_stage_g31_zone_coverage z
- WHERE z.service_kind='AUTO_RIDE' AND z.coverage_status='ACTIVE'
+ WHERE z.service_kind='AUTO_RIDE'
   AND z.eligible_by_policy=false
  ORDER BY z.zone_id LIMIT 1;
  IF zone IS NULL THEN
-  RAISE EXCEPTION 'G38.2 lacks synthetic ACTIVE but noneligible zone'; END IF;
+  RAISE EXCEPTION 'G38.2 lacks synthetic AUTO coverage zone'; END IF;
+ -- Simulate a coverage-only activation as the disposable DB owner, leaving
+ -- legal/geometry policy explicitly FALSE. Coverage alone cannot dispatch.
+ UPDATE public.mobility_stage_g31_zone_coverage
+ SET coverage_status='ACTIVE'
+ WHERE zone_id=zone AND service_kind='AUTO_RIDE'
+  AND eligible_by_policy=false;
  SELECT c.revision INTO consent_rev
  FROM public.mobility_location_consents c
  WHERE c.driver_id=driver AND c.revoked_at IS NULL;
