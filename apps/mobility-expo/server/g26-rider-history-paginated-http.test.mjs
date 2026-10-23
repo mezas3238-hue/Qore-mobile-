@@ -131,7 +131,7 @@ test('G26.3 1,200 historic rows reachable through all 24 actual HTTP pages, no d
  assert.equal(forbidden.body.nextCursor,null);
  const access=await response(base,'tampered_token_never_issued');
  assert.equal(access.status,401);
- assert.equal(queries.length,27);
+ assert.equal(queries.length,25*3,'24 owner pages plus one foreign scoped page only');
 });
 test('G26.3 new operations created after first-page anchor do not alter old traversal',async t=>{
  const rows=dataset(),server=createServer(rows);
