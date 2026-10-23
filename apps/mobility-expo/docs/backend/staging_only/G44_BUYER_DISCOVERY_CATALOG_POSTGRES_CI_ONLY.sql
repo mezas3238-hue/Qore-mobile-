@@ -45,10 +45,10 @@ DECLARE target uuid;
 BEGIN
  IF TG_TABLE_NAME='mobility_stage_catalog_items'
  OR TG_TABLE_NAME='mobility_stage_merchant_branches' THEN
-  target:=CASE WHEN TG_OP='DELETE' THEN OLD.branch_id ELSE NEW.branch_id END;
-  -- branch id column differs from item.branch_id.
   IF TG_TABLE_NAME='mobility_stage_merchant_branches' THEN
    target:=CASE WHEN TG_OP='DELETE' THEN OLD.id ELSE NEW.id END;
+  ELSE
+   target:=CASE WHEN TG_OP='DELETE' THEN OLD.branch_id ELSE NEW.branch_id END;
   END IF;
   INSERT INTO public.mobility_stage_g44_catalog_versions(branch_id,revision)
     VALUES(target,1)
