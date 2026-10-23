@@ -54,11 +54,11 @@ def setup():
          VALUES(%s::uuid,'Asuncion','AUTO_DELIVERY','ACTIVE')""",(ZONE,))
         c.execute("""INSERT INTO public.mobility_stage_merchants(
          id,onboarding_key,owner_id,kind,display_tag,status,reviewed_by,reviewed_at)
-         VALUES(%s::uuid,%s::uuid,%s::uuid,'SUPERMARKET','G45_RACE','approved',
+         VALUES(%s::uuid,%s::uuid,%s::uuid,'SUPERMARKET','QA_RACE','approved',
          %s::uuid,clock_timestamp())""",(SHOP,u(621),USERS[3],USERS[4]))
         c.execute("""INSERT INTO public.mobility_stage_merchant_branches(
          id,merchant_id,branch_tag,pickup_tag,preparation_minutes,active,accepting_orders)
-         VALUES(%s::uuid,%s::uuid,'G45_RACE_BRANCH','G45_RACE_PICKUP',10,true,true)""",(BRANCH,SHOP))
+         VALUES(%s::uuid,%s::uuid,'QA_RACE_BRANCH','QA_RACE_PICKUP',10,true,true)""",(BRANCH,SHOP))
         c.execute("""INSERT INTO public.mobility_stage_g44_branch_geography(
          branch_id,zone_id,service_kind) VALUES(%s::uuid,%s::uuid,'AUTO_DELIVERY')""",(BRANCH,ZONE))
         c.execute("""INSERT INTO public.mobility_stage_catalog_items(
