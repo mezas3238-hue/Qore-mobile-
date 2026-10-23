@@ -111,12 +111,37 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/Success"
+            "description": "Client v1 own-trip status STAGING QA only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiderStatusV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
           },
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "summary": "JWT-bound rider trip status with private Client snapshot v1",
+        "description": "Read from verified Passenger JWT + server-owned trip by passengerId. Do not trust ownerId/client role from request. Reveals driver only after persisted assignment. GPS/ETA only on fresh consented verified road evidence; not an operational deployed service. event preserved for legacy G4 QA.",
+        "x-qore-client-contract-version": "rider-status-v1"
       }
     },
     "/v1/staging/driver/inbox": {
@@ -2358,6 +2383,294 @@
           },
           "active": {
             "type": "boolean"
+          }
+        }
+      },
+      "RiderStatusLegacyEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "tripId",
+          "passengerId",
+          "serverRevision",
+          "trackingSequence",
+          "status",
+          "acceptedDriver",
+          "tracking"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "server"
+          },
+          "tripId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "passengerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serverRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "trackingSequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "accepted",
+              "at_pickup",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "acceptedDriver": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "vehicleKind",
+              "model",
+              "color",
+              "plate",
+              "rating"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "vehicleKind": {
+                "type": "string",
+                "const": "AUTO"
+              },
+              "model": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              },
+              "plate": {
+                "type": "string"
+              },
+              "rating": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5
+              }
+            }
+          },
+          "tracking": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "lat",
+              "lng",
+              "roadMeters",
+              "etaSeconds",
+              "locationUpdatedAtMs",
+              "routeUpdatedAtMs",
+              "trafficAware",
+              "fallbackUsed"
+            ],
+            "properties": {
+              "lat": {
+                "type": "number"
+              },
+              "lng": {
+                "type": "number"
+              },
+              "roadMeters": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "etaSeconds": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "locationUpdatedAtMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "routeUpdatedAtMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "trafficAware": {
+                "type": "boolean",
+                "const": true
+              },
+              "fallbackUsed": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "RiderStatusV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "JWT-derived own-trip Client B snapshot; QA STAGING only. The nested event is backward compatibility, not GPS proof.",
+        "required": [
+          "tripId",
+          "ownerId",
+          "revision",
+          "state",
+          "assignmentPersisted",
+          "driver",
+          "vehicle",
+          "gpsConsent",
+          "location",
+          "etaVerified",
+          "etaMinutes",
+          "mode",
+          "commercialRidesEnabled",
+          "event",
+          "locationVisible",
+          "deliveryConfirmed"
+        ],
+        "properties": {
+          "tripId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "assigned",
+              "arriving",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "assignmentPersisted": {
+            "type": "boolean"
+          },
+          "driver": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "verified",
+              "displayName"
+            ],
+            "properties": {
+              "verified": {
+                "type": "boolean",
+                "const": true
+              },
+              "displayName": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 70
+              }
+            }
+          },
+          "vehicle": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "plate"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "AUTO"
+              },
+              "plate": {
+                "type": "string",
+                "pattern": "^[A-Z0-9-]{4,12}$"
+              }
+            }
+          },
+          "gpsConsent": {
+            "type": "boolean"
+          },
+          "location": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "latitude",
+              "longitude",
+              "observedAt"
+            ],
+            "properties": {
+              "latitude": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              "observedAt": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "etaVerified": {
+            "type": "boolean"
+          },
+          "etaMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 240
+          },
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialRidesEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "event": {
+            "$ref": "#/components/schemas/RiderStatusLegacyEvent"
+          },
+          "locationVisible": {
+            "type": "boolean"
+          },
+          "deliveryConfirmed": {
+            "type": "boolean",
+            "const": false
           }
         }
       }
