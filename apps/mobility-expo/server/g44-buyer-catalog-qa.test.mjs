@@ -49,7 +49,7 @@ test('G44 traverses ALL 13,000 buyer products in 130 pages; pageSize never total
  const f=make();let cursor=null,pages=0,total=0,seen=new Set();
  do{
   const result=await f.api.listCatalog({...page,cursor});
-  assert.equal(result.status,200,JSON.stringify(result.body));
+  assert.equal(result.status,200,JSON.stringify({body:result.body,pages,cursorLength:cursor?.length,branch}));
   assert.equal(result.body.orderEnabled,false);
   assert.equal(result.body.productionEnabled,false);
   assert.equal(result.body.snapshotConsistent,false);
@@ -74,7 +74,7 @@ test('G44 traverses 241 discovered branches, 100/page and no global cap',async()
   const r=await api.listBranches({
    bearer:token,municipality:'Asuncion',serviceKind:'AUTO_DELIVERY',cursor
   });
-  assert.equal(r.status,200,JSON.stringify(r.body));
+  assert.equal(r.status,200,JSON.stringify({body:r.body,pages,cursorLength:cursor?.length,identity}));
   total+=r.body.items.length;cursor=r.body.nextCursor;pages++;
  }while(cursor&&pages<10);
  assert.equal(total,241);assert.equal(pages,3);
