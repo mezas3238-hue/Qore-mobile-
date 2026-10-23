@@ -7,8 +7,13 @@ export default function ClientLayout(){
   <Stack screenOptions={{headerTintColor:'#183044',headerStyle:{backgroundColor:'#F4F7FB'},headerTitleStyle:{fontWeight:'700'}}}>
    <Stack.Screen name="index" options={{title:'Movete Fácil Cliente'}}/>
    <Stack.Screen name="envios" options={{title:'Pedir envío'}}/>
-   <Stack.Screen name="historial" options={{title:'Mis viajes y envíos'}}/>
    <Stack.Screen name="seguimiento" options={{title:'Seguimiento'}}/>
+   <Stack.Screen name="historial" options={{title:'Mis viajes y envíos'}}/>
+   <Stack.Screen name="comercios" options={{title:'Comercios'}}/>
+   <Stack.Screen name="cotizacion" options={{title:'Cotizaciones'}}/>
+   <Stack.Screen name="pagos" options={{title:'Pagos simulados'}}/>
+   <Stack.Screen name="soporte" options={{title:'Seguridad y soporte'}}/>
+   <Stack.Screen name="cuenta" options={{title:'Mi cuenta'}}/>
   </Stack>
  </>;
 }
