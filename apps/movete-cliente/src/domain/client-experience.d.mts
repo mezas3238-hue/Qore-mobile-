@@ -48,6 +48,11 @@ export declare function createClientExperience(options?:{
   fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
   timeoutMs?:number;
  }|null;
+ statusGatewayOptions?:{
+  enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  historyGatewayOptions?:{
   enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;

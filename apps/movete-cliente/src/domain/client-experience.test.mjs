@@ -402,3 +402,29 @@ test('409 de cancelación fuerza relectura GET y no permite un nuevo UUID',async
  assert.equal(statusReads,2);
  assert.equal(app.prepareCancelRide({tripId:trip,requestKey:quoteId}).code,'RELOAD_TRIP_BEFORE_NEW_CANCEL');
 });
+
+test('status tipado G11 se consulta por HTTP y se proyecta únicamente para pasajero propio',async()=>{
+ const receipt={tripId:trip,ownerId:a,revision:2,state:'assigned',
+  assignmentPersisted:true,driver:{verified:true,displayName:'Chofer QA'},
+  vehicle:{kind:'AUTO',plate:'QA-2026'},gpsConsent:true,
+  location:{latitude:-25.3,longitude:-57.6,observedAt:now-1000},
+  etaVerified:true,etaMinutes:4,mode:'STAGING_DEMO_ONLY',
+  commercialRidesEnabled:false,locationVisible:true,deliveryConfirmed:false,
+  event:{source:'server',tripId:trip,passengerId:a,serverRevision:2,trackingSequence:5,
+   status:'accepted',acceptedDriver:null,tracking:null}};
+ let calls=0;
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  gateway:{send:async()=>{throw Error('no generic gateway for status');}},
+  statusGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{calls++;return {ok:true,status:200,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify(receipt)};}}
+ });
+ await app.refreshSession();app.startTracking(trip);
+ assert.equal((await app.syncTracking()).ok,true);
+ assert.equal(calls,1);
+ assert.equal(app.snapshot().tracking.assignedDriver.plate,'QA-2026');
+ assert.equal(app.snapshot().tracking.liveEnabled,false);
+});

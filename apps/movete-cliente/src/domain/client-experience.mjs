@@ -3,6 +3,7 @@ import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
 import {createClientHistoryGateway} from './client-history-gateway.mjs';
+import {createRiderStatusGateway} from './ride-status-gateway.mjs';
 import {createRideCancellationGateway,createRideCancellationController} from './ride-cancellation.mjs';
 import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
@@ -15,7 +16,7 @@ import {createRiderStatusStore} from './rider-status.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,now=()=>Date.now()}={}){
+export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
@@ -59,9 +60,26 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
 
+ const statusGateway=statusGatewayOptions?createRiderStatusGateway({
+  ...statusGatewayOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway();
+   const visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ // Todas las operaciones genéricas continúan en el gateway existente;
+ // únicamente rideStatus usa el contrato tipado y fail-closed.
+ const trackGateway=statusGateway?{
+  send:(operation,args)=>operation==='rideStatus'
+   ?statusGateway.fetchStatus(args?.id)
+   :gateway?.send?.(operation,args)??fail('GATEWAY_UNAVAILABLE')
+ }:gateway;
  mutations=createClientMutationController({gateway,getSession:async()=>actor()});
  tracking=createRiderPollingCoordinator({
-  gateway,getSession:async()=>actor(),store:riderStore,now
+  gateway:trackGateway,getSession:async()=>actor(),store:riderStore,now
  });
  function prepare(operation,body){
   const user=actor();
