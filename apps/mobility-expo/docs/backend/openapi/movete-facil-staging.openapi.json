@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g44",
+    "version": "1.0.0-g45",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G44 QA-only Buyer branch discovery and versioned cursor catalog; NEVER mounted or checkout enabled"
+    "x-qore-contract-extension": "G45 synthetic durable buyer order and cancellation contract; server PYG, stock CAS; not HTTP mounted, no checkout or PSP"
   },
   "servers": [
     {
@@ -2031,6 +2031,126 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BuyerCatalogPageG44"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/buyer/orders/reservations-g45": {
+      "post": {
+        "operationId": "reserveBuyerOrderG45Qa",
+        "tags": [
+          "buyer",
+          "commerce"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Synthetic order only. Auth source must attest session; SQL G42 lock and G44 version fence run within same transaction; stock and PYG from server only. NO paid orders or real checkout.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuyerReserveOrderG45"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "QA-only transaction; not deployed nor payment-authorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerReserveReceiptG45"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/buyer/orders/{orderId}/cancel-reservation-g45": {
+      "post": {
+        "operationId": "cancelBuyerOrderG45Qa",
+        "tags": [
+          "buyer",
+          "commerce"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Synthetic cancellation only. G6 returns reserved stock once; NO real refunds, PSP or merchant commitments.",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuyerCancelOrderG45"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "QA-only transaction; not deployed nor payment-authorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerCancelReceiptG45"
                 }
               }
             }
@@ -4723,6 +4843,160 @@
             "const": false
           },
           "snapshotConsistent": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuyerReserveOrderG45": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "branchId",
+          "catalogVersion",
+          "vehicleKind",
+          "items"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "branchId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "catalogVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "vehicleKind": {
+            "type": "string",
+            "const": "AUTO"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "itemId",
+                "quantity"
+              ],
+              "properties": {
+                "itemId": {
+                  "$ref": "#/components/schemas/Uuid"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999
+                }
+              }
+            }
+          }
+        }
+      },
+      "BuyerReserveReceiptG45": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "receiptId",
+          "orderId",
+          "requestKey",
+          "branchId",
+          "catalogVersion",
+          "subtotalPyg",
+          "receiptStatus",
+          "orderEnabled",
+          "productionEnabled"
+        ],
+        "properties": {
+          "receiptId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "orderId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "branchId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "catalogVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "subtotalPyg": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 50000000
+          },
+          "receiptStatus": {
+            "type": "string",
+            "const": "QA_RESERVED_NO_PAYMENT"
+          },
+          "orderEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuyerCancelOrderG45": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cancelKey"
+        ],
+        "properties": {
+          "cancelKey": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        }
+      },
+      "BuyerCancelReceiptG45": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "receiptId",
+          "eventId",
+          "receiptStatus",
+          "refundStatus",
+          "orderEnabled",
+          "productionEnabled"
+        ],
+        "properties": {
+          "orderId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "receiptStatus": {
+            "type": "string",
+            "const": "QA_CANCELLED_STOCK_RESTORED"
+          },
+          "refundStatus": {
+            "type": "string",
+            "const": "NO_PSP_NO_FINANCIAL_REFUND"
+          },
+          "orderEnabled": {
             "type": "boolean",
             "const": false
           },
