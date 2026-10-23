@@ -39,6 +39,22 @@ test('doble toque mientras hay solicitud no crea segunda operación',async()=>{
  await first;
  assert.equal(n,1);
 });
+test('dos taps en el mismo tick no producen dos envíos',async()=>{
+ let calls=0;
+ let release;
+ const wait=new Promise(resolve=>release=resolve);
+ const c=createClientMutationController({
+  gateway:{send:async()=>{calls++;return wait}},
+  getSession:async()=>({subject,role:'passenger'})
+ });
+ c.prepare({operation:'rideRequest',body:ride,subject});
+ const first=c.submit(),second=c.submit();
+ assert.equal((await second).code,'NO_READY_REQUEST');
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(calls,1);
+ release({ok:true,status:201});
+ assert.equal((await first).ok,true);
+});
 test('timeout conserva requestKey y solo reintenta explícitamente',async()=>{
  const sent=[];
  let n=0;
