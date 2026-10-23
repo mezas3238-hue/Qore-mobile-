@@ -13,6 +13,11 @@ INSERT INTO auth.users(id) VALUES
  ('42424242-4242-4242-8242-424242424242'),
  ('43434343-4343-4343-8343-434343434343')
 ON CONFLICT DO NOTHING;
+-- auth fixture trigger may create a native passenger account. An exclusive
+-- Admin must NOT possess a native role; mirror the proven G28 fixture.
+DELETE FROM public.user_roles WHERE user_id IN (
+ '41414141-4141-4141-8141-414141414141'::uuid,
+ '42424242-4242-4242-8242-424242424242'::uuid);
 INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by)
 VALUES
  ('41414141-4141-4141-8141-414141414141','admin','active',

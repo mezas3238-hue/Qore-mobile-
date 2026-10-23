@@ -7,7 +7,7 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CURSOR=/^[A-Za-z0-9_-]{44,384}$/;
 const KEY=/^[1-4][0-9]{13}[0-9a-f]{32}$/;
 const SEVERITIES=['CRITICAL','HIGH','MEDIUM','LOW'];
