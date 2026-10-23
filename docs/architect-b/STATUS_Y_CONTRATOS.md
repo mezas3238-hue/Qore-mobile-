@@ -217,3 +217,13 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - QA local: **200/200 Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS. El corte anterior era 194/194; se agregaron 6 pruebas adversariales, sin eliminar pruebas.
 - Evidencia técnica: [CLIENT_MUTATION_SESSION_REVISION_GATE_2026-10-23.md](./CLIENT_MUTATION_SESSION_REVISION_GATE_2026-10-23.md).
 - Pendiente inmediato: publicar commit atómico, confirmar los 3 workflows de PR #8 y luego continuar B-02/B-03. Gate HTTP sigue OFF; no hay Auth/STAGING/LIVE real.
+
+**Cierre GitHub B24:** commit `93cb5bf13ec81acdf7b1345ec2f09f86276b57b3`; ownership #39962457773 SUCCESS, Admin #39962457776 SUCCESS y two-app isolation #39962457781 SUCCESS.
+
+## B25 — Harness UI sintético del viaje AUTO seguro (23-10-2026)
+- B-02 implementado mediante `safe-auto-ui-harness.mjs`: recorrido headless de editar/revisar/preparar/visualizar como no enviado/descartar usando `client-experience`, sin endpoint alternativo.
+- El surface QA mantiene cotización, conductor y GPS en `null`; `canQuote=false`, `canSearchDriver=false` y continuar retorna `PREQUOTE_AND_DISPATCH_CONTRACT_PENDING`.
+- Se prueba sin Auth, ruta inválida, preparación/descarte con cero llamadas de red y limpieza por rotación JWT.
+- QA local: **204/204 Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS. Cuatro pruebas nuevas, ninguna eliminada.
+- Documento: [SAFE_AUTO_UI_JOURNEY_HARNESS_2026-10-23.md](./SAFE_AUTO_UI_JOURNEY_HARNESS_2026-10-23.md).
+- Próxima prioridad: B-03, harness equivalente de envíos AUTO/MOTO carga con privacidad, límites y estados offline; no activar delivery backend.

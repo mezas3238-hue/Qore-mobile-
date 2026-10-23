@@ -1,8 +1,8 @@
 # Movete Fácil — B24 gate de revisión privada en mutaciones Cliente
 
-**Fecha:** 23 de octubre de 2026  
-**Ámbito:** Arquitecto B, `apps/movete-cliente/**` y QA sintética.  
-**Estado:** código local probado; pendiente de GitHub Actions del commit que contiene este documento.  
+**Fecha:** 23 de octubre de 2026
+**Ámbito:** Arquitecto B, `apps/movete-cliente/**` y QA sintética.
+**Estado:** publicado y certificado en GitHub Actions.
 **Restricciones:** PR #8 DRAFT, sin merge, despliegue, LIVE, JWT real, pagos, GPS ni datos personales.
 
 ## Problema cerrado en la capa Cliente
@@ -40,6 +40,13 @@ Un `subject` Passenger no identifica por sí solo una sesión. La misma cuenta p
 - `npm run check`: TypeScript SUCCESS; **200/200 tests PASS**, 0 FAIL.
 - `npx expo export --platform web --output-dir dist`: SUCCESS.
 - El corte anterior tenía 194 tests; este bloque agrega 6 pruebas y no elimina ninguna.
+
+## Evidencia GitHub
+
+- Commit: `93cb5bf13ec81acdf7b1345ec2f09f86276b57b3`.
+- Architect B ownership boundary #39962457773: SUCCESS.
+- Admin Web QA #39962457776: SUCCESS.
+- Two app isolation #39962457781: SUCCESS, Cliente 200/200 en el bloque B24.
 
 ## Límites que siguen abiertos
 

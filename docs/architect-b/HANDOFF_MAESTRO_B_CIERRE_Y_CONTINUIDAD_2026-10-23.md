@@ -278,4 +278,14 @@ El siguiente bloque ya no está pendiente: **B-01 fue implementado** después de
 - QA local del bloque: **200/200 tests Cliente**, TypeScript y Expo export web SUCCESS. Consultar el SHA/CI del commit posterior antes de declarar GitHub verde.
 - Documento: `docs/architect-b/CLIENT_MUTATION_SESSION_REVISION_GATE_2026-10-23.md`.
 
-La siguiente prioridad ejecutable pasa a **B-02: harness de UI sintético del flujo AUTO seguro**, sin inventar precotización, aceptación, dispatch ni respuesta backend inexistente.
+El commit B24 quedó certificado en GitHub como `93cb5bf13ec8`: los tres workflows SUCCESS.
+
+## B25 — B-02 completado
+
+- Se agregó un harness headless del flujo UI AUTO: editar, revisar, preparar borrador no enviado y descartar.
+- Nunca habilita precio, GPS, conductor o dispatch; esos campos permanecen nulos y el paso siguiente falla cerrado por contrato pendiente.
+- Cubre Auth ausente, ruta inválida, una sola requestKey, cero red y remount por rotación JWT.
+- QA local: **204/204 tests Cliente**, TypeScript y Expo export web SUCCESS. Verificar SHA/CI GitHub del commit B25.
+- Evidencia: `docs/architect-b/SAFE_AUTO_UI_JOURNEY_HARNESS_2026-10-23.md`.
+
+La siguiente prioridad ejecutable pasa a **B-03: harness seguro de envíos AUTO/MOTO de carga**, incluyendo error/offline y privacidad del destinatario, sin activar backend.
