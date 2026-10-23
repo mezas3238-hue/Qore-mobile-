@@ -6,7 +6,7 @@ import {projectG44BuyerBranches} from './g44-buyer-contract.mjs';
  * Requiere transporte y sesión certificados por A; default OFF.
  */
 const CURSOR=/^[A-Za-z0-9_.-]{44,384}$/;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const kinds=new Set(['AUTO_DELIVERY','MOTO_DELIVERY']);
 const fail=code=>Object.freeze({ok:false,code});
 const actorOk=a=>a?.role==='passenger'&&typeof a.subject==='string'
