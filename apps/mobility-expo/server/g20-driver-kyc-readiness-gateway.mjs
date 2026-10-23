@@ -2,7 +2,7 @@
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 export const G20_LICENSE_READINESS_LIVE_ENABLED=false;
 const PATH='/v1/staging/driver/license-readiness';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const response=(status,body)=>({status,body});
 function bearer(headers){
