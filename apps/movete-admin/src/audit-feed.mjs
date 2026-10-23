@@ -20,7 +20,7 @@ export function projectAuditFeed(raw,{role,now=Date.now()}={}){
   ||!Number.isSafeInteger(raw.generatedAt)||raw.generatedAt>now
   ||raw.generatedAt<now-300000||!Number.isSafeInteger(raw.expiresAt)
   ||raw.expiresAt<=now||raw.expiresAt>now+300000
-  ||!Array.isArray(raw.items)||raw.items.length>100||!readContinuation(raw).ok)return null;
+  ||!Array.isArray(raw.items)||raw.items.length>50||!readContinuation(raw).ok)return null;
  const ids=new Set(),items=[];
  for(const event of raw.items){
   if(!exact(event,fields)||!id(event.eventId)||ids.has(event.eventId)

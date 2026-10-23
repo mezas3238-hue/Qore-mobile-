@@ -40,3 +40,14 @@ test('la revocación en UI permite limpiar al cambiar sesión',()=>{
  store.replace(queue,'admin');time=2100;
  assert.equal(store.current(),null);
 });
+
+test('A05 limita a 50 la página, no a 50 el total de la plataforma',()=>{
+ const createRecord=n=>({...record,vehicleId:'123e4567-e89b-42d3-a456-'+String(n+10).padStart(12,'0')});
+ const rows=Array.from({length:50},(_,i)=>createRecord(i));
+ const page={...queue,items:rows,nextCursor:'S'.repeat(44)};
+ const data=projectKycQueue(page,{role:'admin',now:1100});
+ assert.equal(data.items.length,50);
+ assert.equal(data.nextCursor,'S'.repeat(44));
+ assert.equal(projectKycQueue({...page,items:[...rows,createRecord(51)]},
+  {role:'admin',now:1100}),null);
+});

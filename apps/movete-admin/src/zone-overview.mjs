@@ -19,7 +19,7 @@ export function projectZoneOverview(payload,{role,now=Date.now()}={}){
   ||!Number.isSafeInteger(payload.generatedAt)||payload.generatedAt>now
   ||payload.generatedAt<now-300000||!Number.isSafeInteger(payload.expiresAt)
   ||payload.expiresAt<=now||payload.expiresAt>now+300000
-  ||!Array.isArray(payload.items)||payload.items.length>200||!readContinuation(payload).ok)return null;
+  ||!Array.isArray(payload.items)||payload.items.length>50||!readContinuation(payload).ok)return null;
  const ids=new Set(),items=[];
  for(const row of payload.items){
   if(!exact(row,keys)||!validId(row.zoneId)||ids.has(row.zoneId+'|'+row.serviceKind)

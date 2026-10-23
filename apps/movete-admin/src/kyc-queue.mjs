@@ -18,7 +18,7 @@ export function projectKycQueue(data,{role,now=Date.now()}={}){
    ||data.scope!=='admin.kyc.read'||!Number.isSafeInteger(data.revision)||data.revision<0
    ||!Number.isSafeInteger(data.generatedAt)||data.generatedAt>now||data.generatedAt<now-300000
    ||!Number.isSafeInteger(data.expiresAt)||data.expiresAt<=now||data.expiresAt>now+300000
-   ||!Array.isArray(data.items)||data.items.length>100||!readContinuation(data).ok)return null;
+   ||!Array.isArray(data.items)||data.items.length>50||!readContinuation(data).ok)return null;
  const seen=new Set(),rows=[];
  for(const v of data.items){
   if(!exact(v,exactItem)||!exactItem.every(k=>Object.hasOwn(v,k))

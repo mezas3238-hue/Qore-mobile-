@@ -75,3 +75,14 @@ test('una misma zona admite automóvil, autoenvío y motoenvío sin colisión de
   ['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY']);
  assert.equal(result.items.every(x=>x.availabilityConfirmed===false),true);
 });
+
+test('A05 limita a 50 la página, no a 50 el total de la plataforma',()=>{
+ const createRecord=n=>({...row,zoneId:'123e4567-e89b-42d3-a456-'+String(n+30).padStart(12,'0')});
+ const rows=Array.from({length:50},(_,i)=>createRecord(i));
+ const page={...data,items:rows,nextCursor:'S'.repeat(44)};
+ const data=projectZoneOverview(page,{role:'admin',now});
+ assert.equal(data.items.length,50);
+ assert.equal(data.nextCursor,'S'.repeat(44));
+ assert.equal(projectZoneOverview({...page,items:[...rows,createRecord(51)]},
+  {role:'admin',now}),null);
+});

@@ -43,3 +43,14 @@ test('cambio de rol o revisión antigua invalida snapshot',()=>{
  store.replace(feed,'admin');time=now+50000;
  assert.equal(store.current('admin'),null);
 });
+
+test('A05 limita a 50 la página, no a 50 el total de la plataforma',()=>{
+ const createRecord=n=>({...row,eventId:'123e4567-e89b-42d3-a456-'+String(n+50).padStart(12,'0')});
+ const rows=Array.from({length:50},(_,i)=>createRecord(i));
+ const page={...feed,items:rows,nextCursor:'S'.repeat(44)};
+ const data=projectAuditFeed(page,{role:'admin',now});
+ assert.equal(data.items.length,50);
+ assert.equal(data.nextCursor,'S'.repeat(44));
+ assert.equal(projectAuditFeed({...page,items:[...rows,createRecord(51)]},
+  {role:'admin',now}),null);
+});

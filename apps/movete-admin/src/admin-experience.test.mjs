@@ -488,3 +488,49 @@ test('G28: una respuesta HTTP con 51 incidentes no autoriza parcial o falso vac�
  assert.equal(app.snapshot().incidents,null);
  assert.equal(app.snapshot().pagination.incidents.hasNext,false);
 });
+
+test('A05: KYC, zonas y auditoría rechazan 51 filas cada una y ocultan la página',async()=>{
+ const ids=n=>'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0');
+ const all=[
+  ['kyc',dto,'vehicleId'],['zones',zone,'zoneId'],['audit',auditFeed,'eventId']
+ ];
+ for(const [operation,seed,idKey] of all){
+  const app=createAdminExperience({now:()=>now,
+   authProvider:{readSession:async()=>auth()},
+   readGatewayOptions:readConfig(async()=>mockReply({...seed,
+    nextCursor:null,items:Array.from({length:51},(_,i)=>({
+     ...seed.items[0],[idKey]:ids(i+1)
+    }))}))});
+  await app.refreshSession();
+  assert.equal((await app.syncFromServer(operation,'reset')).code,'INVALID_READ_DTO',operation);
+  assert.equal(app.snapshot()[operation],null);
+  assert.equal(app.snapshot().pagination[operation].hasNext,false);
+ }
+});
+test('A05: 50 filas de KYC no impiden recuperar más páginas hasta la última',async()=>{
+ const ids=n=>'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0');
+ const cursor=n=>'G'.repeat(44)+String(n).padStart(4,'0');
+ let reads=0;
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async url=>{
+   reads++;
+   const part=url.match(/cursor=G{44}(\d{4})/);
+   const p=part?Number(part[1]):1;
+   return mockReply({...dto,items:Array.from({length:p===3?23:50},(_,i)=>({
+    ...dto.items[0],vehicleId:ids((p-1)*50+i+1)
+   })),nextCursor:p<3?cursor(p+1):null});
+  })
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('kyc','reset')).ok,true);
+ assert.equal(app.snapshot().kyc.items.length,50);
+ assert.equal((await app.syncFromServer('kyc','next')).ok,true);
+ assert.equal(app.snapshot().kyc.items.length,50);
+ assert.equal((await app.syncFromServer('kyc','next')).ok,true);
+ assert.equal(app.snapshot().kyc.items.length,23);
+ assert.equal(app.snapshot().kyc.items[22].vehicleId,ids(123));
+ assert.equal(app.snapshot().pagination.kyc.pageNumber,3);
+ assert.equal((await app.syncFromServer('kyc','next')).code,'NO_ADDITIONAL_PAGE');
+ assert.equal(reads,3);
+});
