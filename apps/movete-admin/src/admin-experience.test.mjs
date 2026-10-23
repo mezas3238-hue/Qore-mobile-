@@ -128,3 +128,31 @@ test('finanzas con otro titular no son aceptadas',async()=>{
  assert.equal(app.readFinance({...financeData,ownerId:admin}),false);
  assert.equal(app.snapshot().finance,null);
 });
+
+test('ACK de revisión recibido después de logout no confirma una decisión',async()=>{
+ let resume;
+ const pending=new Promise(resolve=>{resume=resolve;});
+ const gateway={isConfigured:()=>true,reviewVehicle:async()=>pending};
+ const {app}=fixture(auth(),gateway);
+ await app.refreshSession();app.readKyc(dto);
+ const task=app.reviewVehicle({});
+ await app.logout();
+ resume({ok:true,status:200});
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(app.snapshot().authenticated,false);
+ assert.equal(app.snapshot().kyc,null);
+});
+test('ACK de revisión de otro administrador se rechaza tras cambio de sesión',async()=>{
+ let resume;
+ const pending=new Promise(resolve=>{resume=resolve;});
+ const gateway={isConfigured:()=>true,reviewVehicle:async()=>pending};
+ const {app,setUser}=fixture(auth(),gateway);
+ await app.refreshSession();
+ const task=app.reviewVehicle({});
+ setUser(auth('123e4567-e89b-42d3-a456-426614174020'));
+ await app.refreshSession();
+ resume({ok:true,status:200});
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(app.snapshot().account.subject,'123e4567-e89b-42d3-a456-426614174020');
+ assert.equal(app.snapshot().kyc,null);
+});
