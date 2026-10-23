@@ -21,6 +21,10 @@ BEGIN
  JOIN public.mobility_stage_deliveries d ON d.id=f.delivery_id
  JOIN public.mobility_stage_delivery_offer_outbox o ON o.offer_id=f.id
  WHERE f.courier_id=_courier_id AND o.courier_id=_courier_id
+   AND EXISTS(SELECT 1 FROM public.user_roles r
+      WHERE r.user_id=f.courier_id AND r.role='driver'::public.app_role)
+   AND (SELECT count(*) FROM public.user_roles r
+      WHERE r.user_id=f.courier_id)=1
    AND f.status='offered' AND d.status='requested'
    AND f.expires_at>pg_catalog.clock_timestamp()+interval '3 seconds'
  ORDER BY f.offered_at,f.id
