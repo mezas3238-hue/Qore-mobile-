@@ -152,7 +152,7 @@ export function createG44BuyerHttpGateway({
  return Object.freeze({
   isConfigured:()=>Boolean(ready),cancelPending,
   readBuyerCatalog:(branchId,context={})=>
-   perform('catalog',{branchId,...context}),
+   perform('catalog',{...context,branchId}),
   readBuyerBranches:(context={})=>perform('branches',context)
  });
 }

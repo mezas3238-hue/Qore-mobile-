@@ -170,3 +170,35 @@ test('G44 solicitudes independientes de directorio y catálogo no se bloquean',a
  release(response(branchPage()));
  assert.equal((await branches).ok,true);
 });
+
+test('G44 rechaza sobrescritura de sucursal desde argumentos secundarios',async()=>{
+ let url;
+ const g=createG44BuyerHttpGateway({...settings,fetchImpl:async input=>{
+  url=input;return response(catalog());
+ }});
+ const result=await g.readBuyerCatalog(branch,{...context,branchId:id(88)});
+ assert.equal(result.ok,true);
+ assert.equal(url,'https://staging.example.invalid/v1/staging/buyer/branches/'+branch+'/catalog');
+ assert.equal(result.data.branchId,branch);
+});
+test('G44 logout antes de resolver Identity no inicia fetch y descarta resultado',async()=>{
+ let releaseAuth,hits=0;
+ const waiting=new Promise(resolve=>{releaseAuth=resolve;});
+ const g=createG44BuyerHttpGateway({...settings,
+  getSession:()=>waiting,fetchImpl:async()=>{hits++;return response(catalog());}
+ });
+ const job=g.readBuyerCatalog(branch,context);
+ assert.equal((await g.readBuyerCatalog(branch,context)).code,'G44_READ_IN_FLIGHT');
+ g.cancelPending();
+ releaseAuth(actor());
+ assert.equal((await job).code,'STALE_SESSION_RESPONSE');
+ assert.equal(hits,0);
+});
+test('G44 demora vencida no publica datos ni ignora el deadline de 1 segundo',async()=>{
+ let clock=time;
+ const g=createG44BuyerHttpGateway({...settings,now:()=>clock,
+  timeoutMs:1000,fetchImpl:async()=>{
+   clock+=1001;return response(catalog());
+  }});
+ assert.equal((await g.readBuyerCatalog(branch,context)).code,'NETWORK_OR_TIMEOUT');
+});
