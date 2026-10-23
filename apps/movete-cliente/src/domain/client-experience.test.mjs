@@ -428,3 +428,49 @@ test('status tipado G11 se consulta por HTTP y se proyecta únicamente para pasa
  assert.equal(app.snapshot().tracking.assignedDriver.plate,'QA-2026');
  assert.equal(app.snapshot().tracking.liveEnabled,false);
 });
+
+
+test('cancelación más GET tipado muestra Cancelado solo tras revisión persistida',async()=>{
+ const legacy=(revision,status)=>({source:'server',tripId:trip,passengerId:a,
+  serverRevision:revision,trackingSequence:revision,status,
+  acceptedDriver:null,tracking:null});
+ const assigned={tripId:trip,ownerId:a,revision:2,state:'assigned',
+  assignmentPersisted:true,driver:{verified:true,displayName:'Chofer QA'},
+  vehicle:{kind:'AUTO',plate:'QA-2026'},gpsConsent:false,location:null,
+  etaVerified:false,etaMinutes:null,mode:'STAGING_DEMO_ONLY',
+  commercialRidesEnabled:false,locationVisible:false,deliveryConfirmed:false,
+  event:legacy(2,'accepted')};
+ const cancelled={...assigned,revision:3,state:'cancelled',
+  assignmentPersisted:false,driver:null,vehicle:null,event:legacy(3,'cancelled')};
+ const receipt={mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
+  tripId:trip,event:'cancel',eventId:key,serverPersisted:true};
+ let statusHits=0,writes=0;
+ const okBody=data=>({ok:true,status:200,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':null},
+  text:async()=>JSON.stringify(data)});
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  statusGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{statusHits++;return okBody(statusHits===1?assigned:cancelled);}},
+  cancelGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{writes++;return okBody(receipt);}}
+ });
+ await app.refreshSession();app.startTracking(trip);
+ assert.equal((await app.syncTracking()).ok,true);
+ assert.equal(app.snapshot().tracking.state,'assigned');
+ assert.equal(app.prepareCancelRide({tripId:trip,requestKey:key}).ok,true);
+ // Preparar una solicitud jamás modifica el status antes del POST/GET.
+ assert.equal(app.snapshot().tracking.state,'assigned');
+ const result=await app.submitCancelRide();
+ assert.equal(result.ok,true);
+ assert.equal(result.statusRefreshed,true);
+ assert.equal(statusHits,2);assert.equal(writes,1);
+ assert.equal(app.snapshot().tracking.state,'cancelled');
+ assert.equal(app.snapshot().tracking.revision,3);
+ assert.equal(app.snapshot().tracking.assignedDriver,null);
+ assert.equal(app.snapshot().tracking.position,null);
+ assert.equal(app.prepareCancelRide({tripId:trip,requestKey:quoteId}).code,
+  'CANCEL_REQUIRES_ACTIVE_RIDE');
+});
