@@ -3,6 +3,17 @@ import {FlatList,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 const kind:Record<string,string>={RIDE:'Automóvil',DELIVERY:'Envío',MERCHANT_ORDER:'Pedido comercial'};
+const safeMessage:Record<string,string>={
+ INVALID_OR_EXPIRED_CURSOR:'La consulta venció. Reiniciá desde la primera página.',
+ AUTH_REQUIRED:'La sesión caducó. Volvé a iniciar sesión.',
+ FORBIDDEN:'La cuenta no tiene acceso a este historial.',
+ INVALID_HISTORY_DTO:'El servidor no devolvió datos válidos para esta cuenta.',
+ CURSOR_REPEATED:'Se detectó un cursor repetido. Reiniciá la consulta.',
+ NETWORK_OR_TIMEOUT:'Sin conexión segura. Podés intentar de nuevo.',
+ RATE_LIMITED:'Hay demasiadas consultas. Intentá más tarde.',
+ SERVICE_UNAVAILABLE:'El servicio de historial no está disponible.',
+ HISTORY_READ_IN_FLIGHT:'Ya se está consultando el historial.'
+};
 export default function ClientHistory(){
  const {client,view}=useClientView();
  const list=view.authenticated?view.history?.items??[]:[];
@@ -35,7 +46,7 @@ export default function ClientHistory(){
       ?'Consulta segura habilitada para esta sesión de prueba.'
       :'Lectura no disponible hasta certificar la API y permisos del pasajero.'}</Text>
     {view.historyLoadError&&<Text accessibilityRole="alert" style={styles.small}>
-      No se pudo validar el historial: {view.historyLoadError}
+      No se pudo validar el historial: {safeMessage[view.historyLoadError]??'No se pudo completar la consulta.'}
     </Text>}
     {view.historyLoadError&&view.historyConfigured&&view.authenticated&&
       <Action label="Reiniciar consulta desde la primera página"

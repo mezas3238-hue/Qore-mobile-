@@ -286,3 +286,30 @@ test('relogin de mismo usuario con token nuevo borra cotización e historial pri
  assert.equal(api.snapshot().history,null);
  assert.equal(api.snapshot().quote,null);
 });
+
+test('TTL de historial vencido inicia nueva secuencia sin falsos cursores repetidos',async()=>{
+ let clock=now,hits=0;
+ const nextCursor=signedCursor('cursor2');
+ const third=signedCursor('cursor3');
+ const seen=[];
+ const api=createClientExperience({
+  now:()=>clock,
+  authProvider:{readSession:async()=>({...fakeSession(),expiresAt:now+180000})},
+  historyGatewayOptions:historyOptions(async(_url,req)=>{
+   const cursor=req.headers['X-Qore-History-Cursor']??null;
+   seen.push(cursor);hits++;
+   return historyResp({...fakeHistory(),generatedAt:clock-1000,
+    expiresAt:clock+60000,nextCursor:
+     hits===1?nextCursor:hits===2?third:hits===3?nextCursor:null});
+  })
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadHistoryPage({reset:true})).ok,true);
+ assert.equal((await api.loadHistoryPage()).ok,true);
+ assert.equal(api.snapshot().history.nextCursor,third);
+ clock=now+61000;
+ assert.equal(api.snapshot().history,null);
+ assert.equal((await api.loadHistoryPage()).ok,true);
+ assert.equal(api.snapshot().history.nextCursor,nextCursor);
+ assert.deepEqual(seen,[null,nextCursor,null]);
+});

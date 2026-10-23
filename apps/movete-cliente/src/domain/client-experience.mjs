@@ -77,6 +77,9 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(!historyGateway?.isConfigured())return fail('HISTORY_CONTRACT_PENDING');
   if(historyLoading)return fail('HISTORY_READ_IN_FLIGHT');
   const current=history.current(user.subject);
+  // Una página vencida cancela la cadena anterior de cursores.
+  // Iniciar nueva secuencia con cursor vacío y titular actual.
+  if(!current){seenCursors.clear();}
   if(!reset&&current&&current.nextCursor===null)return fail('NO_ADDITIONAL_PAGE');
   const cursor=reset?null:current?.nextCursor??null;
   if(cursor!==null&&seenCursors.has(cursor))return fail('CURSOR_REPEATED');
