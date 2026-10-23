@@ -36,7 +36,7 @@ BEGIN
  o:=public.mobility_stage_auto_demo_offer(
   trip,'00000000-0000-4000-8000-000000000181',
   '00000000-0000-4000-8000-000000000184',
-  'b6381000-0000-4638-8638-000000000004',60);
+  'b6381000-0000-4638-8638-000000000004',30);
  denied:=false;
  BEGIN
   PERFORM public.mobility_stage_auto_demo_accept_offer(
@@ -53,7 +53,7 @@ BEGIN
  o:=public.mobility_stage_delivery_offer(
   del,'00000000-0000-4000-8000-000000000181',
   '00000000-0000-4000-8000-000000000184',
-  'b6381000-0000-4638-8638-000000000007',60);
+  'b6381000-0000-4638-8638-000000000007',45);
  denied:=false;
  BEGIN
   PERFORM public.mobility_stage_delivery_accept_offer(
