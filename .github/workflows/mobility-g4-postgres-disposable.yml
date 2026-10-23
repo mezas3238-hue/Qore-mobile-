@@ -15,6 +15,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G27_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G28_*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
@@ -182,3 +183,11 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G27_BACKOFFICE_ROLES_POSTGRES_CI_ONLY.sql
       - name: G27 A04.2 reject native dual role, revoked privileges, cross-role scopes and client writes
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G27_BACKOFFICE_ROLES_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G28 install already authored G7 and G8 real schemas on disposable chain only
+        run: |
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G7_FARES_SIMULATED_PAYMENTS_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G8_SAFETY_OPERATIONS_POSTGRES_CI_ONLY.sql
+      - name: G28 install scoped read-only incident queue SQL (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G28_ADMIN_INCIDENT_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G28 test 121 incident rows in three full keyset pages and reject Owner/dual-role/access
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G28_ADMIN_INCIDENT_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
