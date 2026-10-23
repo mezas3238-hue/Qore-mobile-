@@ -170,3 +170,15 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - [**CI Admin Web #39896092740 SUCCESS**](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39896092740): **100 tests, 100 PASS, 0 FAIL, TypeScript y Vite build SUCCESS**. Boundary #39896092581 SUCCESS. Los checks prueban código/QA, no la API real.
 - Documento con rutas STAGING propuestas, matrices de acceso, evidencias, limitaciones y plan: [ADMIN_READ_GATEWAY_QA_2026-10-23.md](./ADMIN_READ_GATEWAY_QA_2026-10-23.md).
 - A presenta OpenAPI `1.0.0-g11` con **40 rutas** al último chequeo: cinco GET Admin/Owner siguen sin contratos certificados. Se requieren MFA servidor, JWT/RLS, DTO versionado, E2E navegador y autorización STAGING del propietario. No live, no merge ni pagos.
+
+## Novena sesión — paginación sin límite global de registros (23-10-2026)
+- **Directiva Owner preservada:** Movete Fácil debe admitir todas las altas de usuarios/conductores/servicios según la capacidad de infraestructura, sin techo artificial de 50 o 100. Los límites de respuesta (50/100/200) solo controlan la cantidad de elementos por página, **nunca el total de la plataforma**.
+- `ab50dbac`: `page-cursor.mjs`, cursores opacos URL-safe con Anterior/Siguiente, retroceso, rechazo de ciclos y pruebas de 251 páginas.
+- `938e06aa`: KYC, zonas, incidentes, auditoría aceptan `nextCursor` validado; no retienen expedientes de páginas previas.
+- `65cf1850`: gateway GET `?cursor=` seguro y runtime con navegación, roles y limpieza al logout; test recorre 151 páginas KYC.
+- `64d00dff`: corregido caso sin sesión (snapshot de paginación vacía) detectado por CI.
+- `af7f0a4b`: Admin Web muestra «Anterior / Página N / Siguiente», sin fabricar número total. CI Admin #39921570353 SUCCESS.
+- `c6f3793e`: Cliente `history-feed` demuestra **5.000 registros de 100 páginas**, validación de cursor y pantalla RN `FlatList` virtualizada. CI Cliente/isolation #39921744487 SUCCESS.
+- `ea675b07`: una misma zona puede aparecer en múltiples modalidades `AUTO_RIDE/AUTO_DELIVERY/MOTO_DELIVERY` sin colisión. CI Admin [#39921965130 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39921965130): **109 pruebas PASS / 0 FAIL**; boundary #39921965133 SUCCESS, Cliente/Driver isolation #39921965135 SUCCESS.
+- Documento completo: [PAGINACION_SIN_LIMITE_REGISTROS_2026-10-23.md](./PAGINACION_SIN_LIMITE_REGISTROS_2026-10-23.md). [Issue #9](https://github.com/mezas3238-hue/Qore-mobile-/issues/9) actualizado para que A certifique PostgreSQL sin max-cardinalidad, cursor keyset firmado ligado a sesión, 1.000–10.000 registros STAGING y contratos finales. No se ha probado capacidad real de base de datos desde B.
+- Rama exclusiva B, PR #8 DRAFT, no merge, no LIVE, sin Auth/servicios reales. La interfaz Lovable sigue pendiente de cierre infraestructura y autorización Owner.
