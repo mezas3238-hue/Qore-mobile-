@@ -54,7 +54,7 @@ BEGIN
  IF TG_OP<>'UPDATE' OR TG_TABLE_SCHEMA<>'public'
   OR TG_TABLE_NAME NOT IN('mobility_stage_auto_demo_trips','mobility_stage_deliveries')
  THEN RAISE EXCEPTION 'G38 unexpected acceptance trigger' USING ERRCODE='G3801'; END IF;
- IF NEW.status<>'accepted' OR OLD.status NOT IN('searching','requested')
+ IF NEW.status::text<>'accepted' OR OLD.status::text NOT IN('searching','requested')
  THEN RETURN NEW; END IF;
  IF TG_TABLE_NAME='mobility_stage_auto_demo_trips' THEN
   kind:='AUTO_RIDE';service:='AUTO_RIDE';
