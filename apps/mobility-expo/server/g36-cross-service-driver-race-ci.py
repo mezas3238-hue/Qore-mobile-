@@ -58,6 +58,9 @@ def prepare():
             assert c.fetchone()[0] is True, "AUTO selected-vehicle preflight unavailable"
             c.execute("SELECT public.mobility_stage_delivery_courier_preflight(%s::uuid,%s::uuid,%s::uuid)",(DRIVER,VEHICLE,delivery))
             assert c.fetchone()[0] is True, "DELIVERY selected-vehicle preflight unavailable"
+            # The service_role deliberately cannot SELECT internal slots;
+            # the disposable database owner (qore_ci) alone inspects them.
+            c.execute("RESET ROLE")
             c.execute("SELECT count(*) FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s::uuid",(DRIVER,))
             assert c.fetchone()[0] == 0, "Previous AUTO slot did not release"
     return trip,delivery
