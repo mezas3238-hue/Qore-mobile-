@@ -14,6 +14,8 @@ import {createIncidentReportFlow} from './incident-report-flow.mjs';
 import {createCommerceCatalogFlow} from './commerce-catalog-flow.mjs';
 import {createCommerceCatalogPager} from './commerce-catalog-pages.mjs';
 import {createG44BranchDirectory} from './g44-branch-directory.mjs';
+import {createG44BuyerCatalogAdapter} from './g44-buyer-contract.mjs';
+import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -24,11 +26,12 @@ import {createG44BranchDirectory} from './g44-branch-directory.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
- commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,now=()=>Date.now()}={}){
+ commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
+ g44BuyerHttpOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let commerceFlow,commercePager,branchDirectory;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
@@ -43,6 +46,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(commerceFlow)commerceFlow.clear();
   if(commercePager)commercePager.clear();
   if(branchDirectory)branchDirectory.clear();
+  if(g44Http)g44Http.cancelPending();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -93,14 +97,32 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  commerceFlow=createCommerceCatalogFlow({
   gateway:commerceCatalogGateway,getActor:async()=>actorSession(),now
  });
- // Paginación de descubrimiento SOLO LECTURA, independiente del carrito.
- // OFF por defecto; el backend A todavía no ha publicado GET Buyer.
+ // HTTP G44 REAL solo con tres gates, Auth de sesión y HTTPS STAGING pinned.
+ // Inyectar opciones no certifica contratos ni permite activar usuarios reales.
+ g44Http=g44BuyerHttpOptions?createG44BuyerHttpGateway({
+  ...g44BuyerHttpOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway();
+   const visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ const g44Ready=g44Http?.isConfigured()===true;
+ const g44CatalogAdapter=g44Http?createG44BuyerCatalogAdapter({
+  enabled:g44Ready,contractCertified:g44Ready,stagingRuntimeVerified:g44Ready,
+  readBuyerCatalog:g44Http.readBuyerCatalog,now
+ }):null;
  commercePager=createCommerceCatalogPager({
-  gateway:commerceCatalogPageGateway,getActor:async()=>actorSession(),now
+  gateway:commerceCatalogPageGateway??g44CatalogAdapter,
+  getActor:async()=>actorSession(),now
  });
- // Directorio Buyer G44 inactivo sin contrato runtime real certificado por A.
  branchDirectory=createG44BranchDirectory({
-  ...(g44BranchDirectoryOptions??{}),getActor:async()=>actorSession(),now
+  ...(g44BranchDirectoryOptions??(g44Http?{
+   enabled:g44Ready,contractCertified:g44Ready,stagingRuntimeVerified:g44Ready,
+   readBuyerBranches:g44Http.readBuyerBranches
+  }:{})),getActor:async()=>actorSession(),now
  });
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
   ...historyGatewayOptions,now,

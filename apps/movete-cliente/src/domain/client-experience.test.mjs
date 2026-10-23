@@ -867,3 +867,80 @@ test('G44 directorio nunca revive sucursales después de rotar JWT',async()=>{
  assert.equal((await job).code,'STALE_RESPONSE_IGNORED');
  assert.equal(api.snapshot().branchDirectory.items.length,0);
 });
+
+test('G44 transporte integrado no hace HTTP por simple presencia de esquema',async()=>{
+ let calls=0;
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  g44BuyerHttpOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:false,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{calls++;throw Error('not allowed');}
+  }
+ });
+ await app.refreshSession();
+ assert.equal(app.snapshot().branchDirectory.readReady,false);
+ assert.equal(app.snapshot().commercePager.readReady,false);
+ assert.equal((await app.loadBuyerBranches({municipality:'Asunción',
+  serviceKind:'MOTO_DELIVERY'})).code,'BRANCH_DIRECTORY_RUNTIME_NOT_CERTIFIED');
+ assert.equal(calls,0);
+});
+test('G44 integración HTTPS inyectada permite descubrir y leer sin activar órdenes',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080';
+ const item='123e4567-e89b-42d3-a456-426614174081';
+ const calls=[];
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g44BuyerHttpOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async (url,init)=>{
+    calls.push([url,init.headers.Authorization]);
+    const isCatalog=url.endsWith('/catalog');
+    const dto=isCatalog?{branchId:branch,version:7,expiresAt:now+60000,
+     items:[{itemId:item,itemTag:'ARROZ_1KG',itemClass:'GENERAL',
+      active:true,unitPricePyg:7500,stockUnits:12}],nextCursor:null,
+     orderEnabled:false,eligibleByPolicy:false,snapshotConsistent:false,
+     productionEnabled:false}:
+     {municipality:'Asunción',serviceKind:'MOTO_DELIVERY',items:[{
+      branchId:branch,branchTag:'CENTRO',merchantKind:'SUPERMARKET',
+      municipality:'Asunción',serviceKind:'MOTO_DELIVERY',
+      eligibleByPolicy:false,orderEnabled:false
+     }],nextCursor:null,orderEnabled:false,productionEnabled:false};
+    return {ok:true,status:200,redirected:false,
+     headers:{get:k=>k==='content-type'?'application/json':null},
+     text:async()=>JSON.stringify(dto)};
+   }
+  }
+ });
+ await app.refreshSession();
+ assert.equal(app.snapshot().branchDirectory.readReady,true);
+ assert.equal(app.snapshot().commercePager.readReady,true);
+ assert.equal((await app.loadBuyerBranches({municipality:'Asunción',
+  serviceKind:'MOTO_DELIVERY'})).ok,true);
+ assert.equal((await app.loadCommercePage({branchId:branch})).ok,true);
+ assert.equal(app.snapshot().branchDirectory.items[0].branchId,branch);
+ assert.equal(app.snapshot().commercePager.visibleItems[0].unitPricePyg,7500);
+ assert.equal(app.snapshot().commercePager.version,'g44:7');
+ assert.equal(app.snapshot().commercePager.ordersEnabled,false);
+ assert.equal(app.snapshot().commerce.checkoutEnabled,false);
+ assert.equal(calls.length,2);
+ assert.ok(calls.every(c=>c[1]==='Bearer '+fakeSession().token));
+ await app.signOut();
+ assert.equal(app.snapshot().commercePager.visibleItems.length,0);
+ assert.equal(app.snapshot().branchDirectory.items.length,0);
+});
+test('G44 401 con sesión estable limpia vistas privadas y revoca solo Cliente',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080';
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g44BuyerHttpOptions:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>({ok:false,status:401,redirected:false})}
+ });
+ await app.refreshSession();
+ assert.equal((await app.loadCommercePage({branchId:branch})).ok,false);
+ assert.equal(app.snapshot().authenticated,false);
+ assert.equal(app.snapshot().commercePager.visibleItems.length,0);
+ assert.equal(app.snapshot().branchDirectory.items.length,0);
+});
