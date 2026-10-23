@@ -243,4 +243,12 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - El subtotal visible deriva exclusivamente de ese snapshot; `finalTotalPyg` permanece `null` porque total, tasas, reserva de stock y autorización pertenecen al backend.
 - Cambiar sucursal elimina catálogo y líneas. Reutilizar una versión con contenido distinto falla por conflicto. Cualquier precio, stock o baja de un artículo elegido invalida el carrito antes de checkout.
 - El body mantiene exactamente el `MerchantOrderRequest` actual; la versión queda como precondición separada y `submissionAllowed=false` hasta disponer de semántica atómica certificada. No se inventó ruta ni campo de API.
-- QA local: **211/211 Cliente PASS**, TypeScript y Expo web export SUCCESS; falta registrar SHA y GitHub Actions del cierre.
+- QA local: **211/211 Cliente PASS**, TypeScript y Expo web export SUCCESS.
+- Cierre GitHub B27: `f969a526d0bd501c4ae13ece6ec92974c22450a2`; ownership #39965493620, Admin #39965493637 y aislamiento #39965493603, todos SUCCESS.
+
+## B-05 — auditoría del status de envíos (23-10-2026)
+- Se leyó el OpenAPI directamente del HEAD `346f9dfcbd2fc3a57cb7951c473120bc8571d88d` del PR #7 de A, actualizado el 23-10-2026.
+- `GET /v1/staging/deliveries/{deliveryId}/status` sigue respondiendo mediante `#/components/responses/Success`, cuyo esquema es un objeto genérico.
+- No hay DTO certificable para `ownerId`, `deliveryId`, revisión monotónica, estado, asignación persistida, prueba de entrega, frescura de ubicación o flags de operación. B no crea un gateway ni representa esos datos como autoritativos.
+- Dependencia para A: response estricta y versionada, autorización JWT por participante, estados/transiciones definidos, política de GPS/frescura, proof metadata segura y errores 401/403/404/409/410/429/503.
+- Evidencia: [DELIVERY_STATUS_REAL_CONTRACT_AUDIT_2026-10-23.md](./DELIVERY_STATUS_REAL_CONTRACT_AUDIT_2026-10-23.md).

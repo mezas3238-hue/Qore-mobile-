@@ -2,7 +2,7 @@
 
 **Fecha:** 23 de octubre de 2026  
 **Ámbito:** Arquitecto B; aplicación Cliente y contrato de integración con A.  
-**Estado:** dominio Cliente implementado; operación remota bloqueada por contrato backend incompleto.
+**Estado:** dominio Cliente implementado y CI verde; operación remota bloqueada por contrato backend incompleto.
 
 ## Decisión
 
@@ -72,7 +72,9 @@ Se cubren once escenarios de Comercio:
 10. expiración del catálogo;
 11. limpieza completa de sesión.
 
-Resultado local del bloque: **211/211 tests Cliente PASS**, TypeScript SUCCESS y exportación web SUCCESS. GitHub Actions se registra al cerrar el commit.
+Resultado local del bloque: **211/211 tests Cliente PASS**, TypeScript SUCCESS y exportación web SUCCESS.
+
+**Cierre GitHub:** commit `f969a526d0bd501c4ae13ece6ec92974c22450a2`; ownership boundary #39965493620 SUCCESS, Admin web #39965493637 SUCCESS y two-app isolation #39965493603 SUCCESS.
 
 ## Garantía y límite
 

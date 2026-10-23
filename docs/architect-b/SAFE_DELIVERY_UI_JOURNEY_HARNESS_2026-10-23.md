@@ -2,7 +2,7 @@
 
 **Fecha:** 23 de octubre de 2026
 **Ámbito:** Arquitecto B; Cliente Passenger, QA sintética y operaciones remotas OFF.
-**Estado:** pruebas locales completas; GitHub Actions del commit B26 pendientes al redactar.
+**Estado:** pruebas locales y GitHub Actions completas.
 
 ## Objetivo
 
@@ -39,6 +39,7 @@ Nuevo `safe-delivery-ui-harness.mjs`, que usa `validateDeliveryForm`, `prepareLo
 - TypeScript: SUCCESS.
 - Expo web export: SUCCESS.
 - Cuatro pruebas nuevas; las 204 anteriores permanecen activas.
+- Cierre GitHub B26: commit `06e4eebe07acfaa03973e1fd84fc41c54b23e728`; ownership #39963341016, Admin #39963341116 y aislamiento #39963341135, todos SUCCESS.
 
 ## Límites
 

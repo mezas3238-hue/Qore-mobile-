@@ -306,7 +306,16 @@ El commit B25 quedó certificado en GitHub como `916db657c56c`: los tres workflo
 - El subtotal es informativo y deriva del servidor; el total final, tasas, reserva y compra no se calculan en el móvil.
 - El `MerchantOrderRequest` se conserva sin campos inventados. La precondición de versión queda separada y no puede enviarse todavía: el OpenAPI no ofrece lectura Buyer de catálogo, revalidación atómica ni receipt de pedido tipado.
 - La pantalla ya no se presenta como demo: explica el gate de integración real y nunca muestra productos ficticios.
-- QA local del bloque: **211/211 tests Cliente**, TypeScript y Expo web export SUCCESS. Consultar el SHA/CI del commit B27 antes de declarar GitHub verde.
+- QA local del bloque: **211/211 tests Cliente**, TypeScript y Expo web export SUCCESS.
 - Evidencia: `docs/architect-b/COMMERCE_PRODUCTION_CHECKOUT_GUARD_2026-10-23.md`.
 
-La siguiente prioridad independiente pasa a **B-05: estudiar el status de envíos**. Si la respuesta de A continúa genérica, registrar el bloqueo exacto y seguir con B-06 sin representar entrega, ubicación o estado no autoritativo.
+El commit B27 quedó certificado en GitHub como `f969a526d0bd`: ownership #39965493620, Admin #39965493637 y two-app isolation #39965493603, todos SUCCESS.
+
+## B-05 auditado contra el HEAD actual de A
+
+- OpenAPI leído desde PR #7 HEAD `346f9dfcbd2fc3a57cb7951c473120bc8571d88d`.
+- `GET /v1/staging/deliveries/{deliveryId}/status` conserva response `Success` genérica; no hay DTO de propietario, revisión, estado, asignación, ubicación ni prueba de entrega.
+- Crear un gateway tipado hoy obligaría a inventar campos. B lo deja bloqueado y documenta a A el contrato requerido.
+- Evidencia: `docs/architect-b/DELIVERY_STATUS_REAL_CONTRACT_AUDIT_2026-10-23.md`.
+
+La siguiente prioridad independiente pasa a **B-06: historial con memoria acotada y navegación por ventanas**, sin confundir el límite de memoria del dispositivo con un límite global del historial del servidor.
