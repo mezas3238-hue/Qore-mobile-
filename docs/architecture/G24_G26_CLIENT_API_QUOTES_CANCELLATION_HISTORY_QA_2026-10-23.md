@@ -27,6 +27,13 @@
 - **Pendientes de integración:** la app Cliente B debe recorrer automáticamente `nextCursor` y acumular todas las páginas. Su regex inicial `CURSOR=/^[A-Za-z0-9_-]{1,200}$/` **no acepta** el cursor HMAC `v1.<carga>.<firma>` del backend A; Arquitecto B debe corregirlo exclusivamente en su carpeta (issue #9). No hay tope de historia, pero sí páginas pequeñas para mantener memoria/red bajo control.
 - **Pendientes de producción:** volumetría alta (cientos de miles/millones), índices/planes y política de snapshots consistentes bajo escrituras concurrentes; RLS con cuentas reales y JWT/Supabase autorizados, sin SQL remoto por ahora.
 
+## G26.3 — QA avanzado sin límite global (23 oct 2026)
+- **Integración HTTP completa, no mock de respuestas:** `g26-rider-history-paginated-http.test.mjs` atraviesa servidor loopback real, verificación JWT sintética, autorización, repositorio SQL simulado y 24 cursores HMAC consecutivos. Recupera **1.200 registros sin duplicados** y verifica que una cuenta ajena no pueda usar el cursor de otra, que la cabecera `Cache-Control` no exponga datos y que registros nuevos posteriores a la fecha ancla no desordenen una lectura iniciada. QA Node SUCCESS en el commit `a8624d713f2a7df428319d1a45c156545e74958c`.
+- **PostgreSQL real desechable, volumen mayor:** `G26_HISTORY_LARGE_VOLUME_POSTGRES_CI_ONLY.sql` inserta 30.000 operaciones sintéticas adicionales sobre 1.200 previas, mantiene el esquema G3/G5/G6 e índices y recorre las 3 tablas por orden keyset. PostgreSQL 16 confirmó el NOTICE literal: `G26.3 POSTGRES: 31200 owned historic rows / 624 pages / 0 duplicates`. No existen topes globales de histórico, solo bloques pequeños por solicitud. CI run #200 SUCCESS: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39931735547 .
+- **Verificación total del código G26.3:** STAGING Node #388 SUCCESS, Expo #936 SUCCESS y aislamiento de dos aplicaciones #291 SUCCESS (mismo commit `650b0794b21ac0e65d721da34f3983d59272b554`).
+- **Pendiente, sin reclamar certificación de producción:** el gateway HTTP del Cliente B todavía no incluye `riderHistory` GET ni cabecera `X-Qore-History-Cursor` (aunque B ya corrigió el regex `nextCursor`); se notificó en el issue #9. Continúan pendientes pruebas con millones de registros, escrituras retroactivas concurrentes, redes móviles reales, JWT/Auth de STAGING, SDK móvil y una política de retención/archivado aprobada.
+- **Límite de consistencia conocido:** el cursor fija una fecha ancla y excluye inserciones nuevas con `created_at` posterior a ella. No constituye un snapshot transaccional persistente entre llamadas; inserciones retroactivas o ediciones de `created_at` deberán prohibirse/auditarse en la capa de persistencia y ensayarse antes de operación real.
+
 ## Evidencia de pruebas
 - `g7-finance-gateway.test.mjs` + `g4-staging-runtime.test.mjs`: recibos fuente servidor, TTL, MOTO pasajeros denegado.
 - `g4-trip-command-gateway.test.mjs` + `g4-loopback-http-transport.test.mjs`: autorización, rechazo de datos de cobro y transiciones seguras.
@@ -34,7 +41,7 @@
 - `g11-openapi-contract.test.mjs` certifica presencia y forma de los 3 contratos. Todos los tests usan identidad y datos SINTÉTICOS; concluir `SUCCESS` únicamente al verificar los workflows del HEAD exacto.
 
 ## Próximos trabajos de A (sin tocar carpetas B)
-1. G26.3: ensayo masivo de rendimiento/concurrencia, cursores ante escrituras y certificación Auth/JWT remoto bajo autorización; G26.1 no tiene límite total.
+1. G26.4: probar escritura retroactiva, inmutabilidad/auditoría de created_at y sincronización autenticada con Cliente B; el historial continúa sin tope global.
 2. Contratos Auth Passenger/Admin/Owner y MFA real en servidor, DTO KYC/zonas/incidentes y finanzas Owner, pruebas RLS no vacías.
 3. Desplegar solamente STAGING bajo autorización y HTTPS/pinned origin; conectar SDK Auth sin credenciales por GitHub.
 4. Validar sesión, privacidad, cotización y cancelación en dos apps físicas; observar race, offline, GPS y red.
