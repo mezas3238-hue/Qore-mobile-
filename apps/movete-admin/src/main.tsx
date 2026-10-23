@@ -114,7 +114,7 @@ function AuthorizedQueue({items}:{items:readonly AdminKycRecord[]}){
  </Panel>;
 }
 function App(){
- const {view}=useAdminView();
+ const {view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
  const [menuOpen,setMenuOpen]=useState(false);
  const view=sections.find(x=>x.id===page)!;
@@ -137,7 +137,7 @@ function App(){
    </header>
    <div className="container">
     <div className="intro"><div><p className="overline">MOVETE FÁCIL · ADMINISTRACIÓN</p>
-     <h1>{view.label}</h1><p>{view.hint} · {view.authenticated?'Sesión Admin verificada por proveedor de QA':'Sin autenticación administrativa activa'}</p></div>
+     <h1>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión Admin verificada por proveedor de QA':'Sin autenticación administrativa activa'}</p></div>
      <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
      <span><strong>Modo demostración técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
@@ -154,7 +154,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='kyc'?(view.authenticated&&view.kyc?<AuthorizedQueue items={view.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='kyc'?(adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>
