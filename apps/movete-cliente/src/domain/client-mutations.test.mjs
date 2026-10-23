@@ -74,6 +74,18 @@ test('requiere mismo titular; evita mezcla de cuentas',async()=>{
  assert.equal((await c.submit()).code,'SESSION_CHANGED');
  assert.equal(c.publicState().requestKey,null);
 });
+test('misma cuenta con otra revisión de sesión no envía el borrador anterior',async()=>{
+ let calls=0;
+ const c=createClientMutationController({
+  gateway:{send:async()=>{calls++;return {ok:true,status:201};}},
+  getSession:async()=>({subject,role:'passenger',sessionRevision:8})
+ });
+ assert.equal(c.prepare({operation:'rideRequest',body:ride,subject,
+  sessionRevision:7}).ok,true);
+ assert.equal((await c.submit()).code,'SESSION_CHANGED');
+ assert.equal(calls,0);
+ assert.equal(c.publicState().phase,'idle');
+});
 test('clear en logout descarta respuesta antigua y borra request',async()=>{
  let resolve;
  const delayed=new Promise(done=>resolve=done);

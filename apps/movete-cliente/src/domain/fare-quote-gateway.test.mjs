@@ -29,6 +29,14 @@ test('POST G24 exacto, sin precio, GPS ni identidad arbitraria',async()=>{
  assert.deepEqual(JSON.parse(request.o.body),{requestKey:key,fareMode:'AUTO',subjectKind:'RIDE',subjectId:trip});
  assert.equal(request.o.method,'POST');assert.equal(request.o.credentials,'omit');assert.equal(request.o.redirect,'error');
 });
+test('cotización preparada por JWT anterior no sale con la nueva sesión',async()=>{
+ let hits=0;
+ const g=createFareQuoteGateway({...opts,
+  getSession:async()=>({...session(),sessionRevision:5}),
+  fetchImpl:async()=>{hits++;return reply(dto());}});
+ assert.equal((await g.fetchQuote(trip,key,4)).code,'STALE_SESSION_RESPONSE');
+ assert.equal(hits,0);
+});
 test('rechaza roles y orígenes falsos',async()=>{
  for(const wrong of [{...session(),role:'driver'},{...session(),role:'owner'},
   {...session(),expiresAt:t},{...session(),subject:'invalid'}]){

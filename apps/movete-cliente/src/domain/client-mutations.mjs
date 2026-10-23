@@ -10,27 +10,32 @@ const MUTATIONS=new Set(['rideRequest','deliveryRequest','fareQuote','paymentAut
 const fail=(code)=>({ok:false,code});
 function copy(value){return JSON.parse(JSON.stringify(value));}
 export function createClientMutationController({gateway,getSession,clearSensitive=()=>{}}={}){
- let state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,error:null};
+ let state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,
+  sessionRevision:null,error:null};
  let generation=0;
  const publicState=()=>Object.freeze({
   phase:state.phase,operation:state.operation,requestKey:state.requestKey,error:state.error
  });
  function clear(){
   generation++;
-  state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,error:null};
+  state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,
+   sessionRevision:null,error:null};
   clearSensitive();
  }
- function prepare({operation,body,subject}={}){
+ function prepare({operation,body,subject,sessionRevision=null}={}){
   if(state.phase==='in_flight')return fail('REQUEST_IN_FLIGHT');
   if(state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
   if(state.phase==='acknowledged')return fail('ALREADY_ACKNOWLEDGED');
   // No crear un segundo requestKey tras una respuesta no concluyente (p.ej. 409).
   if(state.phase==='failed')return fail('RECONCILE_BEFORE_NEW_REQUEST');
   if(!MUTATIONS.has(operation)||!validateClientOperation(operation,body)
-    ||typeof subject!=='string'||!UUID.test(subject))return fail('INVALID_INPUT');
+    ||typeof subject!=='string'||!UUID.test(subject)
+    ||(sessionRevision!==null&&(!Number.isSafeInteger(sessionRevision)||sessionRevision<0)))
+   return fail('INVALID_INPUT');
   if(state.subject&&state.subject!==subject)clear();
   generation++;
-  state={phase:'ready',subject,operation,body:copy(body),requestKey:body.requestKey,error:null};
+  state={phase:'ready',subject,operation,body:copy(body),requestKey:body.requestKey,
+   sessionRevision,error:null};
   return {ok:true,requestKey:state.requestKey};
  }
  async function run(retry=false){
@@ -41,6 +46,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   // Dos taps síncronos no pueden pasar ambos la comprobación de phase.
   const started=++generation;
   const expectedSubject=state.subject;
+  const expectedSessionRevision=state.sessionRevision;
   const operation=state.operation;
   const body=copy(state.body);
   state.phase='in_flight';state.error=null;
@@ -51,11 +57,12 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    clear();return fail('AUTH_UNAVAILABLE');
   }
   if(started!==generation||state.subject!==expectedSubject)return fail('STALE_RESPONSE_IGNORED');
-  if(!session||session.role!=='passenger'||session.subject!==expectedSubject){
+  if(!session||session.role!=='passenger'||session.subject!==expectedSubject
+   ||(expectedSessionRevision!==null&&session.sessionRevision!==expectedSessionRevision)){
    clear();return fail('SESSION_CHANGED');
   }
   let reply;
-  try{reply=await gateway.send(operation,{body});}
+  try{reply=await gateway.send(operation,{body,expectedSessionRevision});}
   catch{reply=fail('NETWORK_OR_TIMEOUT');}
   if(started!==generation||state.subject!==session.subject)return fail('STALE_RESPONSE_IGNORED');
   if(reply&&reply.ok===true){

@@ -31,14 +31,15 @@ const valid=(s,now)=>obj(s)&&s.role==='passenger'&&uuid(s.subject)&&typeof s.tok
  &&s.token.length>=20&&Number.isFinite(s.expiresAt)&&s.expiresAt>now+1000
  &&Number.isSafeInteger(s.authRevision)&&s.authRevision>=0;
 const same=(a,b)=>a.subject===b.subject&&a.token===b.token&&
- a.expiresAt===b.expiresAt&&a.authRevision===b.authRevision;
+ a.expiresAt===b.expiresAt&&a.authRevision===b.authRevision
+ &&a.sessionRevision===b.sessionRevision;
 export function createFareQuoteGateway({enabled=false,contractCertified=false,origin:source,
  pinnedOrigin,getSession,fetchImpl,onSessionInvalid=()=>{},now=()=>Date.now(),timeoutMs=8000}={}){
  const h=origin(source),pin=origin(pinnedOrigin);
  const ready=enabled===true&&contractCertified===true&&h!==null&&h===pin
   &&typeof fetchImpl==='function'&&typeof getSession==='function';
  let busy=false;
- async function fetchQuote(tripId,requestKey){
+ async function fetchQuote(tripId,requestKey,expectedSessionRevision=null){
   if(!ready)return fail('FARE_CONTRACT_PENDING');
   if(!uuid(tripId)||!uuid(requestKey))return fail('INVALID_INPUT');
   if(busy)return fail('FARE_IN_FLIGHT');
@@ -47,6 +48,8 @@ export function createFareQuoteGateway({enabled=false,contractCertified=false,or
    let before;
    try{before=await getSession();}catch{return fail('AUTH_UNAVAILABLE');}
    if(!valid(before,now()))return fail('AUTH_REQUIRED');
+   if(expectedSessionRevision!==null&&before.sessionRevision!==expectedSessionRevision)
+    return fail('STALE_SESSION_RESPONSE');
    const ctl=new AbortController();
    timer=setTimeout(()=>ctl.abort(),Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000
     &&timeoutMs<=30000?timeoutMs:8000);

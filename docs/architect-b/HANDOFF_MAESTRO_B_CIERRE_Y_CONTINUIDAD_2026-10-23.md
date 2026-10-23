@@ -264,3 +264,18 @@ B-16. Preparar entrega Lovable exclusivamente UI final cuando las APIs estén li
 Soy el nuevo **Arquitecto B** de **QORE Mobile / Movete Fácil**. Continuá inmediatamente el desarrollo **SIN DETENERTE salvo bloqueo REAL**. GitHub es la verdad: https://github.com/mezas3238-hue/Qore-mobile-. Leé primero docs/architect-b/HANDOFF_MAESTRO_B_CIERRE_Y_CONTINUIDAD_2026-10-23.md y el handoff histórico del Arquitecto B, PR #8 DRAFT, PR A #7 DRAFT e issue #9. Verificá los HEAD/CI recientes (no reutilices SHAs antiguos). Propiedad exclusiva B: apps/movete-cliente/**, apps/movete-admin/**, docs/architect-b/**. A es dueño de apps/movete-driver/**, backend, PostgreSQL, SQL, JWT/MFA/RLS, OpenAPI, .github, scripts y docs comunes. DOS apps móviles independientes; Admin es web. El corte precedente tuvo 194/194 tests Cliente, 131/131 Admin, Driver y workflows verdes; NO hay operación comercial todavía. Retomá por B-01 (rotaciones/operaciones preparadas) y B-02 (E2E de UX segura AUTO/envíos), o el siguiente módulo B realizable. No inventes dinero, GPS, conductores, permisos, contratos ni nombres de endpoints. Implementá cambios reales y QA sintética, commits atómicos en PR #8 con lease, observá CI, repará fallos y continuá. Si falta contrato A, registrá en issue #9 y avanzá otra tarea B. NO MERGE, NO DEPLOY/LIVE, NO PII/pagos reales, NO modificar Driver/A.
 
 **CIERRE:** el trabajo B actual está entregado mediante commits y QA auditables; **no equivale a aplicación comercial terminada**. El siguiente arquitecto tiene tareas independientes listas para implementar sin detenerse, y bloqueos externos documentados y delimitados.
+
+---
+
+# 13. CONTINUIDAD POSTERIOR AL HANDOFF — B24
+
+El siguiente bloque ya no está pendiente: **B-01 fue implementado** después del commit inicial de este handoff.
+
+- Viaje/envío, cotización G24 y cancelación quedan ligados a la revisión privada de la sesión que preparó la operación.
+- Un JWT nuevo de la misma cuenta no puede transmitir el borrador anterior; los gateways lo bloquean antes de red.
+- Rotación o logout durante el request descartan el ACK tardío y limpian la UI privada.
+- Refresh idéntico del mismo token conserva el borrador legítimo.
+- QA local del bloque: **200/200 tests Cliente**, TypeScript y Expo export web SUCCESS. Consultar el SHA/CI del commit posterior antes de declarar GitHub verde.
+- Documento: `docs/architect-b/CLIENT_MUTATION_SESSION_REVISION_GATE_2026-10-23.md`.
+
+La siguiente prioridad ejecutable pasa a **B-02: harness de UI sintético del flujo AUTO seguro**, sin inventar precotización, aceptación, dispatch ni respuesta backend inexistente.

@@ -35,6 +35,14 @@ test('solicita solo cancelar viaje propio con requestKey y no incluye actor ni t
  assert.deepEqual(JSON.parse(req.body),{requestKey:key});
  assert.equal(Object.hasOwn(result,'refundGs'),false);
 });
+test('cancelación preparada por sesión anterior no se transmite bajo otro JWT',async()=>{
+ let hits=0;
+ const gateway=createRideCancellationGateway({...opts,
+  getSession:async()=>({...session(),sessionRevision:9}),
+  fetchImpl:async()=>{hits++;return success();}});
+ assert.equal((await gateway.cancel(trip,key,8)).code,'STALE_SESSION_RESPONSE');
+ assert.equal(hits,0);
+});
 test('no se aceptan roles distintos, expirados ni IDs falsos',async()=>{
  for(const bad of [{...session(),role:'driver'}, {...session(),role:'owner'},
   {...session(),expiresAt:t}, {...session(),subject:'invalid'}]){

@@ -575,6 +575,44 @@ test('cambio de JWT en la misma cuenta rota la revisión privada sin publicar to
  assert.ok(loggedOut.privateViewRevision>changed.privateViewRevision);
  assert.equal(loggedOut.account,null);
 });
+test('rotar JWT tras preparar bloquea el envío y desmonta el formulario privado',async()=>{
+ let calls=0;
+ const {api,setSession}=fixture(fakeSession(),async()=>{
+  calls++;return {ok:true,status:201};
+ });
+ await api.refreshSession();
+ const revision=api.snapshot().privateViewRevision;
+ assert.equal(api.prepareRide(ride).ok,true);
+ setSession({...fakeSession(),token:'synthetic-second-token-same-passenger'});
+ await api.refreshSession();
+ assert.ok(api.snapshot().privateViewRevision>revision);
+ assert.equal(api.snapshot().mutation.phase,'idle');
+ assert.equal((await api.submit()).code,'NO_READY_REQUEST');
+ assert.equal(calls,0);
+});
+test('rotación o logout durante envío jamás acepta ACK de la sesión anterior',async()=>{
+ for(const action of ['rotate','logout']){
+  let release,calls=0;
+  const pending=new Promise(resolve=>release=resolve);
+  const {api,setSession}=fixture(fakeSession(),async()=>{calls++;return pending;});
+  await api.refreshSession();
+  const revision=api.snapshot().privateViewRevision;
+  assert.equal(api.prepareRide(ride).ok,true);
+  const request=api.submit();
+  await Promise.resolve();await Promise.resolve();
+  if(action==='rotate'){
+   setSession({...fakeSession(),token:'synthetic-rotated-during-request'});
+   await api.refreshSession();
+  }else await api.signOut();
+  release({ok:true,status:201});
+  assert.equal((await request).code,'STALE_RESPONSE_IGNORED');
+  assert.equal(calls,1);
+  const snapshot=api.snapshot();
+  assert.ok(snapshot.privateViewRevision>revision);
+  assert.equal(snapshot.mutation.phase,'idle');
+  if(action==='logout')assert.equal(snapshot.authenticated,false);
+ }
+});
 test('relogin con misma cuenta sigue invalidando alcance privado tras logout',async()=>{
  const {api}=fixture();
  await api.refreshSession();

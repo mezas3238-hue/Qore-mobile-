@@ -38,18 +38,22 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  };
  const session=createClientSessionController({provider:authProvider,clearPrivateState:clearPrivate,now});
  const actor=()=>session.publicSession();
+ const actorSession=()=>{
+  const user=actor();
+  return user?{...user,sessionRevision:session.privacyRevision()}:null;
+ };
  const cancelGateway=cancelGatewayOptions?createRideCancellationGateway({
   ...cancelGatewayOptions,now,
   getSession:()=>{
    const privateSession=session.getSessionForGateway();
    const visible=actor();
    return privateSession&&visible?{...privateSession,subject:visible.subject,
-    authRevision:session.revision()}:null;
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
  cancellation=createRideCancellationController({
-  gateway:cancelGateway,getSession:async()=>actor()
+  gateway:cancelGateway,getSession:async()=>actorSession()
  });
 
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
@@ -58,7 +62,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    const privateSession=session.getSessionForGateway();
    const visible=actor();
    return privateSession&&visible?{...privateSession,subject:visible.subject,
-    authRevision:session.revision()}:null;
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
@@ -69,11 +73,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    const privateSession=session.getSessionForGateway();
    const visible=actor();
    return privateSession&&visible?{...privateSession,subject:visible.subject,
-    authRevision:session.revision()}:null;
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
- fareFlow=createFareQuoteFlow({gateway:fareGateway,getActor:async()=>actor(),
+ fareFlow=createFareQuoteFlow({gateway:fareGateway,getActor:async()=>actorSession(),
   onAccept:(dto,subject,id)=>{
    const user=actor();
    return Boolean(user&&user.subject===subject&&tracking.snapshot().tripId===id
@@ -86,7 +90,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    const privateSession=session.getSessionForGateway();
    const visible=actor();
    return privateSession&&visible?{...privateSession,subject:visible.subject,
-    authRevision:session.revision()}:null;
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
@@ -97,7 +101,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    ?statusGateway.fetchStatus(args?.id)
    :gateway?.send?.(operation,args)??fail('GATEWAY_UNAVAILABLE')
  }:gateway;
- mutations=createClientMutationController({gateway,getSession:async()=>actor()});
+ mutations=createClientMutationController({gateway,getSession:async()=>actorSession()});
  tracking=createRiderPollingCoordinator({
   gateway:trackGateway,getSession:async()=>actor(),store:riderStore,now
  });
@@ -114,7 +118,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  function prepare(operation,body){
   const user=actor();
   if(!user)return fail('AUTH_REQUIRED');
-  return mutations.prepare({operation,body,subject:user.subject});
+  return mutations.prepare({operation,body,subject:user.subject,
+   sessionRevision:session.privacyRevision()});
  }
  function startTracking(tripId){
   const user=actor();
@@ -140,7 +145,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   const active=tracking.snapshot();
   if(active.tripId!==tripId||!['searching','assigned','arriving'].includes(active.state))
    return fail('CANCEL_REQUIRES_ACTIVE_RIDE');
-  return cancellation.prepare({tripId,requestKey,subject:user.subject});
+  return cancellation.prepare({tripId,requestKey,subject:user.subject,
+   sessionRevision:session.privacyRevision()});
  }
  function prepareServerFare({tripId,requestKey}={}){
   const user=actor();
@@ -150,7 +156,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(tracked.tripId!==tripId||!tracked.subscriptionActive||tracked.revision<1
    ||!['searching','assigned','arriving'].includes(tracked.state))
    return fail('FARE_REQUIRES_SERVER_TRIP');
-  return fareFlow.prepare({tripId,requestKey,subject:user.subject});
+  return fareFlow.prepare({tripId,requestKey,subject:user.subject,
+   sessionRevision:session.privacyRevision()});
  }
  function acceptQuote(dto){
   const user=actor();

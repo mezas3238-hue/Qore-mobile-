@@ -209,3 +209,11 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - El handoff incluye historial completo de las 11 fases anteriores, matriz de propiedad A/B, QA exacto (Cliente 131/131, Admin 109/109), CI de los dos móviles, OpenAPI G11 con 42 rutas al corte, cancelación/historial reales en CONTRATO (sin afirmar servicio desplegado), módulos de ambas interfaces, 35 riesgos/problemas pendientes, fallos resueltos, criterios DoD, plan ejecutable B-P0→B-P4 y texto listo para comenzar chat.
 - PR #8 DRAFT, base rama A, no merge/LIVE. El documento ordena al sucesor **continuar sin parar** excepto bloqueo real. Cuando A cambie HEAD/OpenAPI, comprobar versión nueva antes de conectar.
 - GitHub SHA inicial del documento: `ca225829b4254a22f405d328e506fd1df1fa6a5d`. Todo avance posterior debe quedar documentado con su propio SHA y CI.
+
+## B24 — Gate de sesión completa para mutaciones Cliente (23-10-2026)
+- Se retomó el roadmap del handoff de cierre por **B-01**. Viajes, envíos, cotización G24 y cancelación ligan cada preparación a la revisión privada de la sesión que la creó.
+- Rotar el JWT de la misma cuenta, cambiar de cuenta, expirar o cerrar sesión bloquea el request antiguo antes de red cuando aún no salió. Un ACK tardío durante rotación/logout se descarta y no restaura formulario, requestKey ni estado privado.
+- Un refresh idéntico conserva la revisión y no borra un borrador legítimo. No se publica JWT, body ni `sessionRevision` en snapshots.
+- QA local: **200/200 Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS. El corte anterior era 194/194; se agregaron 6 pruebas adversariales, sin eliminar pruebas.
+- Evidencia técnica: [CLIENT_MUTATION_SESSION_REVISION_GATE_2026-10-23.md](./CLIENT_MUTATION_SESSION_REVISION_GATE_2026-10-23.md).
+- Pendiente inmediato: publicar commit atómico, confirmar los 3 workflows de PR #8 y luego continuar B-02/B-03. Gate HTTP sigue OFF; no hay Auth/STAGING/LIVE real.

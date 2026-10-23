@@ -54,6 +54,15 @@ test('requestKey de idempotencia no se reescribe y JWT solo bearer',async()=>{
   assert.ok(opts.headers.Authorization.startsWith('Bearer '));
  }
 });
+test('borrador de revisión privada anterior se bloquea antes de usar otro JWT',async()=>{
+ let hits=0;
+ const current={...session(),sessionRevision:12};
+ const gateway=make(async()=>{hits++;return success},{getSession:async()=>current});
+ assert.equal((await gateway.send('rideRequest',{
+  body,expectedSessionRevision:11
+ })).code,'STALE_SESSION_RESPONSE');
+ assert.equal(hits,0);
+});
 test('deniega sesiones perdidas, vencidas, driver y admin',async()=>{
  let hits=0;const fetchImpl=async()=>{hits++;return success};
  for(const bad of [null,{...session(),role:'driver'},{...session(),role:'admin'},{...session(),expiresAt:Date.now()-1},{...session(),token:'short'}]){

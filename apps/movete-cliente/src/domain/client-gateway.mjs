@@ -74,7 +74,8 @@ const validAuth=(s,now)=>object(s)&&s.role==='passenger'&&isUuid(s.subject)
  &&Number.isSafeInteger(s.authRevision)&&s.authRevision>=0
  &&Number.isFinite(s.expiresAt)&&s.expiresAt>now+1000;
 const sameAuth=(a,b)=>a.subject===b.subject&&a.token===b.token
- &&a.authRevision===b.authRevision&&a.expiresAt===b.expiresAt;
+ &&a.authRevision===b.authRevision&&a.expiresAt===b.expiresAt
+ &&a.sessionRevision===b.sessionRevision;
 /**
  * QA-only. Enabled origin is not sufficient: contracts and each operation
  * must be explicitly certified. 201 = HTTP ACK, NOT business completion.
@@ -93,7 +94,7 @@ export function createClientGateway({
  const timeout=Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
  let busy=false;
  async function session(){try{return await getSession();}catch{return null;}}
- async function send(op,{id,body}={}){
+ async function send(op,{id,body,expectedSessionRevision=null}={}){
   if(!configured)return fail('NOT_CONFIGURED');
   if(!Object.hasOwn(CLIENT_ENDPOINTS,op))return fail('OPERATION_DENIED');
   if(['fareQuote','rideStatus','orderRequest'].includes(op))
@@ -106,6 +107,10 @@ export function createClientGateway({
   try{
    const before=await session();
    if(!validAuth(before,now()))return fail('AUTH_REQUIRED');
+   // Un borrador preparado por otra identidad de sesión nunca debe salir
+   // bajo un JWT nuevo, aunque el subject del pasajero sea el mismo.
+   if(expectedSessionRevision!==null&&before.sessionRevision!==expectedSessionRevision)
+    return fail('STALE_SESSION_RESPONSE');
    const url=actual+CLIENT_ENDPOINTS[op].replace(/\{\w+\}/g,()=>encodeURIComponent(id??''));
    const ctl=new AbortController();
    timer=setTimeout(()=>ctl.abort(),timeout);
