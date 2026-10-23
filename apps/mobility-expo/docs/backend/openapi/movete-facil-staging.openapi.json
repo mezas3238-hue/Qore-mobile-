@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g41",
+    "version": "1.0.0-g44",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G41 private server-side globally filtered incident triage, QA-only unmounted"
+    "x-qore-contract-extension": "G44 QA-only Buyer branch discovery and versioned cursor catalog; NEVER mounted or checkout enabled"
   },
   "servers": [
     {
@@ -1901,6 +1901,150 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/buyer/branches": {
+      "get": {
+        "operationId": "listBuyerBranchesG44",
+        "tags": [
+          "buyer",
+          "commerce"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Contract only: Buyer JWT & active provider session, synthetic branch-to-municipality mapping. Coverage ACTIVE never implies permission or checkout.",
+        "parameters": [
+          {
+            "name": "municipality",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "serviceKind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AUTO_DELIVERY",
+                "MOTO_DELIVERY"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 384
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Isolated QA-only contract; NOT an active HTTPS service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerBranchPageG44"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/buyer/branches/{branchId}/catalog": {
+      "get": {
+        "operationId": "listBuyerCatalogG44",
+        "tags": [
+          "buyer",
+          "commerce"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Contract only: 100 items per page, unlimited total; HMAC cursor bound to actor/session/branch and revision. SQL locks G42 session and catalog revision; no ordering/checkout.",
+        "parameters": [
+          {
+            "name": "branchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 384
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Isolated QA-only contract; NOT an active HTTPS service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerCatalogPageG44"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
             "$ref": "#/components/responses/Error"
           },
           "429": {
@@ -4369,6 +4513,214 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          },
+          "snapshotConsistent": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuyerBranchG44": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "branchId",
+          "branchTag",
+          "merchantKind",
+          "municipality",
+          "serviceKind",
+          "eligibleByPolicy",
+          "orderEnabled"
+        ],
+        "properties": {
+          "branchId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "branchTag": {
+            "type": "string"
+          },
+          "merchantKind": {
+            "type": "string",
+            "enum": [
+              "SUPERMARKET",
+              "PHARMACY",
+              "RESTAURANT",
+              "RETAIL",
+              "OTHER"
+            ]
+          },
+          "municipality": {
+            "type": "string"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "AUTO_DELIVERY",
+              "MOTO_DELIVERY"
+            ]
+          },
+          "eligibleByPolicy": {
+            "type": "boolean",
+            "const": false
+          },
+          "orderEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuyerBranchPageG44": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "municipality",
+          "serviceKind",
+          "items",
+          "nextCursor",
+          "orderEnabled",
+          "productionEnabled"
+        ],
+        "properties": {
+          "municipality": {
+            "type": "string"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "AUTO_DELIVERY",
+              "MOTO_DELIVERY"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BuyerBranchG44"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 44,
+                "maxLength": 384,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orderEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuyerCatalogItemG44": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "itemId",
+          "itemTag",
+          "itemClass",
+          "active",
+          "unitPricePyg",
+          "stockUnits"
+        ],
+        "properties": {
+          "itemId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "itemTag": {
+            "type": "string"
+          },
+          "itemClass": {
+            "type": "string",
+            "enum": [
+              "GENERAL",
+              "PHARMACY_OTC"
+            ]
+          },
+          "active": {
+            "type": "boolean",
+            "const": true
+          },
+          "unitPricePyg": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 10000000
+          },
+          "stockUnits": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          }
+        }
+      },
+      "BuyerCatalogPageG44": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "branchId",
+          "version",
+          "expiresAt",
+          "items",
+          "nextCursor",
+          "orderEnabled",
+          "eligibleByPolicy",
+          "snapshotConsistent",
+          "productionEnabled"
+        ],
+        "properties": {
+          "branchId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BuyerCatalogItemG44"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 44,
+                "maxLength": 384,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orderEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "eligibleByPolicy": {
+            "type": "boolean",
+            "const": false
           },
           "snapshotConsistent": {
             "type": "boolean",
