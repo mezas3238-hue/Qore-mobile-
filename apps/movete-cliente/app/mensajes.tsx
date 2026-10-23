@@ -46,14 +46,22 @@ function PrivateChat({client,view,serviceId,serviceKind}:{
    else{
     const body=draft.trim();
     if(!body||body.length>500){setFeedback('Escribí un mensaje entre 1 y 500 caracteres.');return;}
-    result=await client.sendChat({body,requestKey:Crypto.randomUUID()});
+    let requestKey:string;
+    try{requestKey=Crypto.randomUUID();}
+    catch{
+     setFeedback('No se pudo generar una clave segura. No enviamos el mensaje.');
+     return;
+    }
+    result=await client.sendChat({body,requestKey});
    }
    if(result.ok){
     setDraft('');setFeedback('Mensaje almacenado por el servidor. No confirma que el destinatario lo haya leído.');
    }else if(['CHAT_NETWORK_OR_TIMEOUT','RATE_LIMITED','SERVICE_UNAVAILABLE',
       'PENDING_MESSAGE_RECONCILIATION'].includes(result.code??'')){
     setFeedback('La respuesta es incierta. No se generará otra clave para este mensaje. Reintentá la misma solicitud.');
-   }else setFeedback('No se confirmó el mensaje. Verificá la asignación y el estado de tu sesión.');
+   }else if(result.code==='INVALID_MESSAGE')
+    setFeedback('Mensaje no permitido: evitá números telefónicos, correos, enlaces y caracteres de control.');
+   else setFeedback('No se confirmó el mensaje. Verificá la asignación y el estado de tu sesión.');
   }finally{busy.current=false;}
  };
  useEffect(()=>{setDraft('');setFeedback('');},[serviceId,serviceKind]);
@@ -74,7 +82,7 @@ function PrivateChat({client,view,serviceId,serviceKind}:{
    {view.authenticated&&serviceId&&serviceKind&&chat.contractReady&&<>
     <Text style={styles.text}>Servicio: {serviceKind==='RIDE'?'Viaje en automóvil':
       serviceKind==='DELIVERY'?'Envío particular':'Entrega de comercio'}</Text>
-    <Action label={chat.loading?'Verificando conversación…':'Abrir conversación autorizada'}
+    <Action label={chat.loading?'Verificando conversación…':matching&&chat.active?'Actualizar mensajes':'Abrir conversación autorizada'}
      disabled={chat.loading||chat.sending||Boolean(chat.pendingSend)}
      busy={chat.loading} onPress={()=>void open()}/>
     {matching&&chat.active&&<>
@@ -86,7 +94,11 @@ function PrivateChat({client,view,serviceId,serviceKind}:{
       </View>)}
      <Action secondary label="Cargar mensajes anteriores" disabled={!chat.hasOlder||chat.loading||chat.sending||chat.pendingSend}
       onPress={()=>void open(true)}/>
-     <Text style={styles.small}>La vista carga páginas verificadas; no existe límite global de mensajes. La lectura del destinatario no se presume.</Text>
+     <Text style={styles.small}>Mostrando {chat.messages.length} mensajes recientes de la ventana local; se consultaron {chat.window.rowsRead} en esta sesión de visualización. No hay un límite global de mensajes en el servidor.</Text>
+     {chat.window.hasEvictedNewer&&<Text style={styles.small}>
+      Se liberaron {chat.window.evictedCount} mensajes vistos para cuidar la memoria del dispositivo. Usá «Actualizar mensajes» para volver a los más recientes.
+     </Text>}
+     <Text style={styles.small}>La lectura del destinatario no se presume.</Text>
      <TextInput multiline style={styles.field} value={draft} maxLength={500}
       onChangeText={setDraft} editable={!chat.sending&&!chat.pendingSend}
       placeholder="Escribí al conductor o repartidor asignado"
