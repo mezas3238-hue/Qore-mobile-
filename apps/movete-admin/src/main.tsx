@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import './styles.css';
 
 type Page='resumen'|'kyc'|'zonas'|'incidentes'|'auditoria';
@@ -41,6 +42,58 @@ const panels:Record<Exclude<Page,'resumen'>,{title:string;description:string;emp
 function Panel({children,className=''}:{children:React.ReactNode;className?:string}){
  return <section className={'panel '+className}>{children}</section>;
 }
+function KycTraining(){
+ const [selected,setSelected]=useState(TRAINING_CASES[0].id);
+ const [decision,setDecision]=useState<'approve'|'reject'>('reject');
+ const [reason,setReason]=useState('');
+ const [feedback,setFeedback]=useState('');
+ const record=TRAINING_CASES.find(x=>x.id===selected) || TRAINING_CASES[0];
+ function validate(){
+  const outcome=createReviewDraft({
+   vehicleId:record.id,
+   requestKey:'123e4567-e89b-42d3-a456-426614174088',
+   approve:decision==='approve',
+   reason
+  });
+  setFeedback(outcome.ok
+   ?'Borrador sintético válido. No se aprobó ni rechazó ningún vehículo. No se transmitió al servidor.'
+   :outcome.reason);
+ }
+ return <div className="training-grid">
+  <Panel className="training-list">
+   <div className="section-head"><h2>Casos ficticios para validar interfaz</h2><span className="muted-tag">100% SINTÉTICOS</span></div>
+   <p>La cola de conductores real está bloqueada hasta confirmar sesión Admin, permisos y lectura autorizada del servidor.</p>
+   {TRAINING_CASES.map(c=><button key={c.id} type="button"
+     className={'training-row '+(c.id===selected?'selected':'')}
+     onClick={()=>{setSelected(c.id);setFeedback('');setReason('');}}
+     aria-pressed={c.id===selected}>
+     <span><strong>{c.label}</strong><small>{c.vehicleKind} · {c.documentLabel}</small></span>
+     <span className="muted-tag">QA</span>
+   </button>)}
+   <p className="training-disclaimer">Estos expedientes no existen en ninguna base de datos. Se generan únicamente como ejemplos estáticos para evaluar navegación y formularios.</p>
+  </Panel>
+  <Panel className="training-detail">
+   <div className="section-head"><h2>Revisión simulada</h2><span className="muted-tag">NO SE ENVÍA</span></div>
+   <dl><dt>Identificador</dt><dd>{record.label}</dd>
+    <dt>Vehículo</dt><dd>{record.vehicleKind}</dd>
+    <dt>Documentación</dt><dd>{record.documentLabel} (dato ficticio)</dd>
+    <dt>Permiso comercial</dt><dd>No validado / no habilitado</dd>
+   </dl>
+   <fieldset className="choice-group"><legend>Decisión de práctica</legend>
+     <label><input type="radio" name="decision" checked={decision==='reject'} onChange={()=>{setDecision('reject');setFeedback('');}}/> Rechazar borrador</label>
+     <label><input type="radio" name="decision" checked={decision==='approve'} onChange={()=>{setDecision('approve');setFeedback('');}}/> Preparar revisión de aprobación</label>
+   </fieldset>
+   <label className="reason-label" htmlFor="kyc-reason">Motivo de revisión (12–500 caracteres)</label>
+   <textarea id="kyc-reason" rows={4} maxLength={500} value={reason}
+     onChange={e=>{setReason(e.target.value);setFeedback('');}}
+     placeholder="Usá una razón genérica sin datos personales ni información real."/>
+   <button className="review-action" type="button" onClick={validate}>Validar borrador local (QA)</button>
+   {feedback&&<p className="review-feedback" role="status">{feedback}</p>}
+   <p className="training-disclaimer">No hay token de administrador ni acceso al backend. Una validación local nunca constituye revisión legal, KYC ni autorización operativa.</p>
+  </Panel>
+ </div>;
+}
+
 function App(){
  const [page,setPage]=useState<Page>('resumen');
  const [menuOpen,setMenuOpen]=useState(false);
@@ -81,7 +134,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='kyc'?<KycTraining/>:<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>
