@@ -16,6 +16,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G27_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G28_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G29_*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
@@ -191,3 +192,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G28_ADMIN_INCIDENT_PAGE_POSTGRES_CI_ONLY.sql
       - name: G28 test 121 incident rows in three full keyset pages and reject Owner/dual-role/access
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G28_ADMIN_INCIDENT_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G29 add G2 authoritative vehicle-review revision on disposable chain
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
+      - name: G29 install server-only real AUTO KYC source query
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G29_ADMIN_KYC_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G29 verify 121 KYC rows, documentary truth, MOTO exclusion and role isolation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G29_ADMIN_KYC_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
