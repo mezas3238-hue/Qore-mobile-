@@ -21,11 +21,11 @@ export function projectClientHistory(raw,{subject,now=Date.now()}={}){
  const out=[],seen=new Set();
  for(const item of raw.items){
   if(!allow(item,attrs)||!attrs.every(k=>Object.hasOwn(item,k))
-    ||!uuid(item.serviceId)||seen.has(item.serviceId)
+    ||!uuid(item.serviceId)||seen.has(item.kind+':'+item.serviceId)
     ||!types.has(item.kind)||!states.has(item.status)
     ||!Number.isSafeInteger(item.createdAt)||item.createdAt<0||item.createdAt>now
     ||!Number.isSafeInteger(item.revision)||item.revision<1)return null;
-  seen.add(item.serviceId);
+  seen.add(item.kind+':'+item.serviceId);
   out.push(Object.freeze({...item}));
  }
  return Object.freeze({ownerId:subject,expiresAt:raw.expiresAt,
@@ -41,8 +41,9 @@ export function createClientHistoryStore({now=()=>Date.now()}={}){
   if(owner!==null&&owner!==subject){clear();return false;}
   if(!append){entries.clear();}
   for(const item of page.items){
-   const prior=entries.get(item.serviceId);
-   if(!prior||item.revision>prior.revision)entries.set(item.serviceId,item);
+   const key=item.kind+':'+item.serviceId;
+   const prior=entries.get(key);
+   if(!prior||item.revision>prior.revision)entries.set(key,item);
   }
   owner=subject;expiry=page.expiresAt;nextCursor=page.nextCursor;cachedItems=null;
   return true;
@@ -50,7 +51,7 @@ export function createClientHistoryStore({now=()=>Date.now()}={}){
  function current(subject){
   if(!uuid(subject)||owner!==subject||expiry===null||expiry<=now()){clear();return null;}
   if(cachedItems===null)cachedItems=Object.freeze([...entries.values()]
-    .sort((a,b)=>b.createdAt-a.createdAt||a.serviceId.localeCompare(b.serviceId)));
+    .sort((a,b)=>b.createdAt-a.createdAt||a.serviceId.localeCompare(b.serviceId)||a.kind.localeCompare(b.kind)));
   return Object.freeze({ownerId:owner,items:cachedItems,nextCursor});
  }
  return Object.freeze({consume,current,clear});

@@ -79,3 +79,18 @@ test('historial grande reutiliza lista ya ordenada sin recalcular cada refresco 
  store.clear();
  assert.equal(store.current(owner),null);
 });
+
+test('IDs iguales de viaje, envío y pedido se conservan como tres servicios',()=>{
+ const store=createClientHistoryStore({now:()=>1100});
+ const rides={...entry,kind:'RIDE',revision:1};
+ const deliveries={...entry,kind:'DELIVERY',revision:2};
+ const orders={...entry,kind:'MERCHANT_ORDER',revision:3};
+ assert.equal(projectClientHistory({...page,items:[rides,deliveries,orders]},{subject:owner,now:1100}).items.length,3);
+ assert.equal(store.consume({...page,items:[rides]},owner),true);
+ assert.equal(store.consume({...page,items:[deliveries,orders]},owner,{append:true}),true);
+ assert.equal(store.current(owner).items.length,3);
+ assert.deepEqual(store.current(owner).items.map(x=>x.kind),['DELIVERY','MERCHANT_ORDER','RIDE']);
+ assert.equal(store.consume({...page,items:[{...deliveries,revision:4}]},owner,{append:true}),true);
+ assert.equal(store.current(owner).items.length,3);
+ assert.equal(store.current(owner).items.find(x=>x.kind==='DELIVERY').revision,4);
+});
