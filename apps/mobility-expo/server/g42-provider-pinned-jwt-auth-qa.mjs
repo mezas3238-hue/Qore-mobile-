@@ -143,8 +143,8 @@ export function createG42ProviderSessionAdapters({
   async verifyAccessToken(token){
    const {v,user}=await read(token);
    return Object.freeze({
-    id:v.id,sessionId:v.sessionId,expiresAtMs:v.expiresAtMs,
-    is_anonymous:false,
+    id:v.id,sessionId:v.sessionId,tokenIatMs:v.tokenIatMs,
+    expiresAtMs:v.expiresAtMs,is_anonymous:false,
     ...(typeof user.email_confirmed_at==='string'?
       {email_confirmed_at:user.email_confirmed_at}:{}),
     ...(typeof user.phone_confirmed_at==='string'?
