@@ -106,3 +106,46 @@ test('invalid Auth, roles, bodies, paths, limits and persistence fail closed',as
  assert.equal((await broken({method:'POST',path:'/v1/staging/rider/trips/request',
   headers:headers(passenger),body:requestBody})).status,409);
 });
+
+test('G25 Client cancel alias: only confirmed Passenger, sealed requestKey, existing atomic transition',async()=>{
+ const {gateway,calls}=fixture();
+ const path='/v1/staging/rider/trips/'+trip+'/cancel';
+ const canceled=await gateway({method:'POST',path,headers:headers(passenger),
+  body:{requestKey:key}});
+ assert.equal(canceled.status,200);
+ assert.equal(canceled.body.event,'cancel');
+ assert.equal(canceled.body.tripId,trip);
+ assert.equal(canceled.body.eventId,key);
+ assert.equal(canceled.body.serverPersisted,true);
+ assert.equal(canceled.body.commercialRidesEnabled,false);
+ assert.deepEqual(calls,[{operation:'transition',input:{
+  actorId:passenger,tripId:trip,event:'cancel',eventKey:key
+ }}]);
+ for(const body of [
+  {requestKey:key,actorId:passenger},{requestKey:key,amountGs:1},
+  {requestKey:key,feeGs:1000},{requestKey:key,refund:true},
+  {requestKey:'not-uuid'},{}
+ ]){
+  assert.equal((await gateway({method:'POST',path,headers:headers(passenger),body})).status,400);
+ }
+ assert.equal((await gateway({method:'POST',path,headers:headers(driver),
+  body:{requestKey:key}})).status,403);
+ assert.equal((await gateway({method:'POST',path,headers:{},
+  body:{requestKey:key}})).status,401);
+ assert.equal((await gateway({method:'GET',path,headers:headers(passenger)})).status,404);
+ assert.equal(calls.length,1);
+});
+
+test('G25 stale/foreign cancellation returns no event or private trip info',async()=>{
+ const gateway=createQoreTripCommandGateway({
+  projectRef:ref,verifyAccessToken:async()=>({id:passenger,is_anonymous:false,
+   email_confirmed_at:'2026-10-22T12:00:00Z'}),
+  resolveRole:async()=> 'passenger',allowRequest:()=>true,
+  requestTrip:async()=>{throw Error('unused')},
+  transitionTrip:async()=>{throw Error('No own mutable trip')}
+ });
+ const out=await gateway({method:'POST',path:'/v1/staging/rider/trips/'+trip+'/cancel',
+  headers:headers(passenger),body:{requestKey:key}});
+ assert.equal(out.status,409);
+ assert.doesNotMatch(JSON.stringify(out),/driver|passenger_id|feeGs|No own mutable trip/i);
+});
