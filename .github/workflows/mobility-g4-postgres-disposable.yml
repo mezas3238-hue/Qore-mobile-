@@ -216,3 +216,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_LOCATION_SIGNAL_QUARANTINE_POSTGRES_CI_ONLY.sql
       - name: G32 assert real DB revocation, replay denial and no location-to-availability promotion
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_SIGNAL_QUARANTINE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G32.2 two PostgreSQL sessions race same Driver sequence and concurrent consent revocation
+        run: python3 apps/mobility-expo/server/g32-driver-telemetry-concurrency-ci.py
