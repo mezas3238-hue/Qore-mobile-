@@ -13,7 +13,7 @@ export default function ClientLayout(){
    <Stack.Screen name="historial" options={{title:'Mis viajes y envíos'}}/>
    <Stack.Screen name="comercios" options={{title:'Comercios'}}/>
    <Stack.Screen name="cotizacion" options={{title:'Cotizaciones'}}/>
-   <Stack.Screen name="pagos" options={{title:'Pagos simulados'}}/>
+   <Stack.Screen name="pagos" options={{title:'Pagos y recibos'}}/>
    <Stack.Screen name="soporte" options={{title:'Seguridad y soporte'}}/>
    <Stack.Screen name="cuenta" options={{title:'Mi cuenta'}}/>
   </Stack>

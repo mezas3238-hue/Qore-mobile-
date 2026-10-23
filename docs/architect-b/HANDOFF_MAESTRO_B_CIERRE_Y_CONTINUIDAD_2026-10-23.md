@@ -67,14 +67,14 @@ Si falta contrato: abrir comentario técnico preciso en issue #9; A define API, 
 # 4. INVENTARIO FUNCIONAL YA CONSTRUIDO ANTES DEL PRESENTE CORTE
 
 ## 4.1 Cliente Expo / Passenger
-- Expo/React Native/Expo Router, identidad de app Cliente aislada; pantallas: inicio, viaje, envíos, comercios, cotización, seguimiento, historial, cuenta, pagos DEMO y soporte DEMO.
+- Expo/React Native/Expo Router, identidad de app Cliente aislada; pantallas: inicio, viaje, envíos, comercios, cotización, seguimiento, historial, cuenta, pagos/recibos y seguridad/soporte. Las integraciones externas permanecen cerradas hasta certificación, pero la UI se diseña para operación real.
 - ClientRuntime + client-experience: estado efímero, subscribe/snapshot, limpieza segura de recursos, independencia de Driver y operaciones remotas OFF por defecto.
 - client-session: únicamente rol Passenger, subject UUID, token efímero, TTL, logout y rotación de JWT; invalida acciones tardías y publica revisión de privacidad sin revelar JWT.
 - client-gateway: validación estricta de carga y role, HTTPS fijado, JWT, allowed operations, DTO/HTTP, control 401/403/409/429/503, manejo de timeout.
 - client-mutations: requestKey UUID idempotente, mismo cuerpo en retry, exclusión ANTES del await, no generar segundo despacho tras 409/timeout, no asumir éxito comercial por ACK HTTP.
 - quote-view: visualiza únicamente tarifas G7/server-priced en Gs, identidad/servicio/TTL/routing verificados. No precio ficticio.
 - rider-polling/rider-status: seguimiento con revisión monotónica, propietario, asignación persistida, conductor/placa validados, GPS consentido y fresco, ETA únicamente verificada, pérdida de conexión retira coordenadas.
-- Formularios de viaje AUTO, envíos por AUTO/MOTO cargo, categorías y dimensiones, comercio/carrito por sucursal, pagos SOLO SIMULADOS y soporte local sin enviar una falsa alerta SOS.
+- Formularios de viaje AUTO, envíos por AUTO/MOTO carga, categorías y dimensiones, comercio/carrito por sucursal; pagos preparados para una futura integración PSP real y soporte local sin declarar falsamente alerta, envío o asistencia.
 - client-history-gateway + history-feed: historial autenticado, hasta 50/página SIN tope global; cursor HMAC firmado por servidor por cabecera X-Qore-History-Cursor; propietario, TTL, revisión y retries; no exponer otro Passenger.
 - ride-cancellation: cancelación del viaje propio con UUID seguro OS, confirmación explícita y key inmutable; no declara viaje cancelado hasta GET status del servidor.
 - admin no se incluye ni comparte librerías privadas de conductor en el binario Cliente.
@@ -95,7 +95,7 @@ Si falta contrato: abrir comentario técnico preciso en issue #9; A define API, 
 **El handoff histórico contiene 84 archivos iniciales + hitos del 22/23; aquí se incorpora TODO el bloque posterior desde cancelación a privacidad. Commits orientativos y código verificable:**
 
 ### B01–B13 (22/23-oct, detallados en handoff histórico)
-Creación y separación de pantallas Cliente; dominios para rutas AUTO, envíos, comercio, soporte y pago simulado; ClientRuntime, JWT simulado fail-closed, gateway, idempotencia, cancelación lógica, GPS/ETA, proyección de cotización, historial paginado; Admin con Owner/Admin, KYC, zonas, incidentes, auditoría y finanzas; CI Admin independiente, TypeScript y Expo web, control estricto de carpetas. PR #8 DRAFT, issue #9 de contratos y problemas. Histórico QA 131 Cliente/109 Admin antes de nuevas pruebas.
+Creación y separación de pantallas Cliente; dominios para rutas AUTO, envíos, comercio, soporte y el contrato sintético histórico de pagos QA —no arquitectura financiera final—; ClientRuntime, JWT QA fail-closed, gateway, idempotencia, cancelación lógica, GPS/ETA, proyección de cotización, historial paginado; Admin con Owner/Admin, KYC, zonas, incidentes, auditoría y finanzas; CI Admin independiente, TypeScript y Expo web, control estricto de carpetas. PR #8 DRAFT, issue #9 de contratos y problemas. Histórico QA 131 Cliente/109 Admin antes de nuevas pruebas.
 
 ### B14 — Cancelación visible y segura; commits 8aa0b04b, bb053d7a, 57e685e5
 En app/seguimiento.tsx se añadió UX de confirmación de cancelar para viaje propio elegible, CSPRNG OS mediante expo-crypto, secure-cancel-key.mjs (sin Math.random), botón/race lock, retry con la misma requestKey, 409 y error pendientes, sin reembolso inventado. client-experience descarta el controlador al cambiar de viaje y reconsulta estado tras ACK. Se añadió declaración TS y tests. Todo apagado por defecto.
@@ -335,3 +335,15 @@ El commit B29 quedó certificado en GitHub como `b1b4ad943658`: ownership #39966
 Límite restante: el contrato actual solo ofrece cursor hacia páginas antiguas. La navegación reversa granular requiere que A certifique cursor anterior o semántica bidireccional; B no lo inventa. La UI sí puede volver de forma segura al inicio reciente.
 
 La siguiente prioridad independiente pasa a **B-07: accesibilidad real de pantallas Cliente**, con foco, lector, fuentes grandes, teclado y alertas, sin depender de datos ficticios.
+
+## B31 — B-07 base accesible Cliente completada
+
+- `ClientUI.Action` centraliza objetivo táctil mínimo de 48 px, texto de 16 px, contraste AA y estados accesibles `disabled`, `selected` y `busy`.
+- Texto auxiliar mínimo 14 px, escalado del sistema conservado, filas flexibles y controles dimensionados para fuentes grandes.
+- Pantallas con encabezados semánticos, etiquetas de entrada, regiones vivas, áreas seguras y cierre de teclado; confirmación de cancelación recibe foco y aísla su superficie para tecnología asistiva.
+- Se retiró el lenguaje de demo en navegación/pagos. La UI explica la integración productiva pendiente y sigue fail-closed: no recibe tarjetas ni afirma cobro/receipt sin PSP y backend certificados.
+- QA local: **220/220 Cliente PASS**, TypeScript y Expo export web SUCCESS.
+- Evidencia: `docs/architect-b/CLIENT_ACCESSIBILITY_FOUNDATION_2026-10-23.md`.
+- Pendiente de certificación: matriz manual TalkBack/VoiceOver en dispositivo o emulador; no se afirma validación nativa a partir del export web.
+
+La siguiente prioridad independiente pasa a **B-08: soporte seguro**, con limpieza por rotación/logout y futura confirmación tipada del backend, sin representar nunca un borrador como aviso a 911/SOS ni como caso enviado.

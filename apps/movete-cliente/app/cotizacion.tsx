@@ -40,29 +40,30 @@ export default function Fare(){
    else setMessage('El servidor no confirmó una tarifa. No se calcula ningún importe local.');
   }finally{locked.current=false;}
  }
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-  <View style={styles.hero}><Text style={styles.heroText}>Tarifa en guaraníes</Text>
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
+  keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Tarifa en guaraníes</Text>
    <Text style={styles.heroSub}>Solo tarifas verificadas por el servidor. Nunca estimaciones inventadas.</Text></View>
   {quote?<Panel>
-   <Text style={styles.heading}>{quote.formattedAmount}</Text>
+   <Text accessibilityRole="header" style={styles.heading}>{quote.formattedAmount}</Text>
    <Text style={styles.text}>Modalidad: {quote.fareMode}</Text>
    <Text style={styles.text}>Regla tarifaria: {quote.fareVersion}</Text>
    <Text style={styles.small}>Válida hasta: {new Date(quote.expiresAt).toLocaleString('es-PY')}</Text>
    <Text style={styles.small}>Información sin compromiso comercial, pago ni conductor reservado.</Text>
   </Panel>:<Panel>
-   <Text style={styles.heading}>Todavía no hay tarifa vigente</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Todavía no hay tarifa vigente</Text>
    <Text style={styles.text}>La cotización debe pertenecer a esta cuenta y estar respaldada por ruteo y regla vigentes del servidor.</Text>
   </Panel>}
   <Panel>
-   <Text style={styles.heading}>Consultar tarifa del servidor</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Consultar tarifa del servidor</Text>
    <Text style={styles.small}>Se necesita un viaje identificado previamente por el backend. Esta consulta no despacha conductores ni realiza cobros.</Text>
    {!fare.contractReady&&<Text style={styles.small}>Función desactivada hasta certificar Auth, RLS y servicio STAGING.</Text>}
    {eligible&&fare.phase==='idle'&&<Action label="Preparar consulta segura" onPress={prepare}/>}
    {eligible&&fare.phase==='ready'&&<Action label="Consultar tarifa" onPress={()=>{void send(false);}}/>}
    {eligible&&fare.phase==='retryable'&&<Action label="Reintentar misma consulta" onPress={()=>{void send(true);}}/>}
-   {fare.phase==='in_flight'&&<Text style={styles.small}>Consultando tarifa…</Text>}
-   {fare.phase==='failed'&&<Text style={styles.small}>No se verificó el precio. Primero actualizá el estado del viaje; no hagas una solicitud duplicada.</Text>}
-   {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
+   {fare.phase==='in_flight'&&<Text accessibilityLiveRegion="polite" style={styles.small}>Consultando tarifa…</Text>}
+   {fare.phase==='failed'&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.small}>No se verificó el precio. Primero actualizá el estado del viaje; no hagas una solicitud duplicada.</Text>}
+   {message!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.text}>{message}</Text>}
   </Panel>
  </ScrollView>;
 }

@@ -261,3 +261,13 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - QA local: **212/212 Cliente PASS**, TypeScript y Expo web export SUCCESS.
 - Cierre GitHub B29: `b1b4ad94365832d9b2b0cc34ee520989b2aa25e1`; ownership #39966255875, Admin #39966255923 y aislamiento #39966256833, todos SUCCESS.
 - Evidencia: [HISTORY_WINDOWED_MEMORY_2026-10-23.md](./HISTORY_WINDOWED_MEMORY_2026-10-23.md).
+
+## B31 — B-07 base de accesibilidad Cliente (23-10-2026)
+- `Action` compartida expone rol, etiqueta y estados `disabled/selected/busy`; objetivos táctiles/campos mínimos de 48 px, texto auxiliar mínimo de 14 px y contraste AA automatizado.
+- Todas las pantallas Cliente incorporan encabezados semánticos, áreas seguras automáticas y teclado controlado; opciones seleccionables ya no dependen solo del color.
+- Alertas y sincronización usan regiones vivas; la confirmación de cancelación recibe foco y actúa como superficie modal para tecnología asistiva.
+- Navegación y pantalla financiera dejan de presentarse como demo: la integración real queda fail-closed hasta PSP, tokenización, receipt y conciliación certificados.
+- QA local: **220/220 Cliente PASS**, TypeScript SUCCESS, Expo web export SUCCESS y diff check limpio.
+- Limitación explícita: falta certificación manual TalkBack/VoiceOver en Android/iOS; export web no la sustituye.
+- Evidencia: [CLIENT_ACCESSIBILITY_FOUNDATION_2026-10-23.md](./CLIENT_ACCESSIBILITY_FOUNDATION_2026-10-23.md).
+- Próxima prioridad B-08: soporte con limpieza de sesión y confirmación backend tipada; jamás declarar envío, atención o SOS sin receipt autoritativo.

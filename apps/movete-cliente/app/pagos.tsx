@@ -2,12 +2,13 @@ import React from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {Panel,styles} from '../src/ClientUI';
 export default function Payments(){
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-  <View style={styles.hero}><Text style={styles.heroText}>Pagos y recibos</Text>
-   <Text style={styles.heroSub}>Ambiente de pruebas: sin dinero, tarjetas ni transacciones reales.</Text></View>
-  <Panel><Text style={styles.heading}>Pago simulado inactivo</Text>
-   <Text style={styles.text}>Se habilitarán únicamente métodos SIMULATED_CASH y SIMULATED_CARD cuando existan cotización vigente, sesión y contrato G7 certificados.</Text>
-   <Text style={styles.small}>Nunca ingreses números de tarjeta ni datos financieros reales en este entorno.</Text>
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
+  keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Pagos y recibos</Text>
+   <Text style={styles.heroSub}>Integración financiera pendiente de proveedor, seguridad y conciliación certificados.</Text></View>
+  <Panel><Text accessibilityRole="header" style={styles.heading}>Pago no habilitado</Text>
+   <Text style={styles.text}>El contrato actual solo cubre métodos sintéticos de QA y no es la arquitectura financiera final. La app real requerirá cotización vigente, PSP autorizado, tokenización, receipt y conciliación del servidor.</Text>
+   <Text style={styles.small}>No ingreses números de tarjeta ni datos financieros hasta que el proveedor real esté integrado y certificado.</Text>
   </Panel>
  </ScrollView>;
 }

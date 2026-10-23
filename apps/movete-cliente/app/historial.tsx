@@ -37,6 +37,8 @@ export default function ClientHistory(){
   void client.loadHistoryPage();
  }
  return <FlatList
+  contentInsetAdjustmentBehavior="automatic"
+  accessibilityLabel="Historial de servicios propios"
   style={styles.page}
   contentContainerStyle={styles.content}
   data={list}
@@ -48,22 +50,22 @@ export default function ClientHistory(){
   windowSize={7}
   ListHeaderComponent={<>
    <View style={styles.hero}>
-    <Text style={styles.heroText}>Mi historial</Text>
+    <Text accessibilityRole="header" style={styles.heroText}>Mi historial</Text>
     <Text style={styles.heroSub}>Servicios propios, sin límite global de registros. La lista se muestra en partes para cuidar la memoria.</Text>
    </View>
    {view.history?.window.hasEvictedNewer&&<Panel>
-    <Text style={styles.heading}>Ventana de memoria activa</Text>
+    <Text accessibilityRole="header" style={styles.heading}>Ventana de memoria activa</Text>
     <Text style={styles.text}>Se liberaron {view.history.window.evictedCount.toLocaleString('es-PY')} servicios recientes ya recorridos para mantener estable el dispositivo. El historial completo continúa en el servidor.</Text>
     <Action label="Volver a los servicios más recientes" secondary
      disabled={view.historyLoading} onPress={resetHistory}/>
    </Panel>}
   </>}
   ListEmptyComponent={<Panel>
-    <Text style={styles.heading}>Todavía no hay servicios consultados</Text>
+    <Text accessibilityRole="header" style={styles.heading}>Todavía no hay servicios consultados</Text>
     <Text style={styles.text}>No hay historial autorizado conectado a esta sesión. No mostramos viajes, envíos ni recibos de otras cuentas.</Text>
    </Panel>}
   renderItem={({item})=><Panel>
-    <Text style={styles.heading}>{kind[item.kind]??'Servicio'}</Text>
+    <Text accessibilityRole="header" style={styles.heading}>{kind[item.kind]??'Servicio'}</Text>
     <Text style={styles.text}>Estado: {item.status}</Text>
     <Text style={styles.small}>Registrado: {new Date(item.createdAt).toLocaleString('es-PY')} · Revisión {item.revision}</Text>
     <Text style={styles.small}>El comprobante y el total no se inventan ni se calculan en esta vista.</Text>
@@ -72,7 +74,7 @@ export default function ClientHistory(){
     <Text style={styles.small}>{view.historyConfigured
       ?'Consulta segura habilitada para esta sesión de prueba.'
       :'Lectura no disponible hasta certificar la API y permisos del pasajero.'}</Text>
-    {view.historyLoadError&&<Text accessibilityRole="alert" style={styles.small}>
+    {view.historyLoadError&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.small}>
       No se pudo validar el historial: {safeMessage[view.historyLoadError]??'No se pudo completar la consulta.'}
     </Text>}
     {view.historyLoadError&&view.historyConfigured&&view.authenticated&&
@@ -81,10 +83,11 @@ export default function ClientHistory(){
        onPress={resetHistory}/>}
     {view.history?.nextCursor
       ?<Action label={view.historyLoading?'Consultando…':'Cargar más servicios'}
-        disabled={!view.historyConfigured||view.historyLoading}
+        disabled={!view.historyConfigured||view.historyLoading} busy={view.historyLoading}
         onPress={nextManual}/>
       :<Action label={view.historyLoading?'Consultando…':view.history?'Actualizar desde el inicio':'Consultar historial'}
         disabled={!view.authenticated||!view.historyConfigured||view.historyLoading}
+        busy={view.historyLoading}
         onPress={resetHistory}/>}
     <Text style={styles.small}>Desplazate hacia abajo para consultar más páginas automáticamente. No existe un límite total de registros; también podés utilizar el botón manual.</Text>
    </Panel>}

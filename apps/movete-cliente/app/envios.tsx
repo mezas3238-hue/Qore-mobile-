@@ -78,33 +78,36 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    if(answer.ok)setValidated(false);
   }finally{lock.current=false;}
  }
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-  <View style={styles.hero}><Text style={styles.heroText}>Preparar un envío</Text>
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
+  keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Preparar un envío</Text>
    <Text style={styles.heroSub}>Documentos, paquetes y compras compatibles en auto o moto de carga. No reserva repartidores.</Text>
   </View>
   <Panel>
-   <Text style={styles.heading}>Paso 1 · Origen y entrega</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 1 · Origen y entrega</Text>
    <TextInput style={styles.field} value={pickup}
     onChangeText={value=>edit(setPickup,value)} editable={!myDraft}
     placeholder="Dirección de recogida" accessibilityLabel="Origen del envío" maxLength={120}/>
    <TextInput style={styles.field} value={destination}
     onChangeText={value=>edit(setDestination,value)} editable={!myDraft}
     placeholder="Dirección de entrega" accessibilityLabel="Destino del envío" maxLength={120}/>
-   <Text style={styles.heading}>Categoría</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Categoría</Text>
    {DELIVERY_CATEGORIES.map(item=><Action key={item.code} label={item.label}
-    disabled={myDraft} secondary={category!==item.code}
+    disabled={myDraft} secondary={category!==item.code} selected={category===item.code}
     onPress={()=>select(()=>setCategory(item.code))}/>)}
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Paso 2 · Vehículo de carga</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 2 · Vehículo de carga</Text>
    <View style={[styles.row,{justifyContent:'flex-start'}]}>
-    <View style={{flex:1}}><Action label="Moto envíos" disabled={myDraft}
-     secondary={vehicleKind!=='MOTO'} onPress={()=>select(()=>setVehicleKind('MOTO'))}/></View>
-    <View style={{flex:1}}><Action label="Auto envíos" disabled={myDraft}
-     secondary={vehicleKind!=='AUTO'} onPress={()=>select(()=>setVehicleKind('AUTO'))}/></View>
+    <View style={{flex:1,minWidth:140}}><Action label="Moto envíos" disabled={myDraft}
+     secondary={vehicleKind!=='MOTO'} selected={vehicleKind==='MOTO'}
+     onPress={()=>select(()=>setVehicleKind('MOTO'))}/></View>
+    <View style={{flex:1,minWidth:140}}><Action label="Auto envíos" disabled={myDraft}
+     secondary={vehicleKind!=='AUTO'} selected={vehicleKind==='AUTO'}
+     onPress={()=>select(()=>setVehicleKind('AUTO'))}/></View>
    </View>
    <Text style={styles.small}>Moto pasajeros no autorizada. Moto para carga hasta 10 kg y sujeta a permisos y cobertura del servidor.</Text>
-   <Text style={styles.heading}>Peso y dimensiones</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Peso y dimensiones</Text>
    <TextInput style={styles.field} value={weight} editable={!myDraft}
     onChangeText={value=>edit(setWeight,value)} placeholder="Peso en gramos"
     accessibilityLabel="Peso en gramos" keyboardType="numeric" maxLength={6}/>
@@ -118,11 +121,12 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
     onChangeText={value=>edit(setHeight,value)} placeholder="Alto en cm"
     accessibilityLabel="Alto en centímetros" keyboardType="numeric" maxLength={3}/>
    <Action label={restricted?'Artículos restringidos: SÍ':'Artículos restringidos: NO'}
-    disabled={myDraft} secondary={!restricted} onPress={()=>select(()=>setRestricted(!restricted))}/>
+    disabled={myDraft} secondary={!restricted} selected={restricted}
+    onPress={()=>select(()=>setRestricted(!restricted))}/>
    <Text style={styles.small}>No se aceptan productos restringidos. Declarar NO no verifica legalidad o mercancía en tránsito.</Text>
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Paso 3 · Revisar y preparar</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 3 · Revisar y preparar</Text>
    <Action label="Revisar borrador de envío" disabled={!free} onPress={validate}/>
    {validated&&<View>
     <Text style={styles.text}>Ruta: {pickup.trim()} → {destination.trim()}</Text>
@@ -141,13 +145,13 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    {!free&&!myDraft&&<Text style={styles.small}>
     Existe una solicitud pendiente, reconocida o sin conciliar. No podés generar otra clave hasta resolverla.
    </Text>}
-   {result!==''&&<Text accessibilityRole="alert"
+   {result!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive"
     style={[styles.text,{color:palette.primary}]}>{result}</Text>}
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Paso 4 · Confirmación y precio</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Confirmación y precio</Text>
    <Action label="Cotizar y solicitar repartidor — pendiente del servidor"
-    disabled onPress={()=>{}}/>
+    disabled hint="Se habilitará con cotización y contrato de envíos certificados" onPress={()=>{}}/>
    <Text style={styles.small}>Se requiere cotización válida en Gs., permisos, confirmación expresa del cliente y backend de envíos certificado. No hay pagos, despachos ni rutas GPS activadas.</Text>
   </Panel>
  </ScrollView>;

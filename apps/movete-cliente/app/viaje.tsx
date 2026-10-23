@@ -74,12 +74,13 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    else setFeedback('No se puede borrar una solicitud cuyo resultado de servidor sea incierto.');
   }finally{lock.current=false;}
  }
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-  <View style={styles.hero}><Text style={styles.heroText}>Pedí un automóvil</Text>
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
+  keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+  <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Pedí un automóvil</Text>
    <Text style={styles.heroSub}>Preparación de viaje con revisión de ruta. La cotización y búsqueda requieren autorización del servidor.</Text>
   </View>
   <Panel>
-   <Text style={styles.heading}>Paso 1 · Tu ruta</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 1 · Tu ruta</Text>
    <Text style={styles.text}>Origen</Text>
    <TextInput style={styles.field} value={pickup} onChangeText={editPickup}
     editable={!myDraft} maxLength={120} placeholder="Ej.: Centro de San Lorenzo"
@@ -91,16 +92,17 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    <Text style={styles.small}>Estas direcciones aún no se geocodifican ni comprueban en el mapa; distancia, cobertura y disponibilidad requieren evidencia del backend.</Text>
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Paso 2 · Tipo de automóvil</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 2 · Tipo de automóvil</Text>
    {OPTIONS.map(option=><View key={option.code}>
     <Action label={option.title} secondary={service!==option.code}
+     selected={service===option.code}
      disabled={myDraft} onPress={()=>selectService(option.code)}/>
     <Text style={styles.small}>{option.description}. Disponibilidad y tarifa pendientes del servidor.</Text>
    </View>)}
    <Text style={styles.small}>No hay motos de pasajeros. Motocicletas solo para envíos habilitados.</Text>
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Paso 3 · Revisá antes de continuar</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 3 · Revisá antes de continuar</Text>
    <Action label="Revisar ruta y servicio" disabled={!free} onPress={validate}/>
    {validated&&<View>
     <Text style={styles.text}>Ruta: {pickup.trim()} → {destination.trim()}</Text>
@@ -118,12 +120,13 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    {!free&&!myDraft&&<Text style={styles.small}>
     Hay otra operación preparada, recibida o sin conciliar. No se puede generar otra solicitud sin resolverla de forma segura.
    </Text>}
-   {feedback!==''&&<Text accessibilityRole="alert"
+   {feedback!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive"
     style={[styles.text,{color:palette.primary}]}>{feedback}</Text>}
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Paso 4 · Cotización y conductor</Text>
-   <Action label="Aceptar tarifa y buscar conductor — pendiente de backend" disabled onPress={()=>{}}/>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Cotización y conductor</Text>
+   <Action label="Aceptar tarifa y buscar conductor — pendiente de backend" disabled
+    hint="Se habilitará cuando el servidor certifique cotización y despacho" onPress={()=>{}}/>
    <Text style={styles.small}>No se cobrará ni iniciará búsqueda. Falta el contrato A de precotización sin despacho, Auth Passenger real, verificación de zona y confirmación del importe en Gs.</Text>
   </Panel>
  </ScrollView>;
