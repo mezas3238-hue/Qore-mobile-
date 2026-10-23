@@ -21,6 +21,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G31_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G32_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G33_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G34_*'
       - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
@@ -223,3 +224,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G33_QUARANTINED_ZONE_DIAGNOSTICS_POSTGRES_CI_ONLY.sql
       - name: G33 validate busy trip, busy delivery, consent withdrawal, cross-zone latest and no G31 publication
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G33_QUARANTINED_ZONE_DIAGNOSTICS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G34 consent revision trigger and append-only audit, strengthen G32 SQL revision check
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G34_CONSENT_REVISION_AUDIT_FENCING_POSTGRES_CI_ONLY.sql
+      - name: G34 reject stale Driver consent revision after withdrawal and re-opt-in in disposable DB
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G34_CONSENT_REVISION_AUDIT_ASSERT_POSTGRES_CI_ONLY.sql
