@@ -15,6 +15,13 @@ INSERT INTO auth.users(id) VALUES
  ('00000000-0000-4000-8000-000000000181'),
  ('00000000-0000-4000-8000-000000000182'),
  ('00000000-0000-4000-8000-000000000183');
+-- G1 Auth trigger creates a passenger role by default. Synthetic role review
+-- explicitly replaces it; never allow dual-role Driver onboarding.
+DELETE FROM public.user_roles WHERE user_id IN (
+ '00000000-0000-4000-8000-000000000181',
+ '00000000-0000-4000-8000-000000000182',
+ '00000000-0000-4000-8000-000000000183'
+);
 INSERT INTO public.user_roles(user_id,role) VALUES
  ('00000000-0000-4000-8000-000000000181','driver'),
  ('00000000-0000-4000-8000-000000000182','passenger');
