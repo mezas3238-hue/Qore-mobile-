@@ -31,9 +31,11 @@ function validatePage(dto,{ownerId,now,revision=null}){
   ||dto.expiresAt<=now||dto.expiresAt>now+300000
   ||dto.expiresAt<=dto.generatedAt
   ||!Array.isArray(dto.items)||dto.items.length>100
+  // Un cursor con página vacía permitiría un bucle interminable.
+  ||(dto.items.length===0&&dto.nextCursor!==null)
   ||!(dto.nextCursor===null||(typeof dto.nextCursor==='string'
    &&CURSOR.test(dto.nextCursor))))return null;
- const local=new Set(),items=[];
+ const local=new Set(),services=new Set(),items=[];
  for(const row of dto.items){
   if(!exact(row,ROW)||!validId(row.conversationId)||!validId(row.serviceId)
    ||!KINDS.has(row.serviceKind)||row.state!=='ACTIVE'
@@ -43,8 +45,11 @@ function validatePage(dto,{ownerId,now,revision=null}){
    ||!Number.isSafeInteger(row.unreadCount)||row.unreadCount<0
    ||!Number.isSafeInteger(row.updatedAt)
    ||row.updatedAt<0||row.updatedAt>now
-   ||local.has(row.conversationId))return null;
-  local.add(row.conversationId);items.push(Object.freeze({...row}));
+   ||local.has(row.conversationId)
+   ||services.has(row.serviceKind+':'+row.serviceId))return null;
+  local.add(row.conversationId);
+  services.add(row.serviceKind+':'+row.serviceId);
+  items.push(Object.freeze({...row}));
  }
  return Object.freeze({ownerId,revision:dto.revision,
   expiresAt:dto.expiresAt,nextCursor:dto.nextCursor,
@@ -123,6 +128,13 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
     if(state.seenIds.has(row.conversationId)){
      clear();state.error='DUPLICATE_CONVERSATION';
      return fail('DUPLICATE_CONVERSATION');
+    }
+    // Cada servicio activo pertenece a un único hilo en la ventana
+    // visible; una reasignación debe invalidar el cursor anterior.
+    if(state.items.some(old=>old.serviceKind===row.serviceKind
+      &&old.serviceId===row.serviceId)){
+     clear();state.error='DUPLICATE_ACTIVE_SERVICE';
+     return fail('DUPLICATE_ACTIVE_SERVICE');
     }
    }
    for(const row of page.items){state.items.push(row);state.seenIds.add(row.conversationId);}

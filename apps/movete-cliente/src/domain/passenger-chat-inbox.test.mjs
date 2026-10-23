@@ -141,3 +141,31 @@ test('inbox soporta cantidades sin leer superiores a 99 sin truncar el DTO',asyn
   assert.equal(inbox.snapshot().items[0].unreadCount,unreadCount);
  }
 });
+
+test('página vacía con cursor no permite loops ilimitados',async()=>{
+ const gateway=flags({readInbox:async()=>({
+  ok:true,data:page([], 'c'.repeat(44))
+ })});
+ const inbox=make(gateway);
+ assert.equal((await inbox.load()).code,'INVALID_CHAT_INBOX_DTO');
+ assert.equal(inbox.snapshot().items.length,0);
+});
+test('dos conversaciones distintas para el mismo servicio activo dentro de una página',async()=>{
+ const duplicate={...row(1),conversationId:id(999)};
+ const inbox=make(flags({readInbox:async()=>({
+  ok:true,data:page([row(1),duplicate])
+ })}));
+ assert.equal((await inbox.load()).code,'INVALID_CHAT_INBOX_DTO');
+ assert.equal(inbox.snapshot().items.length,0);
+});
+test('otra página no puede presentar un segundo hilo para un mismo servicio activo',async()=>{
+ const cursor='b'.repeat(44);
+ const first=row(1),second={...row(1),conversationId:id(999)};
+ let n=0;
+ const inbox=make(flags({readInbox:async()=>({
+  ok:true,data:page(n++===0?[first]:[second],n===1?cursor:null)
+ })}));
+ assert.equal((await inbox.load()).ok,true);
+ assert.equal((await inbox.load({next:true})).code,'DUPLICATE_ACTIVE_SERVICE');
+ assert.equal(inbox.snapshot().items.length,0);
+});
