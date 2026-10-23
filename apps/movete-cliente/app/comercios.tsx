@@ -40,9 +40,9 @@ function CertifiedCatalog({client,view}:{client:ClientExperience;view:ClientSnap
  const [loading,setLoading]=useState(false);
  const busy=commerce.catalogLoading||loading;
  const clearMessage=()=>setMessage('');
- const load=async()=>{
+ const load=async(branchOverride?:string)=>{
   if(busy)return;
-  const branch=prepareCatalogBranchLookup(branchInput);
+  const branch=prepareCatalogBranchLookup(branchOverride??branchInput);
   if(!branch.ok){setMessage('Ingresá un identificador válido de una sucursal autorizada.');return;}
   setLoading(true);setMessage('');
   try{
@@ -72,12 +72,16 @@ function CertifiedCatalog({client,view}:{client:ClientExperience;view:ClientSnap
    El servidor no confirmó un catálogo vigente. No se presentarán precios obsoletos.
   </Text>}
   {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
-  {!fresh?<Text accessibilityRole="alert" style={styles.text}>
+  {!fresh?(busy?<Text accessibilityLiveRegion="polite" style={styles.text}>
+   Verificando en servidor la sucursal, sus precios y su stock. El catálogo anterior permanece oculto.
+  </Text>:<Text accessibilityRole="alert" style={styles.text}>
    Catálogo no disponible o vencido. No se muestran precios ni productos sin validación del servidor.
-  </Text>:<>
+  </Text>):<>
    <Text style={styles.small}>Sucursal: {commerce.branchId}. Versión de catálogo: {commerce.catalogVersion}. Precios en guaraníes del último snapshot; sujetos a cambio.</Text>
    <Action label="Actualizar precios y stock de esta sucursal" secondary disabled={busy}
-    onPress={()=>{setBranchInput(commerce.branchId??'');void client.loadCommerceCatalog(commerce.branchId??'');}}/>
+    onPress={()=>{const branch=commerce.branchId;if(branch){
+     setBranchInput(branch);void load(branch);
+    }}}/>
    {commerce.catalogItems.filter(item=>item.active).map(item=>{
     const count=commerce.items.find(row=>row.itemId===item.itemId)?.quantity??0;
     return <View key={item.itemId} style={styles.card}>
