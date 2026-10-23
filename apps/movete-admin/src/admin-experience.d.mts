@@ -4,8 +4,13 @@ export type AdminKycRecord={
 };
 export type AdminSnapshot={
  authenticated:boolean;
- account:{subject:string;role:'admin';mfaVerified:true}|null;
+ account:{subject:string;role:'admin'|'owner';mfaVerified:true}|null;
  kyc:{revision:number;generatedAt:number;expiresAt:number;items:readonly Readonly<AdminKycRecord>[]} |null;
+ finance:{period:{from:string;to:string;timezone:'America/Asuncion'};currency:'PYG';
+  revision:number;ledgerRevision:number;reconciliationStatus:'RECONCILED';generatedAt:number;expiresAt:number;
+  totals:{completedRides:number;completedDeliveries:number;completedMerchantOrders:number;
+   grossCollectedGs:number;driverPayoutGs:number;platformCommissionGs:number;refundsGs:number;
+   processingFeesGs:number;netPlatformGs:number}}|null;
  actionsEnabled:false;
 };
 export type AdminExperience={
@@ -14,6 +19,7 @@ export type AdminExperience={
  logout:()=>Promise<{ok:boolean;code?:string}>;
  clear:()=>void;
  readKyc:(data:unknown)=>boolean;
+ readFinance:(data:unknown)=>boolean;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };

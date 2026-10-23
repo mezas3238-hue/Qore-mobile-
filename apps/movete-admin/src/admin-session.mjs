@@ -14,14 +14,14 @@ export function createAdminSessionController({provider,clearSensitive=()=>{},now
   let value;
   try{value=await provider.readSession();}
   catch{clear();return {ok:false,code:'AUTH_UNAVAILABLE'};}
-  if(!value||value.role!=='admin'||value.mfaVerified!==true
+  if(!value||!['admin','owner'].includes(value.role)||value.mfaVerified!==true
    ||typeof value.subject!=='string'||!UUID.test(value.subject)
    ||typeof value.token!=='string'||value.token.length<20
    ||!Number.isFinite(value.expiresAt)||value.expiresAt<=now()+1000){
    clear();return {ok:false,code:'ADMIN_AUTH_REQUIRED'};
   }
   if(current&&current.subject!==value.subject)clearSensitive();
-  current={subject:value.subject,role:'admin',mfaVerified:true,token:value.token,expiresAt:value.expiresAt};
+  current={subject:value.subject,role:value.role,mfaVerified:true,token:value.token,expiresAt:value.expiresAt};
   return {ok:true,subject:current.subject,expiresAt:current.expiresAt};
  }
  function publicSession(){

@@ -82,3 +82,49 @@ test('observer unsubscribe deja de recibir actualizaciones',async()=>{
  assert.equal(n,2);
  off();await app.logout();assert.equal(n,2);
 });
+
+const financeNow=now;
+const owner='123e4567-e89b-42d3-a456-426614174051';
+const financeData={
+ scope:'owner.finance.read',ownerId:owner,
+ period:{from:'2026-10-01',to:'2026-10-22',timezone:'America/Asuncion'},
+ currency:'PYG',revision:1,ledgerRevision:2,reconciliationStatus:'RECONCILED',
+ generatedAt:financeNow-1000,expiresAt:financeNow+30000,
+ totals:{completedRides:3,completedDeliveries:2,completedMerchantOrders:1,
+  grossCollectedGs:100000,driverPayoutGs:70000,platformCommissionGs:16000,
+  refundsGs:2000,processingFeesGs:1000,netPlatformGs:13000}
+};
+test('Owner MFA ve únicamente sus totales financieros conciliados, sin KYC ni escritura',async()=>{
+ const {app}=fixture({...auth(owner),role:'owner'});
+ assert.equal((await app.refreshSession()).ok,true);
+ assert.equal(app.readFinance(financeData),true);
+ const state=app.snapshot();
+ assert.equal(state.account.role,'owner');
+ assert.equal(state.finance.totals.netPlatformGs,13000);
+ assert.equal(state.kyc,null);
+ assert.equal(state.actionsEnabled,false);
+ assert.equal(app.readKyc(dto),false);
+ assert.equal((await app.reviewVehicle({})).code,'FORBIDDEN');
+});
+test('Admin puede leer KYC pero jamás finanzas exclusivas owner',async()=>{
+ const {app}=fixture(auth());
+ await app.refreshSession();
+ assert.equal(app.readFinance(financeData),false);
+ assert.equal(app.snapshot().finance,null);
+ assert.equal(app.readKyc(dto),true);
+});
+test('logout y cambio owner borran métricas financieras anteriores',async()=>{
+ const {app,setUser}=fixture({...auth(owner),role:'owner'});
+ await app.refreshSession();app.readFinance(financeData);
+ setUser({...auth('123e4567-e89b-42d3-a456-426614174052'),role:'owner'});
+ await app.refreshSession();
+ assert.equal(app.snapshot().finance,null);
+ await app.logout();
+ assert.equal(app.snapshot().finance,null);
+});
+test('finanzas con otro titular no son aceptadas',async()=>{
+ const {app}=fixture({...auth(owner),role:'owner'});
+ await app.refreshSession();
+ assert.equal(app.readFinance({...financeData,ownerId:admin}),false);
+ assert.equal(app.snapshot().finance,null);
+});

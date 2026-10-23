@@ -37,3 +37,11 @@ test('logout elimina sesión aunque falle revocación remota',async()=>{
  assert.equal((await ctrl.logout()).code,'REVOCATION_UNCONFIRMED');
  assert.equal(ctrl.getSessionForGateway(),null);
 });
+
+test('rol owner requiere MFA y no se convierte en admin',async()=>{
+ const state={...ok(),role:'owner'};
+ const ctrl=createAdminSessionController({provider:{readSession:()=>state},now:()=>10000});
+ assert.equal((await ctrl.refresh()).ok,true);
+ assert.equal(ctrl.publicSession().role,'owner');
+ assert.equal(ctrl.getSessionForGateway().role,'owner');
+});
