@@ -25,7 +25,7 @@ export function createAdminSessionController({provider,clearSensitive=()=>{},now
    ||!Number.isFinite(value.expiresAt)||value.expiresAt<=now()+1000){
    clear();return {ok:false,code:'ADMIN_AUTH_REQUIRED'};
   }
-  if(current&&current.subject!==value.subject)clearSensitive();
+  if(current&&(current.subject!==value.subject||current.role!==value.role))clearSensitive();
   current={subject:value.subject,role:value.role,mfaVerified:true,token:value.token,expiresAt:value.expiresAt};
   return {ok:true,subject:current.subject,expiresAt:current.expiresAt};
  }
