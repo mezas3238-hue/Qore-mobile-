@@ -1,8 +1,9 @@
 import React from 'react';
 import {Stack} from 'expo-router';
 import {StatusBar} from 'expo-status-bar';
+import {ClientRuntimeProvider} from '../src/ClientRuntime';
 export default function ClientLayout(){
- return <>
+ return <ClientRuntimeProvider>
   <StatusBar style="dark"/>
   <Stack screenOptions={{headerTintColor:'#183044',headerStyle:{backgroundColor:'#F4F7FB'},headerTitleStyle:{fontWeight:'700'}}}>
    <Stack.Screen name="index" options={{title:'Movete Fácil Cliente'}}/>
@@ -16,5 +17,5 @@ export default function ClientLayout(){
    <Stack.Screen name="soporte" options={{title:'Seguridad y soporte'}}/>
    <Stack.Screen name="cuenta" options={{title:'Mi cuenta'}}/>
   </Stack>
- </>;
+ </ClientRuntimeProvider>;
 }
