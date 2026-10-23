@@ -63,7 +63,7 @@ function validAck(row,header,body,key,now){
  return exact(row,ACK)&&row.conversationId===header.conversationId
   &&row.serviceId===header.serviceId&&row.requestKey===key
   &&row.senderRole==='passenger'&&row.body===body
-  &&row.serverStored===true&&validMessage({
+  &&row.serverStored===true&&validateMessage({
    messageId:row.messageId,senderRole:row.senderRole,body:row.body,
    createdAt:row.createdAt,revision:row.revision
   },now);
