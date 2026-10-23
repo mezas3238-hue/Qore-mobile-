@@ -1,7 +1,8 @@
-import React from 'react';
+import React,{useEffect,useRef} from 'react';
 import {FlatList,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
+import {canAutoLoadHistory} from '../src/domain/history-auto-page.mjs';
 const kind:Record<string,string>={RIDE:'Automóvil',DELIVERY:'Envío',MERCHANT_ORDER:'Pedido comercial'};
 const safeMessage:Record<string,string>={
  INVALID_OR_EXPIRED_CURSOR:'La consulta venció. Reiniciá desde la primera página.',
@@ -16,12 +17,32 @@ const safeMessage:Record<string,string>={
 };
 export default function ClientHistory(){
  const {client,view}=useClientView();
+ const lastCursor=useRef<string|null>(null);
+ useEffect(()=>{lastCursor.current=null;},[view.account?.subject]);
  const list=view.authenticated?view.history?.items??[]:[];
+ function atListEnd(){
+  const cursor=view.history?.nextCursor??null;
+  if(!canAutoLoadHistory({authenticated:view.authenticated,configured:view.historyConfigured,
+   loading:view.historyLoading,error:view.historyLoadError,nextCursor:cursor,
+   lastRequested:lastCursor.current}))return;
+  lastCursor.current=cursor;
+  void client.loadHistoryPage();
+ }
+ function resetHistory(){
+  lastCursor.current=null;
+  void client.loadHistoryPage({reset:true});
+ }
+ function nextManual(){
+  lastCursor.current=view.history?.nextCursor??null;
+  void client.loadHistoryPage();
+ }
  return <FlatList
   style={styles.page}
   contentContainerStyle={styles.content}
   data={list}
-  keyExtractor={item=>item.serviceId}
+  keyExtractor={item=>item.kind+':'+item.serviceId}
+  onEndReachedThreshold={0.35}
+  onEndReached={atListEnd}
   initialNumToRender={12}
   maxToRenderPerBatch={18}
   windowSize={7}
@@ -51,15 +72,15 @@ export default function ClientHistory(){
     {view.historyLoadError&&view.historyConfigured&&view.authenticated&&
       <Action label="Reiniciar consulta desde la primera página"
        disabled={view.historyLoading}
-       onPress={()=>{void client.loadHistoryPage({reset:true});}}/>}
+       onPress={resetHistory}/>}
     {view.history?.nextCursor
       ?<Action label={view.historyLoading?'Consultando…':'Cargar más servicios'}
         disabled={!view.historyConfigured||view.historyLoading}
-        onPress={()=>{void client.loadHistoryPage();}}/>
-      :<Action label={view.historyLoading?'Consultando…':'Consultar historial'}
+        onPress={nextManual}/>
+      :<Action label={view.historyLoading?'Consultando…':view.history?'Actualizar desde el inicio':'Consultar historial'}
         disabled={!view.authenticated||!view.historyConfigured||view.historyLoading}
-        onPress={()=>{void client.loadHistoryPage({reset:true});}}/>}
-    <Text style={styles.small}>Los resultados se obtienen por páginas, sin limitar el total de servicios registrados.</Text>
+        onPress={resetHistory}/>}
+    <Text style={styles.small}>Desplazate hacia abajo para consultar más páginas automáticamente. No existe un límite total de registros; también podés utilizar el botón manual.</Text>
    </Panel>}
  />;
 }
