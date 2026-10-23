@@ -45,8 +45,8 @@ export function projectZoneOverview(payload,{role,now=Date.now()}={}){
 export function createZoneOverviewStore({now=()=>Date.now()}={}){
  let data=null,raw=null;
  function clear(){data=null;raw=null;}
- function replace(raw,role){
-  const candidate=projectZoneOverview(raw,{role,now:now()});
+ function replace(payload,role){
+  const candidate=projectZoneOverview(payload,{role,now:now()});
   if(!candidate){clear();return false;}
   if(data&&candidate.revision<data.revision){clear();return false;}
   data=candidate;raw=payload;return true;
