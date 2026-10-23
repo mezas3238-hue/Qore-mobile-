@@ -150,6 +150,20 @@ test('G44 rejects poisoned SQL rows, leaked PII, order-enabled and stale page',a
  for(const data of poison)
   assert.equal((await make({rpc:async()=>({data})}).api.listCatalog(page)).status,503);
 });
+
+test('G44 empty authorized catalog or discovery is valid, not a fabricated shortage',async()=>{
+ const catalogData={branchId:branch,version:1,expiresAt:at+60000,
+  hasMore:false,items:[],orderEnabled:false,eligibleByPolicy:false};
+ const emptyCatalog=await make({rpc:async()=>({data:catalogData})}).api.listCatalog(page);
+ assert.equal(emptyCatalog.status,200);
+ assert.deepEqual(emptyCatalog.body.items,[]);
+ assert.equal(emptyCatalog.body.nextCursor,null);
+ const emptyBranches=await make({rpc:async()=>({data:{hasMore:false,items:[]}})})
+  .api.listBranches({bearer:token,municipality:'Asuncion',serviceKind:'AUTO_DELIVERY'});
+ assert.equal(emptyBranches.status,200);
+ assert.deepEqual(emptyBranches.body.items,[]);
+ assert.equal(emptyBranches.body.nextCursor,null);
+});
 test('G44 constructor cannot enable production or omit trusted sources',()=>{
  const d={environment:'isolated_staging',liveEnabled:false,localQaOnly:true,
   projectRef:'staging1234567890abcd',cursorSecrets:{current},
