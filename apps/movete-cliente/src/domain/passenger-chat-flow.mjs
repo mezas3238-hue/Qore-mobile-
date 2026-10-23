@@ -242,7 +242,17 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    const accepted=Object.freeze({messageId:ack.messageId,
     senderRole:ack.senderRole,body:ack.body,createdAt:ack.createdAt,
     revision:ack.revision});
-   if(!state.seenIds.has(accepted.messageId)){
+   if(state.seenIds.has(accepted.messageId)){
+    // Un replay idempotente es válido solo si reproduce EXACTAMENTE
+    // el mensaje persistido. No marcar éxito en una colisión de ID.
+    const previous=state.messages.find(row=>row.messageId===accepted.messageId);
+    if(!previous||previous.senderRole!==accepted.senderRole
+     ||previous.body!==accepted.body||previous.createdAt!==accepted.createdAt
+     ||previous.revision!==accepted.revision){
+     clear();state.error='CHAT_MESSAGE_ID_COLLISION';
+     return fail('CHAT_MESSAGE_ID_COLLISION');
+    }
+   }else{
     state.messages.unshift(accepted);state.seenIds.add(accepted.messageId);
     state.readCount++;
     trimWindow(true);

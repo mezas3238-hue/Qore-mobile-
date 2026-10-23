@@ -348,3 +348,47 @@ test('excepción en certificación no revela datos ni rompe controles',async()=>
  assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,
   'CHAT_CONTRACT_NOT_CERTIFIED');
 });
+
+test('colisión de ACK reutiliza messageId pero cambia cuerpo: falla cerrado',async()=>{
+ const existing={...row(1),messageId};
+ const flow=make(flags({
+  readMessages:async()=>({ok:true,data:{...page(),messages:[existing]}}),
+  sendMessage:async()=>({ok:true,data:{...ack(),createdAt:existing.createdAt,
+   revision:existing.revision}})
+ }));
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_MESSAGE_ID_COLLISION');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
+test('ACK idempotente idéntico a un mensaje existente se acepta una sola vez',async()=>{
+ const stored={messageId,body:'Estoy aquí',senderRole:'passenger',
+  createdAt:now-100,revision:8};
+ const flow=make(flags({
+  readMessages:async()=>({ok:true,data:{...page(),revision:8,messages:[stored]}}),
+  sendMessage:async()=>({ok:true,data:ack()})
+ }));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).ok,true);
+ assert.equal(flow.snapshot().messages.length,1);
+ assert.equal(flow.snapshot().window.rowsRead,1);
+});
+test('colisión del mismo messageId con revisión/timestamp diferente no es ACK',async()=>{
+ for(const patch of [
+  {revision:9},
+  {createdAt:now-50},
+  {senderRole:'driver'}
+ ]){
+  const stored={messageId,body:'Estoy aquí',senderRole:'passenger',
+   createdAt:now-100,revision:8};
+  const flow=make(flags({
+   readMessages:async()=>({ok:true,data:{...page(),revision:8,messages:[stored]}}),
+   sendMessage:async()=>({ok:true,data:{...ack(),...patch}})
+  }));
+  await flow.open({serviceId,serviceKind:'RIDE'});
+  const r=await flow.send({body:'Estoy aquí',requestKey:key});
+  assert.equal(r.ok,false);
+  assert.equal(flow.snapshot().messages.length,0);
+ }
+});
