@@ -64,3 +64,32 @@ Adaptadores clientes no verifican JWT por sí mismos ni confían en roles locale
 - B13: Abierto; faltan E2E, API staging, QA nativa y aceptación A/Owner.
 
 > La capa B no está terminada. La disponibilidad de servicios reales depende de contratos y seguridad del backend A. Se mantendrá fail-closed.
+
+## Segunda sesión — avance de construcción B (22-10-2026, continuación)
+### Código nuevo dentro de las rutas exclusivas
+- `4475c97c7c58cd55a5b08d08d7be5c3a3d85282e`: `client-mutations.mjs` con requestKey estable, reintento explícito, aislamiento al cambiar cuenta y sin datos privados en estado público; `quote-view.mjs` con validación por titular, tarifa en Gs, caducidad y evidencia de ruta. Los DTOs de quote quedan como propuesta QA, **no como contrato backend aprobado**.
+- `47a4865899d7dde8296dc03b68d82ea8b2778dfa`: interfaz Admin KYC de entrenamiento, tres casos estáticos enteramente ficticios; formulario de decisión local con motivo, sin ejecutar aprobación ni exponer documentación.
+- `86eebd22382e3513926079317f8ea169a6b3c1a4` y `1f2a316d41c718e36e5a1098c9e0c49613aebe11`: corrección de carrera de dos taps simultáneos mientras se obtiene sesión. Se bloquea la operación **antes del primer await** y se agregó test adversarial.
+- `d42b99cb88cb0f78182d133b9212f065e26eb26f`: carrito sintético por sucursal, cantidades 1–999, hasta 50 líneas, **sin inventar precio/stock**; proyector de catálogo condicionado a revisión, caducidad y categorías no reguladas.
+- `f461595bad5446eafed3e9aa586fa3353d0a4cf5`: corrección del patrón UUID estándar del carrito/catálogo que CI detectó inválido. El fallo inicial fue real y quedó reparado con re-ejecución exitosa.
+- `aef538161254445fac089d638a7513d46fee650b`: formulario Cliente para borrador de incidentes QA; sin enviar avisos, contactar autoridades ni afirmar SOS activado.
+- `616c031591896953d176ab9a7eae22fdf8f6c63c`: asistente de viaje AUTO: origen, destino, preferencia Económico/Confort/XL, validación de borrador, confirmación comercial deshabilitada sin cotización/identidad/GPS reales.
+
+### Pruebas y fallos
+- CI 39879402745 del módulo de mutaciones/cotización: **SUCCESS**.
+- CI 39879647388 del módulo KYC sintético: **SUCCESS** en aislamiento/Cliente; NO incluye `npm run build` del Admin.
+- CI 39879731927, que incorpora corrección de doble toque: **SUCCESS**.
+- CI 39879929997 y 39880103552: **FAILURE detectado** en cinco pruebas del carrito por patrón UUID sin un bloque de cuatro dígitos. No ocultar estos antecedentes.
+- Commit reparador `f461595bad5446eafed3e9aa586fa3353d0a4cf5`: CI boundary #39880212560 **SUCCESS** y CI Cliente/aislamiento #39880212725 **SUCCESS**.
+- CI del siguiente HEAD (asistente AUTO) debe consultarse directamente por SHA; su éxito no se presupone aquí.
+- Admin web posee script local `npm run check && npm run build`, pero no hay evidencia de ejecución en CI específica; issue #9 sigue abierto hasta que A agregue job. **No declarar Admin certificado**.
+
+### Criterios B restantes
+1. Integrar endpoint Auth Passenger con JWT verificado por A y revocación, roles y sesión real, sin introducir service_role en Expo.
+2. Unir `client-mutations`, `quote-view`, `rider-status` y `commerce-draft` a DTOs STAGING certificados y APIs Auth propias; bloquear hasta entonces.
+3. Definir URL HTTPS staging pinned, scopes/permisos, request/response exactos, estado, caducidad, re-sync/reconexión, idempotencia transversal y política de protección de datos según issue #9.
+4. Certificar Admin Web con TypeScript/build propios, Auth Admin con MFA si corresponde, KYC/zonas/incidentes/reportes por backend y E2E adversarial de navegador.
+5. Probar dos APK/IPA separadas en dispositivos autorizados, sin interpretar exportación web como certificación nativa.
+6. Interfaz visual final (Lovable solo UI) después de infraestructura y contratos aprobados; no despliegue ni LIVE sin mandato explícito.
+
+Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no merge; no producción, SQL remoto, pagos reales ni datos personales.**
