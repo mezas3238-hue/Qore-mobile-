@@ -14,12 +14,15 @@
 - Errores 400/401/403/409/429/503. Ninguna operación de refund/fee real o simulada se infiere del acto de cancelar. Política de cobro/reembolso sigue pendiente.
 - Backend no expone este endpoint desde HTTPS público: solo QA loopback.
 
-## G26: historial privado de Cliente — primera página
-- `GET /v1/staging/rider/history` bajo JWT Passenger, sin parámetros de usuario ni query pública.
-- Lee sólo columnas `id,<owner>,status,revision,created_at` de `mobility_stage_auto_demo_trips`, `mobility_stage_deliveries` y `mobility_stage_merchant_orders` usando `service_role` **exclusivo servidor**, con `eq(owner,user.id)` y validación de propietario en la respuesta. El navegador nunca recibe `service_role`.
-- Formato mínimo exacto para `projectClientHistory` de B: `ownerId,generatedAt,expiresAt,items,nextCursor:null`; elementos `serviceId,kind,status,createdAt,revision`. TTL 60 segundos. No PII, rutas, matrículas, monto ni documento.
-- **Limitación explícita G26.0:** máximo 50 registros en total; se cargan 51 por cada fuente. Si faltan tablas/permisos, hay error o existen >50 en conjunto, se emite 503 sin lista parcial. No cursor ni histórico profundo todavía. Se requiere G26.1 paginación keyset autenticada, snapshots coherentes, índices y SQL PostgreSQL real antes de completar historia comercial.
-- En PostgreSQL real se debe auditar cada `SELECT`, RLS/restricciones de `service_role` e índices en `passenger_id/sender_id/buyer_id,created_at,id`. La QA existente de G3/G5/G6 usa instalaciones desechables separadas; **no equivale** a una migración integral en Supabase remoto.
+## G26.1: historial privado de Cliente — **TODOS LOS REGISTROS, SIN TOPE GLOBAL**
+- `GET /v1/staging/rider/history` bajo JWT Passenger; no acepta parámetros de identidad ni query arbitraria.
+- Primera página sin encabezado adicional. En las sucesivas, enviar exactamente `X-Qore-History-Cursor: <nextCursor>` usando el cursor devuelto por el servidor. Repetir hasta `nextCursor:null`. El tamaño de cada respuesta es de 0–50 elementos **solo para transporte; no hay máximo acumulado**. Un pasajero con 1.200 operaciones recibe 24 páginas, no un rechazo 503 ni una historia truncada.
+- El cursor HMAC-SHA256 es opaco y asociado al JWT verificado; no lo puede fabricar ni usar otra cuenta. Lleva posición keyset `(created_at,id,kind)` y una fecha de corte del servidor. Caduca a los 10 minutos de inactividad; cada petición válida renueva el plazo. Cursor inválido/corrupto/caducado => 400 y no se consulta SQL.
+- Datos exclusivamente propios consultados con `.eq(passenger_id|sender_id|buyer_id,user.id)` de `mobility_stage_auto_demo_trips`, `mobility_stage_deliveries`, `mobility_stage_merchant_orders`. Nunca se envía service key a las apps. Orden estable descendente por fecha, ID y tipo de servicio. Consultas keyset con `.lte(created_at,anchor)` y comparación `created_at,id`, sin `OFFSET` ni traer toda la tabla a memoria. Por página, máximo 51 filas por origen, para determinar si hay continuación.
+- DTO compatible con `projectClientHistory` del Arquitecto B: `ownerId,generatedAt,expiresAt,items,nextCursor`; elementos `serviceId,kind,status,createdAt,revision`. TTL de caché 60 s. Sin PII, ubicación, rutas, matrículas, nombre de conductor, montos ni documentos.
+- Si faltan tablas, hay errores SQL, identidad inválida o datos inconsistentes => 503. **Nunca se devuelve una lista parcial como si fuera todo el historial.**
+- Evidencia automatizada: `g26-rider-history-repository.test.mjs` recupera **1.200 operaciones por 24 páginas**, sin omisión ni duplicación, además de pruebas de firma/actor/vencimiento/HTTP local. Estas son pruebas sintéticas; no prueban aún latencia de tablas reales con millones de registros.
+- **Pendientes operativos**: índices compuestos PostgreSQL `(owner_id,created_at DESC,id DESC)` para cada tabla y ensayo de paginación/aislamiento RLS sobre una base PostgreSQL desechable integral con datos abundantes, sin SQL remoto ni secretos. La app Cliente B debe implementar el bucle de carga por cursor y permitir ver el historial completo, sin borrar páginas anteriores en cada consulta.
 
 ## Evidencia de pruebas
 - `g7-finance-gateway.test.mjs` + `g4-staging-runtime.test.mjs`: recibos fuente servidor, TTL, MOTO pasajeros denegado.
@@ -28,7 +31,7 @@
 - `g11-openapi-contract.test.mjs` certifica presencia y forma de los 3 contratos. Todos los tests usan identidad y datos SINTÉTICOS; concluir `SUCCESS` únicamente al verificar los workflows del HEAD exacto.
 
 ## Próximos trabajos de A (sin tocar carpetas B)
-1. G26.1: paginación keyset, cursor firmado/contexto de dueño, límite 50, consistencia y múltiples tablas sin omisiones.
+1. G26.2: optimizar índices, pruebas SQL PostgreSQL con grandes volúmenes y consistencia; G26.1 no tiene límite total.
 2. Contratos Auth Passenger/Admin/Owner y MFA real en servidor, DTO KYC/zonas/incidentes y finanzas Owner, pruebas RLS no vacías.
 3. Desplegar solamente STAGING bajo autorización y HTTPS/pinned origin; conectar SDK Auth sin credenciales por GitHub.
 4. Validar sesión, privacidad, cotización y cancelación en dos apps físicas; observar race, offline, GPS y red.
