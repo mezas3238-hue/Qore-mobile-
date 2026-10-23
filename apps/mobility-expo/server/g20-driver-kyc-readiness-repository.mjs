@@ -1,6 +1,6 @@
 /** G20: server-role-only current-license gate, no LIVE eligibility claim. */
 export const G20_LICENSE_READINESS_LIVE_ENABLED=false;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createDriverKycReadinessRepository({rpc}={}){
  if(typeof rpc!=='function')throw Error('Trusted G20 RPC required');
  return Object.freeze({
