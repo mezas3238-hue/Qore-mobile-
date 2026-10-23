@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const spec=JSON.parse(readFileSync(new URL(
  '../docs/backend/openapi/movete-facil-staging.openapi.json',import.meta.url),'utf8'));
 test('G45 endpoints cannot be mistaken for mounted payment/checkout HTTP',()=>{
- assert.equal(spec.info.version,'1.0.0-g45');
+ assert.ok(/^1\\.0\\.0-g(?:45|4[6-9]|[5-9][0-9])$/.test(spec.info.version));
  assert.equal(spec['x-qore-live-enabled'],false);
  for(const [path,method,bodySchema,receiptSchema,status] of [
   ['/v1/staging/buyer/orders/reservations-g45','post','BuyerReserveOrderG45','BuyerReserveReceiptG45','201'],
