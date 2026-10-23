@@ -3,9 +3,9 @@
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createClientSessionController({provider,clearPrivateState=()=>{},now=()=>Date.now()}={}){
- let current=null,epoch=0;
+ let current=null,epoch=0,privacyEpoch=0;
  const clear=()=>{
-  epoch++;
+  epoch++;privacyEpoch++;
   current=null;
   clearPrivateState();
  };
@@ -25,9 +25,14 @@ export function createClientSessionController({provider,clearPrivateState=()=>{}
    ||session.expiresAt<=now()+1000){clear();return {ok:false,code:'AUTH_REQUIRED'};}
   // Un relogin con JWT distinto es otra sesión, aunque el subject sea igual.
   // No reutilizar historia, GPS ni requestKey de un token revocado.
-  if(current&&(current.subject!==session.subject||
-    current.token!==session.token||current.expiresAt!==session.expiresAt))
-    clearPrivateState();
+  const changed=!current||current.subject!==session.subject
+   ||current.token!==session.token||current.expiresAt!==session.expiresAt;
+  // Separado de epoch: un refresh idéntico no destruye borradores, pero
+  // login/logout, rotación JWT y expiración remueven estados locales privados.
+  if(changed){
+   privacyEpoch++;
+   if(current)clearPrivateState();
+  }
   current={subject:session.subject,role:'passenger',expiresAt:session.expiresAt,token:session.token};
   return {ok:true,subject:current.subject,expiresAt:current.expiresAt};
  }
@@ -47,5 +52,5 @@ export function createClientSessionController({provider,clearPrivateState=()=>{}
    return {ok:true};
   }catch{return {ok:false,code:'SERVER_REVOCATION_UNCONFIRMED'};}
  }
- return Object.freeze({refresh,publicSession,getSessionForGateway,logout,clear,revision:()=>epoch});
+ return Object.freeze({refresh,publicSession,getSessionForGateway,logout,clear,revision:()=>epoch,privacyRevision:()=>privacyEpoch});
 }

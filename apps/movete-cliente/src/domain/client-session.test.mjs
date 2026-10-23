@@ -87,3 +87,31 @@ test('renovación idéntica no vacía estado ni desencadena borrado',async()=>{
  await state.refresh();await state.refresh();
  assert.equal(clears,0);
 });
+
+test('privacidad UI cambia al login, logout, rotación y nueva cuenta, no al refresh idéntico',async()=>{
+ let next=valid();
+ const c=createClientSessionController({provider:{readSession:async()=>next,signOut:async()=>{}},now:()=>10000});
+ const initial=c.privacyRevision();
+ assert.equal((await c.refresh()).ok,true);
+ const logged=c.privacyRevision();assert.ok(logged>initial);
+ assert.equal((await c.refresh()).ok,true);
+ assert.equal(c.privacyRevision(),logged);
+ next={...valid(),token:'synthetic-new-jwt-rotation-123456'};
+ await c.refresh();
+ const rotated=c.privacyRevision();assert.ok(rotated>logged);
+ next=valid(u);await c.refresh();
+ const switched=c.privacyRevision();assert.ok(switched>rotated);
+ await c.logout();
+ const exited=c.privacyRevision();assert.ok(exited>switched);
+ next=valid(u);await c.refresh();
+ assert.ok(c.privacyRevision()>exited);
+ assert.equal(JSON.stringify(c.publicSession()).includes('token'),false);
+});
+test('sesión expirada invalida también el alcance de los formularios privados',async()=>{
+ let clock=10000;
+ const c=createClientSessionController({provider:{readSession:()=>valid()},now:()=>clock});
+ await c.refresh();const revision=c.privacyRevision();
+ clock=90000;
+ assert.equal(c.publicSession(),null);
+ assert.ok(c.privacyRevision()>revision);
+});

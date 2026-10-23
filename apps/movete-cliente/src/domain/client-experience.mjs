@@ -220,13 +220,14 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(!user){
    clearPrivate();
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
-    tracking:tracking.snapshot(),quote:null,history:null,
+    privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
    account:Object.freeze({subject:user.subject,role:'passenger'}),
+   privateViewRevision:session.privacyRevision(),
    mutation:mutations.publicState(),
    tracking:tracking.snapshot(),
    quote:quote.current(),

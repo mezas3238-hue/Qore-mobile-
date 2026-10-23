@@ -1,5 +1,7 @@
 export type ClientSnapshot={
  authenticated:boolean;
+ // Solo revisión numérica para invalidar formularios locales en login/logout/JWT.
+ privateViewRevision:number;
  account:{subject:string;role:'passenger'}|null;
  mutation:{phase:string;operation:string|null;requestKey:string|null;error:string|null};
  tracking:{

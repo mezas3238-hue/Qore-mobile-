@@ -555,3 +555,33 @@ test('solicitud reconocida no se puede borrar hasta reconciliar servidor',async(
  assert.equal(api.discardPreparedMutation({operation:'rideRequest',requestKey:key}).code,'NOT_UNSENT_REQUEST');
  assert.equal(api.snapshot().mutation.phase,'acknowledged');
 });
+
+test('cambio de JWT en la misma cuenta rota la revisión privada sin publicar token',async()=>{
+ const {api,setSession}=fixture();
+ await api.refreshSession();
+ const first=api.snapshot();
+ assert.equal(Number.isSafeInteger(first.privateViewRevision),true);
+ await api.refreshSession();
+ assert.equal(api.snapshot().privateViewRevision,first.privateViewRevision);
+ setSession({...fakeSession(),token:'synthetic-rotated-same-passenger-account'});
+ await api.refreshSession();
+ const changed=api.snapshot();
+ assert.ok(changed.privateViewRevision>first.privateViewRevision);
+ assert.equal(changed.account.subject,a);
+ assert.equal(Object.hasOwn(changed,'token'),false);
+ assert.equal(JSON.stringify(changed).includes('synthetic-rotated-same-passenger-account'),false);
+ await api.signOut();
+ const loggedOut=api.snapshot();
+ assert.ok(loggedOut.privateViewRevision>changed.privateViewRevision);
+ assert.equal(loggedOut.account,null);
+});
+test('relogin con misma cuenta sigue invalidando alcance privado tras logout',async()=>{
+ const {api}=fixture();
+ await api.refreshSession();
+ const previous=api.snapshot().privateViewRevision;
+ await api.signOut();
+ const exited=api.snapshot().privateViewRevision;
+ assert.ok(exited>previous);
+ await api.refreshSession();
+ assert.ok(api.snapshot().privateViewRevision>exited);
+});

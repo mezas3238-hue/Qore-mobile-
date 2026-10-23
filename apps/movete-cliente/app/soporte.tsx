@@ -1,8 +1,15 @@
 import React,{useState} from 'react';
+import {useClientView} from '../src/ClientRuntime';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
 import {SUPPORT_TYPES,validateSupportDraft} from '../src/domain/support-draft.mjs';
 export default function Support(){
+ const {view}=useClientView();
+ // El reporte local no se envía; su contenido tampoco sobrevive al logout,
+ // relogin con la misma cuenta ni a una rotación del JWT.
+ return <PrivateSupportDraft key={view.privateViewRevision}/>;
+}
+function PrivateSupportDraft(){
  const [category,setCategory]=useState('SAFETY');
  const [serviceId,setServiceId]=useState('');
  const [description,setDescription]=useState('');

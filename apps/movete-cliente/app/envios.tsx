@@ -1,14 +1,20 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
+import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {DELIVERY_CATEGORIES,validateDeliveryForm} from '../src/domain/delivery-form.mjs';
 import {prepareLocalDeliveryRequest} from '../src/domain/client-request-preparation.mjs';
 type Kind='AUTO'|'MOTO';
 
 export default function ClientDeliveries(){
  const {client,view}=useClientView();
+ // El key fuerza remount antes de pintar un JWT distinto, incluso si subject
+ // es idéntico; no hay un render transitorio de rutas de la sesión previa.
+ return <PrivateDeliveryForm key={view.privateViewRevision} client={client} view={view}/>;
+}
+function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientSnapshot}){
  const [pickup,setPickup]=useState('');
  const [destination,setDestination]=useState('');
  const [weight,setWeight]=useState('');
@@ -24,11 +30,6 @@ export default function ClientDeliveries(){
  const mutation=view.mutation;
  const myDraft=mutation.phase==='ready'&&mutation.operation==='deliveryRequest';
  const free=mutation.phase==='idle';
- useEffect(()=>{
-  setPickup('');setDestination('');setWeight('');setLength('');setWidth('');
-  setHeight('');setCategory('PARCEL');setRestricted(false);setVehicleKind('MOTO');
-  setValidated(false);setResult('');
- },[view.account?.subject]);
  function edit(setter:(s:string)=>void,value:string){
   if(myDraft)return;
   setter(value);setValidated(false);setResult('');
