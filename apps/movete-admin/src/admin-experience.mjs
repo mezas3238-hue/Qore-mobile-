@@ -6,6 +6,8 @@ import {createIncidentQueueStore} from './incidents-overview.mjs';
 import {createAuditFeedStore} from './audit-feed.mjs';
 import {createAdminReadGateway} from './admin-read-gateway.mjs';
 import {createPageNavigator,readContinuation} from './page-cursor.mjs';
+import {createIncidentTriageG41Gateway} from './incident-g41-gateway.mjs';
+import {createGlobalTriageFlow} from './incident-g41-flow.mjs';
 
 /**
  * Composición web B11: ninguna sesión/cola real se crea por defecto.
@@ -13,17 +15,17 @@ import {createPageNavigator,readContinuation} from './page-cursor.mjs';
  * Las operaciones de escritura siguen bajo validación y autorización de A.
  */
 const fail=code=>({ok:false,code});
-export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,now=()=>Date.now()}={}){
+export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,triageGatewayOptions=null,now=()=>Date.now()}={}){
  const queue=createKycQueueStore({now});
  const finance=createOwnerFinanceStore({now});
  const zones=createZoneOverviewStore({now});
  const incidents=createIncidentQueueStore({now});
  const audit=createAuditFeedStore({now});
  const pages=createPageNavigator();
- let session;
+ let session,globalTriage;
  const listeners=new Set();
  const notify=()=>{for(const callback of listeners){try{callback();}catch{/* no filtrar secretos */}}};
- const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();};
+ const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();globalTriage?.clear();};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
  const readGateway=readGatewayOptions?createAdminReadGateway({
   ...readGatewayOptions,
@@ -34,11 +36,37 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
+
+ // G41 sigue UNMOUNTED en A. Sin STAGING real verificado no existe GET.
+ const triageGateway=triageGatewayOptions?createIncidentTriageG41Gateway({
+  ...triageGatewayOptions,now,
+  getSession:()=>{
+   const value=session.getSessionForGateway();
+   return value?{...value,subject:session.publicSession()?.subject,
+    authRevision:session.revision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ globalTriage=createGlobalTriageFlow({
+  gateway:triageGateway,
+  getActor:async()=>{
+   const current=session.publicSession();
+   return current?{...current,authRevision:session.revision()}:null;
+  },now
+ });
+ async function loadGlobalIncidentTriage(options={}){
+  const user=session.publicSession();
+  if(!user)return fail('ADMIN_AUTH_REQUIRED');
+  if(user.role!=='admin')return fail('FORBIDDEN');
+  const result=await globalTriage.load(options);
+  notify();return result;
+ }
+
  const stores=Object.freeze({kyc:queue,finance,zones,incidents,audit});
  const reading=new Set();
  function snapshot(){
   const current=session.publicSession();
-  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,
+  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,
    pagination:Object.freeze({kyc:pages.get('kyc'),zones:pages.get('zones'),
     incidents:pages.get('incidents'),audit:pages.get('audit')}),
    actionsEnabled:false});}
@@ -50,6 +78,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    zones:current.role==='admin'?zones.current(current.role):null,
    incidents:current.role==='admin'?incidents.current(current.role):null,
    audit:current.role==='admin'?audit.current(current.role):null,
+   globalTriage:current.role==='admin'?globalTriage.snapshot():null,
    pagination:Object.freeze({
     kyc:pages.get('kyc'),zones:pages.get('zones'),
     incidents:pages.get('incidents'),audit:pages.get('audit')
@@ -167,6 +196,6 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   clear:()=>{session.clear();notify();},
   readKyc,readFinance,readZones,readIncidents,readAudit,
   isReadConfigured:operation=>Boolean(readGateway?.isConfigured(operation)),
-  syncFromServer,reviewVehicle,snapshot
+  syncFromServer,reviewVehicle,loadGlobalIncidentTriage,snapshot
  });
 }

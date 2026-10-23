@@ -21,6 +21,15 @@ export type AdminSnapshot={
   incidentId:string;category:string;severity:string;status:string;
   createdAt:number;revision:number;
  }[]}|null;
+ globalTriage:{contractReady:boolean;loading:boolean;pageNumber:number;hasNext:boolean;
+  severityFilter:string|null;statusFilter:string|null;error:string|null;
+  globalTotalKnown:false;emergencyDispatchEnabled:false;
+  page:{scope:'SERVER_FILTERED_PAGE_ONLY';expiresAt:number;nextCursor:string|null;
+   severityFilter:string|null;statusFilter:string|null;
+   items:readonly {incidentId:string;category:string;severity:string;
+    status:string;createdAt:number;revision:number}[];
+   hasGlobalTotal:false;snapshotConsistent:false;
+   emergencyDispatchEnabled:false}|null;}|null;
  audit:{revision:number;expiresAt:number;items:readonly {
   eventId:string;actorRole:string;operation:string;targetKind:string;
   outcome:string;occurredAt:number;revision:number;
@@ -42,12 +51,20 @@ export type AdminExperience={
  readAudit:(data:unknown)=>boolean;
  isReadConfigured:(operation:string)=>boolean;
  syncFromServer:(operation:string,direction?:'refresh'|'reset'|'next'|'previous')=>Promise<{ok:boolean;code?:string}>;
+ loadGlobalIncidentTriage:(args?:{severityFilter?:string|null;statusFilter?:string|null;next?:boolean})=>
+  Promise<{ok:boolean;code?:string;pageNumber?:number;hasNext?:boolean}>;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };
 export declare function createAdminExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{isConfigured:()=>boolean;reviewVehicle:(body:unknown)=>unknown|Promise<unknown>}|null;
+ triageGatewayOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  readGatewayOptions?:{
   enabled?:boolean;certifiedContracts?:string[];origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;

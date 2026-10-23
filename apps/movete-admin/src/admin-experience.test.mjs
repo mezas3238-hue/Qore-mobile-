@@ -534,3 +534,83 @@ test('A05: 50 filas de KYC no impiden recuperar más páginas hasta la última',
  assert.equal((await app.syncFromServer('kyc','next')).code,'NO_ADDITIONAL_PAGE');
  assert.equal(reads,3);
 });
+
+
+const g41Row={incidentId:vehicle,category:'SAFETY',severity:'CRITICAL',
+ status:'OPEN',createdAt:now-1000,revision:1};
+const g41Data=(severityFilter=null,nextCursor=null)=>({
+ scope:'admin.incidents.read',priorityOrder:'SEVERITY_THEN_NEWEST',
+ severityFilter,statusFilter:null,revision:3,items:[g41Row],nextCursor,
+ generatedAt:now-2000,expiresAt:now+30000,snapshotConsistent:false,
+ productionEnabled:false
+});
+const g41Reply=payload=>({status:200,ok:true,redirected:false,
+ headers:{get:k=>k==='content-type'?'application/json':null},
+ text:async()=>JSON.stringify(payload)});
+const g41Options=fetchImpl=>({
+ enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+ origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+ fetchImpl
+});
+test('Admin G41 sin montaje verificado no habilita peticiones ni inventa casos',async()=>{
+ let hits=0;
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>auth()},
+  triageGatewayOptions:{...g41Options(async()=>{hits++;return g41Reply(g41Data());}),
+   stagingRuntimeVerified:false}
+ });
+ await app.refreshSession();
+ assert.equal(app.snapshot().globalTriage.contractReady,false);
+ assert.equal((await app.loadGlobalIncidentTriage()).code,'G41_RUNTIME_NOT_CERTIFIED');
+ assert.equal(app.snapshot().globalTriage.page,null);
+ assert.equal(hits,0);
+});
+test('Admin G41 filtra en servidor y pagina sin límite global',async()=>{
+ const urls=[];let n=0;
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>auth()},
+  triageGatewayOptions:g41Options(async url=>{
+   urls.push(url);n++;
+   return g41Reply(g41Data('CRITICAL',n===1?'X'.repeat(44):null));
+  })
+ });
+ await app.refreshSession();
+ assert.equal((await app.loadGlobalIncidentTriage({severityFilter:'CRITICAL'})).ok,true);
+ assert.equal(app.snapshot().globalTriage.page.items.length,1);
+ assert.equal(app.snapshot().globalTriage.pageNumber,1);
+ assert.equal((await app.loadGlobalIncidentTriage({severityFilter:'CRITICAL',next:true})).ok,true);
+ assert.equal(app.snapshot().globalTriage.pageNumber,2);
+ assert.equal(app.snapshot().globalTriage.globalTotalKnown,false);
+ assert.deepEqual(urls,[
+  'https://staging.example.invalid/v1/staging/admin/incidents/triage-queue?severity=CRITICAL',
+  'https://staging.example.invalid/v1/staging/admin/incidents/triage-queue?severity=CRITICAL&cursor='+'X'.repeat(44)
+ ]);
+ await app.logout();
+ assert.equal(app.snapshot().globalTriage,null);
+});
+test('Owner MFA no hereda cola global G41 de Admin',async()=>{
+ let hits=0;
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>({...auth(owner),role:'owner'})},
+  triageGatewayOptions:g41Options(async()=>{hits++;return g41Reply(g41Data());})
+ });
+ await app.refreshSession();
+ assert.equal((await app.loadGlobalIncidentTriage()).code,'FORBIDDEN');
+ assert.equal(app.snapshot().globalTriage,null);
+ assert.equal(hits,0);
+});
+test('GET G41 antiguo tras cambio de cuenta jamás llena bandeja nueva',async()=>{
+ let current=auth(),resume;
+ const pending=new Promise(done=>resume=done);
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>current},
+  triageGatewayOptions:g41Options(async()=>pending)
+ });
+ await app.refreshSession();
+ const task=app.loadGlobalIncidentTriage();
+ await Promise.resolve();await Promise.resolve();
+ current=auth(another);await app.refreshSession();
+ resume(g41Reply(g41Data()));
+ assert.equal((await task).ok,false);
+ assert.equal(app.snapshot().globalTriage.page,null);
+});
