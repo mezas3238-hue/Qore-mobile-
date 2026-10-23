@@ -59,7 +59,7 @@ test('G26.1 first page merges own services with time+id ordering and minimal fie
  const {load,calls}=fixture();
  const page=await load({ownerId:owner,anchorMs:at});
  assert.equal(page.items.length,3);
- assert.deepEqual(page.items.map(x=>x.kind),['RIDE','DELIVERY','MERCHANT_ORDER']);
+ assert.deepEqual(page.items.map(x=>x.kind),['MERCHANT_ORDER','DELIVERY','RIDE']);
  assert.equal(page.nextPosition,null);
  assert.equal(calls.length,3);
  assert.ok(calls.every(x=>x.cols.includes('created_at')&&!x.cols.includes('phone')));
