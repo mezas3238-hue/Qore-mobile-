@@ -48,8 +48,10 @@ export function validateClientOperation(op,body){
   if(op==='orderRequest'){
     return keys(body,['requestKey','branchId','vehicleKind','items'])
       &&isUuid(body.requestKey)&&isUuid(body.branchId)&&['AUTO','MOTO'].includes(body.vehicleKind)
-      &&Array.isArray(body.items)&&body.items.length>=1&&body.items.length<=50;
-      // Line schema must be certified against contract A before enabling requests.
+      &&Array.isArray(body.items)&&body.items.length>=1&&body.items.length<=50
+      &&body.items.every(line=>keys(line,['itemId','quantity'])
+        &&isUuid(line.itemId)&&positive(line.quantity)&&line.quantity<=999);
+      // Validación de request del OpenAPI. Envío aún bloqueado por DTO response pendiente.
   }
   if(op==='paymentAuthorize'){
     return keys(body,['requestKey','quoteId','method'])&&isUuid(body.requestKey)
