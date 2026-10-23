@@ -3,6 +3,7 @@ import {createKycQueueStore} from './kyc-queue.mjs';
 import {createOwnerFinanceStore} from './owner-finance.mjs';
 import {createZoneOverviewStore} from './zone-overview.mjs';
 import {createIncidentQueueStore} from './incidents-overview.mjs';
+import {createAuditFeedStore} from './audit-feed.mjs';
 
 /**
  * Composición web B11: ninguna sesión/cola real se crea por defecto.
@@ -15,14 +16,15 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
  const finance=createOwnerFinanceStore({now});
  const zones=createZoneOverviewStore({now});
  const incidents=createIncidentQueueStore({now});
+ const audit=createAuditFeedStore({now});
  let session;
  const listeners=new Set();
  const notify=()=>{for(const callback of listeners){try{callback();}catch{/* no filtrar secretos */}}};
- const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();};
+ const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
  function snapshot(){
   const current=session.publicSession();
-  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,actionsEnabled:false});}
+  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,actionsEnabled:false});}
   return Object.freeze({
    authenticated:true,
    account:Object.freeze({subject:current.subject,role:current.role,mfaVerified:true}),
@@ -30,6 +32,7 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
    finance:current.role==='owner'?finance.current(current):null,
    zones:current.role==='admin'?zones.current(current.role):null,
    incidents:current.role==='admin'?incidents.current(current.role):null,
+   audit:current.role==='admin'?audit.current(current.role):null,
    // La UI nunca habilita acciones por permisos locales.
    actionsEnabled:false
   });
@@ -57,6 +60,12 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
   const current=session.publicSession();
   if(!current||current.role!=='admin'){incidents.clear();notify();return false;}
   const accepted=incidents.replace(dto,current.role);
+  notify();return accepted;
+ }
+ function readAudit(dto){
+  const current=session.publicSession();
+  if(!current||current.role!=='admin'){audit.clear();notify();return false;}
+  const accepted=audit.replace(dto,current.role);
   notify();return accepted;
  }
  async function reviewVehicle(dto){
@@ -93,6 +102,6 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
   refreshSession:async()=>{const result=await session.refresh();notify();return result;},
   logout:async()=>{clearPrivate();const result=await session.logout();notify();return result;},
   clear:()=>{session.clear();notify();},
-  readKyc,readFinance,readZones,readIncidents,reviewVehicle,snapshot
+  readKyc,readFinance,readZones,readIncidents,readAudit,reviewVehicle,snapshot
  });
 }

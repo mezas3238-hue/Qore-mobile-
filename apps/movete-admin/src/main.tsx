@@ -199,6 +199,30 @@ function IncidentReadOnly({incidents,allowed}:{
  </Panel>;
 }
 
+function AuditReadOnly({audit,allowed}:{
+ audit:AdminSnapshot['audit'];allowed:boolean;
+}){
+ return <Panel className="detail">
+  <div className="section-head"><div><h2>Registro de auditoría de servidor</h2>
+   <p>Vista mínima, sin identidades personales ni registros inventados por el navegador.</p>
+  </div><span className="muted-tag">SOLO LECTURA</span></div>
+  {!allowed?<div className="empty"><h3>Permiso de auditoría no otorgado</h3>
+     <p>Requiere sesión administrativa y permiso específico del backend.</p></div>
+   :!audit?<div className="empty"><h3>Sin respuesta de auditoría certificada</h3>
+     <p>No se afirma ausencia de eventos: falta lectura autorizada y contrato auditable.</p></div>
+   :audit.items.length===0?<div className="empty"><h3>Sin eventos en esta página</h3>
+     <p>La ausencia de resultados aquí no certifica un registro global vacío.</p></div>
+   :<div className="zone-rows">{audit.items.map(event=>
+     <div className="zone-row" key={event.eventId}>
+      <div><strong>{event.operation.replaceAll('_',' ')}</strong>
+       <small>Recurso: {event.targetKind} · Resultado: {event.outcome}</small>
+       <small>Tipo actor: {event.actorRole} · {new Date(event.occurredAt).toLocaleString('es-PY')}</small></div>
+      <div className="zone-count">#{event.revision}<small>Revisión</small></div>
+     </div>)}</div>}
+  <p className="training-disclaimer">La interfaz no crea, firma ni borra eventos. El backend deberá garantizar orden, cadena de integridad, almacenamiento y acceso por permisos auditados.</p>
+ </Panel>;
+}
+
 function App(){
  const {view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
@@ -240,7 +264,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='incidentes'?<IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>

@@ -20,6 +20,10 @@ export type AdminSnapshot={
   incidentId:string;category:string;severity:string;status:string;
   createdAt:number;revision:number;
  }[]}|null;
+ audit:{revision:number;expiresAt:number;items:readonly {
+  eventId:string;actorRole:string;operation:string;targetKind:string;
+  outcome:string;occurredAt:number;revision:number;
+ }[]}|null;
  actionsEnabled:false;
 };
 export type AdminExperience={
@@ -31,6 +35,7 @@ export type AdminExperience={
  readFinance:(data:unknown)=>boolean;
  readZones:(data:unknown)=>boolean;
  readIncidents:(data:unknown)=>boolean;
+ readAudit:(data:unknown)=>boolean;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };

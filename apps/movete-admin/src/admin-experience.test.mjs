@@ -237,3 +237,29 @@ test('cambio de cuenta borra el resumen previo de incidentes',async()=>{
  setUser(auth(another));await app.refreshSession();
  assert.equal(app.snapshot().incidents,null);
 });
+
+const auditFeed={scope:'admin.audit.read',revision:10,generatedAt:now-2000,
+ expiresAt:now+30000,items:[{eventId:vehicle,actorRole:'admin',
+ operation:'KYC_REVIEW',targetKind:'VEHICLE',outcome:'CONFIRMED',
+ occurredAt:now-5000,revision:8}]};
+test('Admin recibe metadatos de auditoría únicamente tras MFA',async()=>{
+ const {app}=fixture();
+ await app.refreshSession();
+ assert.equal(app.readAudit(auditFeed),true);
+ assert.equal(app.snapshot().audit.items[0].outcome,'CONFIRMED');
+ assert.equal(Object.hasOwn(app.snapshot().audit.items[0],'actorName'),false);
+});
+test('Owner no hereda auditoría del operador y no puede cargarla',async()=>{
+ const {app}=fixture({...auth(owner),role:'owner'});
+ await app.refreshSession();
+ assert.equal(app.readAudit(auditFeed),false);
+ assert.equal(app.snapshot().audit,null);
+});
+test('nuevo inicio de sesión vacía eventos de auditoría del anterior admin',async()=>{
+ const {app,setUser}=fixture();
+ await app.refreshSession();
+ app.readAudit(auditFeed);
+ setUser(auth(another));
+ await app.refreshSession();
+ assert.equal(app.snapshot().audit,null);
+});
