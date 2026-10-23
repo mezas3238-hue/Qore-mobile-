@@ -313,7 +313,7 @@ export async function prepareQoreG4StagingRuntime({
   }),
  });
  const finance=createQoreFinanceGateway({
-  projectRef:ref,verifyAccessToken:verified,
+  projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   loadPricingContext:params=>pricingContext(params),
   quoteFare:params=>financePersistence.quote({
