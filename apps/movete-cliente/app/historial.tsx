@@ -1,10 +1,10 @@
 import React from 'react';
 import {FlatList,Text,View} from 'react-native';
-import {Panel,styles} from '../src/ClientUI';
+import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 const kind:Record<string,string>={RIDE:'Automóvil',DELIVERY:'Envío',MERCHANT_ORDER:'Pedido comercial'};
 export default function ClientHistory(){
- const {view}=useClientView();
+ const {client,view}=useClientView();
  const list=view.authenticated?view.history?.items??[]:[];
  return <FlatList
   style={styles.page}
@@ -30,7 +30,21 @@ export default function ClientHistory(){
     <Text style={styles.small}>Registrado: {new Date(item.createdAt).toLocaleString('es-PY')} · Revisión {item.revision}</Text>
     <Text style={styles.small}>El comprobante y el total no se inventan ni se calculan en esta vista.</Text>
    </Panel>}
-  ListFooterComponent={view.authenticated&&view.history?.nextCursor?
-   <Panel><Text style={styles.text}>El servidor indica que existen más resultados por consultar. La carga de páginas requiere el contrato autenticado del backend.</Text></Panel>:null}
+  ListFooterComponent={<Panel>
+    <Text style={styles.small}>{view.historyConfigured
+      ?'Consulta segura habilitada para esta sesión de prueba.'
+      :'Lectura no disponible hasta certificar la API y permisos del pasajero.'}</Text>
+    {view.historyLoadError&&<Text accessibilityRole="alert" style={styles.small}>
+      No se pudo validar el historial: {view.historyLoadError}
+    </Text>}
+    {view.history?.nextCursor
+      ?<Action label={view.historyLoading?'Consultando…':'Cargar más servicios'}
+        disabled={!view.historyConfigured||view.historyLoading}
+        onPress={()=>{void client.loadHistoryPage();}}/>
+      :<Action label={view.historyLoading?'Consultando…':'Consultar historial'}
+        disabled={!view.authenticated||!view.historyConfigured||view.historyLoading}
+        onPress={()=>{void client.loadHistoryPage({reset:true});}}/>}
+    <Text style={styles.small}>Los resultados se obtienen por páginas, sin limitar el total de servicios registrados.</Text>
+   </Panel>}
  />;
 }

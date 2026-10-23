@@ -11,6 +11,7 @@ export type ClientSnapshot={
  };
  quote:{quoteId:string;subjectId:string;amountGs:number;fareMode:string;
   subjectKind:string;expiresAt:number;fareVersion:string;formattedAmount:string}|null;
+ historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
  history:{ownerId:string;nextCursor:string|null;
   items:readonly {serviceId:string;kind:string;status:string;createdAt:number;revision:number}[]}|null;
 };
@@ -31,10 +32,16 @@ export type ClientExperience={
  connectionLost():void;
  acceptQuote(dto:unknown):boolean;
  acceptHistory(dto:unknown,options?:{append?:boolean}):boolean;
+ loadHistoryPage(options?:{reset?:boolean}):Promise<ClientResult>;
  snapshot():ClientSnapshot;
 };
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ historyGatewayOptions?:{
+  enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  now?:()=>number;
 }):ClientExperience;

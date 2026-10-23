@@ -160,3 +160,76 @@ test('un listener defectuoso no bloquea el cierre de sesión',async()=>{
  assert.equal((await api.signOut()).ok,true);
  assert.equal(api.snapshot().authenticated,false);
 });
+
+const historyResp=(payload)=>({ok:true,status:200,redirected:false,
+ headers:{get:k=>k==='content-type'?'application/json':null},
+ text:async()=>JSON.stringify(payload)});
+const historyOptions=fetchImpl=>({
+ enabled:true,contractCertified:true,origin:'https://staging.example.invalid',
+ pinnedOrigin:'https://staging.example.invalid',fetchImpl
+});
+test('historial del pasajero no usa red ni permite carga sin contrato certificado',async()=>{
+ const api=createClientExperience({now:()=>now,authProvider:{readSession:async()=>fakeSession()},
+  historyGatewayOptions:{...historyOptions(async()=>{throw Error('red prohibida');}),contractCertified:false}});
+ await api.refreshSession();
+ assert.equal(api.snapshot().historyConfigured,false);
+ assert.equal((await api.loadHistoryPage({reset:true})).code,'HISTORY_CONTRACT_PENDING');
+});
+test('cliente recorre 120 páginas de historial de un usuario sin límite total',async()=>{
+ const urls=[];
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  historyGatewayOptions:historyOptions(async url=>{
+   urls.push(url);
+   const match=url.match(/cursor=p_(\d+)/);
+   const number=match?Number(match[1]):1;
+   return historyResp({...fakeHistory(),
+    items:[{serviceId:'123e4567-e89b-42d3-a456-'+String(number).padStart(12,'0'),
+      kind:'RIDE',status:'completed',createdAt:now-3000,revision:1}],
+    nextCursor:number>=120?null:'p_'+(number+1)});
+  })
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadHistoryPage({reset:true})).ok,true);
+ for(let n=2;n<=120;n++)assert.equal((await api.loadHistoryPage()).ok,true);
+ assert.equal(api.snapshot().history.items.length,120);
+ assert.equal(api.snapshot().history.nextCursor,null);
+ assert.equal((await api.loadHistoryPage()).code,'NO_ADDITIONAL_PAGE');
+ assert.equal(urls.length,120);
+ assert.equal(urls[1],'https://staging.example.invalid/v1/staging/rider/history?cursor=p_2');
+});
+test('página con propietario ajeno se rechaza y no muestra historial privado',async()=>{
+ const api=createClientExperience({now:()=>now,authProvider:{readSession:async()=>fakeSession()},
+  historyGatewayOptions:historyOptions(async()=>historyResp(fakeHistory(b)))});
+ await api.refreshSession();
+ assert.equal((await api.loadHistoryPage({reset:true})).code,'INVALID_HISTORY_DTO');
+ assert.equal(api.snapshot().history,null);
+});
+test('logout durante historial pendiente nunca restaura viajes de sesión antigua',async()=>{
+ let resolve;
+ const wait=new Promise(done=>resolve=done);
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  historyGatewayOptions:historyOptions(async()=>wait)
+ });
+ await api.refreshSession();
+ const task=api.loadHistoryPage({reset:true});
+ await Promise.resolve();await Promise.resolve();
+ await api.signOut();
+ resolve(historyResp(fakeHistory()));
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(api.snapshot().authenticated,false);
+ assert.equal(api.snapshot().history,null);
+});
+test('cursor circular no repite páginas ni hace solicitudes ilimitadas',async()=>{
+ let n=0;
+ const api=createClientExperience({now:()=>now,authProvider:{readSession:async()=>fakeSession()},
+  historyGatewayOptions:historyOptions(async()=>{
+   n++;return historyResp({...fakeHistory(),nextCursor:'loop'});
+  })
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadHistoryPage({reset:true})).ok,true);
+ assert.equal((await api.loadHistoryPage()).code,'CURSOR_REPEATED');
+ assert.equal(n,2);
+});
