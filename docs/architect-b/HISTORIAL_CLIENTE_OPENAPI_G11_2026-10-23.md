@@ -39,3 +39,10 @@ Implementado un puente **de lectura únicamente**, sin conexión por defecto, en
 
 ## Continuidad
 Arquitecto A entrega evidencia del endpoint STAGING y tests de autorización + HMAC; Arquitecto B integra mediante configuración inyectada segura (nunca por input de usuario), ejecuta E2E de Android Cliente con múltiples páginas y verifica renovaciones de sesión. [Issue de coordinación #9](https://github.com/mezas3238-hue/Qore-mobile-/issues/9).
+
+## Evidencias posteriores de CI (23 octubre 2026)
+- `c3f38ddfb3d63f4307a68065953a51540e0c101d`: se agregó el error `INVALID_OR_EXPIRED_CURSOR` al recibir 400 y la opción **Reiniciar consulta desde la primera página**. Reintento explícito sin mezclar cursores de sesiones diferentes; tests QA.
+- [**CI Cliente/Driver #39926313188 — SUCCESS**](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39926313188): Cliente **113 tests, 113 PASS, 0 FAIL**, chequeo TypeScript y exportación web; Driver chequeo y exportación independiente aprobados.
+- [**CI Admin Web #39926313214 — SUCCESS**](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39926313214): **109 tests, 109 PASS, 0 FAIL**, TypeScript y Vite build aprobados.
+- Control de propiedad de carpetas para B [#39926313223 — SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39926313223).
+- Estos resultados prueban el código de QA y la independencia de los paquetes, **no** que una cuenta real o un histórico privado ya se pueda consultar en un servidor comercial.

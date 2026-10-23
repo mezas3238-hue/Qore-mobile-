@@ -182,3 +182,13 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - `ea675b07`: una misma zona puede aparecer en múltiples modalidades `AUTO_RIDE/AUTO_DELIVERY/MOTO_DELIVERY` sin colisión. CI Admin [#39921965130 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39921965130): **109 pruebas PASS / 0 FAIL**; boundary #39921965133 SUCCESS, Cliente/Driver isolation #39921965135 SUCCESS.
 - Documento completo: [PAGINACION_SIN_LIMITE_REGISTROS_2026-10-23.md](./PAGINACION_SIN_LIMITE_REGISTROS_2026-10-23.md). [Issue #9](https://github.com/mezas3238-hue/Qore-mobile-/issues/9) actualizado para que A certifique PostgreSQL sin max-cardinalidad, cursor keyset firmado ligado a sesión, 1.000–10.000 registros STAGING y contratos finales. No se ha probado capacidad real de base de datos desde B.
 - Rama exclusiva B, PR #8 DRAFT, no merge, no LIVE, sin Auth/servicios reales. La interfaz Lovable sigue pendiente de cierre infraestructura y autorización Owner.
+
+## Décima sesión — historial HTTP real alineado a OpenAPI A (23-10-2026)
+- Backend A ya documenta `GET /v1/staging/rider/history`, `operationId=listOwnRiderHistoryPaginated`, OpenAPI G11. **No es un endpoint inventado ni prueba por sí misma que STAGING esté desplegado.**
+- `d755dd5`: `client-history-gateway` seguro y bloqueado, HTTPS pinned, rol/JWT Passenger, anti logout/rotación, límites de JSON y cursores opacos.
+- `2ee4a4c`: integra carga de páginas en `client-experience`, anti duplicados y carrera, UI «Consultar historial / Cargar más» con API por defecto deshabilitada; prueba 120 páginas sintéticas.
+- `03ee5de`: cachea el orden de historia para evitar ordenar miles de servicios en cada render; invalida caché al añadir página o cerrar sesión.
+- `0cdbd0bc`: adapta interfaz al OpenAPI **real** de A: cursor HMAC `v1.<payload>.<signature>` vía cabecera `X-Qore-History-Cursor`, no URL `?cursor=`; revisión mínima 1. Nunca verificar la firma en navegador: lo hace el servidor.
+- `353d60a`: corrige un helper QA faltante detectado por CI; `c3f38dd`: error 400 de cursor caducado y opción manual de reiniciar sin mezclar cuentas.
+- **CI último código `c3f38dd`:** Cliente/Driver [#39926313188](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39926313188) **SUCCESS**, Cliente **113/113 PASS**, TS + export web; Admin [#39926313214](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39926313214) **109/109 PASS**, TS + Vite build; B boundary #39926313223 SUCCESS.
+- Handoff técnico: [HISTORIAL_CLIENTE_OPENAPI_G11_2026-10-23.md](./HISTORIAL_CLIENTE_OPENAPI_G11_2026-10-23.md). Issue #9 ya solicita a A evidencias de HMAC/JWT/RLS, API STAGING, carga 1.000/10.000 sin tope. **No merge, no LIVE, no datos reales.**
