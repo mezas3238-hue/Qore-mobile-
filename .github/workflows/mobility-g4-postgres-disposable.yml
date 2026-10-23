@@ -13,6 +13,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
       - 'apps/mobility-expo/server/g17-*'
@@ -123,6 +124,7 @@ jobs:
             G3_AUTO_DEMO_TRIP_CONTRACT_POSTGRES_CI_ONLY.sql \
             G4_PRIVATE_AUTO_OFFERS_POSTGRES_CI_ONLY.sql \
             G5_DELIVERY_CUSTODY_POSTGRES_CI_ONLY.sql \
+            G6_MERCHANT_ORDERS_POSTGRES_CI_ONLY.sql \
             G10_PRIVATE_DELIVERY_OFFERS_POSTGRES_CI_ONLY.sql \
             G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql; do
             psql -v ON_ERROR_STOP=1 -f "$base/$migration"
@@ -161,3 +163,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G20_DRIVER_KYC_PREFLIGHT_FENCING_POSTGRES_CI_ONLY.sql
       - name: Verify G20 rejections at offer acceptance, expired license and MOTO passengers
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G20_DRIVER_KYC_PREFLIGHT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G26 unbounded owner-history covering indexes (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_INDEXES_POSTGRES_CI_ONLY.sql
+      - name: G26 real PostgreSQL history 1200 rows, 24 pages and authenticated RLS
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_UNBOUNDED_ASSERT_POSTGRES_CI_ONLY.sql
