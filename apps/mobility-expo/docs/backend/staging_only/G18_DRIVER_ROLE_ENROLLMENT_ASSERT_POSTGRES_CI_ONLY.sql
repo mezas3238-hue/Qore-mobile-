@@ -20,6 +20,10 @@ BEGIN
  THEN RAISE EXCEPTION 'G18 enrollment audit is mutable'; END IF;
 END $guard$;
 
+-- G16 deliberately left user 183 without a role while testing strangers.
+-- Build an explicit clean passenger fixture for controlled G18 conversion.
+INSERT INTO public.user_roles(user_id,role)
+ VALUES('00000000-0000-4000-8000-000000000183','passenger');
 INSERT INTO auth.users(id) VALUES
  ('00000000-0000-4000-8000-000000000203');
 INSERT INTO public.user_roles(user_id,role)
