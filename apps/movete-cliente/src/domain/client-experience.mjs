@@ -18,6 +18,8 @@ export function createClientExperience({authProvider=null,gateway=null,now=()=>D
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
  let mutations,tracking;
+ const observers=new Set();
+ const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
   if(mutations)mutations.clear();
   if(tracking)tracking.stop();
@@ -75,20 +77,24 @@ export function createClientExperience({authProvider=null,gateway=null,now=()=>D
   return session.logout();
  }
  return Object.freeze({
-  refreshSession:session.refresh,
-  signOut,
-  clear:()=>{session.clear();clearPrivate();},
-  prepareRide:body=>prepare('rideRequest',body),
-  prepareDelivery:body=>prepare('deliveryRequest',body),
-  prepareFare:body=>prepare('fareQuote',body),
-  prepareSimulatedPayment:body=>prepare('paymentAuthorize',body),
-  submit:mutations.submit,
-  retry:mutations.retry,
-  startTracking,
-  syncTracking,
-  connectionLost:tracking.connectionLost,
-  acceptQuote,
-  acceptHistory,
+  subscribe(listener){
+   if(typeof listener!=='function')return ()=>{};
+   observers.add(listener);return ()=>observers.delete(listener);
+  },
+  refreshSession:async()=>{const result=await session.refresh();notify();return result;},
+  signOut:async()=>{const result=await signOut();notify();return result;},
+  clear:()=>{session.clear();clearPrivate();notify();},
+  prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
+  prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
+  prepareFare:body=>{const result=prepare('fareQuote',body);notify();return result;},
+  prepareSimulatedPayment:body=>{const result=prepare('paymentAuthorize',body);notify();return result;},
+  submit:async()=>{const result=await mutations.submit();notify();return result;},
+  retry:async()=>{const result=await mutations.retry();notify();return result;},
+  startTracking:tripId=>{const result=startTracking(tripId);notify();return result;},
+  syncTracking:async()=>{const result=await syncTracking();notify();return result;},
+  connectionLost:()=>{tracking.connectionLost();notify();},
+  acceptQuote:dto=>{const result=acceptQuote(dto);notify();return result;},
+  acceptHistory:(dto,options)=>{const result=acceptHistory(dto,options);notify();return result;},
   snapshot
  });
 }
