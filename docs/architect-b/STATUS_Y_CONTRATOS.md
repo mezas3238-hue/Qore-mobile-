@@ -37,3 +37,30 @@ Fecha de inicio: 22-10-2026. Rama exclusiva `feature/mobility-cliente-admin-para
 
 ## Regla de implementación
 Adaptadores clientes no verifican JWT por sí mismos ni confían en roles locales para permisos. Por defecto `enabled=false`; URL HTTPS pinned, sesión inyectada y respuestas server-authoritative son condiciones necesarias, pero no suficientes sin QA del backend. Toda prueba usa datos ficticios. El Arquitecto B modifica únicamente `apps/movete-cliente/**`, `apps/movete-admin/**` y `docs/architect-b/**`. Registro de CI, SHA y bloqueos se ampliará con cada commit.
+
+## Avances de la primera sesión del Arquitecto B (22-10-2026)
+- `86f0ece6d1559187ac215a809488692109673c3b`: auditoría B01, adaptador HTTP Cliente por defecto inactivo y pruebas de autenticación, idempotencia, rutas y pago simulado.
+- `41597e503ae4d59d157e388fec11ece36c9ca33c`: reducer B06 de seguimiento privado por revisión monotónica/frescura de GPS y pruebas, páginas Cliente de comercios, tarifa, pagos, cuenta y soporte.
+- `27a64a86ae8e1e79dbd0fb477ca26615dfcafa13`: `apps/movete-admin` creado como web React/TypeScript/Vite autónoma con secciones KYC, zonas, seguridad, auditoría y métricas explícitamente desconectadas; adapter con bloqueo hasta contrato certificado.
+- `1f4fbc6cdf03c057f0ce21633fe6fa266fdba251`: sesión pasajero efímera (no persistencia) y borrador de envíos con categorías, restricciones, peso y dimensiones; prueba de cambio de cuenta/logout.
+- `8e7bdd9f38fd660e9d882214adeb913256053c5f`: declaración TS para formulario de envíos en Expo.
+- [Issue #9 para Arquitecto A](https://github.com/mezas3238-hue/Qore-mobile-/issues/9): Auth, DTO de estado/tarifa, cancelación idempotente, comercios, historia, KYC y RBAC/acciones Admin.
+- CI confirmado sobre `27a64a86`: **ownership boundary SUCCESS** (run 39878038142) y **two-app isolation SUCCESS** (run 39878038052). Son pruebas CI de la rama, no pruebas E2E reales ni certificado de Admin.
+- CI del HEAD `8e7bdd9f`: boundary SUCCESS (run 39878354281); two-app isolation **en ejecución al consultar**, sin conclusión anticipada.
+- Pruebas `apps/movete-admin/npm run check` y `npm run build`: **pendientes de ejecución verificable**. Los workflows actuales están controlados por A; B no puede editarlos para añadir un job Admin. Se solicita a A incorporar un job aislado del panel.
+- Ninguna operación LIVE, GPS real, documentos KYC reales, frontend Auth real, PSP, build de APK o instalación en móviles se ha probado ni habilitado.
+
+### Actualización matriz
+- B01: COMPLETADO (auditoría por lectura).
+- B02: PARCIAL (navegación 9 rutas y pantallas QA sin información inventada).
+- B03: PARCIAL (controller sesión local + gateway en espera de Auth/DTO real).
+- B04/B05: PARCIAL (validadores y contrato de POST; backend no conectado).
+- B06: PARCIAL (reducer monotónico, no polling/Realtime integrado).
+- B07: PARCIAL (formulario con categorías/peso/dimensiones y controles).
+- B08/B09: PARCIAL UI de espera, sin precios, stock, pagos ni historial inventados.
+- B10: CI Expo/aislamiento observado para commit anterior; E2E sin probar.
+- B11: ESTRUCTURA/UI creada, sin admin Auth ni operaciones ni certificado build.
+- B12: Pendiente fase Lovable, no se ejecutó.
+- B13: Abierto; faltan E2E, API staging, QA nativa y aceptación A/Owner.
+
+> La capa B no está terminada. La disponibilidad de servicios reales depende de contratos y seguridad del backend A. Se mantendrá fail-closed.
