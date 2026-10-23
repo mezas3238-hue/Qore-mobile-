@@ -17,7 +17,7 @@ CREATE FUNCTION public.mobility_stage_g40_report_receipt(
 ) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=''
 AS $body$
 DECLARE
- incident_id uuid;
+ created_incident_id uuid;
  receipt_id uuid;
  result jsonb;
  issue_message text;
@@ -28,7 +28,7 @@ BEGIN
  THEN RAISE EXCEPTION 'G40 emergency channel not certified or invalid report'
   USING ERRCODE='G4003'; END IF;
  BEGIN
-  incident_id:=public.mobility_stage_safety_report(
+  created_incident_id:=public.mobility_stage_safety_report(
    _reporter,_request_key,_subject_kind,_subject_id,_category,_severity);
  EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS issue_message=MESSAGE_TEXT;
@@ -39,7 +39,7 @@ BEGIN
  END;
  SELECT e.id INTO receipt_id
  FROM public.mobility_stage_safety_incident_events e
- WHERE e.request_key=_request_key AND e.incident_id=incident_id
+ WHERE e.request_key=_request_key AND e.incident_id=created_incident_id
  AND e.actor_id=_reporter AND e.action='report'
  AND e.next_status='open' AND e.incident_revision=1;
  IF receipt_id IS NULL THEN
@@ -52,7 +52,7 @@ BEGIN
   'receiptStatus','RECEIVED_IN_QA_DATABASE_ONLY'
  ) INTO result
  FROM public.mobility_stage_safety_incidents i
- WHERE i.id=incident_id AND i.reporter_id=_reporter;
+ WHERE i.id=created_incident_id AND i.reporter_id=_reporter;
  IF result IS NULL THEN
   RAISE EXCEPTION 'G40 incident ownership evidence missing'
    USING ERRCODE='G4003'; END IF;
