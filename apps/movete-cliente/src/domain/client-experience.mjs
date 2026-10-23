@@ -18,6 +18,7 @@ import {createG44BuyerCatalogAdapter} from './g44-buyer-contract.mjs';
 import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
 import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
 import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
+import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -29,12 +30,12 @@ import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
- g44BuyerHttpOptions=null,chatGateway=null,now=()=>Date.now()}={}){
+ g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
- let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
@@ -51,6 +52,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(branchDirectory)branchDirectory.clear();
   if(g44Http)g44Http.cancelPending();
   if(chatFlow)chatFlow.clear();
+  if(chatInbox)chatInbox.clear();
   chatHintStore.clear();
   quote.clear();
   history.clear();
@@ -65,6 +67,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  // Chat Cliente ↔ Driver/MOTO delivery, sujeto a asignación certificada por A.
  // No hay transporte habilitado hasta que A implemente Auth + conversaciones.
  chatFlow=createPassengerChatFlow({gateway:chatGateway,
+  getActor:async()=>actorSession(),now});
+ chatInbox=createPassengerChatInbox({gateway:chatInboxGateway,
   getActor:async()=>actorSession(),now});
  const cancelGateway=cancelGatewayOptions?createRideCancellationGateway({
   ...cancelGatewayOptions,now,
@@ -309,7 +313,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
     incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
     commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
-    chat:chatFlow.snapshot(),chatHints:Object.freeze([])});
+    chat:chatFlow.snapshot(),chatInbox:chatInbox.snapshot(),
+    chatHints:Object.freeze([])});
   }
   return Object.freeze({
    authenticated:true,
@@ -324,7 +329,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
    commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
-   chat:chatFlow.snapshot(),
+   chat:chatFlow.snapshot(),chatInbox:chatInbox.snapshot(),
    chatHints:chatFlow.isConfigured()?chatHintStore.snapshot(user.subject):Object.freeze([])
   });
  }
@@ -348,6 +353,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   openChat:async args=>{const p=chatFlow.open(args);notify();const r=await p;notify();return r;},
   sendChat:async args=>{const p=chatFlow.send(args);notify();const r=await p;notify();return r;},
   retryChat:async()=>{const p=chatFlow.retryPending();notify();const r=await p;notify();return r;},
+  loadChatInbox:async args=>{
+   const p=chatInbox.load(args);notify();
+   const r=await p;notify();return r;
+  },
+  clearChatInbox:()=>{chatInbox.clear();notify();},
   // El hint Push no contiene texto del remitente ni concede acceso al hilo.
   acceptChatPushHint:dto=>{
    const user=actor();

@@ -37,6 +37,7 @@ export default function ClientHome(){
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Mis actividades</Text>
    <Action secondary label="Seguimiento" onPress={()=>router.push('/seguimiento')}/>
+   <Action secondary label="Mis conversaciones" onPress={()=>router.push('/conversaciones')}/>
    <Action secondary label="Mensajes del servicio" onPress={()=>router.push('/mensajes')}/>
    <Action secondary label="Historial" onPress={()=>router.push('/historial')}/>
    <Action secondary label="Pagos y recibos" onPress={()=>router.push('/pagos')}/>

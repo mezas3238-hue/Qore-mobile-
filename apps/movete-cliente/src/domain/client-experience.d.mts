@@ -34,6 +34,15 @@ export type ClientSnapshot={
   hasOlder:boolean;pendingSend:boolean;error:string|null;
   phoneNumbersRequired:false;deliveredWithoutAck:false;attachmentsEnabled:false;
   window:{maxMessages:number;rowsRead:number;evictedCount:number;hasEvictedNewer:boolean}};
+ chatInbox:{readReady:boolean;loading:boolean;pageNumber:number;hasNext:boolean;
+  error:string|null;phoneNumbersExposed:false;messageBodiesExposed:false;
+  globalTotalKnown:false;
+  items:readonly {conversationId:string;serviceId:string;
+   serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';state:'ACTIVE';
+   assignmentVerified:true;counterpartRole:'driver';revision:number;
+   unreadCount:number;updatedAt:number;canSend:true}[];
+  window:{maxConversations:number;rowsRead:number;
+   evictedCount:number;hasEvictedNewer:boolean}};
  chatHints:readonly {eventId:string;serviceId:string;
   serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';revision:number;
   title:string;body:string;badgeText:string;expiresAt:number;
@@ -80,6 +89,8 @@ export type ClientExperience={
  openChat(args:{serviceId:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';older?:boolean}):Promise<ClientResult>;
  sendChat(args:{body:string;requestKey:string}):Promise<ClientResult>;
  retryChat():Promise<ClientResult>;
+ loadChatInbox(args?:{next?:boolean}):Promise<ClientResult>;
+ clearChatInbox():void;
  acceptChatPushHint(dto:unknown):boolean;
  setCommerceQuantity(itemId:string,quantity:number):ClientResult;
  selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
@@ -116,6 +127,12 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ chatInboxGateway?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  isConfigured?:()=>boolean;cancelInbox?:()=>void;
+  readInbox?:(args:{cursor:string|null;subject:string;sessionRevision:number})=>
+   Promise<{ok:boolean;code?:string;data?:unknown}>;
+ }|null;
  chatGateway?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   isConfigured?:()=>boolean;cancelPending?:()=>void;

@@ -11,6 +11,7 @@ export default function ClientLayout(){
    <Stack.Screen name="envios" options={{title:'Pedir envío'}}/>
    <Stack.Screen name="seguimiento" options={{title:'Seguimiento'}}/>
    <Stack.Screen name="mensajes" options={{title:'Mensajes con conductor'}}/>
+   <Stack.Screen name="conversaciones" options={{title:'Mis conversaciones'}}/>
    <Stack.Screen name="historial" options={{title:'Mis viajes y envíos'}}/>
    <Stack.Screen name="comercios" options={{title:'Comercios'}}/>
    <Stack.Screen name="cotizacion" options={{title:'Cotizaciones'}}/>

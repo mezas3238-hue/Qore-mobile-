@@ -1063,3 +1063,50 @@ test('avisos en nueva sesión JWT no reaniman lista privada previa',async()=>{
  await api.refreshSession();
  assert.equal(api.snapshot().chatHints.length,0);
 });
+
+test('bandeja de conversaciones Cliente OFF por defecto no intenta API',async()=>{
+ const {api}=fixture();await api.refreshSession();
+ assert.equal(api.snapshot().chatInbox.readReady,false);
+ assert.equal((await api.loadChatInbox()).code,'CHAT_INBOX_CONTRACT_NOT_CERTIFIED');
+ assert.equal(api.snapshot().chatInbox.items.length,0);
+});
+test('inbox autorizada solo contiene conversaciones activas, sin datos de Driver',async()=>{
+ const conv='123e4567-e89b-42d3-a456-426614174087';
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  chatInboxGateway:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,isConfigured:()=>true,
+   readInbox:async({subject,sessionRevision})=>({
+    ok:true,data:{ownerId:subject,generatedAt:now-1000,expiresAt:now+60000,
+     revision:4,items:[{conversationId:conv,serviceId:chatService,
+      serviceKind:'MERCHANT_ORDER',state:'ACTIVE',assignmentVerified:true,
+      counterpartRole:'driver',revision:4,unreadCount:2,updatedAt:now-1000,
+      canSend:true}],nextCursor:null,productionEnabled:false}
+   })}
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadChatInbox()).ok,true);
+ assert.equal(api.snapshot().chatInbox.items.length,1);
+ assert.equal(api.snapshot().chatInbox.items[0].unreadCount,2);
+ assert.equal(Object.hasOwn(api.snapshot().chatInbox.items[0],'driverPhone'),false);
+ assert.equal(api.snapshot().chatInbox.globalTotalKnown,false);
+ await api.signOut();
+ assert.equal(api.snapshot().chatInbox.items.length,0);
+});
+test('inbox privada deja de verse al rotar JWT aun con el mismo titular',async()=>{
+ let session=fakeSession();
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>session,signOut:async()=>{}},
+  chatInboxGateway:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,isConfigured:()=>true,
+   readInbox:async({subject})=>({ok:true,data:{ownerId:subject,
+    generatedAt:now-1000,expiresAt:now+60000,revision:5,
+    items:[],nextCursor:null,productionEnabled:false}})}
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadChatInbox()).ok,true);
+ assert.equal(api.snapshot().chatInbox.pageNumber,1);
+ session={...session,token:'jwt-second-private-session-abcdef'};
+ await api.refreshSession();
+ assert.equal(api.snapshot().chatInbox.pageNumber,0);
+});
