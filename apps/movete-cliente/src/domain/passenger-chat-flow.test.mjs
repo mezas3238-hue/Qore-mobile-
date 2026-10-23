@@ -1,0 +1,162 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
+const now=1800000000000;
+const id=n=>'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0');
+const serviceId=id(1), owner=id(2),conversationId=id(3),messageId=id(4),key=id(5);
+const actor=()=>({subject:owner,role:'passenger',sessionRevision:3});
+const row=n=>({messageId:id(20+n),senderRole:n%2?'passenger':'driver',
+ body:n%2?'Estoy en la entrada':'Estoy llegando',createdAt:now-1000,
+ revision:7});
+const page=(kind='RIDE',cursor=null)=>({
+ conversationId,serviceId,serviceKind:kind,ownerId:owner,
+ counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',revision:7,
+ generatedAt:now-2000,expiresAt:now+60000,canSend:true,
+ productionEnabled:false,messages:[row(1)],nextCursor:cursor
+});
+const ack=()=>({conversationId,serviceId,requestKey:key,messageId,body:'Estoy aquí',
+ senderRole:'passenger',createdAt:now-100,revision:8,serverStored:true});
+const flags=(gateway={})=>({
+ enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+ isConfigured:()=>true,readMessages:async()=>({ok:true,data:page()}),
+ sendMessage:async()=>({ok:true,data:ack()}),...gateway
+});
+const make=(gw=flags(),getActor=async()=>actor())=>
+ createPassengerChatFlow({gateway:gw,getActor,now:()=>now});
+test('chat OFF sin contrato no llama a red ni muestra conversación inventada',async()=>{
+ let calls=0;const flow=make(flags({
+  stagingRuntimeVerified:false,
+  readMessages:async()=>{calls++;return {ok:true,data:page()};}
+ }));
+ assert.equal(flow.snapshot().contractReady,false);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,'CHAT_CONTRACT_NOT_CERTIFIED');
+ assert.equal(calls,0);
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('RIDE, DELIVERY y MERCHANT_ORDER solo con asignación certificada',async()=>{
+ for(const kind of ['RIDE','DELIVERY','MERCHANT_ORDER']){
+  const flow=make(flags({readMessages:async()=>({ok:true,data:page(kind)})}));
+  assert.equal((await flow.open({serviceId,serviceKind:kind})).ok,true);
+  assert.equal(flow.snapshot().serviceKind,kind);
+  assert.equal(flow.snapshot().messages.length,1);
+  assert.equal(flow.snapshot().phoneNumbersRequired,false);
+ }
+});
+test('chat rechaza driver no asignado, permiso revocado, cuenta ajena y estado cerrado',async()=>{
+ const invalid=[
+  {...page(),ownerId:id(77)},
+  {...page(),assignmentVerified:false},
+  {...page(),counterpartRole:'admin'},
+  {...page(),state:'CLOSED'},
+  {...page(),expiresAt:now-1},
+  {...page(),canSend:false},
+  {...page(),productionEnabled:true},
+  {...page(),driverPhone:'0981111111'},
+  {...page(),messages:[{...row(1),customerEmail:'private'}]}
+ ];
+ for(const dto of invalid){
+  const flow=make(flags({readMessages:async()=>({ok:true,data:dto})}));
+  assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,'INVALID_CHAT_PAGE');
+  assert.equal(flow.snapshot().messages.length,0);
+ }
+});
+test('mensajes únicamente se acreditan tras ACK persistido por servidor',async()=>{
+ const flow=make();
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).ok,true);
+ assert.equal(flow.snapshot().messages[0].messageId,messageId);
+ assert.equal(flow.snapshot().pendingSend,false);
+ assert.equal(flow.snapshot().deliveredWithoutAck,false);
+});
+test('fallo ambiguo conserva requestKey y no duplica mensajes en reintento',async()=>{
+ const keys=[];let n=0;
+ const flow=make(flags({sendMessage:async args=>{
+  keys.push(args.requestKey);
+  return ++n===1?{ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'}:{ok:true,data:ack()};
+ }}));
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,'CHAT_NETWORK_OR_TIMEOUT');
+ assert.equal(flow.snapshot().pendingSend,true);
+ assert.equal(flow.snapshot().messages.length,1);
+ assert.equal((await flow.send({body:'Otra cosa',requestKey:id(88)})).code,
+  'PENDING_MESSAGE_RECONCILIATION');
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key,retry:true})).ok,true);
+ assert.deepEqual(keys,[key,key]);
+ assert.equal(flow.snapshot().messages.length,2);
+});
+test('sin asignación o con mensaje inválido jamás llama al transporte',async()=>{
+ let n=0;
+ const flow=make(flags({sendMessage:async()=>{
+  n++;return {ok:true,data:ack()};
+ }}));
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,'CHAT_NOT_AUTHORIZED');
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ for(const body of ['','<script>','https://example.com','Hola\nconsulta',' '.repeat(4),'a'.repeat(501)]){
+  assert.equal((await flow.send({body,requestKey:key})).code,'INVALID_MESSAGE');
+ }
+ assert.equal(n,0);
+});
+test('rotación de sesión durante lectura jamás publica mensajes anteriores',async()=>{
+ let identity=actor(),resolve;const deferred=new Promise(r=>resolve=r);
+ const flow=make(flags({readMessages:async()=>deferred}),async()=>identity);
+ const task=flow.open({serviceId,serviceKind:'RIDE'});
+ await Promise.resolve();await Promise.resolve();
+ identity={...actor(),sessionRevision:4};
+ resolve({ok:true,data:page()});
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('logout con fetch suspendido limpia chat y evita revivir otra sesión',async()=>{
+ let resolve;const pending=new Promise(r=>resolve=r);
+ let hit=0;
+ const flow=make(flags({readMessages:async()=>{
+  return ++hit===1?pending:{ok:true,data:page()};
+ }}));
+ const old=flow.open({serviceId,serviceKind:'RIDE'});
+ await Promise.resolve();await Promise.resolve();
+ flow.clear();
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ resolve({ok:true,data:page()});
+ assert.equal((await old).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(flow.snapshot().messages.length,1);
+});
+test('más de 150 páginas de mensajes sin cuota global y con cursor opaco',async()=>{
+ const cursor=n=>'C'+String(n).padStart(43,'0');
+ let calls=0;
+ const flow=make(flags({readMessages:async ({cursor:current})=>{
+  const n=current?Number(current.slice(1))+1:1;
+  calls++;
+  return {ok:true,data:{...page('DELIVERY',n<160?cursor(n):null),
+   messages:[row(n)]}};
+ }}));
+ assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY'})).ok,true);
+ for(let n=1;n<160;n++)
+  assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY',older:true})).ok,true);
+ assert.equal(calls,160);
+ assert.equal(flow.snapshot().messages.length,160);
+ assert.equal(flow.snapshot().hasOlder,false);
+});
+test('cursor circular o mensajes de la misma página no exponen historial no confiable',async()=>{
+ const cursor='c'.repeat(44);
+ let n=0;
+ const flow=make(flags({readMessages:async()=>({
+  ok:true,data:page('RIDE',++n===1?cursor:cursor)
+ })}));
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).code,
+  'DUPLICATE_CHAT_MESSAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('ACK cruzado de conversación, clave, remitente o estado nunca se acepta',async()=>{
+ const mutations=[
+  {...ack(),conversationId:id(99)}, {...ack(),requestKey:id(99)},
+  {...ack(),senderRole:'driver'}, {...ack(),serverStored:false},
+  {...ack(),phoneNumber:'0981000000'}
+ ];
+ for(const data of mutations){
+  const flow=make(flags({sendMessage:async()=>({ok:true,data})}));
+  await flow.open({serviceId,serviceKind:'RIDE'});
+  assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,'INVALID_CHAT_ACK');
+  assert.equal(flow.snapshot().messages.length,0);
+ }
+});
