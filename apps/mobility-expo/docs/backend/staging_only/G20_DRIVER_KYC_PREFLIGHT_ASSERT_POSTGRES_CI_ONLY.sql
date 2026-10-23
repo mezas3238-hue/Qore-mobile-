@@ -18,8 +18,17 @@ END $guard$;
 
 -- Passenger for new AUTO/cargo synthetic requests; no PII or real accounts.
 INSERT INTO auth.users(id) VALUES ('00000000-0000-4000-8000-000000000241');
-INSERT INTO public.user_roles(user_id,role)
- VALUES('00000000-0000-4000-8000-000000000241','passenger');
+-- G1 Auth baseline already provisions default passenger on INSERT; do not
+-- create a duplicate role. This assertion catches fixture policy drift.
+DO $role$
+BEGIN
+ IF (SELECT count(*) FROM public.user_roles
+   WHERE user_id='00000000-0000-4000-8000-000000000241')<>1
+ OR NOT EXISTS(SELECT 1 FROM public.user_roles
+   WHERE user_id='00000000-0000-4000-8000-000000000241'
+     AND role='passenger'::public.app_role)
+ THEN RAISE EXCEPTION 'G20 synthetic passenger role incorrect'; END IF;
+END $role$;
 
 SET ROLE service_role;
 DO $checks$
