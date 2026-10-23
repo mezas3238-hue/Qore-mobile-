@@ -24,6 +24,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G34_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G35_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G36_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G37_*'
       - 'apps/mobility-expo/server/g36-*'
       - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
@@ -239,5 +240,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G36_CROSS_SERVICE_DRIVER_SLOT_POSTGRES_CI_ONLY.sql
       - name: G36 reject direct-write and cross-service double-booking, validate terminal release and replay
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G36_CROSS_SERVICE_DRIVER_SLOT_ASSERT_POSTGRES_CI_ONLY.sql
-      - name: G36.2 two true PostgreSQL connections race AUTO and delivery acceptance for same Driver
+
+      - name: G37 install PostgreSQL-only state machine and strip direct assignment/event DML
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G37_TRIP_DELIVERY_DML_STATE_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G37 adversarial service_role direct writes, legal RPC and immutable lifecycle
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G37_TRIP_DELIVERY_DML_STATE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G37 reverify G36 two PostgreSQL sessions and both private-offer race orders after DML revoke
         run: python3 apps/mobility-expo/server/g36-cross-service-driver-race-ci.py
