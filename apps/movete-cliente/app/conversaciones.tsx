@@ -41,9 +41,10 @@ export default function PassengerConversationInbox(){
   </>}
   renderItem={({item})=><Panel>
    <Text accessibilityRole="header" style={styles.heading}>{LABELS[item.serviceKind]}</Text>
-   <Text style={styles.text}>Servicio con asignación verificada</Text>
+   <Text style={styles.text}>{inbox.stale?'Servicio consultado previamente; pendiente de nueva verificación':'Servicio con asignación verificada'}</Text>
    <Text style={styles.small}>Mensajes pendientes de leer: {item.unreadCount>=99?'99+':item.unreadCount}</Text>
-   <Action label="Abrir chat autorizado" secondary
+   <Action label={inbox.stale?'Actualizar antes de abrir':'Abrir chat autorizado'}
+    secondary disabled={inbox.stale||inbox.loading}
     onPress={()=>router.push({pathname:'/mensajes',params:{
      serviceId:item.serviceId,serviceKind:item.serviceKind}})}/>
   </Panel>}
@@ -55,7 +56,7 @@ export default function PassengerConversationInbox(){
    {inbox.window.hasEvictedNewer&&
     <Text style={styles.small}>Se liberaron {inbox.window.evictedCount} conversaciones ya recorridas para cuidar la memoria. El historial completo permanece en el servidor; actualizá para volver a las recientes.</Text>}
    {inbox.error&&<Text accessibilityRole="alert" style={styles.text}>
-    No se pudo verificar la bandeja. Reiniciá la consulta para recuperar el permiso.
+    {inbox.stale?'Sin conexión: se muestra únicamente la última lista válida, sin permiso para abrir conversaciones. Actualizá cuando vuelva la red.':'No se pudo verificar la bandeja. Reiniciá la consulta para recuperar el permiso.'}
    </Text>}
    {canLoad&&inbox.hasNext&&<Action label={inbox.loading?'Consultando…':'Cargar más conversaciones'}
     disabled={inbox.loading} busy={inbox.loading}

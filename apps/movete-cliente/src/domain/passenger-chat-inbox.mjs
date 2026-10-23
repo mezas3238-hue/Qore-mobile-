@@ -14,6 +14,7 @@ const validId=x=>typeof x==='string'&&UUID.test(x);
 const exact=(x,keys)=>x!==null&&typeof x==='object'&&!Array.isArray(x)
  &&Object.keys(x).length===keys.length&&keys.every(k=>Object.hasOwn(x,k));
 const natural=n=>Number.isSafeInteger(n)&&n>=1;
+const TRANSIENT=new Set(['NETWORK_OR_TIMEOUT','SERVICE_UNAVAILABLE','RATE_LIMITED']);
 const actorOk=x=>x!==null&&typeof x==='object'&&x.role==='passenger'
  &&validId(x.subject)&&Number.isSafeInteger(x.sessionRevision)&&x.sessionRevision>=0;
 const sameActor=(a,b)=>actorOk(b)&&a.subject===b.subject
@@ -27,9 +28,10 @@ function strictlyOlder(row,previous){
   row.updatedAt===previous.updatedAt
    &&row.conversationId<previous.conversationId;
 }
-const empty=()=>({ownerId:null,expiresAt:0,revision:null,nextCursor:null,
- items:[],seenIds:new Set(),seenCursors:new Set(),pagesRead:0,rowsRead:0,
- evictedCount:0,error:null,lastSort:null});
+const empty=()=>({ownerId:null,sessionRevision:null,expiresAt:0,
+ revision:null,nextCursor:null,items:[],seenIds:new Set(),
+ seenCursors:new Set(),pagesRead:0,rowsRead:0,evictedCount:0,
+ error:null,stale:false,lastSort:null});
 function validatePage(dto,{ownerId,now,revision=null}){
  if(!exact(dto,PAGE)||!validId(ownerId)||dto.ownerId!==ownerId
   ||dto.productionEnabled!==false||!natural(dto.revision)
@@ -81,13 +83,14 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
   try{gateway?.cancelInbox?.();}catch{/* purga privada es incondicional */}
  }
  function snapshot(){
-  if(!ready()&&(state.ownerId||loading))clear();
+  if((!ready()||state.ownerId!==null&&state.expiresAt<=now())
+    &&(state.ownerId||loading))clear();
   const valid=ready()&&state.ownerId!==null&&state.expiresAt>now();
   return Object.freeze({
-   readReady:ready(),loading,
+   readReady:ready(),loading,stale:Boolean(valid&&state.stale),
    items:Object.freeze(valid&&!loading?[...state.items]:[]),
    pageNumber:valid&&!loading?state.pagesRead:0,
-   hasNext:Boolean(valid&&!loading&&state.nextCursor),
+   hasNext:Boolean(valid&&!loading&&!state.stale&&state.nextCursor),
    error:state.error,phoneNumbersExposed:false,messageBodiesExposed:false,
    globalTotalKnown:false,
    window:Object.freeze({maxConversations:max,rowsRead:state.rowsRead,
@@ -99,7 +102,7 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
   if(loading)return fail('CHAT_INBOX_READ_IN_FLIGHT');
   const old=state,nowValue=now();
   if(next&&(!old.ownerId||old.expiresAt<=nowValue
-   ||old.nextCursor===null))return fail('CHAT_INBOX_NEXT_UNAVAILABLE');
+   ||old.nextCursor===null||old.stale))return fail('CHAT_INBOX_NEXT_UNAVAILABLE');
   const cursor=next?old.nextCursor:null;
   if(next&&old.seenCursors.has(cursor)){clear();return fail('CURSOR_REPEATED');}
   const started=++epoch;loading=true;state.error=null;
@@ -109,8 +112,10 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
    if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(!ready()){clear();return fail('CHAT_INBOX_CONTRACT_NOT_CERTIFIED');}
    if(!actorOk(before)){clear();return fail('AUTH_REQUIRED');}
-   if(next&&old.ownerId!==before.subject){clear();return fail('STALE_SESSION_RESPONSE');}
-   if(!next)state=empty();
+   if(old.ownerId!==null&&(old.ownerId!==before.subject
+    ||old.sessionRevision!==before.sessionRevision)){
+    clear();return fail('STALE_SESSION_RESPONSE');
+   }
    let answer;
    try{answer=await gateway.readInbox({
     cursor,subject:before.subject,sessionRevision:before.sessionRevision
@@ -123,12 +128,21 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
    if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
    if(answer?.ok!==true){
     const code=typeof answer?.code==='string'?answer.code:'CHAT_INBOX_UNAVAILABLE';
+    // Solo una avería transitoria puede mantener una página existente,
+    // y SOLO mientras actor, JWT/gate y TTL sigan siendo válidos.
+    if(TRANSIENT.has(code)&&old.ownerId===before.subject
+     &&old.sessionRevision===before.sessionRevision
+     &&old.expiresAt>now()){
+     state.error=code;state.stale=true;return fail(code);
+    }
     clear();state.error=code;return fail(code);
    }
    const page=validatePage(answer.data,{ownerId:before.subject,now:now(),
     revision:next?old.revision:null});
    if(!page){clear();state.error='INVALID_CHAT_INBOX_DTO';
     return fail('INVALID_CHAT_INBOX_DTO');}
+   // Refresco confirmado: sustituye atómicamente el snapshot anterior.
+   if(!next)state=empty();
    if(page.nextCursor!==null&&(page.nextCursor===cursor
     ||state.seenCursors.has(page.nextCursor))){
     clear();state.error='CURSOR_REPEATED';return fail('CURSOR_REPEATED');
@@ -161,8 +175,10 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
     state.evictedCount+=discard.length;
    }
    if(cursor!==null)state.seenCursors.add(cursor);
-   state.ownerId=page.ownerId;state.expiresAt=page.expiresAt;
+   state.ownerId=page.ownerId;state.sessionRevision=before.sessionRevision;
+   state.expiresAt=page.expiresAt;
    state.revision=page.revision;state.nextCursor=page.nextCursor;
+   state.stale=false;state.error=null;
    if(page.items.length>0)state.lastSort=page.items[page.items.length-1];
    state.pagesRead++;
    return Object.freeze({ok:true,hasNext:page.nextCursor!==null,

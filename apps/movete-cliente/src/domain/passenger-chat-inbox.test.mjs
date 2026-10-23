@@ -207,3 +207,62 @@ test('mismo updatedAt acepta desempate estable por conversationId descendente',a
  assert.equal((await inbox.load({next:true})).ok,true);
  assert.equal(inbox.snapshot().items.length,2);
 });
+
+test('timeout de refresco conserva únicamente lista previamente validada y bloquea cursor',async()=>{
+ let failNext=false;
+ const inbox=make(flags({readInbox:async()=>failNext
+  ?{ok:false,code:'NETWORK_OR_TIMEOUT'}:{ok:true,data:page()}}));
+ assert.equal((await inbox.load()).ok,true);
+ failNext=true;
+ assert.equal((await inbox.load()).code,'NETWORK_OR_TIMEOUT');
+ const v=inbox.snapshot();
+ assert.equal(v.items.length,1);
+ assert.equal(v.stale,true);
+ assert.equal(v.hasNext,false);
+ assert.equal(v.error,'NETWORK_OR_TIMEOUT');
+});
+test('recuperación de red sustituye la página vieja y restablece permisos UI',async()=>{
+ let phase=0;
+ const inbox=make(flags({readInbox:async()=>++phase===2
+  ?{ok:false,code:'SERVICE_UNAVAILABLE'}
+  :{ok:true,data:phase===1?page([row(1)]):page([row(2)])}}));
+ await inbox.load();
+ assert.equal((await inbox.load()).code,'SERVICE_UNAVAILABLE');
+ assert.equal(inbox.snapshot().stale,true);
+ assert.equal((await inbox.load()).ok,true);
+ assert.deepEqual(inbox.snapshot().items.map(x=>x.conversationId),[id(102)]);
+ assert.equal(inbox.snapshot().stale,false);
+ assert.equal(inbox.snapshot().error,null);
+});
+test('403, 401, invalid DTO no mantienen conversación previamente autorizada',async()=>{
+ for(const code of ['FORBIDDEN','AUTH_REQUIRED','INVALID_CURSOR']){
+  let n=0;
+  const inbox=make(flags({readInbox:async()=>++n===1
+   ?{ok:true,data:page()}:{ok:false,code}}));
+  await inbox.load();
+  assert.equal((await inbox.load()).code,code);
+  assert.equal(inbox.snapshot().items.length,0);
+  assert.equal(inbox.snapshot().stale,false);
+ }
+});
+test('JWT rotado mismo pasajero revoca datos incluso si el transporte devuelve timeout',async()=>{
+ let identity=actor(),calls=0;
+ const inbox=make(flags({readInbox:async()=>++calls===1
+  ?{ok:true,data:page()}:{ok:false,code:'NETWORK_OR_TIMEOUT'}}),
+  async()=>identity);
+ await inbox.load();
+ identity={...actor(),sessionRevision:4};
+ assert.equal((await inbox.load()).code,'STALE_SESSION_RESPONSE');
+ assert.equal(inbox.snapshot().items.length,0);
+});
+test('página validada caducada jamás permanece visible durante desconexión',async()=>{
+ let clock=now,calls=0;
+ const inbox=make(flags({readInbox:async()=>++calls===1
+  ?{ok:true,data:page()}:{ok:false,code:'NETWORK_OR_TIMEOUT'}}),
+  async()=>actor(),()=>clock);
+ await inbox.load();
+ clock+=60001;
+ assert.equal(inbox.snapshot().items.length,0);
+ assert.equal((await inbox.load()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(inbox.snapshot().items.length,0);
+});

@@ -34,7 +34,7 @@ export type ClientSnapshot={
   hasOlder:boolean;pendingSend:boolean;error:string|null;
   phoneNumbersRequired:false;deliveredWithoutAck:false;attachmentsEnabled:false;
   window:{maxMessages:number;rowsRead:number;evictedCount:number;hasEvictedNewer:boolean}};
- chatInbox:{readReady:boolean;loading:boolean;pageNumber:number;hasNext:boolean;
+ chatInbox:{readReady:boolean;loading:boolean;stale:boolean;pageNumber:number;hasNext:boolean;
   error:string|null;phoneNumbersExposed:false;messageBodiesExposed:false;
   globalTotalKnown:false;
   items:readonly {conversationId:string;serviceId:string;
