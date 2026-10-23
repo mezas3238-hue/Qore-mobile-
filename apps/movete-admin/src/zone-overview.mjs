@@ -43,17 +43,20 @@ export function projectZoneOverview(payload,{role,now=Date.now()}={}){
  return Object.freeze({revision:payload.revision,expiresAt:payload.expiresAt,items:Object.freeze(items)});
 }
 export function createZoneOverviewStore({now=()=>Date.now()}={}){
- let data=null;
- function clear(){data=null;}
+ let data=null,raw=null;
+ function clear(){data=null;raw=null;}
  function replace(raw,role){
   const candidate=projectZoneOverview(raw,{role,now:now()});
   if(!candidate){clear();return false;}
   if(data&&candidate.revision<data.revision){clear();return false;}
-  data=candidate;return true;
+  data=candidate;raw=payload;return true;
  }
  function current(role){
   if(role!=='admin'||!data||data.expiresAt<=now()){clear();return null;}
-  return data;
+  // Recalcular frescura de la capacidad incluso sin nuevo evento de red.
+  const projected=projectZoneOverview(raw,{role,now:now()});
+  if(!projected){clear();return null;}
+  data=projected;return data;
  }
  return Object.freeze({replace,current,clear});
 }
