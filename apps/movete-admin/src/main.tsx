@@ -149,6 +149,31 @@ function OwnerPanel({finance,authorized}:{finance:OwnerFinance|null;authorized:b
    <div className="empty-chip">SOLO LECTURA · NO LIVE</div></Panel>
  </div>;
 }
+function ZoneReadOnly({zones,allowed}:{
+ zones:AdminSnapshot['zones'];allowed:boolean;
+}){
+ return <Panel className="detail">
+  <div className="section-head"><div>
+   <h2>Supervisión geográfica por servicio</h2>
+   <p>La cobertura habilitada nunca garantiza un automóvil o repartidor disponible.</p>
+  </div><span className="muted-tag">SOLO LECTURA</span></div>
+  {!allowed?<p>No hay sesión administrativa autorizada. El propietario no hereda la consulta operativa de zonas.</p>
+   :!zones?<div className="empty"><h3>Sin datos de zonas certificados</h3>
+    <p>Esperando el contrato de lectura y la validación de la cobertura en backend.</p></div>
+   :zones.items.length===0?<div className="empty"><h3>Sin resultados en esta consulta</h3>
+    <p>No se infiere que Paraguay carezca de zonas operativas.</p></div>
+   :<div className="zone-rows">{zones.items.map(item=>
+    <div className="zone-row" key={item.zoneId}>
+     <div><strong>{item.municipality}</strong>
+      <small>{item.serviceKind.replaceAll('_',' ')} · Cobertura: {item.coverageStatus}</small>
+      <small>Permiso operativo: {item.eligibleByPolicy?'Reportado habilitado':'No habilitado'}</small></div>
+     <div className="zone-count">{item.availabilityFresh?String(item.onDutyVehicles):'—'}
+      <small>Vehículos en línea reportados</small></div>
+    </div>)}</div>}
+  <p className="training-disclaimer">Estos datos son solo una vista del servidor. No estiman aceptación, tiempos de espera ni capacidad de despacho; no habilitan rutas, motos de pasajeros ni zonas nuevas.</p>
+ </Panel>;
+}
+
 function App(){
  const {view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
@@ -190,7 +215,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>

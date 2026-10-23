@@ -11,6 +11,11 @@ export type AdminSnapshot={
   totals:{completedRides:number;completedDeliveries:number;completedMerchantOrders:number;
    grossCollectedGs:number;driverPayoutGs:number;platformCommissionGs:number;refundsGs:number;
    processingFeesGs:number;netPlatformGs:number}}|null;
+ zones:{revision:number;expiresAt:number;items:readonly {
+   zoneId:string;municipality:string;serviceKind:'AUTO_RIDE'|'AUTO_DELIVERY'|'MOTO_DELIVERY';
+   coverageStatus:string;eligibleByPolicy:boolean;onDutyVehicles:number|null;
+   availabilityFresh:boolean;availabilityConfirmed:false;
+ }[]}|null;
  actionsEnabled:false;
 };
 export type AdminExperience={
@@ -20,6 +25,7 @@ export type AdminExperience={
  clear:()=>void;
  readKyc:(data:unknown)=>boolean;
  readFinance:(data:unknown)=>boolean;
+ readZones:(data:unknown)=>boolean;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };

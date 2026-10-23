@@ -185,3 +185,31 @@ test('cambio de rol owner a admin y retorno no recupera finanzas previas',async(
  await app.refreshSession();
  assert.equal(app.snapshot().finance,null);
 });
+
+const zone={scope:'admin.zones.read',revision:3,generatedAt:now-2000,expiresAt:now+30000,
+ items:[{zoneId:vehicle,municipality:'Luque',serviceKind:'AUTO_RIDE',
+  coverageStatus:'ACTIVE',eligibleByPolicy:true,onDutyVehicles:0,availabilityObservedAt:now-1000}]};
+test('Admin ve cobertura sin confundirla con conductores disponibles',async()=>{
+ const {app}=fixture();
+ await app.refreshSession();
+ assert.equal(app.readZones(zone),true);
+ assert.equal(app.snapshot().zones.items[0].coverageStatus,'ACTIVE');
+ assert.equal(app.snapshot().zones.items[0].onDutyVehicles,0);
+ assert.equal(app.snapshot().zones.items[0].availabilityConfirmed,false);
+});
+test('Owner no hereda lista operativa de zonas de Admin',async()=>{
+ const {app}=fixture({...auth(owner),role:'owner'});
+ await app.refreshSession();
+ assert.equal(app.readZones(zone),false);
+ assert.equal(app.snapshot().zones,null);
+});
+test('cambio de cuenta y logout retiran zonas privadas',async()=>{
+ const {app,setUser}=fixture();
+ await app.refreshSession();
+ app.readZones(zone);
+ setUser(auth(another));await app.refreshSession();
+ assert.equal(app.snapshot().zones,null);
+ app.readZones(zone);
+ await app.logout();
+ assert.equal(app.snapshot().zones,null);
+});
