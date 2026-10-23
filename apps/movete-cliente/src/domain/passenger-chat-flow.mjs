@@ -35,7 +35,8 @@ const MESSAGE=['messageId','senderRole','body','createdAt','revision'];
 const ACK=['conversationId','serviceId','requestKey','messageId',
  'senderRole','body','createdAt','revision','serverStored'];
 const blank=()=>({header:null,messages:[],nextCursor:null,
- seenCursor:new Set(),seenIds:new Set(),pageNumber:0,error:null,pending:null});
+ seenCursor:new Set(),seenIds:new Set(),pageNumber:0,error:null,pending:null,
+ readCount:0,evictedCount:0});
 function validateMessage(row,now){
  return exact(row,MESSAGE)&&validId(row.messageId)&&ROLES.has(row.senderRole)
   &&cleanMessage(row.body)&&validInt(row.createdAt)&&row.createdAt<=now
@@ -75,16 +76,26 @@ function validAck(row,header,body,key,now){
   },now);
 }
 export function createPassengerChatFlow({gateway=null,getActor=null,
- now=()=>Date.now()}={}){
+ now=()=>Date.now(),maxCachedMessages=500}={}){
  let generation=0,loading=false,sending=false,state=blank();
+ const windowLimit=Number.isSafeInteger(maxCachedMessages)
+  &&maxCachedMessages>=100&&maxCachedMessages<=5000?maxCachedMessages:500;
  const ready=()=>gateway?.enabled===true&&gateway?.contractCertified===true
   &&gateway?.stagingRuntimeVerified===true&&gateway?.isConfigured?.()===true
   &&typeof gateway.readMessages==='function'
   &&typeof gateway.sendMessage==='function'&&typeof getActor==='function';
  const clear=()=>{
   generation++;loading=false;sending=false;state=blank();
-  gateway?.cancelPending?.();
+  try{gateway?.cancelPending?.();}catch{/* logout local nunca se bloquea */}
  };
+ function trimWindow(newestFirst){
+  const excess=state.messages.length-windowLimit;
+  if(excess<=0)return;
+  const discarded=newestFirst?state.messages.splice(-excess)
+   :state.messages.splice(0,excess);
+  for(const item of discarded)state.seenIds.delete(item.messageId);
+  state.evictedCount+=discarded.length;
+ }
  function snapshot(){
   const valid=state.header&&state.header.expiresAt>now();
   return Object.freeze({
@@ -96,7 +107,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    hasOlder:Boolean(valid&&!loading&&state.nextCursor),
    pendingSend:Boolean(valid&&state.pending),
    error:state.error,phoneNumbersRequired:false,
-   deliveredWithoutAck:false,attachmentsEnabled:false
+   deliveredWithoutAck:false,attachmentsEnabled:false,
+   window:Object.freeze({maxMessages:windowLimit,
+    rowsRead:state.readCount,evictedCount:state.evictedCount,
+    hasEvictedNewer:state.evictedCount>0})
   });
  }
  async function open({serviceId,serviceKind,older=false}={}){
@@ -150,11 +164,14 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     state.pageNumber++;
    }else{
     state.messages=[...verified.messages];state.pageNumber=1;
+    state.readCount=0;state.evictedCount=0;
     state.seenIds=new Set(verified.messages.map(m=>m.messageId));
     state.seenCursor=new Set();
     state.pending=null;
    }
    for(const msg of verified.messages)state.seenIds.add(msg.messageId);
+   state.readCount+=verified.messages.length;
+   trimWindow(false);
    if(verified.nextCursor!==null&&(verified.nextCursor===cursor
     ||state.seenCursor.has(verified.nextCursor))){
     clear();return fail('CURSOR_REPEATED');
@@ -208,6 +225,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     revision:ack.revision});
    if(!state.seenIds.has(accepted.messageId)){
     state.messages.unshift(accepted);state.seenIds.add(accepted.messageId);
+    state.readCount++;
+    trimWindow(true);
    }
    state.pending=null;state.error=null;
    return Object.freeze({ok:true,serverStored:true});

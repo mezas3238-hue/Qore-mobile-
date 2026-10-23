@@ -197,3 +197,35 @@ test('un ACK viejo nunca se confunde con un nuevo envío confirmado',async()=>{
  assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,'INVALID_CHAT_ACK');
  assert.equal(flow.snapshot().messages.length,0);
 });
+
+test('el móvil mantiene ventana acotada sin imponer cuota al historial del servidor',async()=>{
+ const cursor=n=>'P'+String(n).padStart(43,'0');
+ const flow=createPassengerChatFlow({now:()=>now,maxCachedMessages:100,
+  getActor:async()=>actor(),
+  gateway:flags({readMessages:async ({cursor:current})=>{
+   const n=current?Number(current.slice(1))+1:1;
+   return {ok:true,data:{...page('DELIVERY',n<620?cursor(n):null),
+    messages:[row(n)]}};
+  }})
+ });
+ assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY'})).ok,true);
+ for(let n=1;n<620;n++)
+  assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY',older:true})).ok,true);
+ const v=flow.snapshot();
+ assert.equal(v.pageNumber,620);
+ assert.equal(v.messages.length,100);
+ assert.equal(v.window.maxMessages,100);
+ assert.equal(v.window.rowsRead,620);
+ assert.equal(v.window.evictedCount,520);
+ assert.equal(v.window.hasEvictedNewer,true);
+ assert.equal(v.hasOlder,false);
+ flow.clear();
+ assert.equal(flow.snapshot().window.rowsRead,0);
+});
+test('una cancelación defectuosa del gateway no impide limpiar chat del móvil',async()=>{
+ const flow=make(flags({cancelPending:()=>{throw Error('fallo de transporte');}}));
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ assert.equal(flow.snapshot().messages.length,1);
+ assert.doesNotThrow(()=>flow.clear());
+ assert.equal(flow.snapshot().messages.length,0);
+});

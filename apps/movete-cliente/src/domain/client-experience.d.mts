@@ -32,7 +32,8 @@ export type ClientSnapshot={
   messages:readonly {messageId:string;senderRole:'passenger'|'driver';
    body:string;createdAt:number;revision:number}[];
   hasOlder:boolean;pendingSend:boolean;error:string|null;
-  phoneNumbersRequired:false;deliveredWithoutAck:false;attachmentsEnabled:false};
+  phoneNumbersRequired:false;deliveredWithoutAck:false;attachmentsEnabled:false;
+  window:{maxMessages:number;rowsRead:number;evictedCount:number;hasEvictedNewer:boolean}};
  branchDirectory:{readReady:boolean;loading:boolean;error:string|null;
   municipality:string|null;serviceKind:string|null;pageNumber:number;
   items:readonly {branchId:string;branchTag:string;merchantKind:string;
