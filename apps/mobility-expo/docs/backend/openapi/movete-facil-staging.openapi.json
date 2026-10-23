@@ -799,6 +799,9 @@
           },
           "503": {
             "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "summary": "G40 Owner-only typed incident receipt, QA NOT deployed",
@@ -847,6 +850,9 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
             "$ref": "#/components/responses/Error"
           }
         },

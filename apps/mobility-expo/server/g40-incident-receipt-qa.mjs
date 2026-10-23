@@ -2,7 +2,7 @@
  * G40 passenger incident receipt & owner status contract.
  * Transport-free QA adapter; NOT a live safety hotline, SOS or 911.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SUBJECT=new Set(['RIDE','DELIVERY','MERCHANT_ORDER']);
 const CATEGORY=new Set(['SAFETY','LOSS','DISPUTE','FRAUD','QUALITY']);
 const SEVERITY=new Set(['LOW','MEDIUM','HIGH']);

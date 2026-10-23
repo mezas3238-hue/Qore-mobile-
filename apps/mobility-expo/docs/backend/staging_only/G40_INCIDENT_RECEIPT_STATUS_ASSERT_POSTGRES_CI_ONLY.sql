@@ -30,7 +30,7 @@ DECLARE
  stranger uuid:='40400000-0000-4400-8400-000000000002';
  request uuid:='40400000-0000-4400-8400-000000000003';
  job uuid;
- a jsonb;b jsonb;own jsonb;cross jsonb;
+ a jsonb;b jsonb;own jsonb;cross_read jsonb;
  denied boolean;events_count integer;
 BEGIN
  job:=public.mobility_stage_auto_demo_request(
@@ -49,9 +49,9 @@ BEGIN
  IF events_count<>1 THEN RAISE EXCEPTION 'G40 duplicate incident event'; END IF;
  own:=public.mobility_stage_g40_owner_incident_status(
   owner,(a->>'incidentId')::uuid);
- cross:=public.mobility_stage_g40_owner_incident_status(
+ cross_read:=public.mobility_stage_g40_owner_incident_status(
   stranger,(a->>'incidentId')::uuid);
- IF own<>a OR cross IS NOT NULL
+ IF own<>a OR cross_read IS NOT NULL
  THEN RAISE EXCEPTION 'G40 status leaked or inconsistent receipt'; END IF;
  denied:=false;
  BEGIN
