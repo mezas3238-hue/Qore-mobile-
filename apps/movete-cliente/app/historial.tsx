@@ -1,8 +1,10 @@
 import React,{useEffect,useRef} from 'react';
+import {router} from 'expo-router';
 import {FlatList,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import {canAutoLoadHistory} from '../src/domain/history-auto-page.mjs';
+import {canShowPassengerServiceChat} from '../src/domain/passenger-chat-navigation.mjs';
 const kind:Record<string,string>={RIDE:'Automóvil',DELIVERY:'Envío',MERCHANT_ORDER:'Pedido comercial'};
 const safeMessage:Record<string,string>={
  INVALID_OR_EXPIRED_CURSOR:'La consulta venció. Reiniciá desde la primera página.',
@@ -69,6 +71,15 @@ export default function ClientHistory(){
     <Text style={styles.text}>Estado: {item.status}</Text>
     <Text style={styles.small}>Registrado: {new Date(item.createdAt).toLocaleString('es-PY')} · Revisión {item.revision}</Text>
     <Text style={styles.small}>El comprobante y el total no se inventan ni se calculan en esta vista.</Text>
+    {canShowPassengerServiceChat({authenticated:view.authenticated,
+     contractReady:view.chat.contractReady,accountSubject:view.account?.subject,
+     historyOwnerId:view.history?.ownerId,serviceId:item.serviceId,
+     kind:item.kind,status:item.status})&&
+     <Action label={item.kind==='RIDE'?'Mensajes con mi conductor':'Mensajes con mi repartidor'}
+      secondary onPress={()=>router.push({pathname:'/mensajes',
+       params:{serviceId:item.serviceId,serviceKind:item.kind}})}/>}
+    {['assigned','in_progress'].includes(item.status)&&!view.chat.contractReady&&
+     <Text style={styles.small}>La conversación estará disponible solo cuando el servidor verifique la asignación del conductor o repartidor.</Text>}
    </Panel>}
   ListFooterComponent={<Panel>
     <Text style={styles.small}>{view.historyConfigured
