@@ -42,7 +42,7 @@ def setup():
     with db() as cx, cx.cursor() as c:
         c.execute("INSERT INTO auth.users(id) SELECT unnest(%s::uuid[])",
                   (USERS,))
-        c.execute("INSERT INTO public.user_roles(user_id,role) SELECT unnest(%s::uuid[]),'passenger'::public.app_role",(BUYERS,))
+        c.execute("INSERT INTO public.user_roles(user_id,role) SELECT unnest(%s::uuid[]),'passenger'::public.app_role ON CONFLICT DO NOTHING",(BUYERS,))
         for buyer,session in zip(BUYERS,SESSIONS):
             c.execute("""INSERT INTO public.mobility_stage_g42_provider_session_grants
             (user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind)
