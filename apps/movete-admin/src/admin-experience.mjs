@@ -38,7 +38,10 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const reading=new Set();
  function snapshot(){
   const current=session.publicSession();
-  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,actionsEnabled:false});}
+  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,
+   pagination:Object.freeze({kyc:pages.get('kyc'),zones:pages.get('zones'),
+    incidents:pages.get('incidents'),audit:pages.get('audit')}),
+   actionsEnabled:false});}
   return Object.freeze({
    authenticated:true,
    account:Object.freeze({subject:current.subject,role:current.role,mfaVerified:true}),
