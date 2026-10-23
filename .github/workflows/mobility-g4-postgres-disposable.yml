@@ -25,6 +25,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G35_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G36_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G37_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G38_*'
       - 'apps/mobility-expo/server/g36-*'
       - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
@@ -247,3 +248,12 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G37_TRIP_DELIVERY_DML_STATE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G37 reverify G36 two PostgreSQL sessions and both private-offer race orders after DML revoke
         run: python3 apps/mobility-expo/server/g36-cross-service-driver-race-ci.py
+
+      - name: G38.0 separate delivered/disputed case from occupied Driver slot
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_0_DISPUTE_CASE_NO_SLOT_POSTGRES_CI_ONLY.sql
+      - name: G38.0 real private cargo lifecycle delivery-dispute-return and idempotency
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_0_DISPUTE_CASE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G38.1 install fail-closed transactional offer proof and eligibility fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_1_TRUSTED_OFFER_ACCEPTANCE_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G38.1 deny untrusted AUTO and DELIVERY private accept without certification
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_1_TRUSTED_OFFER_ACCEPTANCE_ASSERT_POSTGRES_CI_ONLY.sql
