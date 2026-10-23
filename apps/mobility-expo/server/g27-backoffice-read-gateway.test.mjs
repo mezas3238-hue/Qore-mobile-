@@ -156,7 +156,10 @@ test('A05 cursors bind operation, account, session, key and expiry',async()=>{
  assert.equal((await f.req('zones',cursor)).status,400);
  f.state.actor=another;
  assert.equal((await f.req('kyc',cursor)).status,400);
- const nextSession=fixture({verifyAccessToken:async()=>({...session,sessionId:'session-new-0002'})});
+ const nextSession=fixture({
+  verifyAccessToken:async()=>({...session,sessionId:'session-new-0002'}),
+  verifyBackofficeMfa:async()=>({...mfa,sessionId:'session-new-0002'})
+ });
  assert.equal((await nextSession.req('kyc',cursor)).status,400);
  const old=fixture({now:()=>at+600001});
  assert.equal((await old.req('kyc',cursor)).status,400);
