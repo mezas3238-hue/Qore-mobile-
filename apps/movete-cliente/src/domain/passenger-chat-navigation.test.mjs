@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canShowPassengerServiceChat} from './passenger-chat-navigation.mjs';
+import {canShowPassengerServiceChat,passengerChatPrivateViewKey} from './passenger-chat-navigation.mjs';
 const id='123e4567-e89b-42d3-a456-426614174077',other='123e4567-e89b-42d3-a456-426614174088';
 const data=({authenticated:true,contractReady:true,accountSubject:id,
  historyOwnerId:id,serviceId:other,kind:'DELIVERY',status:'assigned'});
@@ -21,4 +21,29 @@ test('no se infieren conductor, teléfono, conversación ni despacho desde elegi
  const r=canShowPassengerServiceChat(data);
  assert.equal(r,true);
  assert.equal(typeof r,'boolean');
+});
+
+test('clave privada desmonta editor al cambiar conversación, tipo o JWT',()=>{
+ const a=passengerChatPrivateViewKey({
+  sessionRevision:4,serviceId:id,serviceKind:'RIDE'});
+ const b=passengerChatPrivateViewKey({
+  sessionRevision:4,serviceId:other,serviceKind:'RIDE'});
+ const c=passengerChatPrivateViewKey({
+  sessionRevision:4,serviceId:id,serviceKind:'DELIVERY'});
+ const d=passengerChatPrivateViewKey({
+  sessionRevision:5,serviceId:id,serviceKind:'RIDE'});
+ assert.notEqual(a,b);
+ assert.notEqual(a,c);
+ assert.notEqual(a,d);
+ assert.equal(a,passengerChatPrivateViewKey({
+  sessionRevision:4,serviceId:id,serviceKind:'RIDE'}));
+});
+test('enlaces manipulados no reutilizan el editor de la conversación previa',()=>{
+ const valid=passengerChatPrivateViewKey({
+  sessionRevision:4,serviceId:id,serviceKind:'MERCHANT_ORDER'});
+ for(const patch of [
+  {sessionRevision:4,serviceId:'../../',serviceKind:'MERCHANT_ORDER'},
+  {sessionRevision:4,serviceId:id,serviceKind:'DRIVER'},
+  {sessionRevision:-1,serviceId:id,serviceKind:'MERCHANT_ORDER'}
+ ])assert.notEqual(valid,passengerChatPrivateViewKey(patch));
 });

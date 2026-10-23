@@ -5,6 +5,7 @@ import {useLocalSearchParams} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
+import {passengerChatPrivateViewKey} from '../src/domain/passenger-chat-navigation.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Service='RIDE'|'DELIVERY'|'MERCHANT_ORDER';
@@ -17,8 +18,10 @@ export default function PassengerChatScreen(){
  const serviceId=typeof params.serviceId==='string'&&UUID.test(params.serviceId)
   ?params.serviceId:null;
  const serviceKind=supported(params.serviceKind)?params.serviceKind:null;
- return <PrivateChat key={view.privateViewRevision}
-  client={client} view={view} serviceId={serviceId} serviceKind={serviceKind}/>;
+ return <PrivateChat key={passengerChatPrivateViewKey({
+  sessionRevision:view.privateViewRevision,serviceId,serviceKind
+ })} client={client} view={view}
+  serviceId={serviceId} serviceKind={serviceKind}/>;
 }
 function PrivateChat({client,view,serviceId,serviceKind}:{
  client:ClientExperience;view:ClientSnapshot;
