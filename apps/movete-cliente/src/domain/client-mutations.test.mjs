@@ -115,3 +115,36 @@ test('rechazo permanente es terminal hasta nueva preparación',async()=>{
  assert.equal((await c.submit()).code,'REQUEST_REJECTED');
  assert.equal((await c.retry()).code,'NO_READY_REQUEST');
 });
+
+
+test('NUNCA reemplaza requestKey mientras el servidor pudo procesar un timeout',async()=>{
+ const requests=[];let attempts=0;
+ const c=fixture(async (_,arg)=>{
+  requests.push(arg.body.requestKey);
+  return ++attempts===1?{ok:false,code:'NETWORK_OR_TIMEOUT'}:{ok:true,status:201};
+ });
+ c.prepare({operation:'rideRequest',body:ride,subject});
+ assert.equal((await c.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(c.prepare({operation:'rideRequest',body:{...ride,
+  requestKey:'123e4567-e89b-42d3-a456-426614174023'},subject}).code,'EXPLICIT_RETRY_REQUIRED');
+ assert.equal(c.prepare({operation:'deliveryRequest',body:{...ride},subject}).code,'EXPLICIT_RETRY_REQUIRED');
+ assert.equal((await c.retry()).ok,true);
+ assert.deepEqual(requests,[key,key]);
+});
+test('rechazo ambiguo no habilita automáticamente un segundo despacho',async()=>{
+ const c=fixture(async()=>({ok:false,code:'REQUEST_REJECTED',status:409}));
+ c.prepare({operation:'rideRequest',body:ride,subject});
+ assert.equal((await c.submit()).code,'REQUEST_REJECTED');
+ assert.equal(c.prepare({operation:'rideRequest',body:{...ride,
+  requestKey:'123e4567-e89b-42d3-a456-426614174023'},subject}).code,
+ 'RECONCILE_BEFORE_NEW_REQUEST');
+});
+test('logout o reinicio explícito elimina el bloqueo y la clave privada',async()=>{
+ const c=fixture(async()=>({ok:false,code:'REQUEST_REJECTED'}));
+ c.prepare({operation:'rideRequest',body:ride,subject});
+ await c.submit();
+ assert.equal(c.publicState().phase,'failed');
+ c.clear();
+ assert.equal(c.publicState().requestKey,null);
+ assert.equal(c.prepare({operation:'rideRequest',body:ride,subject}).ok,true);
+});

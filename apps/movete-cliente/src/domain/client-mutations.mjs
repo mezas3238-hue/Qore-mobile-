@@ -22,7 +22,10 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
  }
  function prepare({operation,body,subject}={}){
   if(state.phase==='in_flight')return fail('REQUEST_IN_FLIGHT');
+  if(state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
   if(state.phase==='acknowledged')return fail('ALREADY_ACKNOWLEDGED');
+  // No crear un segundo requestKey tras una respuesta no concluyente (p.ej. 409).
+  if(state.phase==='failed')return fail('RECONCILE_BEFORE_NEW_REQUEST');
   if(!MUTATIONS.has(operation)||!validateClientOperation(operation,body)
     ||typeof subject!=='string'||!UUID.test(subject))return fail('INVALID_INPUT');
   if(state.subject&&state.subject!==subject)clear();
