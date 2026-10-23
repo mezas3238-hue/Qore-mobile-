@@ -254,7 +254,6 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
-   incidentReport:incidentFlow.snapshot(),
     incidentReport:incidentFlow.snapshot()});
   }
   return Object.freeze({
@@ -267,7 +266,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    history:history.current(user.subject),
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
-   cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot()
+   cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
+   incidentReport:incidentFlow.snapshot()
   });
  }
  async function signOut(){
