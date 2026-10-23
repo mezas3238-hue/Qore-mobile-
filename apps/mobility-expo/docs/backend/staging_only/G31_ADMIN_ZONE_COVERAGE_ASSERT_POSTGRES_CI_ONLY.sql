@@ -39,6 +39,8 @@ INSERT INTO public.mobility_stage_g31_zone_observations(
   'AUTO_RIDE',7,clock_timestamp()-interval '15 seconds'),
  (md5('G31_OBS_STALE')::uuid,md5('G31_ZONE_2')::uuid,
   'AUTO_RIDE',81,clock_timestamp()-interval '10 minutes'),
+ (md5('G31_OBS_SIXTY_ONE')::uuid,md5('G31_ZONE_4')::uuid,
+  'AUTO_RIDE',42,clock_timestamp()-interval '70 seconds'),
  (md5('G31_OBS_MOTO')::uuid,md5('G31_ZONE_1')::uuid,
   'MOTO_DELIVERY',3,clock_timestamp()-interval '20 seconds');
 
@@ -105,7 +107,7 @@ BEGIN
      OR item->>'coverageStatus'<>'PLANNED'
     THEN RAISE EXCEPTION 'G31 MOTO service/count leaked into AUTO'; END IF;
     fresh_moto:=fresh_moto+1;
-   ELSIF (item->>'zoneId')::uuid=md5('G31_ZONE_2')::uuid THEN
+   ELSIF (item->>'zoneId')::uuid IN (md5('G31_ZONE_2')::uuid,md5('G31_ZONE_4')::uuid) THEN
     IF item->>'onDutyVehicles'<>'0' OR
        item->>'availabilityObservedAt'<>'0'
     THEN RAISE EXCEPTION 'G31 stale telemetry misrepresented as current'; END IF;
@@ -126,7 +128,7 @@ BEGIN
   IF pages>10 THEN RAISE EXCEPTION 'G31 infinite pages'; END IF;
  END LOOP;
  IF total<>121 OR pages<>3 OR cardinality(seen)<>121
-  OR fresh_auto<>1 OR fresh_moto<>1 OR stale<>1 OR absent<>118
+  OR fresh_auto<>1 OR fresh_moto<>1 OR stale<>2 OR absent<>117
  THEN RAISE EXCEPTION 'G31 incomplete: total %, pages %, auto %, moto %, stale %, missing %',
  total,pages,fresh_auto,fresh_moto,stale,absent; END IF;
  RAISE NOTICE 'G31 real zones: % rows in % pages, 2 observed, stale/missing safely unknown',
