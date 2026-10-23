@@ -6,6 +6,7 @@ const spec=JSON.parse(readFileSync(new URL(
 const transport=readFileSync(new URL('./g4-loopback-http-transport.mjs',import.meta.url),'utf8');
 const runtimePaths=[
  '/v1/staging/rider/trips/request','/v1/staging/rider/trips/{tripId}/status',
+ '/v1/staging/driver/inbox',
  '/v1/staging/driver/offers/{offerId}','/v1/staging/driver/offers/accept',
  '/v1/staging/driver/offers/decline','/v1/staging/trips/{tripId}/transition',
  '/v1/staging/sender/deliveries/request','/v1/staging/deliveries/{deliveryId}/transition',
