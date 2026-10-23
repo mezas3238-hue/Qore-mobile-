@@ -1,0 +1,24 @@
+export type AdminKycRecord={
+ vehicleId:string;vehicleKind:'AUTO'|'MOTO_DELIVERY';applicationStatus:string;
+ licenseStatus:string;insuranceStatus:string;inspectionStatus:string;reviewRevision:number;
+};
+export type AdminSnapshot={
+ authenticated:boolean;
+ account:{subject:string;role:'admin';mfaVerified:true}|null;
+ kyc:{revision:number;generatedAt:number;expiresAt:number;items:readonly Readonly<AdminKycRecord>[]} |null;
+ actionsEnabled:false;
+};
+export type AdminExperience={
+ subscribe:(callback:()=>void)=>()=>void;
+ refreshSession:()=>Promise<{ok:boolean;code?:string}>;
+ logout:()=>Promise<{ok:boolean;code?:string}>;
+ clear:()=>void;
+ readKyc:(data:unknown)=>boolean;
+ reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
+ snapshot:()=>AdminSnapshot;
+};
+export declare function createAdminExperience(options?:{
+ authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
+ gateway?:{isConfigured:()=>boolean;reviewVehicle:(body:unknown)=>unknown|Promise<unknown>}|null;
+ now?:()=>number;
+}):AdminExperience;

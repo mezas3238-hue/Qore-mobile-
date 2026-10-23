@@ -1,6 +1,8 @@
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
+import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
+import type {AdminKycRecord} from './admin-experience.mjs';
 import './styles.css';
 
 type Page='resumen'|'kyc'|'zonas'|'incidentes'|'auditoria';
@@ -94,7 +96,25 @@ function KycTraining(){
  </div>;
 }
 
+function AuthorizedQueue({items}:{items:readonly AdminKycRecord[]}){
+ return <Panel className="detail">
+  <div className="section-head"><div><h2>Vehículos pendientes · lectura autorizada</h2>
+   <p>Metadatos mínimos recibidos desde una sesión Admin con MFA. Sin documentos, nombres ni teléfonos.</p></div>
+   <span className="muted-tag">SOLO LECTURA</span></div>
+  {items.length===0?<div className="empty"><h3>Sin registros en esta página</h3>
+   <p>Sin afirmar que la cola global está vacía. No hay decisiones habilitadas.</p></div>:
+   <div>{items.map(record=><div className="training-row" key={record.vehicleId}>
+    <div><strong>Vehículo {record.vehicleKind}</strong>
+     <small>Solicitud: {record.applicationStatus} · Seguro: {record.insuranceStatus}</small>
+     <small>Licencia: {record.licenseStatus} · Inspección: {record.inspectionStatus}</small>
+     <small>Revisión servidor: {record.reviewRevision}</small>
+    </div><span className="muted-tag">SIN ACCIÓN</span>
+   </div>)}</div>}
+  <p className="training-disclaimer">Toda aprobación o rechazo requiere endpoint autorizado y confirmación posterior del servidor. No se muestran archivos ni enlaces de evidencia.</p>
+ </Panel>;
+}
 function App(){
+ const {view}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
  const [menuOpen,setMenuOpen]=useState(false);
  const view=sections.find(x=>x.id===page)!;
@@ -117,7 +137,7 @@ function App(){
    </header>
    <div className="container">
     <div className="intro"><div><p className="overline">MOVETE FÁCIL · ADMINISTRACIÓN</p>
-     <h1>{view.label}</h1><p>{view.hint} · Sin autenticación administrativa activa</p></div>
+     <h1>{view.label}</h1><p>{view.hint} · {view.authenticated?'Sesión Admin verificada por proveedor de QA':'Sin autenticación administrativa activa'}</p></div>
      <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
      <span><strong>Modo demostración técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
@@ -134,7 +154,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='kyc'?<KycTraining/>:<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='kyc'?(view.authenticated&&view.kyc?<AuthorizedQueue items={view.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>
@@ -146,4 +166,4 @@ function App(){
  </div>;
 }
 const root=document.getElementById('root');
-if(root)createRoot(root).render(<React.StrictMode><App/></React.StrictMode>);
+if(root)createRoot(root).render(<React.StrictMode><AdminRuntimeProvider><App/></AdminRuntimeProvider></React.StrictMode>);
