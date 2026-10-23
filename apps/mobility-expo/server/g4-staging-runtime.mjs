@@ -9,6 +9,8 @@
 import {safeStageRef,assertPublishableKey,inspectStageSignup} from '../scripts/staging-auth-policy-gate.mjs';
 import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
+import {createQoreRiderHistoryGateway} from './g26-rider-history-gateway.mjs';
+import {createQoreOwnHistoryRepository} from './g26-rider-history-repository.mjs';
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
 import {createStagingRateLimiter} from './g2-staging-vehicle-gateway.mjs';
 import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-repository.mjs';
@@ -208,6 +210,11 @@ export async function prepareQoreG4StagingRuntime({
  // operations to a safe, shared per-user allowance; this intentionally
  // prevents exhaustive high-rate polling on the local QA loopback.
  const allowRequest=({userId})=>limit({userId,operation:'draft'});
+ const riderHistory=createQoreRiderHistoryGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
+  loadOwnHistory:createQoreOwnHistoryRepository(admin),now
+ });
  const rider=createQoreRiderStatusGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),
@@ -425,7 +432,8 @@ export async function prepareQoreG4StagingRuntime({
   commercialRidesEnabled:false,
   /** A server object, NOT a listener. Even this object cannot bind publicly. */
   server:createQoreRadarLoopbackTransport({
-   riderHandler:guard(rider),offerHandler:guard(driver),
+   riderHandler:guard(rider),riderHistoryHandler:guard(riderHistory),
+   offerHandler:guard(driver),
    tripCommandHandler:guard(commands),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
