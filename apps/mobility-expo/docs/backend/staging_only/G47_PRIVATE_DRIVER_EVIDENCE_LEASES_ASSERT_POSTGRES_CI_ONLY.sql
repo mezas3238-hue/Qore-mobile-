@@ -164,9 +164,13 @@ BEGIN
  EXCEPTION WHEN SQLSTATE 'G4707' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G47 access audit tampering succeeded'; END IF;
 
+ -- Call volatile revocations sequentially: SQL boolean expressions are
+ -- not safe to rely upon for procedural evaluation order or side effects.
  IF NOT public.mobility_stage_g47_revoke_lease_qa(lease,'SESSION_REVOKED')
- OR NOT public.mobility_stage_g47_revoke_lease_qa(lease,'SESSION_REVOKED')
- OR (public.mobility_stage_g47_probe_lease_qa(
+ THEN RAISE EXCEPTION 'G47 initial revocation refused'; END IF;
+ IF NOT public.mobility_stage_g47_revoke_lease_qa(lease,'SESSION_REVOKED')
+ THEN RAISE EXCEPTION 'G47 same-key revocation retry refused'; END IF;
+ IF (public.mobility_stage_g47_probe_lease_qa(
     driver,driver_session,iat,lease)->>'leaseActive')<>'false'
  OR (SELECT count(*) FROM public.mobility_stage_g47_access_audit
      WHERE lease_id=lease AND action='REVOKED')<>1
