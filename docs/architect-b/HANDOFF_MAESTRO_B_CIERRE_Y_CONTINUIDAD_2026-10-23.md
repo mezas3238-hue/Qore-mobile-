@@ -343,6 +343,7 @@ La siguiente prioridad independiente pasa a **B-07: accesibilidad real de pantal
 - Pantallas con encabezados semánticos, etiquetas de entrada, regiones vivas, áreas seguras y cierre de teclado; confirmación de cancelación recibe foco y aísla su superficie para tecnología asistiva.
 - Se retiró el lenguaje de demo en navegación/pagos. La UI explica la integración productiva pendiente y sigue fail-closed: no recibe tarjetas ni afirma cobro/receipt sin PSP y backend certificados.
 - QA local: **220/220 Cliente PASS**, TypeScript y Expo export web SUCCESS.
+- Cierre GitHub del código: `6350f701b79e`; ownership #39968009234, Admin #39968008403 y aislamiento #39968008619, todos SUCCESS.
 - Evidencia: `docs/architect-b/CLIENT_ACCESSIBILITY_FOUNDATION_2026-10-23.md`.
 - Pendiente de certificación: matriz manual TalkBack/VoiceOver en dispositivo o emulador; no se afirma validación nativa a partir del export web.
 

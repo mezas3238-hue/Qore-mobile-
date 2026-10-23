@@ -42,6 +42,8 @@ Resultado local del corte:
 - Expo export web: SUCCESS.
 - `git diff --check`: SUCCESS.
 
+Publicación GitHub del código y la evidencia: commit `6350f701b79e7ad625269db9246c79c81782f7ec`. Workflows: ownership B [#39968009234](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39968009234), Admin Web [#39968008403](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39968008403) y aislamiento de aplicaciones [#39968008619](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39968008619), todos **SUCCESS**.
+
 Las nuevas pruebas recorren estáticamente todas las pantallas para impedir regresiones de escalado de fuente, etiquetas de `TextInput`, encabezados, teclado y áreas seguras, además de verificar contraste, tamaño mínimo y semántica del componente de acción compartido.
 
 ## Límite honesto de certificación

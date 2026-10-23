@@ -268,6 +268,7 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - Alertas y sincronización usan regiones vivas; la confirmación de cancelación recibe foco y actúa como superficie modal para tecnología asistiva.
 - Navegación y pantalla financiera dejan de presentarse como demo: la integración real queda fail-closed hasta PSP, tokenización, receipt y conciliación certificados.
 - QA local: **220/220 Cliente PASS**, TypeScript SUCCESS, Expo web export SUCCESS y diff check limpio.
+- Cierre GitHub B31: `6350f701b79e7ad625269db9246c79c81782f7ec`; ownership #39968009234, Admin #39968008403 y aislamiento #39968008619, todos SUCCESS.
 - Limitación explícita: falta certificación manual TalkBack/VoiceOver en Android/iOS; export web no la sustituye.
 - Evidencia: [CLIENT_ACCESSIBILITY_FOUNDATION_2026-10-23.md](./CLIENT_ACCESSIBILITY_FOUNDATION_2026-10-23.md).
 - Próxima prioridad B-08: soporte con limpieza de sesión y confirmación backend tipada; jamás declarar envío, atención o SOS sin receipt autoritativo.
