@@ -60,7 +60,7 @@ test('G39 blocks tampering, wrong key, wrong algorithm and invalid canonical JWS
  const valid=token();
  const [h,p,s]=valid.split('.');
  for(const invalid of [
-  h+'.'+p+'.'+s.slice(0,-2)+'AA',
+  h+'.'+p+'.'+(s[0]==='A'?'B':'A')+s.slice(1),
   token(claims,{key:otherPrivate}),
   token(claims,{alg:'HS256'}),
   token(claims,{alg:'none'}),
