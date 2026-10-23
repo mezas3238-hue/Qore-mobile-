@@ -169,3 +169,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_UNBOUNDED_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G26.3 scale history beyond 30,000 real PostgreSQL rows with full keyset traversal
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_LARGE_VOLUME_POSTGRES_CI_ONLY.sql
+      - name: G26.4 install disposable immutable owner-and-created-at history guards
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_POSTGRES_CI_ONLY.sql
+      - name: G26.4 attack 15 altered/backdated histories and retain lawful lifecycle updates
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_ASSERT_POSTGRES_CI_ONLY.sql
