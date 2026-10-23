@@ -2,7 +2,7 @@
  * Carrito de intención CLIENTE. No deriva precios ni stock.
  * No hace POST, no reserva ítems ni realiza cobros.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid=x=>typeof x==='string'&&UUID.test(x);
 const failure=code=>({ok:false,code});
 export function createCommerceDraftCart(){
