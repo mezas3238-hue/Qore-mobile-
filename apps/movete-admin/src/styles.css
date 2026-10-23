@@ -49,3 +49,22 @@
 .page-actions span{font-size:12px;color:#486579;font-weight:700;white-space:nowrap}
 .page-actions button{padding:8px 10px}
 @media(max-width:600px){.refresh-actions{width:100%;justify-content:flex-start}.page-actions{width:100%;justify-content:space-between}}
+
+/* G29: expediente/documentación de la página visible, jamás habilitación legal */
+.kyc-notice{background:#fff8eb;border:1px solid #e9d5b4;color:#6b502d!important;
+ padding:13px 15px;border-radius:10px;font-size:12px!important}
+.kyc-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 0}
+.kyc-filters label{font-size:13px;font-weight:700;color:#34556c}
+.kyc-filters select{font:inherit;font-size:13px;padding:9px 12px;max-width:100%;
+ color:#183d56;background:#fff;border:1px solid #c5d7e3;border-radius:9px}
+.kyc-filters small{flex-basis:100%;font-size:12px;color:#6c879a}
+.kyc-counters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 18px}
+.kyc-counters span{background:#f2f6f9;border:1px solid #dfeaf1;
+ border-radius:8px;padding:8px;font-size:11px;color:#476377}
+.kyc-counters strong{font-size:13px;color:#153f55}
+.kyc-record{display:flex;align-items:center;justify-content:space-between;
+ gap:12px;border:1px solid #e0e7ef;border-radius:10px;margin:9px 0;padding:13px}
+.kyc-record strong{display:block;color:#234a60;font-size:13px}
+.kyc-record small{display:block;color:#607f91;font-size:12px;margin-top:5px}
+@media(max-width:680px){.kyc-record{flex-direction:column;align-items:flex-start}
+.kyc-record .muted-tag{white-space:normal}}

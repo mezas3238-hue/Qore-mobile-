@@ -3,6 +3,8 @@ import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
 import type {AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
+import {projectKycPageView} from './kyc-page-view.mjs';
+import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
 type Page='resumen'|'propietario'|'kyc'|'zonas'|'incidentes'|'auditoria';
@@ -75,21 +77,44 @@ function KycTraining(){
  </div>;
 }
 
+const kycLabels:Record<KycFilter,string>={
+ ALL:'Todos',EXPIRED:'Documento vencido',REJECTED:'Documento rechazado',
+ MISSING:'Documentación ausente',PENDING:'Verificación pendiente',
+ REPORTED_VALID:'Documentación reportada válida'
+};
 function AuthorizedQueue({items}:{items:readonly AdminKycRecord[]}){
+ const [filter,setFilter]=useState<KycFilter>('ALL');
+ const page=projectKycPageView(items,{filter});
  return <Panel className="detail">
-  <div className="section-head"><div><h2>Vehículos pendientes · lectura autorizada</h2>
-   <p>Metadatos mínimos recibidos desde una sesión Admin con MFA. Sin documentos, nombres ni teléfonos.</p></div>
-   <span className="muted-tag">SOLO LECTURA</span></div>
-  {items.length===0?<div className="empty"><h3>Sin registros en esta página</h3>
-   <p>Sin afirmar que la cola global está vacía. No hay decisiones habilitadas.</p></div>:
-   <div>{items.map(record=><div className="training-row" key={record.vehicleId}>
-    <div><strong>Vehículo {record.vehicleKind}</strong>
-     <small>Solicitud: {record.applicationStatus} · Seguro: {record.insuranceStatus}</small>
-     <small>Licencia: {record.licenseStatus} · Inspección: {record.inspectionStatus}</small>
-     <small>Revisión servidor: {record.reviewRevision}</small>
-    </div><span className="muted-tag">SIN ACCIÓN</span>
-   </div>)}</div>}
-  <p className="training-disclaimer">Toda aprobación o rechazo requiere endpoint autorizado y confirmación posterior del servidor. No se muestran archivos ni enlaces de evidencia.</p>
+  <div className="section-head"><div><h2>Expedientes de vehículos · solo lectura</h2>
+   <p>Estado documental certificado por el contrato del backend. Sin fotografías, nombres, teléfonos o documentación privada.</p></div>
+   <span className="muted-tag">SIN DECISIONES</span></div>
+  <p className="kyc-notice" role="note">Un expediente aprobado o con documentos reportados como válidos <strong>NO significa que el vehículo esté habilitado</strong> para operar. La verificación independiente y vigencia legal corresponden al servidor.</p>
+  {page?<><div className="kyc-filters">
+    <label htmlFor="kyc-filter">Filtrar estados de esta página</label>
+    <select id="kyc-filter" value={filter}
+     onChange={event=>setFilter(event.target.value as KycFilter)}>
+     {Object.entries(kycLabels).map(([code,label])=>
+      <option key={code} value={code}>{label}</option>)}
+    </select>
+    <small>Mostrando {page.visibleCount} de {page.counts.ALL} expedientes de esta página. El filtro no incluye otras páginas.</small>
+   </div>
+   <div className="kyc-counters" aria-label="Totales documentales de esta página">
+    {(['EXPIRED','REJECTED','MISSING','PENDING','REPORTED_VALID'] as KycFilter[]).map(key=>
+     <span key={key}><strong>{page.counts[key]}</strong> {kycLabels[key]}</span>)}
+   </div>
+   {page.visibleCount===0?<div className="empty"><h3>Sin coincidencias en esta página</h3>
+    <p>No equivale a cero expedientes en otras páginas. El total de la plataforma no tiene un límite de 50 registros.</p></div>:
+    <div>{page.items.map(record=><div className="kyc-record" key={record.vehicleId}>
+     <div><strong>Vehículo {record.vehicleKind}</strong>
+      <small>Solicitud: {record.applicationStatus} · Revisión de servidor: {record.reviewRevision}</small>
+      <small>Licencia: {record.licenseStatus} · Seguro: {record.insuranceStatus} · Inspección: {record.inspectionStatus}</small>
+     </div><span className="muted-tag">{kycLabels[record.evidence]} · NO HABILITADO</span>
+    </div>)}</div>}
+   </>:<div className="owner-warning" role="alert">
+    No se pueden mostrar estos expedientes: el contenido no cumple el contrato G29.
+   </div>}
+  <p className="training-disclaimer">El estado de los documentos no permite aprobar, rechazar ni habilitar vehículos. Consulta por páginas, con consistencia eventual y sin límite global de expedientes.</p>
  </Panel>;
 }
 type OwnerFinance=NonNullable<AdminSnapshot['finance']>;
@@ -181,7 +206,7 @@ function AuditReadOnly({audit,allowed}:{
 }){
  return <Panel className="detail">
   <div className="section-head"><div><h2>Registro de auditoría de servidor</h2>
-   <p>Vista mínima, sin identidades personales ni registros inventados por el navegador.</p>
+   <p>Vista mínima sin identidades personales. G30 comprende únicamente revisión de vehículos, incidentes y suspensiones/restablecimientos; todavía faltan auditorías de tarifas, comisiones, zonas, comercios y accesos. No es una bitácora integral.</p>
   </div><span className="muted-tag">SOLO LECTURA</span></div>
   {!allowed?<div className="empty"><h3>Permiso de auditoría no otorgado</h3>
      <p>Requiere sesión administrativa y permiso específico del backend.</p></div>
