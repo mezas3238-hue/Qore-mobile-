@@ -21,7 +21,11 @@ export function useClientView(){
  const [view,setView]=useState<ClientSnapshot>(()=>client.snapshot());
  useEffect(()=>client.subscribe(()=>setView(client.snapshot())),[client]);
  useFocusEffect(useCallback(()=>{
+  // Evita que un precio vencido o GPS viejo queden visibles sin eventos.
+  // Solo refresca la vista enfocada; nunca consulta red por este timer.
   setView(client.snapshot());
+  const interval=setInterval(()=>setView(client.snapshot()),5000);
+  return ()=>clearInterval(interval);
  },[client]));
  return {client,view};
 }

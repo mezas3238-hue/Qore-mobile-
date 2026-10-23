@@ -129,3 +129,34 @@ test('la respuesta tardía después de cerrar sesión se descarta',async()=>{
  assert.equal((await pending).code,'STALE_RESPONSE_IGNORED');
  assert.equal(api.snapshot().tracking.assignedDriver,null);
 });
+
+test('notificación de vista y unsubscribe mantienen estado seguro',async()=>{
+ const {api}=fixture();
+ let updates=0;
+ const unsubscribe=api.subscribe(()=>updates++);
+ await api.refreshSession();
+ assert.equal(updates,1);
+ api.acceptQuote(fakeQuote());
+ assert.equal(updates,2);
+ unsubscribe();
+ await api.signOut();
+ assert.equal(updates,2);
+ assert.equal(api.snapshot().quote,null);
+});
+test('cotización vencida desaparece al consultar snapshot, incluso sin otros eventos',async()=>{
+ let clock=now;
+ const api=createClientExperience({now:()=>clock,
+  authProvider:{readSession:async()=>({...fakeSession(),expiresAt:now+180000}),signOut:async()=>{}}});
+ await api.refreshSession();
+ assert.equal(api.acceptQuote(fakeQuote()),true);
+ assert.equal(api.snapshot().quote.amountGs,15500);
+ clock=now+60001;
+ assert.equal(api.snapshot().quote,null);
+});
+test('un listener defectuoso no bloquea el cierre de sesión',async()=>{
+ const {api}=fixture();
+ await api.refreshSession();
+ api.subscribe(()=>{throw Error('listener de QA');});
+ assert.equal((await api.signOut()).ok,true);
+ assert.equal(api.snapshot().authenticated,false);
+});
