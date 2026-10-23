@@ -33,7 +33,7 @@ SELECT public.mobility_stage_register_driver_document(
  '00000000-0000-4000-8000-000000000181',
  '47470000-0000-4747-8747-000000000001',
  'licencia',
- '00000000-0000-4000-8000-000000000181/licencia-abcdefghijklmnop.jpg',
+ '00000000-0000-4000-8000-000000000181/licencia-G47SyntheticHead0001.jpg',
  'image/jpeg',8500,repeat('a',64));
 DO $tests$
 DECLARE
