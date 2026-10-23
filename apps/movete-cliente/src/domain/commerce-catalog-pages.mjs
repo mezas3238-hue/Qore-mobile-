@@ -37,7 +37,8 @@ export function createCommerceCatalogPager({gateway=null,getActor=null,
   &&gateway?.isConfigured?.()===true&&typeof gateway.readCatalogPage==='function';
  const clear=()=>{epoch++;pending=false;state=blank();};
  function snapshot(){
-  const fresh=state.expiresAt!==null&&state.expiresAt>now();
+  // Ocultar filas y precios mientras se valida Auth o la nueva página.
+  const fresh=!pending&&state.expiresAt!==null&&state.expiresAt>now();
   return Object.freeze({
    readReady:enabled(),loading:pending,
    branchId:fresh?state.branchId:null,version:fresh?state.version:null,

@@ -155,3 +155,38 @@ test('autenticación rechazada al cambiar cuenta purga catálogo anterior',async
  assert.equal((await x.load({branchId:branch})).code,'AUTH_REQUIRED');
  assert.equal(x.snapshot().visibleItems.length,0);
 });
+
+test('snapshot oculta precios mientras otra página está en vuelo',async()=>{
+ let release,hits=0;
+ const suspended=new Promise(resolve=>{release=resolve;});
+ const x=make(gw(async()=>{
+  hits++;return hits===1?{ok:true,data:page(1)}:suspended;
+ }));
+ assert.equal((await x.load({branchId:branch})).ok,true);
+ assert.equal(x.snapshot().visibleItems.length,1);
+ const task=x.load({branchId:branch,next:true});
+ assert.equal(x.snapshot().loading,true);
+ assert.equal(x.snapshot().visibleItems.length,0);
+ assert.equal(x.snapshot().version,null);
+ assert.equal(x.snapshot().pageNumber,0);
+ assert.equal(x.snapshot().hasPrevious,false);
+ assert.equal(x.snapshot().hasNext,false);
+ release({ok:true,data:page(2)});
+ assert.equal((await task).ok,true);
+ assert.equal(x.snapshot().visibleItems[0].itemTag,'ITEM_2');
+ assert.equal(x.snapshot().pageNumber,2);
+});
+test('clear durante consulta permite nueva sesión sin revivir precios anteriores',async()=>{
+ let releaseOld,n=0;
+ const pending=new Promise(resolve=>{releaseOld=resolve;});
+ const x=make(gw(async()=>{n++;return n===1?pending:{ok:true,data:page(1)};}));
+ const first=x.load({branchId:branch});
+ await Promise.resolve();await Promise.resolve();
+ x.clear();
+ const second=x.load({branchId:branch});
+ assert.equal((await second).ok,true);
+ releaseOld({ok:true,data:page(2)});
+ assert.equal((await first).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(x.snapshot().visibleItems[0].itemTag,'ITEM_1');
+ assert.equal(x.snapshot().loading,false);
+});
