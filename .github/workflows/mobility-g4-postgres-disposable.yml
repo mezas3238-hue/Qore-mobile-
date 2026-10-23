@@ -10,6 +10,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
+      - 'apps/mobility-expo/server/g17-*'
       - 'apps/mobility-expo/server/g15-*'
       - 'apps/mobility-expo/server/g13-*'
       - 'apps/mobility-expo/server/g14-*'
@@ -143,3 +145,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G16_DRIVER_PRIVATE_AUTO_POLL_POSTGRES_CI_ONLY.sql
       - name: Validate real G16 private AUTO discovery and one-winner acceptance
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G16_DRIVER_PRIVATE_AUTO_POLL_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G17 private Driver documentation and review registry
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G17_PRIVATE_DRIVER_DOCUMENTS_POSTGRES_CI_ONLY.sql
+      - name: Test G17 role isolation, KYC evidence and immutable admin review
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G17_PRIVATE_DRIVER_DOCUMENTS_ASSERT_POSTGRES_CI_ONLY.sql
