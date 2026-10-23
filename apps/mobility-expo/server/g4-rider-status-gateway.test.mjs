@@ -188,3 +188,72 @@ test('G4 AUTO-only passenger snapshots never expose even verified MOTO profiles'
  assert.equal(r.status,503);
  assert.doesNotMatch(JSON.stringify(r),/TEST999|-25.28|QORE Prueba/);
 });
+
+test('G23 Client v1: JWT-bound status DTO matches separate passenger app without a client-supplied owner',async()=>{
+ const search=await fixture().handler(request());
+ assert.equal(search.status,200);
+ assert.equal(search.body.tripId,tripId);
+ assert.equal(search.body.ownerId,passenger);
+ assert.equal(search.body.revision,1);
+ assert.equal(search.body.state,'searching');
+ assert.equal(search.body.assignmentPersisted,false);
+ assert.equal(search.body.driver,null);
+ assert.equal(search.body.vehicle,null);
+ assert.equal(search.body.location,null);
+ assert.equal(search.body.etaMinutes,null);
+ assert.equal(search.body.etaVerified,false);
+
+ const assigned=await fixture({loadOwnTrip:async()=>accepted}).handler(request());
+ assert.equal(assigned.status,200);
+ assert.equal(assigned.body.tripId,tripId);
+ assert.equal(assigned.body.ownerId,passenger);
+ assert.equal(assigned.body.revision,2);
+ assert.equal(assigned.body.state,'assigned');
+ assert.equal(assigned.body.assignmentPersisted,true);
+ assert.deepEqual(assigned.body.driver,{verified:true,displayName:'QORE Prueba'});
+ assert.deepEqual(assigned.body.vehicle,{kind:'AUTO',plate:'TEST999'});
+ assert.deepEqual(assigned.body.location,{
+  latitude:gps.lat,longitude:gps.lng,observedAt:gps.capturedAtMs
+ });
+ assert.equal(assigned.body.gpsConsent,true);
+ assert.equal(assigned.body.etaVerified,true);
+ assert.equal(assigned.body.etaMinutes,4);
+ assert.equal(assigned.body.commercialRidesEnabled,false);
+});
+
+test('G23 Client v1: stale/unconsented location, old trip owner, terminal and pickup hide private coordinates',async()=>{
+ for(const stale of [
+  {...gps,capturedAtMs:now-31_000},
+  {...gps,consentGranted:false},
+ ]){
+  const result=await fixture({
+   loadOwnTrip:async()=>accepted,
+   loadArrivalEvidence:async()=>({driverProfile:profile,location:stale,route})
+  }).handler(request());
+  assert.equal(result.status,200);
+  assert.equal(result.body.assignmentPersisted,true);
+  assert.equal(result.body.location,null);
+  assert.equal(result.body.gpsConsent,false);
+  assert.equal(result.body.etaVerified,false);
+  assert.equal(result.body.etaMinutes,null);
+ }
+ const pickup=await fixture({
+  loadOwnTrip:async()=>({...accepted,status:'arriving',revision:3})
+ }).handler(request());
+ assert.equal(pickup.body.state,'arriving');
+ assert.equal(pickup.body.assignmentPersisted,true);
+ assert.equal(pickup.body.location,null);
+ const completed=await fixture({
+  loadOwnTrip:async()=>({...accepted,status:'completed',revision:4})
+ }).handler(request());
+ assert.equal(completed.body.state,'completed');
+ assert.equal(completed.body.assignmentPersisted,false);
+ assert.equal(completed.body.driver,null);
+ assert.equal(completed.body.vehicle,null);
+ assert.equal(completed.body.location,null);
+ const foreign=await fixture({
+  loadOwnTrip:async()=>({...accepted,passengerId:stranger})
+ }).handler(request());
+ assert.equal(foreign.status,404);
+ assert.doesNotMatch(JSON.stringify(foreign),/TEST999|QORE Prueba|-25.28/);
+});
