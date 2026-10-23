@@ -22,7 +22,10 @@
 - DTO compatible con `projectClientHistory` del Arquitecto B: `ownerId,generatedAt,expiresAt,items,nextCursor`; elementos `serviceId,kind,status,createdAt,revision`. TTL de caché 60 s. Sin PII, ubicación, rutas, matrículas, nombre de conductor, montos ni documentos.
 - Si faltan tablas, hay errores SQL, identidad inválida o datos inconsistentes => 503. **Nunca se devuelve una lista parcial como si fuera todo el historial.**
 - Evidencia automatizada: `g26-rider-history-repository.test.mjs` recupera **1.200 operaciones por 24 páginas**, sin omisión ni duplicación, además de pruebas de firma/actor/vencimiento/HTTP local. Estas son pruebas sintéticas; no prueban aún latencia de tablas reales con millones de registros.
-- **Pendientes operativos**: índices compuestos PostgreSQL `(owner_id,created_at DESC,id DESC)` para cada tabla y ensayo de paginación/aislamiento RLS sobre una base PostgreSQL desechable integral con datos abundantes, sin SQL remoto ni secretos. La app Cliente B debe implementar el bucle de carga por cursor y permitir ver el historial completo, sin borrar páginas anteriores en cada consulta.
+- **G26.2 implementado en CI PostgreSQL real (descartable):** nuevo archivo `G26_HISTORY_INDEXES_POSTGRES_CI_ONLY.sql` crea tres índices propios `(passenger_id|sender_id|buyer_id,created_at DESC,id DESC) INCLUDE(status,revision)`. `G26_HISTORY_UNBOUNDED_ASSERT_POSTGRES_CI_ONLY.sql` instala 1.200 registros sintéticos entre G3/G5/G6, recorre las 24 páginas keyset, prohíbe duplicación de UUID, verifica permisos INSERT bloqueados y RLS para la cuenta ajena y propia, y evalúa mediante `EXPLAIN (FORMAT JSON)` que los tres índices sean utilizables. Se incorpora al workflow `mobility-g4-postgres-disposable.yml`, en `qore_disposable_chain` y `localhost` solamente; no es migración productiva.
+- **Evidencia:** SQL real #194 SUCCESS: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39925294471 . SQL real con validación `EXPLAIN` #195: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39925580301 . No equiparar estas ejecuciones con millones de filas o staging remoto.
+- **Pendientes de integración:** la app Cliente B debe recorrer automáticamente `nextCursor` y acumular todas las páginas. Su regex inicial `CURSOR=/^[A-Za-z0-9_-]{1,200}$/` **no acepta** el cursor HMAC `v1.<carga>.<firma>` del backend A; Arquitecto B debe corregirlo exclusivamente en su carpeta (issue #9). No hay tope de historia, pero sí páginas pequeñas para mantener memoria/red bajo control.
+- **Pendientes de producción:** volumetría alta (cientos de miles/millones), índices/planes y política de snapshots consistentes bajo escrituras concurrentes; RLS con cuentas reales y JWT/Supabase autorizados, sin SQL remoto por ahora.
 
 ## Evidencia de pruebas
 - `g7-finance-gateway.test.mjs` + `g4-staging-runtime.test.mjs`: recibos fuente servidor, TTL, MOTO pasajeros denegado.
@@ -31,7 +34,7 @@
 - `g11-openapi-contract.test.mjs` certifica presencia y forma de los 3 contratos. Todos los tests usan identidad y datos SINTÉTICOS; concluir `SUCCESS` únicamente al verificar los workflows del HEAD exacto.
 
 ## Próximos trabajos de A (sin tocar carpetas B)
-1. G26.2: optimizar índices, pruebas SQL PostgreSQL con grandes volúmenes y consistencia; G26.1 no tiene límite total.
+1. G26.3: ensayo masivo de rendimiento/concurrencia, cursores ante escrituras y certificación Auth/JWT remoto bajo autorización; G26.1 no tiene límite total.
 2. Contratos Auth Passenger/Admin/Owner y MFA real en servidor, DTO KYC/zonas/incidentes y finanzas Owner, pruebas RLS no vacías.
 3. Desplegar solamente STAGING bajo autorización y HTTPS/pinned origin; conectar SDK Auth sin credenciales por GitHub.
 4. Validar sesión, privacidad, cotización y cancelación en dos apps físicas; observar race, offline, GPS y red.
