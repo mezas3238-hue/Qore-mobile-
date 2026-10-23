@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g46",
+    "version": "1.0.0-g47",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G46 commerce privileges revoked only in disposable PG chain; no trusted HTTPS/JWT or buyer catalog/order cutover"
+    "x-qore-contract-extension": "G47 private synthetic Driver KYC evidence leases and auditing; ZERO signed URLs or live Storage integration"
   },
   "servers": [
     {
@@ -2174,6 +2174,116 @@
             "$ref": "#/components/responses/Error"
           },
           "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/evidence/leases-g47": {
+      "post": {
+        "operationId": "issueDriverEvidenceLeaseG47Qa",
+        "tags": [
+          "driver",
+          "kyc"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "No HTTPS route is wired. 60-second synthetic metadata only. Signed provider session, driver self or independent admin AAL2. Neither Storage bytes nor signed URL are available.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverEvidenceLeaseRequestG47"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Synthetic KYC metadata QA; NO document URLs or file content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverEvidenceLeaseReceiptG47"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/evidence/leases-g47/probe": {
+      "post": {
+        "operationId": "probeDriverEvidenceLeaseG47Qa",
+        "tags": [
+          "driver",
+          "kyc"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "No HTTPS route is wired. Deny if G42 provider session revoked, lease expired or storage evidence quarantined. No URL, no bytes and no production eligibility.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverEvidenceProbeRequestG47"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Synthetic KYC metadata QA; NO document URLs or file content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverEvidenceProbeReceiptG47"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -5005,10 +5115,126 @@
             "const": false
           }
         }
+      },
+      "DriverEvidenceLeaseRequestG47": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "documentId",
+          "requestKey",
+          "purpose"
+        ],
+        "properties": {
+          "documentId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "DRIVER_SELF_VIEW",
+              "ADMIN_MANUAL_REVIEW"
+            ]
+          }
+        }
+      },
+      "DriverEvidenceLeaseReceiptG47": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseId",
+          "expiresAtMs",
+          "accessMode",
+          "signedUrlAvailable",
+          "storageConnected",
+          "documentBytesAvailable",
+          "productionEnabled"
+        ],
+        "properties": {
+          "leaseId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "expiresAtMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "accessMode": {
+            "type": "string",
+            "const": "QA_PRIVATE_METADATA_ONLY"
+          },
+          "signedUrlAvailable": {
+            "type": "boolean",
+            "const": false
+          },
+          "storageConnected": {
+            "type": "boolean",
+            "const": false
+          },
+          "documentBytesAvailable": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "DriverEvidenceProbeRequestG47": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseId",
+          "purpose"
+        ],
+        "properties": {
+          "leaseId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "DRIVER_SELF_VIEW",
+              "ADMIN_MANUAL_REVIEW"
+            ]
+          }
+        }
+      },
+      "DriverEvidenceProbeReceiptG47": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseActive",
+          "signedUrlAvailable",
+          "documentBytesAvailable",
+          "productionEnabled"
+        ],
+        "properties": {
+          "leaseActive": {
+            "type": "boolean"
+          },
+          "signedUrlAvailable": {
+            "type": "boolean",
+            "const": false
+          },
+          "documentBytesAvailable": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
       }
     }
   },
   "x-qore-merchant-commerce-promotion-authorized": false,
   "x-qore-merchant-runtime-ready": false,
-  "x-qore-g46-database-privilege-lockdown-ci-only": true
+  "x-qore-g46-database-privilege-lockdown-ci-only": true,
+  "x-qore-driver-evidence-storage-connected": false,
+  "x-qore-driver-evidence-signed-url-enabled": false
 }
