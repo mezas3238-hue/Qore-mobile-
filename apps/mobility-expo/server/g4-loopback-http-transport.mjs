@@ -11,6 +11,7 @@ import {createServer} from 'node:http';
 import {once} from 'node:events';
 
 const riderRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/status$/i;
+const riderHistoryRoute=/^\/v1\/staging\/rider\/history$/;
 const offerReadRoute=/^\/v1\/staging\/driver\/offers\/[0-9a-f-]{36}$/i;
 const offerDecisionRoute=/^\/v1\/staging\/driver\/offers\/(accept|decline)$/;
 const tripRequestRoute=/^\/v1\/staging\/rider\/trips\/request$/;
@@ -63,12 +64,14 @@ function send(res,status,body) {
  res.end(JSON.stringify(body));
 }
 export function createQoreRadarLoopbackTransport({
- riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
+ riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,
 }){
- if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
+ if(typeof riderHandler!=='function'||
+   (riderHistoryHandler!==undefined&&typeof riderHistoryHandler!=='function')||
+   typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
    typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
    typeof safetyHandler!=='function'||typeof merchantManagementHandler!=='function'||
@@ -88,6 +91,7 @@ export function createQoreRadarLoopbackTransport({
    send(res,404,{error:'Not found'});return;
   }
   const rider=req.method==='GET'&&riderRoute.test(path);
+  const riderHistory=req.method==='GET'&&riderHistoryRoute.test(path);
   const offerGet=req.method==='GET'&&offerReadRoute.test(path);
   const offerPost=req.method==='POST'&&offerDecisionRoute.test(path);
   const tripPost=req.method==='POST'&&
@@ -120,7 +124,7 @@ export function createQoreRadarLoopbackTransport({
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
-  if(!rider&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost&&
+  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
@@ -132,7 +136,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||offerGet||deliveryGet||merchantGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||deliveryGet||merchantGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -160,7 +164,9 @@ export function createQoreRadarLoopbackTransport({
    }catch{send(res,400,{error:'Invalid JSON'});return;}
   }
   try {
-   const handler=rider?riderHandler:tripPost?tripCommandHandler:
+   const handler=rider?riderHandler:
+    riderHistory?(riderHistoryHandler??(()=>({status:503,body:{error:'History not configured'}}))):
+    tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
     (merchantGet||merchantPost)?merchantHandler:
     (financeGet||financePost)?financeHandler:
