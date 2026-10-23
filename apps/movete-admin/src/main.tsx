@@ -209,7 +209,8 @@ const safeFeedback:Record<string,string>={
  STALE_SESSION_RESPONSE:'La cuenta cambió durante la lectura. Se descartó la respuesta.',
  INVALID_READ_DTO:'La respuesta del servidor no cumple el contrato aprobado.',
  NETWORK_OR_TIMEOUT:'No se obtuvo respuesta segura del servidor.',
- READ_CONTRACT_NOT_CERTIFIED:'Contrato pendiente de certificación.'
+ READ_CONTRACT_NOT_CERTIFIED:'Contrato pendiente de certificación.',
+ NO_ADDITIONAL_PAGE:'No hay otra página disponible.'
 };
 function App(){
  const {client,view:adminState}=useAdminView();
@@ -223,12 +224,14 @@ function App(){
  const canRefresh=operation!==null
    &&adminState.account?.role===expectedRole
    &&client.isReadConfigured(operation);
- async function refreshPage(){
+ const navigable=operation!==null&&operation!=='finance';
+ const pager=navigable?adminState.pagination[operation as keyof AdminSnapshot['pagination']]:null;
+ async function refreshPage(direction:'refresh'|'next'|'previous'|'reset'='refresh'){
   if(!operation||!canRefresh||refreshing)return;
   const requestedPage=page;
   setRefreshing(true);
   try{
-   const result=await client.syncFromServer(operation);
+   const result=await client.syncFromServer(operation,direction);
    setRefreshStatus({page:requestedPage,
     description:result.ok?'Lectura validada. Datos actualizados según permisos y vigencia.':
      safeFeedback[result.code??'']??'No se pudo validar la lectura. No se mostraron datos nuevos.'});
@@ -265,9 +268,18 @@ function App(){
       <small>{canRefresh?'Contrato habilitado para esta sesión y rol.':
         'Pendiente de autorización Backend y contrato STAGING certificado.'}</small>
      </div>
-     <button type="button" disabled={!canRefresh||refreshing} onClick={()=>{void refreshPage();}}>
-      {refreshing?'Consultando…':'Actualizar datos'}
-     </button>
+     <div className="refresh-actions">
+      <button type="button" disabled={!canRefresh||refreshing} onClick={()=>{void refreshPage('refresh');}}>
+       {refreshing?'Consultando…':'Actualizar datos'}
+      </button>
+      {navigable&&<div className="page-actions" aria-label="Paginación de la bandeja">
+       <button type="button" disabled={!canRefresh||refreshing||!pager?.hasPrevious}
+        onClick={()=>{void refreshPage('previous');}}>Anterior</button>
+       <span aria-live="polite">Página {pager?.pageNumber??1}</span>
+       <button type="button" disabled={!canRefresh||refreshing||!pager?.hasNext}
+        onClick={()=>{void refreshPage('next');}}>Siguiente</button>
+      </div>}
+     </div>
      {refreshStatus?.page===page&&<p role="status">{refreshStatus.description}</p>}
     </div>}
     {page==='resumen'?<>
