@@ -40,7 +40,7 @@ INSERT INTO public.mobility_stage_merchants(
  '45450000-0000-4545-8545-000000000020',
  '45450000-0000-4545-8545-000000000021',
  '45450000-0000-4545-8545-000000000004',
- 'SUPERMARKET','G45_SHOP','approved',
+ 'SUPERMARKET','QA_SHOP','approved',
  '45450000-0000-4545-8545-000000000005',pg_catalog.clock_timestamp()
 );
 INSERT INTO public.mobility_stage_merchant_branches(
@@ -48,7 +48,7 @@ INSERT INTO public.mobility_stage_merchant_branches(
 ) VALUES(
  '45450000-0000-4545-8545-000000000030',
  '45450000-0000-4545-8545-000000000020',
- 'G45_BRANCH','G45_PICKUP',12,true,true);
+ 'QA_BRANCH','QA_PICKUP',12,true,true);
 INSERT INTO public.mobility_stage_g44_branch_geography(branch_id,zone_id,service_kind)
  VALUES('45450000-0000-4545-8545-000000000030',
         '45450000-0000-4545-8545-000000000010','AUTO_DELIVERY');
