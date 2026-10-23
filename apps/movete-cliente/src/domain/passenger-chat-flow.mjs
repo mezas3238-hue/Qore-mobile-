@@ -80,13 +80,21 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  let generation=0,loading=false,sending=false,state=blank();
  const windowLimit=Number.isSafeInteger(maxCachedMessages)
   &&maxCachedMessages>=100&&maxCachedMessages<=5000?maxCachedMessages:500;
- const ready=()=>gateway?.enabled===true&&gateway?.contractCertified===true
-  &&gateway?.stagingRuntimeVerified===true&&gateway?.isConfigured?.()===true
-  &&typeof gateway.readMessages==='function'
-  &&typeof gateway.sendMessage==='function'&&typeof getActor==='function';
+ const ready=()=>{
+  try{
+   return gateway?.enabled===true&&gateway?.contractCertified===true
+    &&gateway?.stagingRuntimeVerified===true&&gateway?.isConfigured?.()===true
+    &&typeof gateway.readMessages==='function'
+    &&typeof gateway.sendMessage==='function'&&typeof getActor==='function';
+  }catch{return false;}
+ };
  const clear=()=>{
   generation++;loading=false;sending=false;state=blank();
   try{gateway?.cancelPending?.();}catch{/* logout local nunca se bloquea */}
+ };
+ const revoked=()=>{
+  if(ready())return false;
+  clear();return true;
  };
  function trimWindow(newestFirst){
   const excess=state.messages.length-windowLimit;
@@ -97,7 +105,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   state.evictedCount+=discarded.length;
  }
  function snapshot(){
-  const valid=state.header&&state.header.expiresAt>now();
+  if(!ready()&&(state.header||state.pending||loading||sending))clear();
+  const valid=ready()&&state.header&&state.header.expiresAt>now();
   // Un mensaje incierto conserva contexto para reconciliar la MISMA clave,
   // pero las filas caducadas nunca vuelven a exponerse al dispositivo.
   const pending=Boolean(state.header&&state.pending);
@@ -118,7 +127,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   });
  }
  async function open({serviceId,serviceKind,older=false}={}){
-  if(!ready())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
+  if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
   // Un resultado de red ambiguo debe conciliarse con la misma clave antes
   // de permitir abrir otra conversación o generar una solicitud nueva.
@@ -135,6 +144,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   try{
    let before;try{before=await getActor();}catch{before=null;}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!actorOk(before)){clear();return fail('AUTH_REQUIRED');}
    if(older&&state.header.ownerId!==before.subject){clear();return fail('STALE_SESSION_RESPONSE');}
    if(!older)state=blank();
@@ -144,8 +154,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     sessionRevision:before.sessionRevision
    });}catch{result=fail('CHAT_NETWORK_OR_TIMEOUT');}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    let after;try{after=await getActor();}catch{after=null;}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
    if(result?.ok!==true){
     const code=result?.code||'CHAT_UNAVAILABLE';
@@ -186,7 +198,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   }finally{if(started===generation)loading=false;}
  }
  async function send({body,requestKey,retry=false}={}){
-  if(!ready())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
+  if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
   if(!state.header||state.header.expiresAt<=now())return fail('CHAT_NOT_AUTHORIZED');
   if(!cleanMessage(body)||!validId(requestKey))return fail('INVALID_MESSAGE');
@@ -199,6 +211,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   try{
    let before;try{before=await getActor();}catch{before=null;}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!actorOk(before)||before.subject!==state.header.ownerId){
     clear();return fail('AUTH_REQUIRED');
    }
@@ -211,8 +224,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     sessionRevision:before.sessionRevision
    });}catch{result=fail('CHAT_NETWORK_OR_TIMEOUT');}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    let after;try{after=await getActor();}catch{after=null;}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
    if(result?.ok!==true){
     const code=result?.code||'CHAT_UNAVAILABLE';
@@ -238,7 +253,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  }
  async function retryPending(){
   if(!state.pending||!state.header)return fail('NO_PENDING_MESSAGE');
-  if(!ready())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
+  if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
   if(state.header.expiresAt<=now()){
    // Antes de un reintento con token/permiso temporal vencido,
@@ -249,6 +264,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     let before;
     try{before=await getActor();}catch{before=null;}
     if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
     if(!actorOk(before)||before.subject!==prior.ownerId){
      clear();return fail('AUTH_REQUIRED');
     }
@@ -258,9 +274,11 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
      subject:before.subject,sessionRevision:before.sessionRevision
     });}catch{response=fail('CHAT_NETWORK_OR_TIMEOUT');}
     if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
     let after;
     try{after=await getActor();}catch{after=null;}
     if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
     if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
     if(response?.ok!==true){
      const code=response?.code||'CHAT_UNAVAILABLE';

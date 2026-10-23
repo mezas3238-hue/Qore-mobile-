@@ -291,3 +291,60 @@ test('hilo diferente tras expiración revoca la autorización del mensaje anteri
  assert.equal(sends,1);
  assert.equal(flow.snapshot().pendingSend,false);
 });
+
+test('revocar contrato después de abrir purga mensajes; reactivarlo no recupera caché vieja',async()=>{
+ let active=true;
+ const gateway=flags({isConfigured:()=>active});
+ const flow=make(gateway);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().messages.length,1);
+ active=false;
+ assert.equal(flow.snapshot().contractReady,false);
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().serviceId,null);
+ active=true;
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().active,false);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+});
+test('revocación con GET en vuelo descarta respuesta y cancela transporte',async()=>{
+ let active=true,finish,cancels=0;
+ const waiting=new Promise(resolve=>{finish=resolve;});
+ const flow=make(flags({isConfigured:()=>active,
+  cancelPending:()=>cancels++,readMessages:async()=>waiting}));
+ const pending=flow.open({serviceId,serviceKind:'DELIVERY'});
+ await Promise.resolve();await Promise.resolve();
+ active=false;
+ finish({ok:true,data:page('DELIVERY')});
+ assert.equal((await pending).code,'CHAT_CONTRACT_NOT_CERTIFIED');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(cancels,1);
+});
+test('revocación antes de ACK no comunica falso enviado ni revive datos',async()=>{
+ let active=true,finish,cancels=0;
+ const waiting=new Promise(resolve=>{finish=resolve;});
+ const flow=make(flags({isConfigured:()=>active,
+  cancelPending:()=>cancels++,sendMessage:async()=>waiting}));
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ const pending=flow.send({body:'Estoy aquí',requestKey:key});
+ await Promise.resolve();await Promise.resolve();
+ active=false;
+ finish({ok:true,data:ack()});
+ assert.equal((await pending).code,'CHAT_CONTRACT_NOT_CERTIFIED');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,false);
+ assert.equal(cancels,1);
+});
+test('excepción en certificación no revela datos ni rompe controles',async()=>{
+ let throwing=false;
+ const flow=make(flags({isConfigured:()=>{
+  if(throwing)throw Error('config revocada');
+  return true;
+ }}));
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ throwing=true;
+ assert.equal(flow.snapshot().contractReady,false);
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,
+  'CHAT_CONTRACT_NOT_CERTIFIED');
+});
