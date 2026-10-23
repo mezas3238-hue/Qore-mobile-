@@ -170,3 +170,18 @@ test('re-login de mismo Admin durante revisión invalida respuesta del token ant
  assert.equal((await first).code,'STALE_SESSION_RESPONSE');
  assert.equal(app.snapshot().kyc,null);
 });
+
+test('cambio de rol owner a admin y retorno no recupera finanzas previas',async()=>{
+ let current={...auth(owner),role:'owner'};
+ const app=createAdminExperience({
+  authProvider:{readSession:async()=>current,signOut:async()=>{}},now:()=>now
+ });
+ await app.refreshSession();
+ assert.equal(app.readFinance(financeData),true);
+ current={...auth(owner),role:'admin'};
+ await app.refreshSession();
+ assert.equal(app.snapshot().finance,null);
+ current={...auth(owner),role:'owner'};
+ await app.refreshSession();
+ assert.equal(app.snapshot().finance,null);
+});
