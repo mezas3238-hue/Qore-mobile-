@@ -20,29 +20,6 @@ const cards=[
  ['Envíos por estado','Sin conexión','No se muestran envíos ficticios'],
  ['Alertas de seguridad','Sin conexión','Requiere bandeja privada']
 ] as const;
-const panels:Record<Exclude<Page,'resumen'>,{title:string;description:string;empty:string;requirements:string[]}>={
- propietario:{title:'Finanzas propietario',description:'Cifras exclusivamente del libro financiero conciliado',empty:'Sin datos conectados',requirements:['Rol owner + MFA del servidor','Ledger conciliado','Permisos y auditoría']},
- kyc:{
-  title:'Revisión documental de conductores y vehículos',
-  description:'Documentación legal y seguros sujetos a verificación. No se aprueba automáticamente ningún conductor.',
-  empty:'La cola KYC todavía no está conectada. No se muestran cédulas, licencias ni fotografías reales.',
-  requirements:['Metadatos autorizados desde API Admin','Documentos por URL temporal y permisos','Decisión registrada con motivo, versión y auditoría']},
- zonas:{
-  title:'Zonas, servicios y elegibilidad',
-  description:'La cobertura de una zona no implica disponibilidad de automóviles o repartidores.',
-  empty:'No hay zonas recuperadas del servidor. No habilites ninguna operación desde esta pantalla.',
-  requirements:['Municipio y permisos por servicio','AUTO pasajeros separado de MOTO carga','Disponibilidad y seguros validados por servidor']},
- incidentes:{
-  title:'Incidentes, suspensiones y soporte',
-  description:'Toda acción sensible requiere autorización por rol y bitácora en el backend.',
-  empty:'Sin bandeja de incidentes conectada. Este panel no es un canal activo de emergencia.',
-  requirements:['Incidentes con PII redactada','Historial de medidas y motivos','Suspender o revertir solo tras confirmación auditada']},
- auditoria:{
-  title:'Trazabilidad de decisiones administrativas',
-  description:'El registro debe provenir de eventos inmutables del servidor, no del navegador.',
-  empty:'No hay eventos reales disponibles. No se generaron registros falsos.',
-  requirements:['Actor y permiso autorizados','Marca temporal del servidor','Revisión, idempotencia y exportación filtrada']}
-};
 function Panel({children,className=''}:{children:React.ReactNode;className?:string}){
  return <section className={'panel '+className}>{children}</section>;
 }
@@ -264,12 +241,12 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
-        <span className="muted-tag">SIN API</span></div>
-       <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
-        <p>{panels[page].empty}</p></div>
-       <h3>Requisitos de activación</h3><ul className="requirements">{panels[page].requirements.map(x=><li key={x}>{x}</li>)}</ul>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail">
+       <h2>Sección no disponible</h2>
+       <p>Esta vista no tiene contrato autorizado. No hay acciones operativas ni datos reales.</p>
+       <div className="empty-chip">QA · SIN API</div>
      </Panel>}
+
     <footer>Arquitecto B · PR #8 DRAFT · Sin despliegue, SQL remoto ni cobros</footer>
    </div>
   </main>
