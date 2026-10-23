@@ -34,15 +34,23 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   if(!['ready','retryable'].includes(state.phase))return fail('NO_READY_REQUEST');
   if(retry!==true&&state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
   if(!gateway||typeof gateway.send!=='function'||!getSession)return fail('GATEWAY_UNAVAILABLE');
-  let session;
-  try{session=await getSession();}catch{return fail('AUTH_UNAVAILABLE');}
-  if(!session||session.role!=='passenger'||session.subject!==state.subject){
-   clear();return fail('SESSION_CHANGED');
-  }
+  // La exclusión de doble envío debe suceder ANTES del primer await.
+  // Dos taps síncronos no pueden pasar ambos la comprobación de phase.
   const started=++generation;
+  const expectedSubject=state.subject;
   const operation=state.operation;
   const body=copy(state.body);
   state.phase='in_flight';state.error=null;
+  let session;
+  try{session=await getSession();}
+  catch{
+   if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   clear();return fail('AUTH_UNAVAILABLE');
+  }
+  if(started!==generation||state.subject!==expectedSubject)return fail('STALE_RESPONSE_IGNORED');
+  if(!session||session.role!=='passenger'||session.subject!==expectedSubject){
+   clear();return fail('SESSION_CHANGED');
+  }
   let reply;
   try{reply=await gateway.send(operation,{body});}
   catch{reply=fail('NETWORK_OR_TIMEOUT');}
