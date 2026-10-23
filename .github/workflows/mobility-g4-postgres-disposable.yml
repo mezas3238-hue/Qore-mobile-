@@ -14,6 +14,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G27_*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
@@ -176,3 +177,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G26.5 verify two-session PostgreSQL MVCC late commits and recovery by refresh
         run: python3 apps/mobility-expo/server/g26-history-mvcc-concurrency-ci.py
+
+      - name: G27 A04.2 add independent Admin and Owner backoffice registry in disposable DB
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G27_BACKOFFICE_ROLES_POSTGRES_CI_ONLY.sql
+      - name: G27 A04.2 reject native dual role, revoked privileges, cross-role scopes and client writes
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G27_BACKOFFICE_ROLES_ASSERT_POSTGRES_CI_ONLY.sql
