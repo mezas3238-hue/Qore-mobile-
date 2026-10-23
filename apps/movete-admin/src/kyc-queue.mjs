@@ -1,3 +1,4 @@
+import {readContinuation} from './page-cursor.mjs';
 /**
  * Proyección de lectura Admin WEB, nunca autorización.
  * DTO propuesto para A; no sustituye políticas RLS, JWT, MFA ni audit trail.
@@ -10,14 +11,14 @@ const exact=(x,allowed)=>obj(x)&&Object.keys(x).every(k=>allowed.includes(k));
 const statuses=new Set(['pending','under_review','rejected','approved','expired']);
 const docStates=new Set(['missing','pending','valid','expired','rejected']);
 const kinds=new Set(['AUTO','MOTO_DELIVERY']);
-const exactTop=['scope','revision','generatedAt','expiresAt','items'];
+const exactTop=['scope','revision','generatedAt','expiresAt','items','nextCursor'];
 const exactItem=['vehicleId','vehicleKind','applicationStatus','licenseStatus','insuranceStatus','inspectionStatus','reviewRevision'];
 export function projectKycQueue(data,{role,now=Date.now()}={}){
  if(role!=='admin'||!exact(data,exactTop)
    ||data.scope!=='admin.kyc.read'||!Number.isSafeInteger(data.revision)||data.revision<0
    ||!Number.isSafeInteger(data.generatedAt)||data.generatedAt>now||data.generatedAt<now-300000
    ||!Number.isSafeInteger(data.expiresAt)||data.expiresAt<=now||data.expiresAt>now+300000
-   ||!Array.isArray(data.items)||data.items.length>100)return null;
+   ||!Array.isArray(data.items)||data.items.length>100||!readContinuation(data).ok)return null;
  const seen=new Set(),rows=[];
  for(const v of data.items){
   if(!exact(v,exactItem)||!exactItem.every(k=>Object.hasOwn(v,k))
@@ -30,7 +31,7 @@ export function projectKycQueue(data,{role,now=Date.now()}={}){
   rows.push(Object.freeze({...v}));
  }
  return Object.freeze({revision:data.revision,generatedAt:data.generatedAt,expiresAt:data.expiresAt,
-  items:Object.freeze(rows)});
+  items:Object.freeze(rows),nextCursor:readContinuation(data).nextCursor});
 }
 export function createKycQueueStore({now=()=>Date.now()}={}){
  let queue=null;

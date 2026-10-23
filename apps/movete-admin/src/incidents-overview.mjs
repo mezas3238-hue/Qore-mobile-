@@ -1,3 +1,4 @@
+import {readContinuation} from './page-cursor.mjs';
 /**
  * Bandeja mínima de incidentes para operador Admin.
  * El backend debe verificar permisos, propiedad y PII antes de responder.
@@ -6,18 +7,18 @@
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validId=x=>typeof x==='string'&&UUID.test(x);
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
-const exact=(x,k)=>object(x)&&Object.keys(x).every(key=>k.includes(key))&&k.every(key=>Object.hasOwn(x,key));
+const exact=(x,k)=>object(x)&&Object.keys(x).every(key=>k.includes(key))&&k.every(key=>key==='nextCursor'||Object.hasOwn(x,key));
 const categories=new Set(['SAFETY','RIDE','DELIVERY','PAYMENT_SIMULATED','OTHER']);
 const severities=new Set(['LOW','MEDIUM','HIGH','CRITICAL']);
 const states=new Set(['OPEN','TRIAGED','INVESTIGATING','RESOLVED','CLOSED']);
-const top=['scope','revision','generatedAt','expiresAt','items'];
+const top=['scope','revision','generatedAt','expiresAt','items','nextCursor'];
 const cols=['incidentId','category','severity','status','createdAt','revision'];
 export function projectIncidentQueue(raw,{role,now=Date.now()}={}){
  if(role!=='admin'||!exact(raw,top)||raw.scope!=='admin.incidents.read'
   ||!Number.isSafeInteger(raw.revision)||raw.revision<0
   ||!Number.isSafeInteger(raw.generatedAt)||raw.generatedAt>now||raw.generatedAt<now-300000
   ||!Number.isSafeInteger(raw.expiresAt)||raw.expiresAt<=now
-  ||raw.expiresAt>now+300000||!Array.isArray(raw.items)||raw.items.length>100)return null;
+  ||raw.expiresAt>now+300000||!Array.isArray(raw.items)||raw.items.length>100||!readContinuation(raw).ok)return null;
  const records=[],seen=new Set();
  for(const row of raw.items){
   if(!exact(row,cols)||!validId(row.incidentId)||seen.has(row.incidentId)
@@ -29,7 +30,7 @@ export function projectIncidentQueue(raw,{role,now=Date.now()}={}){
   records.push(Object.freeze({...row}));
  }
  return Object.freeze({revision:raw.revision,expiresAt:raw.expiresAt,
-  items:Object.freeze(records)});
+  items:Object.freeze(records),nextCursor:readContinuation(raw).nextCursor});
 }
 export function createIncidentQueueStore({now=()=>Date.now()}={}){
  let queue=null;
