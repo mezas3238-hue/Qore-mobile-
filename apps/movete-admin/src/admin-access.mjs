@@ -1,7 +1,7 @@
 /** Browser Admin: HTTP boundary de STAGING, NUNCA authorization server-side.
  * Dos gates explícitos: contrato aprobado y origin HTTPS fijado. Sin LIVE.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail=(code,status=0)=>({ok:false,code,status});
 const originOf=x=>{
  try{const u=new URL(x);return u.protocol==='https:'&&!u.username&&!u.password

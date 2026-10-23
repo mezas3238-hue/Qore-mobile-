@@ -3,7 +3,7 @@
  * La cobertura geográfica NO es disponibilidad de conductores.
  * Contrato de respuesta propuesto a A; endpoint NO certificado.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validId=x=>typeof x==='string'&&UUID.test(x);
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(value,keys)=>obj(value)&&Object.keys(value).every(k=>keys.includes(k))

@@ -3,7 +3,7 @@
  * El backend debe verificar permisos, propiedad y PII antes de responder.
  * Sin PII, sin geolocalización, sin acciones SOS o suspensiones en frontend.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validId=x=>typeof x==='string'&&UUID.test(x);
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(x,k)=>object(x)&&Object.keys(x).every(key=>k.includes(key))&&k.every(key=>Object.hasOwn(x,key));

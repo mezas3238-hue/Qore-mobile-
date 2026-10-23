@@ -3,7 +3,7 @@
  * Auth del servidor; exige factor adicional confirmado por proveedor aprobado.
  * El navegador nunca concede permisos; JWT/RBAC se verifica en backend A.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createAdminSessionController({provider,clearSensitive=()=>{},now=()=>Date.now()}={}){
  let current=null,epoch=0;
  const clear=()=>{epoch++;current=null;clearSensitive();};
