@@ -135,12 +135,41 @@ BEGIN
  IF public.mobility_vehicle_preflight(driver_cargo,cargo_vehicle,'moto_pasajero')
  THEN RAISE EXCEPTION 'G20 mistakenly enabled MOTO passenger rides'; END IF;
 
- -- Cargo offers obey the same preflight at creation AND acceptance.
+ -- Create separate delivery because G15's earlier private offer for
+ -- courier 163 is expired and UNIQUE(delivery,courier) forbids resurfacing it.
+ SELECT public.mobility_stage_delivery_request(
+  sender,'00000000-0000-4000-8000-000000000253',
+  'MOTO','PARCEL',450,10,10,10,'CENTRO','LAMBRARE',false)
+ INTO delivery_id;
  SELECT public.mobility_stage_delivery_offer(
   delivery_id,driver_cargo,cargo_vehicle,
-  '00000000-0000-4000-8000-000000000253',30) INTO cargo_offer;
- -- G15 already created an offer for courier 163 and this delivery; that offer
- -- was expired. This uniqueness intentionally prevents a duplicate offer.
- -- This branch is replaced below with a separate requested delivery fixture.
+  '00000000-0000-4000-8000-000000000254',30) INTO cargo_offer;
+ IF cargo_offer IS NULL THEN RAISE EXCEPTION 'G20 valid MOTO cargo offer not created'; END IF;
+ SELECT public.mobility_stage_register_driver_document(
+  driver_cargo,'00000000-0000-4000-8000-000000000255',
+  'licencia',driver_cargo::text||'/licencia-G20CargoPending456.jpg',
+  'image/jpeg',8050,repeat('c',64)) INTO cargo_doc;
+ BEGIN
+  PERFORM public.mobility_stage_delivery_accept_offer(
+   cargo_offer,driver_cargo,'00000000-0000-4000-8000-000000000256');
+  RAISE EXCEPTION 'BUG: courier accepted offer after new pending license';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM='BUG: courier accepted offer after new pending license'
+   THEN RAISE; END IF;
+ END;
+ IF (SELECT status FROM public.mobility_stage_deliveries WHERE id=delivery_id)
+  <>'requested' THEN RAISE EXCEPTION 'G20 failed courier acceptance changed delivery'; END IF;
+ PERFORM public.mobility_stage_review_driver_document(
+  cargo_doc,admin,true,'DOCUMENT_VALID',
+  '00000000-0000-4000-8000-000000000257');
+ SELECT public.mobility_stage_delivery_accept_offer(
+  cargo_offer,driver_cargo,'00000000-0000-4000-8000-000000000258')
+ INTO cargo_event;
+ IF cargo_event IS NULL OR
+  (SELECT status FROM public.mobility_stage_deliveries WHERE id=delivery_id)
+  <>'accepted'
+ THEN RAISE EXCEPTION 'G20 approved latest cargo license cannot accept private offer'; END IF;
+ IF public.mobility_vehicle_preflight(driver_cargo,cargo_vehicle,'moto_pasajero')
+ THEN RAISE EXCEPTION 'G20 improperly enabled MOTO passenger operations'; END IF;
 END $checks$;
 RESET ROLE;
