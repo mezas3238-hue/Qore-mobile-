@@ -39,7 +39,9 @@ BEGIN
 
  -- Pending AUTO applications only. G2 MOTO is explicitly PASSENGER, not
  -- MOTO_DELIVERY, so it MUST NOT be relabelled or silently approved.
- -- G17 evidence statuses are document truth (not legal/medical verification).
+ -- G17 evidence statuses are source truth; G2 compliance is needed
+ -- before 'approved' evidence can truthfully become 'valid'.
+ -- No date verification => pending, expired dates => expired.
  WITH selected AS (
   SELECT v.id,v.driver_id,v.revision,
    pg_catalog.replace(v.id::text,'-','') AS keyset
@@ -52,10 +54,38 @@ BEGIN
   SELECT * FROM selected ORDER BY keyset DESC LIMIT 50
  ), review AS (
   SELECT v.id,v.revision,v.keyset,
-   license.status AS license_status,
-   insurance.status AS insurance_status,
-   inspection.status AS inspection_status
+   CASE
+    WHEN license.status='approved'
+     AND dc.license_valid_through<CURRENT_DATE THEN 'expired'
+    WHEN license.status='approved'
+     AND dc.driver_review_status='approved'
+     AND dc.license_valid_through>=CURRENT_DATE
+     AND dc.license_verified_at<=pg_catalog.clock_timestamp()
+     AND dc.license_verified_by<>v.driver_id THEN 'valid'
+    WHEN license.status='approved' THEN 'pending'
+    ELSE license.status END AS license_status,
+   CASE
+    WHEN insurance.status='approved'
+     AND vc.insurance_valid_through<CURRENT_DATE THEN 'expired'
+    WHEN insurance.status='approved'
+     AND vc.insurance_valid_through>=CURRENT_DATE
+     AND vc.insurance_verified_at<=pg_catalog.clock_timestamp()
+     AND vc.paid_passenger_insurance_covered=true
+     AND vc.reviewed_by<>v.driver_id THEN 'valid'
+    WHEN insurance.status='approved' THEN 'pending'
+    ELSE insurance.status END AS insurance_status,
+   CASE
+    WHEN inspection.status='approved'
+     AND vc.inspection_valid_through<CURRENT_DATE THEN 'expired'
+    WHEN inspection.status='approved'
+     AND vc.inspection_valid_through>=CURRENT_DATE
+     AND vc.inspection_verified_at<=pg_catalog.clock_timestamp()
+     AND vc.reviewed_by<>v.driver_id THEN 'valid'
+    WHEN inspection.status='approved' THEN 'pending'
+    ELSE inspection.status END AS inspection_status
   FROM bounded v
+  LEFT JOIN public.mobility_driver_compliance dc ON dc.driver_id=v.driver_id
+  LEFT JOIN public.mobility_vehicle_compliance vc ON vc.vehicle_id=v.id
   LEFT JOIN LATERAL (
    SELECT d.status::text AS status
    FROM public.mobility_stage_driver_documents d
@@ -81,15 +111,9 @@ BEGIN
   'items',COALESCE((
    SELECT pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
     'vehicleId',id,'vehicleKind','AUTO','applicationStatus','pending',
-    'licenseStatus',CASE license_status
-      WHEN 'approved' THEN 'valid' WHEN 'rejected' THEN 'rejected'
-      WHEN 'pending' THEN 'pending' ELSE 'missing' END,
-    'insuranceStatus',CASE insurance_status
-      WHEN 'approved' THEN 'valid' WHEN 'rejected' THEN 'rejected'
-      WHEN 'pending' THEN 'pending' ELSE 'missing' END,
-    'inspectionStatus',CASE inspection_status
-      WHEN 'approved' THEN 'valid' WHEN 'rejected' THEN 'rejected'
-      WHEN 'pending' THEN 'pending' ELSE 'missing' END,
+    'licenseStatus',COALESCE(license_status,'missing'),
+    'insuranceStatus',COALESCE(insurance_status,'missing'),
+    'inspectionStatus',COALESCE(inspection_status,'missing'),
     'reviewRevision',revision
    ) ORDER BY keyset DESC)
    FROM review
