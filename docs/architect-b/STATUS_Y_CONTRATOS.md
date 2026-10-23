@@ -93,3 +93,27 @@ Adaptadores clientes no verifican JWT por sí mismos ni confían en roles locale
 6. Interfaz visual final (Lovable solo UI) después de infraestructura y contratos aprobados; no despliegue ni LIVE sin mandato explícito.
 
 Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no merge; no producción, SQL remoto, pagos reales ni datos personales.**
+
+## Tercera sesión — 22/10/2026: B06/B09 y endurecimiento Admin B11
+
+| SHA de código | Trabajo | Verificación |
+|---|---|---|
+| `62cdaeaa8bf45ace4d01c94e853f9182ff816170` | B06: `rider-polling.mjs`, resync por GET propio, bloqueo de polling duplicado, clearing inmediato GPS/ETA por caída/red o 401/403, rechazo de respuestas de sesión/cuenta anterior y cancelación de solicitudes tardías | Boundary #39882716910 **SUCCESS**; Cliente/isolation #39882716929 **SUCCESS** |
+| `67eb2dd6ea8677f22a0743c9efc5d12034885524` | B11: `kyc-queue.mjs`: vista mínima de metadatos aprobables, revisión/caducidad y rechazo explícito de PII/URL documento en filas | Boundary #39882886566 **SUCCESS**; isolation #39882886329 **SUCCESS**. No cubre Admin typecheck/build |
+| `b3e4709f4678868dd3fa133c9eca208068b9e0ba` | B09: historial de servicios paginable solo para titular, deduplicado por revisión, sin importes inventados/PII y con invalidación al cambiar cuenta | Boundary #39883034909 **SUCCESS**; Cliente/isolation #39883034741 **SUCCESS** |
+| `376666b0ca711767f273745fe6ae6101adb139b9` | B11: controlador de sesión Admin efímera con MFA, limpieza de caché privada y revocación conservadora; `admin-access.mjs` reforzado con origin pinned HTTPS, timeout, no cookies, 401/403 y exclusión de revisiones simultáneas | Boundary #39883269068 **SUCCESS**; isolation #39883269072 estaba en cola al último chequeo. **Admin build/test sigue sin ejecutarse en CI** |
+
+**Restricción de integración:** Las funciones B06/B09/B11 anteriores son adaptadores y proyecciones de DTO **propuestos**; A no ha entregado aún contratos de respuesta ni endpoints conectados que permitan activarlos. Se escribió un comentario técnico en [issue #9](https://github.com/mezas3238-hue/Qore-mobile-/issues/9) con propuesta de DTO y códigos de error. Las sesiones cliente/administrador no son autenticación real.
+
+### Gate Admin independiente
+- A debe incorporar un job de GitHub Actions `apps/movete-admin: npm install --ignore-scripts && npm run check && npm run build`, sin editar el código fuente de B.
+- Ejecutar pruebas admin de rechazo por rol, sesión vencida/revocada, MFA, PII, HTTPS pinning, idempotencia, timeout/red caída y concurrencia. Son pruebas unitarias disponibles en la carpeta Admin, **pendientes de ejecución CI verificada**.
+- No insertar tokens/secrets/admin service role en bundle HTML o JS. No hay URLs temporales reales KYC ni expedientes reales.
+- B no podrá declarar Admin listo ni conectado hasta obtener CI de build, autenticación backend y pruebas E2E.
+
+### Gate Cliente pendiente
+- A debe entregar y certificar sesión Passenger, DTOs status/history/quote/cancel, configuración de staging HTTPS autorizada y permisos por servicio/municipio.
+- Probar módulos propuestos con mocks y JWT de staging sin asumir que OpenAPI implica deployment.
+- Integrar pantallas contra adaptadores únicamente después de contratos/gates de A. No activar compras, cobros, tracking o solicitudes reales durante QA local.
+
+**Invariante:** archivos A/CI global/Driver no modificados por B; PR #8 DRAFT, sin merge, sin LIVE.
