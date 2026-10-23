@@ -255,3 +255,34 @@ test('cursor vencido permite reiniciar manualmente desde primera página sin mez
  assert.deepEqual(requests,[null,signedCursor('page_2'),null]);
  assert.equal(api.snapshot().historyLoadError,null);
 });
+
+test('cursor expirado borra historiales parcialmente cargados antes de reiniciar',async()=>{
+ let attempt=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  historyGatewayOptions:historyOptions(async()=>{
+   attempt++;
+   return attempt===1?historyResp({...fakeHistory(),nextCursor:signedCursor('page_2')})
+    :{status:400,ok:false,redirected:false};
+  })
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadHistoryPage({reset:true})).ok,true);
+ assert.equal(api.snapshot().history.items.length,1);
+ assert.equal((await api.loadHistoryPage()).code,'INVALID_OR_EXPIRED_CURSOR');
+ assert.equal(api.snapshot().history,null);
+ assert.equal(api.snapshot().historyLoadError,'INVALID_OR_EXPIRED_CURSOR');
+});
+test('relogin de mismo usuario con token nuevo borra cotización e historial privado',async()=>{
+ let incoming=fakeSession();
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>incoming,signOut:async()=>{}}
+ });
+ await api.refreshSession();
+ api.acceptQuote(fakeQuote());api.acceptHistory(fakeHistory());
+ assert.equal(api.snapshot().history.items.length,1);
+ incoming={...incoming,token:'synthetic-new-passenger-token-987654321'};
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().history,null);
+ assert.equal(api.snapshot().quote,null);
+});

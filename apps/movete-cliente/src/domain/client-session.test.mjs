@@ -67,3 +67,23 @@ test('en dos refresh pasajeros gana el último, sin mezclar identidades',async()
  assert.equal((await older).code,'STALE_SESSION_RESPONSE');
  assert.equal(ctrl.publicSession().subject,u);
 });
+
+test('nuevo token del mismo pasajero borra recursos privados anteriores',async()=>{
+ let next=valid(),clears=0;
+ const state=createClientSessionController({
+  provider:{readSession:async()=>next},clearPrivateState:()=>clears++,now:()=>10000
+ });
+ await state.refresh();
+ next={...valid(),token:'synthetic-new-token-that-is-longer-123456'};
+ assert.equal((await state.refresh()).ok,true);
+ assert.equal(clears,1);
+ assert.equal(state.getSessionForGateway().token,next.token);
+});
+test('renovación idéntica no vacía estado ni desencadena borrado',async()=>{
+ let clears=0;
+ const state=createClientSessionController({
+  provider:{readSession:async()=>valid()},clearPrivateState:()=>clears++,now:()=>10000
+ });
+ await state.refresh();await state.refresh();
+ assert.equal(clears,0);
+});

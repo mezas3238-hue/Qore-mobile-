@@ -23,7 +23,11 @@ export function createClientSessionController({provider,clearPrivateState=()=>{}
    ||!UUID.test(session.subject)||typeof session.token!=='string'
    ||session.token.length<20||!Number.isFinite(session.expiresAt)
    ||session.expiresAt<=now()+1000){clear();return {ok:false,code:'AUTH_REQUIRED'};}
-  if(current&&current.subject!==session.subject)clearPrivateState();
+  // Un relogin con JWT distinto es otra sesión, aunque el subject sea igual.
+  // No reutilizar historia, GPS ni requestKey de un token revocado.
+  if(current&&(current.subject!==session.subject||
+    current.token!==session.token||current.expiresAt!==session.expiresAt))
+    clearPrivateState();
   current={subject:session.subject,role:'passenger',expiresAt:session.expiresAt,token:session.token};
   return {ok:true,subject:current.subject,expiresAt:current.expiresAt};
  }

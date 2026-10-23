@@ -92,6 +92,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     return fail('STALE_SESSION_RESPONSE');
    if(!answer?.ok){
     historyLoadError=answer?.code??'HISTORY_UNAVAILABLE';
+    // Un cursor revocado o expirado invalida el snapshot enlazado
+    // a ese ancla; el pasajero debe reconsultar primera página.
+    if(historyLoadError==='INVALID_OR_EXPIRED_CURSOR'){
+     history.clear();seenCursors.clear();
+    }
     notify();
     return fail(historyLoadError);
    }
