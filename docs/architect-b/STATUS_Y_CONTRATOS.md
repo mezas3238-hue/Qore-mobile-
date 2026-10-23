@@ -152,3 +152,12 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - Handoff completo y contratos propuestos para A: [ADMIN_ZONAS_INCIDENTES_SEGURIDAD_2026-10-22.md](./ADMIN_ZONAS_INCIDENTES_SEGURIDAD_2026-10-22.md).
 - **CI Admin independiente no certificado.** Los checks de propiedad/isolation son del monorepo y de Cliente/Driver; no prueban `npm run check` / `npm run build` de Admin. A debe añadir el job de `.github`, ver issue #9.
 - PR #8 sigue DRAFT sin merge, sin despliegue, sin API real, sin entrada a documentos sensibles ni operaciones económicas.
+
+## SÉPTIMA SESIÓN — ADMIN WEB QA CERTIFICADO EN CI — 23/10/2026
+**Este apartado sustituye el bloqueo histórico «job Admin CI pendiente» registrado en secciones anteriores. El job ya fue aportado por Arquitecto A y corre correctamente.**
+- Workflow `Movete Facil Admin web QA` de A, checkout del commit B, instalación aislada, TypeScript estricto, 79 pruebas unitarias, Vite build y artefacto `dist/index.html`.
+- **Código SHA `4b86173fb8ea047a3e1ff38e097aa7e937bd4e25`**: [CI Admin Web #39893653452 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39893653452). **79 tests, 79 PASS, 0 FAIL; build SUCCESS.**
+- CI de control de carpetas: #39893653625 SUCCESS. CI de aislamiento Cliente/Driver: #39893653495 SUCCESS.
+- Se corrigieron `ERESOLVE` de tipos React, TS de JSX exhaustivo, 4 validadores UUID mal formados en Admin y variable `payload` indefinida del store de zonas. No usar `--force` ni saltarse tests. Histórico y reproducciones: [CERTIFICACION_ADMIN_WEB_QA_2026-10-23.md](./CERTIFICACION_ADMIN_WEB_QA_2026-10-23.md).
+- Se incorporó `audit-feed` y pantalla Admin de auditoría mínima con 79 tests totales de seguridad, finanzas, KYC, zonas, incidentes y Auth. Sin PII, documentos ni operaciones LIVE.
+- **El job Admin no es permiso para producción**: faltan Auth/MFA/RLS del backend, contratos, E2E navegador, API certificada y aprobación del Owner. Mantener PR #8 DRAFT; no merge/deploy/pagos.
