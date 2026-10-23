@@ -36,7 +36,7 @@ const runtimePaths=[
  '/v1/staging/merchant/branches/upsert','/v1/staging/merchant/catalog/upsert',
 ];
 test('G11 OpenAPI is parseable, versioned, localhost STAGING and never LIVE',()=>{
- assert.equal(spec.openapi,'3.1.0');assert.match(spec.info.version,/^1\\.0\\.0-g\\d+$/);
+ assert.equal(spec.openapi,'3.1.0');assert.match(spec.info.version,/^1\.0\.0-g\d+$/);
  assert.equal(spec['x-qore-live-enabled'],false);
  assert.deepEqual(spec.security,[{BearerAuth:[]}]);
  assert.equal(spec.components.securitySchemes.BearerAuth.scheme,'bearer');
