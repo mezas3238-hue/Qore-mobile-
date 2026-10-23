@@ -1,7 +1,8 @@
 /**
  * G28 A05.3 — real private SQL repository adapter for Admin incidents.
- * Zones, Audit and Owner finance remain DISABLED:
- * G29 KYC is AUTO-pending only; no MOTO passenger relabels or invented finance.
+ * Zones and Owner finance remain DISABLED:
+ * G29 KYC is AUTO-pending only; G30 audit is a documented operation subset,
+ * not a complete compliance ledger. No MOTO relabels or invented finance.
  * A trusted backend must still verify JWT and provider-attested MFA in G27.
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -9,7 +10,8 @@ const POSITION=/^[0-9]{13}[0-9a-f]{32}$/;
 const KYC_POSITION=/^[0-9a-f]{32}$/;
 const QUERIES=Object.freeze({
  'admin.incidents.read':{rpc:'mobility_stage_g28_admin_incident_page',pattern:POSITION},
- 'admin.kyc.read':{rpc:'mobility_stage_g29_admin_kyc_page',pattern:KYC_POSITION}
+ 'admin.kyc.read':{rpc:'mobility_stage_g29_admin_kyc_page',pattern:KYC_POSITION},
+ 'admin.audit.read':{rpc:'mobility_stage_g30_admin_audit_page',pattern:POSITION}
 });
 const columns=['revision','items','hasMore'];
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
