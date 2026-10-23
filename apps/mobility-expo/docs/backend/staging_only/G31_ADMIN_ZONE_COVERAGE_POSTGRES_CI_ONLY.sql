@@ -33,9 +33,14 @@ CREATE TABLE public.mobility_stage_g31_zone_coverage (
  PRIMARY KEY(zone_id,service_kind)
 );
 CREATE INDEX mobility_stage_g31_coverage_keyset
- ON public.mobility_stage_g31_zone_coverage(zone_id DESC,service_kind DESC);
+ ON public.mobility_stage_g31_zone_coverage
+ ((pg_catalog.replace(zone_id::text,'-','')||
+    CASE service_kind WHEN 'AUTO_RIDE' THEN '0'
+     WHEN 'AUTO_DELIVERY' THEN '1' ELSE '2' END) DESC);
 
 -- This is a QA read-only telemetry observation, NOT GPS geofencing.
+-- B Admin considers a sample fresh only for 60s; older and missing =>
+-- onDutyVehicles=0 AND availabilityObservedAt=0 (UNKNOWN, not zero drivers).
 -- No browser, driver or service_role can create, spoof or edit observations.
 -- A real future trusted telemetry ingest needs separately audited authority.
 CREATE TABLE public.mobility_stage_g31_zone_observations (
@@ -98,11 +103,11 @@ BEGIN
  ), observed AS (
   SELECT v.*,
    CASE WHEN o.observed_at>=
-       pg_catalog.to_timestamp((_anchor_ms-120000)/1000.0)
+       pg_catalog.to_timestamp((_anchor_ms-60000)/1000.0)
        AND o.observed_at<=pg_catalog.to_timestamp(_anchor_ms/1000.0)
      THEN o.on_duty_vehicles ELSE 0 END AS safe_count,
    CASE WHEN o.observed_at>=
-       pg_catalog.to_timestamp((_anchor_ms-120000)/1000.0)
+       pg_catalog.to_timestamp((_anchor_ms-60000)/1000.0)
        AND o.observed_at<=pg_catalog.to_timestamp(_anchor_ms/1000.0)
      THEN floor(extract(epoch FROM o.observed_at)*1000)::bigint
      ELSE 0 END AS safe_observed_at
