@@ -23,7 +23,7 @@ test('G28 keeps other scopes fail-closed until real sources are certified',async
  const repo=createQoreBackofficeSqlReadRepository({rpc:async()=>{
   called++;return {data:{revision:0,items:[],hasMore:false},error:null};
  }});
- for(const scope of ['admin.zones.read',
+ for(const scope of [
   'owner.finance.read','owner.finance.write','unknown']){
   await assert.rejects(()=>repo({...args,scope}),/not yet independently certified/);
  }
@@ -92,6 +92,30 @@ test('G30 private audit scope uses the real append-only sources and timestamp ke
   params:{_actor:admin,_anchor_ms:ms,_after:null,_limit:50}});
  for(const after of ['bad',admin.replaceAll('-',''),position+'00']){
   await assert.rejects(()=>repo({...audit,after}),/Malformed/);
+ }
+ assert.equal(calls.length,2);
+});
+
+test('G31 zone source read keeps service-aware keysets and refuses fake telemetry clients',async()=>{
+ const calls=[];
+ const repo=createQoreBackofficeSqlReadRepository({rpc:async(name,params)=>{
+  calls.push({name,params});
+  return {data:{revision:1,items:[],hasMore:false},error:null};
+ }});
+ const req={...args,scope:'admin.zones.read',after:null};
+ assert.deepEqual(await repo(req),{revision:1,items:[],hasMore:false});
+ const after=admin.replaceAll('-','')+'2';
+ await repo({...req,after});
+ assert.deepEqual(calls,[{
+  name:'mobility_stage_g31_admin_zone_page',
+  params:{_actor:admin,_anchor_ms:ms,_after:null,_limit:50}
+ },{
+  name:'mobility_stage_g31_admin_zone_page',
+  params:{_actor:admin,_anchor_ms:ms,_after:after,_limit:50}
+ }]);
+ for(const bad of ['fake',admin.replaceAll('-',''),after+'0',
+   admin.replaceAll('-','')+'4','.'+after]){
+  await assert.rejects(()=>repo({...req,after:bad}),/Malformed/);
  }
  assert.equal(calls.length,2);
 });
