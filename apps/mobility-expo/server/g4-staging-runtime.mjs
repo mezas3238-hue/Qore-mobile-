@@ -31,6 +31,8 @@ import {createDriverPrivateInboxRepository} from './g16-driver-private-inbox-rep
 import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
 import {createDriverDocumentRepository} from './g17-driver-document-repository.mjs';
 import {createDriverDocumentGateway} from './g17-driver-document-gateway.mjs';
+import {createDriverEnrollmentRepository} from './g18-driver-enrollment-repository.mjs';
+import {createDriverEnrollmentGateway} from './g18-driver-enrollment-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -178,6 +180,9 @@ export async function prepareQoreG4StagingRuntime({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const driverDocumentPersistence=createDriverDocumentRepository({
+  rpc:(name,params)=>admin.rpc(name,params)
+ });
+ const driverEnrollmentPersistence=createDriverEnrollmentRepository({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const verified=async token=>{
@@ -361,6 +366,11 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const driverEnrollment=createDriverEnrollmentGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeNewDriver:id=>roleHas(admin,id,'passenger'),
+  allowRequest,enroll:params=>driverEnrollmentPersistence.enroll(params)
+ });
  const driverDocuments=createDriverDocumentGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),
@@ -405,6 +415,7 @@ export async function prepareQoreG4StagingRuntime({
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
    driverDocumentHandler:guard(driverDocuments),
+   driverEnrollmentHandler:guard(driverEnrollment),
   }),
  };
 }
