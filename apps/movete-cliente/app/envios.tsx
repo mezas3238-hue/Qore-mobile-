@@ -149,6 +149,11 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
     style={[styles.text,{color:palette.primary}]}>{result}</Text>}
   </Panel>
   <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>Mensajes con el repartidor</Text>
+   <Text style={styles.text}>El chat de tu envío o pedido se abrirá desde su seguimiento una vez que el servidor confirme quién lo repartirá. También funcionará con repartidores en moto de carga.</Text>
+   <Text style={styles.small}>No compartiremos automáticamente tu teléfono, y un borrador de envío no habilita comunicación con ningún repartidor.</Text>
+  </Panel>
+  <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Confirmación y precio</Text>
    <Action label="Cotizar y solicitar repartidor — pendiente del servidor"
     disabled hint="Se habilitará con cotización y contrato de envíos certificados" onPress={()=>{}}/>

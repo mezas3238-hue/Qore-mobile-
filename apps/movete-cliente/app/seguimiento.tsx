@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {AccessibilityInfo,findNodeHandle,ScrollView,Text,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
+import {router} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import {createSecureCancellationKey} from '../src/domain/secure-cancel-key.mjs';
@@ -86,6 +87,15 @@ export default function ClientTracking(){
      :<Text style={styles.text}>Identidad del conductor oculta hasta aceptación persistida y verificación.</Text>}
     {state.position&&state.etaMinutes!==null?<Text style={styles.text}>Llegada estimada verificada: {state.etaMinutes} min.</Text>
      :<Text style={styles.small}>GPS o tiempo estimado no disponibles, sin consentimiento o desactualizados.</Text>}
+    {state.assignedDriver&&state.tripId&&['assigned','arriving','in_progress'].includes(state.state)&&
+     <View>
+      <Action label="Mensajes con mi conductor" secondary disabled={!view.chat.contractReady}
+       hint="Solo se habilita con mensajería de servidor certificada y asignación vigente"
+       onPress={()=>router.push({pathname:'/mensajes',params:{serviceId:state.tripId,serviceKind:'RIDE'}})}/>
+      {!view.chat.contractReady&&<Text style={styles.small}>
+       El chat con tu conductor quedará disponible cuando el backend certifique la conversación privada.
+      </Text>}
+     </View>}
     {state.lastError&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.small}>Sincronización: {state.lastError}. La ubicación caducada está oculta.</Text>}
     <Action label={state.syncing?'Sincronizando…':'Actualizar desde el servidor'} disabled={!canSync}
      busy={state.syncing}
