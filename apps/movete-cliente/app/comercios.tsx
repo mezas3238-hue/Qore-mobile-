@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
@@ -12,6 +12,8 @@ const categories=[
 ] as const;
 export default function Commerce(){
  const {client,view}=useClientView();
+ const [preferredBranch,setPreferredBranch]=useState<string|null>(null);
+ useEffect(()=>setPreferredBranch(null),[view.privateViewRevision]);
  return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Comercios</Text>
@@ -21,10 +23,13 @@ export default function Commerce(){
    <Text style={styles.text}>El carrito productivo ya exige catálogo versionado, stock y precios del servidor. La compra permanece bloqueada porque el contrato actual aún no publica el catálogo para compradores ni una confirmación tipada de pedido.</Text>
    <Text style={styles.small}>Nunca se mostrarán productos ficticios ni se enviará un pedido con precios o stock vencidos.</Text>
   </Panel>}
+  {view.authenticated&&view.branchDirectory.readReady&&
+   <CertifiedBranchDirectory key={'directory-'+view.privateViewRevision}
+    client={client} view={view} onSelect={setPreferredBranch}/>}
   {view.authenticated&&view.commerce.catalogReadReady&&
-   <CertifiedCatalog key={view.privateViewRevision} client={client} view={view}/>}
+   <CertifiedCatalog key={view.privateViewRevision} client={client} view={view} preferredBranch={preferredBranch}/>}
   {view.authenticated&&view.commercePager.readReady&&
-   <ReadOnlyCatalogPager key={'pager-'+view.privateViewRevision} client={client} view={view}/>}
+   <ReadOnlyCatalogPager key={'pager-'+view.privateViewRevision} client={client} view={view} preferredBranch={preferredBranch}/>}
   {categories.map(([title,description])=><Panel key={title}>
    <Text accessibilityRole="header" style={styles.heading}>{title}</Text><Text style={styles.text}>{description}</Text>
    <Text style={styles.small}>Se habilitará únicamente con sucursal, cobertura y catálogo vigentes del servidor.</Text>
@@ -35,10 +40,11 @@ export default function Commerce(){
 /** No presenta productos ni precios mientras falte el GET certificado de A.
  * Los ítems mostrados proceden exclusivamente del flujo de catálogo autorizado.
  */
-function CertifiedCatalog({client,view}:{client:ClientExperience;view:ClientSnapshot}){
+function CertifiedCatalog({client,view,preferredBranch}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null}){
  const commerce=view.commerce;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
+ useEffect(()=>{if(preferredBranch)setBranchInput(preferredBranch);},[preferredBranch]);
  const [loading,setLoading]=useState(false);
  const busy=commerce.catalogLoading||loading;
  const clearMessage=()=>setMessage('');
@@ -122,10 +128,11 @@ function CertifiedCatalog({client,view}:{client:ClientExperience;view:ClientSnap
 /** Lectura de catálogo de múltiples páginas, sin alimentar carrito ni pagos.
  * Solo aparece con una API Buyer previamente auditada por A.
  */
-function ReadOnlyCatalogPager({client,view}:{client:ClientExperience;view:ClientSnapshot}){
+function ReadOnlyCatalogPager({client,view,preferredBranch}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null}){
  const pager=view.commercePager;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
+ useEffect(()=>{if(preferredBranch)setBranchInput(preferredBranch);},[preferredBranch]);
  if(!pager.readReady)return null;
  const matchingBranch=isSelectedCatalogBranchCurrent(branchInput,pager.branchId);
  const load=async(next=false,previous=false)=>{
@@ -165,5 +172,67 @@ function ReadOnlyCatalogPager({client,view}:{client:ClientExperience;view:Client
    <Action label="Cerrar exploración" secondary onPress={()=>{client.clearCommercePage();setMessage('');}}/>
   </>}
   <Text style={styles.small}>No hay límite global de registros de catálogo en el navegador; cada solicitud recibe solo una página. La compra multi-página necesita contrato atómico de A.</Text>
+ </Panel>;
+}
+
+/** Listado G44 sin disponibilidad prometida, sin pedidos ni datos personales.
+ * Solo se monta con un GET de sucursales certificado; OFF por defecto.
+ */
+function CertifiedBranchDirectory({client,view,onSelect}:{
+ client:ClientExperience;view:ClientSnapshot;onSelect:(id:string)=>void;
+}){
+ const directory=view.branchDirectory;
+ const [municipality,setMunicipality]=useState('');
+ const [service,setService]=useState<'MOTO_DELIVERY'|'AUTO_DELIVERY'>('MOTO_DELIVERY');
+ const [message,setMessage]=useState('');
+ const sameQuery=directory.municipality===municipality&&directory.serviceKind===service;
+ const browse=async(next=false,previous=false)=>{
+  if(directory.loading)return;
+  setMessage('');
+  const result=await client.loadBuyerBranches({municipality,serviceKind:service,next,previous});
+  if(!result.ok)setMessage('No fue posible validar esa página de sucursales. Revisá el municipio y volvé a consultar.');
+ };
+ if(!directory.readReady)return null;
+ return <Panel>
+  <Text accessibilityRole="header" style={styles.heading}>Buscar sucursales por municipio · G44</Text>
+  <Text style={styles.small}>Consulta de sucursales habilitadas en el catálogo QA. Cobertura reportada no significa disponibilidad de repartidor ni autorización para realizar pedidos.</Text>
+  <TextInput style={styles.field} placeholder="Municipio (por ejemplo, Asunción)"
+   value={municipality} onChangeText={v=>{setMunicipality(v);setMessage('');}}
+   editable={!directory.loading} maxLength={80}
+   accessibilityLabel="Municipio para buscar sucursales"/>
+  <Action label="Entregas en moto de carga" secondary={service!=='MOTO_DELIVERY'}
+   selected={service==='MOTO_DELIVERY'} disabled={directory.loading}
+   onPress={()=>{setService('MOTO_DELIVERY');setMessage('');}}/>
+  <Action label="Entregas en automóvil" secondary={service!=='AUTO_DELIVERY'}
+   selected={service==='AUTO_DELIVERY'} disabled={directory.loading}
+   onPress={()=>{setService('AUTO_DELIVERY');setMessage('');}}/>
+  <Action label={directory.loading?'Consultando sucursales…':'Consultar sucursales'}
+   busy={directory.loading} disabled={directory.loading}
+   onPress={()=>void browse()}/>
+  {directory.loading&&<Text accessibilityLiveRegion="polite" style={styles.text}>
+   Verificando en servidor los registros del municipio. Se oculta la página anterior.
+  </Text>}
+  {directory.error&&<Text accessibilityRole="alert" style={styles.text}>
+   La página no pudo validarse; no se presentan resultados antiguos.
+  </Text>}
+  {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
+  {!directory.loading&&directory.pageNumber>0&&sameQuery&&<>
+   <Text style={styles.small}>Página {directory.pageNumber} · {directory.items.length} sucursales en esta página. Total global desconocido.</Text>
+   {directory.items.map(item=><View key={item.branchId} style={styles.card}>
+    <Text style={styles.heading}>{item.branchTag.replaceAll('_',' ')}</Text>
+    <Text style={styles.text}>{item.merchantKind} · {item.municipality}</Text>
+    <Text style={styles.small}>Solo descubrimiento. Esta sucursal no está autorizada a recibir pedidos desde esta pantalla.</Text>
+    <Action label={'Elegir sucursal '+item.branchTag.replaceAll('_',' ')}
+     secondary onPress={()=>{onSelect(item.branchId);
+      setMessage('Sucursal elegida. Consultá el catálogo para obtener precios y stock verificados.');}}/>
+   </View>)}
+   <Action label="Sucursales anteriores" secondary disabled={!directory.hasPrevious}
+    onPress={()=>void browse(false,true)}/>
+   <Action label="Siguientes sucursales" secondary disabled={!directory.hasNext}
+    onPress={()=>void browse(true,false)}/>
+   <Action label="Cerrar búsqueda de sucursales" secondary
+    onPress={()=>{client.clearBuyerBranches();setMessage('');}}/>
+  </>}
+  <Text style={styles.small}>Cada respuesta contiene hasta 100 sucursales, sin limitar los registros totales. Las consultas caducan localmente a los 30 segundos; se deberá reconfirmar la disponibilidad real antes de un pedido.</Text>
  </Panel>;
 }
