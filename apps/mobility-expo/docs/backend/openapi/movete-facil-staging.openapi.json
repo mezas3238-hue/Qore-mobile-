@@ -2230,6 +2230,9 @@
           },
           "503": {
             "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -2284,6 +2287,9 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
             "$ref": "#/components/responses/Error"
           }
         }
