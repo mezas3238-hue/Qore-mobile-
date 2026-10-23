@@ -114,3 +114,55 @@ test('logout limpia sucursal, catálogo, líneas y subtotal',()=>{
  const snap=c.snapshot();assert.equal(snap.branchId,null);assert.equal(snap.items.length,0);
  assert.equal(snap.catalogVersion,null);assert.equal(snap.estimatedSubtotalPyg,null);
 });
+
+test('catálogo bloquea campos inesperados de privacidad tanto en envoltura como artículos',()=>{
+ const cases=[
+  {...base,customerPhone:'0981000000'},
+  {...base,items:[{...base.items[0],driverEmail:'secret@example.test'}]},
+  {...base,items:[{...base.items[0],serviceRole:'never'}]},
+  {...base,items:[{...base.items[0],documentUrl:'https://example.test/kyc'}]},
+  {...base,items:[{...base.items[0],customerId:b2}]},
+  {...base,items:[{itemId,...base.items[0],stockUnits:undefined}]}
+ ];
+ for(const candidate of cases)
+  assert.equal(projectCatalog(candidate,{branchId:b1,now:clock}),null);
+ // nextCursor solo es metadato permitido por el paginador; no entra al resultado.
+ const cursorPayload={...base,nextCursor:'C'.repeat(44)};
+ const projected=projectCatalog(cursorPayload,{branchId:b1,now:clock});
+ assert.ok(projected);
+ assert.equal(Object.hasOwn(projected,'nextCursor'),false);
+});
+test('Fuzz determinista de límites/version/UUID/tag/precio/stock no admite valores peligrosos',()=>{
+ const bad=[
+  {version:''},{version:'bad version'},{version:'x'.repeat(81)},
+  {version:'<script>'},{branchId:b2},{branchId:'not-uuid'},
+  {expiresAt:clock},{expiresAt:clock+300001},{expiresAt:NaN},
+  {expiresAt:Infinity},{expiresAt:'65000'},{items:'not-list'},
+  {items:new Array(101).fill(base.items[0])}
+ ];
+ for(const patch of bad)
+  assert.equal(projectCatalog({...base,...patch},{branchId:b1,now:clock}),null);
+ const mutations=[
+  ['itemId',null],['itemId','bad-uuid'],['itemTag','<IMG>'],
+  ['itemTag','Farmacia ✨'],['itemTag','X'],['itemTag','A'.repeat(51)],
+  ['itemClass','PRESCRIPTION'],['itemClass','DRIVER'],
+  ['active',1],['active','true'],['unitPricePyg',99],
+  ['unitPricePyg',10000001],['unitPricePyg',NaN],
+  ['unitPricePyg',Infinity],['unitPricePyg',Number.MAX_SAFE_INTEGER],
+  ['unitPricePyg',200.5],['stockUnits',-1],['stockUnits',1000001],
+  ['stockUnits',1.2],['stockUnits',Infinity],['stockUnits',Number.MAX_SAFE_INTEGER]
+ ];
+ for(let i=0;i<300;i++){
+  const [key,value]=mutations[i%mutations.length];
+  const altered={...base.items[0],[key]:value};
+  const badCatalog={...base,items:[altered]};
+  assert.equal(projectCatalog(badCatalog,{branchId:b1,now:clock}),null,
+   'mutation '+i+' '+key);
+ }
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);
+ const invalidQuantities=[-1,0.5,1000,NaN,Infinity,Number.MAX_SAFE_INTEGER,'2',null];
+ for(const qty of invalidQuantities)
+  assert.equal(c.setQuantity(itemId,qty).code,'INVALID_ITEM');
+ assert.equal(c.snapshot().estimatedSubtotalPyg,0);
+ assert.equal(c.snapshot().finalTotalPyg,null);
+});

@@ -6,6 +6,13 @@
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VERSION=/^[A-Za-z0-9._:-]{1,80}$/;
 const ITEM_TAG=/^[A-Z0-9_]{2,50}$/;
+const CATALOG_KEYS=['branchId','version','expiresAt','items'];
+const ITEM_KEYS=['itemId','itemTag','itemClass','active','unitPricePyg','stockUnits'];
+const onlyKeys=(obj,required,optional=[])=>{
+ const keys=Object.keys(obj);
+ return required.every(k=>Object.hasOwn(obj,k))
+  &&keys.every(k=>required.includes(k)||optional.includes(k));
+};
 const uuid=x=>typeof x==='string'&&UUID.test(x);
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const failure=code=>Object.freeze({ok:false,code});
@@ -16,7 +23,8 @@ const failure=code=>Object.freeze({ok:false,code});
  * itemId, version y expiracion siguen siendo requisitos del contrato de lectura.
  */
 export function projectCatalog(payload,{branchId,now=Date.now()}={}){
- if(!object(payload)||!uuid(branchId)||payload.branchId!==branchId
+ if(!object(payload)||!onlyKeys(payload,CATALOG_KEYS,['nextCursor'])
+  ||!uuid(branchId)||payload.branchId!==branchId
   ||typeof payload.version!=='string'||!VERSION.test(payload.version)
   ||!Number.isSafeInteger(payload.expiresAt)||payload.expiresAt<=now
   ||payload.expiresAt>now+300000||!Array.isArray(payload.items)
@@ -24,7 +32,8 @@ export function projectCatalog(payload,{branchId,now=Date.now()}={}){
  const mapped=[];
  const seen=new Set();
  for(const item of payload.items){
-  if(!object(item)||!uuid(item.itemId)||seen.has(item.itemId)
+  if(!object(item)||!onlyKeys(item,ITEM_KEYS)
+   ||!uuid(item.itemId)||seen.has(item.itemId)
    ||typeof item.itemTag!=='string'||!ITEM_TAG.test(item.itemTag)
    ||!['GENERAL','PHARMACY_OTC'].includes(item.itemClass)
    ||typeof item.active!=='boolean'
