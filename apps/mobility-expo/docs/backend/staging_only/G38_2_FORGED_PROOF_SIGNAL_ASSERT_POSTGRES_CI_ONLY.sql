@@ -19,27 +19,20 @@ DO $fixture$
 DECLARE
  driver uuid:='00000000-0000-4000-8000-000000000181';
  vehicle uuid:='00000000-0000-4000-8000-000000000184';
- zone uuid;
- zone_rev bigint;
+ zone uuid:='b6382000-0000-4638-8638-000000000010';
+ zone_rev bigint:=1;
  consent_rev bigint;
  seq bigint;
  event uuid:='b6382000-0000-4638-8638-000000000009';
  trip uuid;
  offer uuid;
 BEGIN
- SELECT z.zone_id,z.revision INTO zone,zone_rev
- FROM public.mobility_stage_g31_zone_coverage z
- WHERE z.service_kind='AUTO_RIDE'
-  AND z.eligible_by_policy=false
- ORDER BY z.zone_id LIMIT 1;
- IF zone IS NULL THEN
-  RAISE EXCEPTION 'G38.2 lacks synthetic AUTO coverage zone'; END IF;
- -- Simulate a coverage-only activation as the disposable DB owner, leaving
- -- legal/geometry policy explicitly FALSE. Coverage alone cannot dispatch.
- UPDATE public.mobility_stage_g31_zone_coverage
- SET coverage_status='ACTIVE'
- WHERE zone_id=zone AND service_kind='AUTO_RIDE'
-  AND eligible_by_policy=false;
+ -- Self-contained synthetic zone: G31 stress/diagnostic fixtures ROLLBACK.
+ -- ACTIVE geography explicitly stays prohibited for dispatch by policy.
+ INSERT INTO public.mobility_stage_g31_zone_coverage
+ (zone_id,municipality,service_kind,coverage_status,
+  eligible_by_policy,revision)
+ VALUES(zone,'ASUNCION_QA','AUTO_RIDE','ACTIVE',false,zone_rev);
  SELECT c.revision INTO consent_rev
  FROM public.mobility_location_consents c
  WHERE c.driver_id=driver AND c.revoked_at IS NULL;
