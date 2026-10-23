@@ -35,6 +35,9 @@ const merchantOnboardingRoute=/^\/v1\/staging\/merchant\/onboarding\/request$/;
 const merchantReviewRoute=/^\/v1\/staging\/admin\/merchants\/[0-9a-f-]{36}\/review$/i;
 const merchantBranchWriteRoute=/^\/v1\/staging\/merchant\/branches\/upsert$/;
 const merchantCatalogWriteRoute=/^\/v1\/staging\/merchant\/catalog\/upsert$/;
+const driverDocumentReadRoute=/^\/v1\/staging\/driver\/documents$/;
+const driverDocumentObserveRoute=/^\/v1\/staging\/driver\/documents\/observe$/;
+const adminDocumentReviewRoute=/^\/v1\/staging\/admin\/driver-documents\/review$/;
 const driverInboxRoute=/^\/v1\/staging\/driver\/inbox$/;
 const courierPollRoute=/^\/v1\/staging\/courier\/delivery-offers$/;
 const deliveryOfferReadRoute=/^\/v1\/staging\/courier\/delivery-offers\/[0-9a-f-]{36}$/i;
@@ -59,7 +62,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- courierPollHandler,driverInboxHandler,
+ courierPollHandler,driverInboxHandler,driverDocumentHandler,
 }){
  if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
@@ -67,7 +70,8 @@ export function createQoreRadarLoopbackTransport({
    typeof safetyHandler!=='function'||typeof merchantManagementHandler!=='function'||
    typeof deliveryOfferHandler!=='function'||
    (courierPollHandler!==undefined&&typeof courierPollHandler!=='function')||
-   (driverInboxHandler!==undefined&&typeof driverInboxHandler!=='function'))
+   (driverInboxHandler!==undefined&&typeof driverInboxHandler!=='function')||
+   (driverDocumentHandler!==undefined&&typeof driverDocumentHandler!=='function'))
   throw new Error('All G4/G5/G6/G7/G8/G9/G10 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
@@ -100,6 +104,9 @@ export function createQoreRadarLoopbackTransport({
   const merchantManagementPost=req.method==='POST'&&
    (merchantOnboardingRoute.test(path)||merchantReviewRoute.test(path)||
     merchantBranchWriteRoute.test(path)||merchantCatalogWriteRoute.test(path));
+  const driverDocumentGet=req.method==='GET'&&driverDocumentReadRoute.test(path);
+  const driverDocumentPost=req.method==='POST'&&
+   (driverDocumentObserveRoute.test(path)||adminDocumentReviewRoute.test(path));
   const driverInboxGet=req.method==='GET'&&driverInboxRoute.test(path);
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
@@ -107,7 +114,8 @@ export function createQoreRadarLoopbackTransport({
   if(!rider&&!offerGet&&!offerPost&&!tripPost&&!deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
-    !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet){
+    !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
+    !driverDocumentGet&&!driverDocumentPost){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
@@ -115,14 +123,14 @@ export function createQoreRadarLoopbackTransport({
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
   if((rider||offerGet||deliveryGet||merchantGet||financeGet||safetyGet||
-      deliveryOfferGet||courierPollGet||driverInboxGet)&&
+      deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet)&&
      (req.headers['transfer-encoding']!==undefined||
       (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0'))){
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
   if(offerPost||tripPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -147,6 +155,8 @@ export function createQoreRadarLoopbackTransport({
     (financeGet||financePost)?financeHandler:
     (safetyGet||safetyPost)?safetyHandler:
     merchantManagementPost?merchantManagementHandler:
+    (driverDocumentGet||driverDocumentPost)?
+     (driverDocumentHandler??(()=>({status:503,body:{error:'Private Driver documents not configured'}}))):
     driverInboxGet?(driverInboxHandler??(()=>({status:503,body:{error:'Driver inbox not configured'}}))):
     courierPollGet?(courierPollHandler??(()=>({status:503,body:{error:'Private courier polling not configured'}}))):
     (deliveryOfferGet||deliveryOfferPost)?deliveryOfferHandler:offerHandler;
