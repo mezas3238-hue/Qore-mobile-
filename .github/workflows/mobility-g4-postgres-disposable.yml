@@ -12,6 +12,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
+      - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
       - 'apps/mobility-expo/server/g17-*'
       - 'apps/mobility-expo/server/g15-*'
@@ -155,3 +157,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G18_DRIVER_ROLE_ENROLLMENT_POSTGRES_CI_ONLY.sql
       - name: Verify G18 no mixed passenger/Driver identity or fake driver eligibility
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G18_DRIVER_ROLE_ENROLLMENT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G20 latest reviewed KYC license gate to AUTO and courier preflights
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G20_DRIVER_KYC_PREFLIGHT_FENCING_POSTGRES_CI_ONLY.sql
+      - name: Verify G20 rejections at offer acceptance, expired license and MOTO passengers
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G20_DRIVER_KYC_PREFLIGHT_ASSERT_POSTGRES_CI_ONLY.sql
