@@ -1158,6 +1158,86 @@
           }
         }
       }
+    },
+    "/v1/staging/driver/enrollment": {
+      "post": {
+        "operationId": "enrollExclusiveDriverAccount",
+        "tags": [
+          "driver-identity"
+        ],
+        "summary": "One-time JWT-bound conversion to exclusive Driver role, never LIVE",
+        "description": "User must have single default passenger role, explicit consent, no passenger trip/delivery history; driver remains pending compliance. Service-role RPC only in isolated STAGING.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestKey",
+                  "driverConsent"
+                ],
+                "properties": {
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "driverConsent": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Driver identity pending compliance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "mode",
+                    "enrollmentId",
+                    "status",
+                    "driverEligible",
+                    "liveOperationsEnabled"
+                  ],
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "const": "STAGING_DEMO_ONLY"
+                    },
+                    "enrollmentId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "pending_compliance"
+                    },
+                    "driverEligible": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "liveOperationsEnabled": {
+                      "type": "boolean",
+                      "const": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
