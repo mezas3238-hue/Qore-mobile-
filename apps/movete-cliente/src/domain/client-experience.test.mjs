@@ -161,6 +161,7 @@ test('un listener defectuoso no bloquea el cierre de sesión',async()=>{
  assert.equal(api.snapshot().authenticated,false);
 });
 
+const signedCursor=payload=>'v1.'+payload+'.'+'s'.repeat(43);
 const historyResp=(payload)=>({ok:true,status:200,redirected:false,
  headers:{get:k=>k==='content-type'?'application/json':null},
  text:async()=>JSON.stringify(payload)});
@@ -179,14 +180,14 @@ test('cliente recorre 120 páginas de historial de un usuario sin límite total'
  const urls=[];
  const api=createClientExperience({now:()=>now,
   authProvider:{readSession:async()=>fakeSession()},
-  historyGatewayOptions:historyOptions(async url=>{
-   urls.push(url);
-   const match=url.match(/cursor=p_(\d+)/);
+  historyGatewayOptions:historyOptions(async (url,req)=>{
+   urls.push([url,req.headers['X-Qore-History-Cursor']??null]);
+   const match=(req.headers['X-Qore-History-Cursor']??'').match(/v1\.p_(\d+)\./);
    const number=match?Number(match[1]):1;
    return historyResp({...fakeHistory(),
     items:[{serviceId:'123e4567-e89b-42d3-a456-'+String(number).padStart(12,'0'),
       kind:'RIDE',status:'completed',createdAt:now-3000,revision:1}],
-    nextCursor:number>=120?null:'p_'+(number+1)});
+    nextCursor:number>=120?null:signedCursor('p_'+(number+1))});
   })
  });
  await api.refreshSession();
@@ -196,7 +197,8 @@ test('cliente recorre 120 páginas de historial de un usuario sin límite total'
  assert.equal(api.snapshot().history.nextCursor,null);
  assert.equal((await api.loadHistoryPage()).code,'NO_ADDITIONAL_PAGE');
  assert.equal(urls.length,120);
- assert.equal(urls[1],'https://staging.example.invalid/v1/staging/rider/history?cursor=p_2');
+ assert.equal(urls[1][0],'https://staging.example.invalid/v1/staging/rider/history');
+ assert.equal(urls[1][1],signedCursor('p_2'));
 });
 test('página con propietario ajeno se rechaza y no muestra historial privado',async()=>{
  const api=createClientExperience({now:()=>now,authProvider:{readSession:async()=>fakeSession()},
@@ -225,7 +227,7 @@ test('cursor circular no repite páginas ni hace solicitudes ilimitadas',async()
  let n=0;
  const api=createClientExperience({now:()=>now,authProvider:{readSession:async()=>fakeSession()},
   historyGatewayOptions:historyOptions(async()=>{
-   n++;return historyResp({...fakeHistory(),nextCursor:'loop'});
+   n++;return historyResp({...fakeHistory(),nextCursor:signedCursor('loop')});
   })
  });
  await api.refreshSession();

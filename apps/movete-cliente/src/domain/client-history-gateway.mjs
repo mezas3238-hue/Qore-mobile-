@@ -1,14 +1,14 @@
 /**
  * CLIENTE: paginación de historial solo lectura.
- * GET /v1/staging/rider/history es una propuesta para el Arquitecto A:
+ * GET /v1/staging/rider/history consta en OpenAPI STAGING de A:
  * deshabilitada hasta que A certifique endpoint, JWT/RLS y DTO.
  * La cantidad por página no limita registros totales de la plataforma.
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CURSOR=/^[A-Za-z0-9_-]{1,200}$/;
+const CURSOR=/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/;
 const fail=(code,status=0)=>Object.freeze({ok:false,code,status});
 const uuid=x=>typeof x==='string'&&UUID.test(x);
-const validCursor=x=>x===null||(typeof x==='string'&&CURSOR.test(x));
+const validCursor=x=>x===null||(typeof x==='string'&&x.length<=200&&CURSOR.test(x));
 const validSession=(x,now)=>x&&x.role==='passenger'&&uuid(x.subject)
  &&typeof x.token==='string'&&x.token.length>=20
  &&Number.isFinite(x.expiresAt)&&x.expiresAt>now+1000
@@ -45,12 +45,12 @@ export function createClientHistoryGateway({
    const controller=new AbortController();
    const ms=Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
    timeout=setTimeout(()=>controller.abort(),ms);
-   const url=host+'/v1/staging/rider/history'
-      +(cursor===null?'':'?cursor='+encodeURIComponent(cursor));
+   const url=host+'/v1/staging/rider/history';
    const res=await fetchImpl(url,{
     method:'GET',redirect:'error',credentials:'omit',cache:'no-store',
     referrerPolicy:'no-referrer',
-    headers:{Authorization:'Bearer '+before.token,Accept:'application/json'},
+    headers:{Authorization:'Bearer '+before.token,Accept:'application/json',
+      ...(cursor!==null?{'X-Qore-History-Cursor':cursor}:{})},
     signal:controller.signal
    });
    if(!res||res.redirected===true)return fail('UNTRUSTED_REDIRECT');

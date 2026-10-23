@@ -27,8 +27,10 @@ test('cursores opacos seguros permiten múltiples páginas sin techo de registro
   urls.push([url,opts]);return result();
  }});
  assert.equal((await g.fetchPage()).ok,true);
- assert.equal((await g.fetchPage('page_10001')).ok,true);
- assert.equal(urls[1][0],'https://staging.example.invalid/v1/staging/rider/history?cursor=page_10001');
+ assert.equal((await g.fetchPage(signed('page_10001'))).ok,true);
+ assert.equal(urls[1][0],'https://staging.example.invalid/v1/staging/rider/history');
+ assert.equal(urls[1][1].headers['X-Qore-History-Cursor'],signed('page_10001'));
+ assert.equal(Object.hasOwn(urls[0][1].headers,'X-Qore-History-Cursor'),false);
  assert.equal(urls[0][1].method,'GET');
  assert.equal(urls[0][1].credentials,'omit');
  assert.equal(urls[0][1].cache,'no-store');
@@ -37,7 +39,7 @@ test('cursores opacos seguros permiten múltiples páginas sin techo de registro
  assert.equal(urls[0][1].headers.Authorization,'Bearer '+valid().token);
 });
 test('sin endpoint dinámico ni inyección en cursor o origin',async()=>{
- for(const cursor of ['../../driver','x?admin=true','a+b','a@b','', 'x'.repeat(201)]){
+ for(const cursor of ['../../driver','x?admin=true','a+b','a@b','', 'x'.repeat(201),'v1.x.bad']){
   const g=createClientHistoryGateway(configured);
   assert.equal((await g.fetchPage(cursor)).code,'INVALID_CURSOR');
  }

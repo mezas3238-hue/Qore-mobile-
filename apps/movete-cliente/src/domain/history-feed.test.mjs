@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {projectClientHistory,createClientHistoryStore} from './history-feed.mjs';
 const owner='123e4567-e89b-42d3-a456-426614174000',other='123e4567-e89b-42d3-a456-426614174001';
+const signed=payload=>'v1.'+payload+'.'+'s'.repeat(43);
 const id='123e4567-e89b-42d3-a456-426614174002';
 const entry={serviceId:id,kind:'RIDE',status:'completed',createdAt:500,revision:3};
 const page={ownerId:owner,generatedAt:1000,expiresAt:2000,nextCursor:null,items:[entry]};
@@ -48,7 +49,7 @@ test('50 registros por página no limita el historial total: 5.000 servicios de 
   kind:'RIDE',status:'completed',createdAt:500,revision:1});
  for(let pageNo=1;pageNo<=100;pageNo++){
   const items=Array.from({length:50},(_,i)=>record((pageNo-1)*50+i+1));
-  const payload={...page,items,nextCursor:pageNo<100?'cursor_'+(pageNo+1):null};
+  const payload={...page,items,nextCursor:pageNo<100?signed('cursor_'+(pageNo+1)):null};
   assert.equal(store.consume(payload,owner,{append:pageNo!==1}),true);
  }
  assert.equal(store.current(owner).items.length,5000);
@@ -59,7 +60,7 @@ test('cursor de historial no admite rutas, parámetros, tokens ni valor inválid
  for(const cursor of ['../../admin','hello?role=owner','a+b','token@example.org','','x'.repeat(201)]){
   assert.equal(projectClientHistory({...page,nextCursor:cursor},{subject:owner,now:1100}),null);
  }
- assert.equal(projectClientHistory({...page,nextCursor:'p_123'},{subject:owner,now:1100}).nextCursor,'p_123');
+ assert.equal(projectClientHistory({...page,nextCursor:signed('p_123')},{subject:owner,now:1100}).nextCursor,signed('p_123'));
 });
 
 test('historial grande reutiliza lista ya ordenada sin recalcular cada refresco UI',()=>{
