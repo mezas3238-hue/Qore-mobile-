@@ -28,7 +28,8 @@ export type ClientSnapshot={
   catalogReadReady:boolean;catalogLoading:boolean;catalogError:string|null;
   checkoutEnabled:false;paymentEnabled:false;serverOrderReceipt:null};
  chat:{contractReady:boolean;loading:boolean;sending:boolean;active:boolean;
-  serviceId:string|null;serviceKind:string|null;pageNumber:number;
+  serviceId:string|null;serviceKind:string|null;conversationId:string|null;
+  pageNumber:number;
   messages:readonly {messageId:string;senderRole:'passenger'|'driver';
    body:string;createdAt:number;revision:number}[];
   hasOlder:boolean;pendingSend:boolean;error:string|null;
@@ -86,7 +87,7 @@ export type ClientExperience={
  loadBuyerBranches(args:{municipality:string;serviceKind:'AUTO_DELIVERY'|'MOTO_DELIVERY';
   next?:boolean;previous?:boolean}):Promise<ClientResult>;
  clearBuyerBranches():void;
- openChat(args:{serviceId:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';older?:boolean}):Promise<ClientResult>;
+ openChat(args:{serviceId:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';older?:boolean;expectedConversationId?:string|null}):Promise<ClientResult>;
  sendChat(args:{body:string;requestKey:string}):Promise<ClientResult>;
  retryChat():Promise<ClientResult>;
  loadChatInbox(args?:{next?:boolean}):Promise<ClientResult>;

@@ -46,7 +46,8 @@ export default function PassengerConversationInbox(){
    <Action label={inbox.stale?'Actualizar antes de abrir':'Abrir chat autorizado'}
     secondary disabled={inbox.stale||inbox.loading}
     onPress={()=>router.push({pathname:'/mensajes',params:{
-     serviceId:item.serviceId,serviceKind:item.serviceKind}})}/>
+     serviceId:item.serviceId,serviceKind:item.serviceKind,
+     conversationId:item.conversationId}})}/>
   </Panel>}
   ListEmptyComponent={<Panel>
    <Text style={styles.text}>No hay conversaciones activas verificadas para mostrar.</Text>

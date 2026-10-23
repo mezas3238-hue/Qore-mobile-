@@ -115,6 +115,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    active:Boolean((valid||pending)&&!loading),
    serviceId:valid||pending?state.header.serviceId:null,
    serviceKind:valid||pending?state.header.serviceKind:null,
+   conversationId:valid||pending?state.header.conversationId:null,
    pageNumber:valid&&!loading?state.pageNumber:0,
    messages:Object.freeze(valid&&!loading?[...state.messages]:[]),
    hasOlder:Boolean(valid&&!loading&&state.nextCursor),
@@ -126,15 +127,20 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     hasEvictedNewer:state.evictedCount>0})
   });
  }
- async function open({serviceId,serviceKind,older=false}={}){
+ async function open({serviceId,serviceKind,older=false,expectedConversationId=null}={}){
   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
   // Un resultado de red ambiguo debe conciliarse con la misma clave antes
   // de permitir abrir otra conversación o generar una solicitud nueva.
   if(state.pending)return fail('PENDING_MESSAGE_RECONCILIATION');
+  if(expectedConversationId!==null&&!validId(expectedConversationId))
+   return fail('INVALID_CONVERSATION');
   if(older){
    if(!state.header||state.header.serviceId!==serviceId
-    ||state.header.serviceKind!==serviceKind||!snapshot().hasOlder)
+    ||state.header.serviceKind!==serviceKind
+    ||expectedConversationId!==null
+     &&state.header.conversationId!==expectedConversationId
+    ||!snapshot().hasOlder)
     return fail('NO_OLDER_CHAT_PAGE');
   }else if(!validId(serviceId)||!TYPES.has(serviceKind))
    return fail('INVALID_SERVICE');
@@ -165,7 +171,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    }
    const verified=validPage(result.data,{
     serviceId,serviceKind,ownerId:before.subject,now:now(),
-    conversationId:older?state.header.conversationId:null
+    conversationId:older?state.header.conversationId:expectedConversationId
    });
    if(!verified||older&&verified.revision!==state.header.revision){
     clear();state.error='INVALID_CHAT_PAGE';return fail('INVALID_CHAT_PAGE');

@@ -14,29 +14,43 @@ function supported(x:unknown):x is Service{
 }
 export default function PassengerChatScreen(){
  const {client,view}=useClientView();
- const params=useLocalSearchParams<{serviceId?:string;serviceKind?:string}>();
+ const params=useLocalSearchParams<{serviceId?:string;
+  serviceKind?:string;conversationId?:string}>();
  const serviceId=typeof params.serviceId==='string'&&UUID.test(params.serviceId)
   ?params.serviceId:null;
  const serviceKind=supported(params.serviceKind)?params.serviceKind:null;
+ const conversationId=typeof params.conversationId==='string'
+  &&UUID.test(params.conversationId)?params.conversationId:null;
+ // Si llega una referencia de hilo manipulada, la ruta no puede abrir
+ // un hilo no fijado: fallar cerrado en vez de ignorar el parámetro.
+ const invalidThread=params.conversationId!==undefined&&conversationId===null;
  return <PrivateChat key={passengerChatPrivateViewKey({
-  sessionRevision:view.privateViewRevision,serviceId,serviceKind
- })} client={client} view={view}
-  serviceId={serviceId} serviceKind={serviceKind}/>;
+  sessionRevision:view.privateViewRevision,serviceId,serviceKind,
+  conversationId:invalidThread?'INVALID_THREAD':conversationId
+ })} client={client} view={view} invalidThread={invalidThread}
+  serviceId={serviceId} serviceKind={serviceKind}
+  conversationId={conversationId}/>;
 }
-function PrivateChat({client,view,serviceId,serviceKind}:{
+function PrivateChat({client,view,serviceId,serviceKind,
+ conversationId,invalidThread}:{
  client:ClientExperience;view:ClientSnapshot;
  serviceId:string|null;serviceKind:Service|null;
+ conversationId:string|null;invalidThread:boolean;
 }){
  const [draft,setDraft]=useState('');
  const [feedback,setFeedback]=useState('');
  const busy=useRef(false);
  const chat=view.chat;
- const matching=chat.serviceId===serviceId&&chat.serviceKind===serviceKind;
+ const matching=!invalidThread&&chat.serviceId===serviceId
+  &&chat.serviceKind===serviceKind
+  &&(conversationId===null||chat.conversationId===conversationId);
  const open=async(older=false)=>{
-  if(!serviceId||!serviceKind||busy.current||chat.loading||chat.sending)return;
+  if(!serviceId||!serviceKind||invalidThread||busy.current
+   ||chat.loading||chat.sending)return;
   busy.current=true;setFeedback('');
   try{
-   const result=await client.openChat({serviceId,serviceKind,older});
+   const result=await client.openChat({serviceId,serviceKind,older,
+    expectedConversationId:conversationId});
    if(!result.ok)setFeedback('No se pudo verificar la conversación. Es posible que la asignación haya terminado o tu sesión haya cambiado.');
   }finally{busy.current=false;}
  };
@@ -78,11 +92,14 @@ function PrivateChat({client,view,serviceId,serviceKind}:{
    <Text accessibilityRole="header" style={styles.heading}>Chat dentro de Movete Fácil</Text>
    <Text style={styles.small}>No necesitás compartir tu teléfono. Los mensajes pertenecen al viaje, envío o pedido correspondiente y no sustituyen la ayuda de emergencia.</Text>
    {!view.authenticated&&<Text accessibilityRole="alert" style={styles.text}>Iniciá sesión para utilizar mensajes privados.</Text>}
+   {invalidThread&&<Text accessibilityRole="alert" style={styles.text}>
+    Referencia de conversación inválida. Volvé a Mis conversaciones.
+   </Text>}
    {view.authenticated&&(!serviceId||!serviceKind)&&
     <Text style={styles.text}>Abrí esta pantalla desde un viaje, envío o pedido con repartidor efectivamente asignado. No se pueden buscar conductores por nombre o número.</Text>}
-   {view.authenticated&&serviceId&&serviceKind&&!chat.contractReady&&
+   {view.authenticated&&!invalidThread&&serviceId&&serviceKind&&!chat.contractReady&&
     <Text accessibilityRole="alert" style={styles.text}>Chat en preparación. Faltan el servicio de mensajería, la autorización de asignaciones y la recepción en Driver certificados por el backend.</Text>}
-   {view.authenticated&&serviceId&&serviceKind&&chat.contractReady&&<>
+   {view.authenticated&&!invalidThread&&serviceId&&serviceKind&&chat.contractReady&&<>
     <Text style={styles.text}>Servicio: {serviceKind==='RIDE'?'Viaje en automóvil':
       serviceKind==='DELIVERY'?'Envío particular':'Entrega de comercio'}</Text>
     <Action label={chat.loading?'Verificando conversación…':matching&&chat.active?'Actualizar mensajes':'Abrir conversación autorizada'}

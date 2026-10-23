@@ -436,3 +436,46 @@ test('ACK tardío con datos cruzados no conserva permiso ni mensaje privado',asy
  assert.equal(flow.snapshot().messages.length,0);
  assert.equal(flow.snapshot().pendingSend,false);
 });
+
+test('selección desde inbox vincula conversationId y rechaza hilo distinto para mismo envío',async()=>{
+ let sends=0;
+ const flow=make(flags({
+  readMessages:async()=>({ok:true,data:{...page('DELIVERY'),conversationId:id(90)}}),
+  sendMessage:async()=>{sends++;return {ok:true,data:ack()};}
+ }));
+ const result=await flow.open({serviceId,serviceKind:'DELIVERY',
+  expectedConversationId:conversationId});
+ assert.equal(result.code,'INVALID_CHAT_PAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().conversationId,null);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NOT_AUTHORIZED');
+ assert.equal(sends,0);
+});
+test('hilo exacto desde inbox abre y pagina, y un hilo diferente no puede reutilizar cursor',async()=>{
+ const cursor='a'.repeat(44);
+ let calls=0;
+ const flow=make(flags({
+  readMessages:async()=>({ok:true,data:page('DELIVERY',++calls===1?cursor:null)})
+ }));
+ assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY',
+  expectedConversationId:conversationId})).ok,true);
+ assert.equal(flow.snapshot().conversationId,conversationId);
+ assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY',older:true,
+  expectedConversationId:id(90)})).code,'NO_OLDER_CHAT_PAGE');
+ assert.equal(calls,1);
+});
+test('referencia de conversación manipulada se rechaza antes de consultar backend',async()=>{
+ let hits=0;
+ const flow=make(flags({readMessages:async()=>{
+  hits++;return {ok:true,data:page()};
+ }}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:'../../'})).code,'INVALID_CONVERSATION');
+ assert.equal(hits,0);
+});
+test('navegación histórica sin conversationId sigue validando asignación por servidor',async()=>{
+ const flow=make();
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().conversationId,conversationId);
+});

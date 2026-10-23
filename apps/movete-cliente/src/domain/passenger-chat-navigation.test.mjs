@@ -47,3 +47,14 @@ test('enlaces manipulados no reutilizan el editor de la conversación previa',()
   {sessionRevision:-1,serviceId:id,serviceKind:'MERCHANT_ORDER'}
  ])assert.notEqual(valid,passengerChatPrivateViewKey(patch));
 });
+
+test('cambiar conversación del mismo servicio desmonta editor privado',()=>{
+ const one=passengerChatPrivateViewKey({sessionRevision:4,
+  serviceId:id,serviceKind:'DELIVERY',conversationId:id});
+ const another=passengerChatPrivateViewKey({sessionRevision:4,
+  serviceId:id,serviceKind:'DELIVERY',conversationId:other});
+ const fromHistory=passengerChatPrivateViewKey({sessionRevision:4,
+  serviceId:id,serviceKind:'DELIVERY'});
+ assert.notEqual(one,another);
+ assert.notEqual(one,fromHistory);
+});
