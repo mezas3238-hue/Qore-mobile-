@@ -5,7 +5,7 @@
  */
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const B64=/^[A-Za-z0-9_-]+$/;
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
  (Object.getPrototypeOf(x)===Object.prototype||Object.getPrototypeOf(x)===null);
