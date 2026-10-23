@@ -27,6 +27,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G37_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G38_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G40_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G41_*'
       - 'apps/mobility-expo/server/g36-*'
       - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
@@ -266,3 +267,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G40_INCIDENT_RECEIPT_STATUS_POSTGRES_CI_ONLY.sql
       - name: G40 verify persistent receipt, idempotency, cross-account and blocked SOS
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G40_INCIDENT_RECEIPT_STATUS_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G41 install server-filtered global incident priority queue (PG disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G41_ADMIN_INCIDENT_TRIAGE_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G41 traverse 241 severity/status filtered rows, identity privileges and priority keys
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G41_ADMIN_INCIDENT_TRIAGE_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
