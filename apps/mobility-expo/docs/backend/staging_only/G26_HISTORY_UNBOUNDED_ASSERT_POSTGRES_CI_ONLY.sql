@@ -147,6 +147,36 @@ BEGIN
  RAISE NOTICE 'G26 unbounded PostgreSQL history: % records in % pages',count_all,page_count;
 END $pages$;
 
+-- Verify each access path is *usable* by PostgreSQL for owner-filtered
+-- descending cursor pages. We disable seqscans in this QA-only EXPLAIN
+-- assertion to test index eligibility, NOT as a production planner setting.
+SET LOCAL enable_seqscan=off;
+DO $plans$
+DECLARE
+  check_item record;
+  plan_json json;
+BEGIN
+ FOR check_item IN
+  SELECT * FROM (VALUES
+   ('mobility_stage_auto_demo_trips','passenger_id','mobility_stage_history_rider_desc_g26'),
+   ('mobility_stage_deliveries','sender_id','mobility_stage_history_delivery_desc_g26'),
+   ('mobility_stage_merchant_orders','buyer_id','mobility_stage_history_merchant_desc_g26')
+  ) AS q(table_name,owner_column,index_name)
+ LOOP
+  EXECUTE format(
+   'EXPLAIN (FORMAT JSON) SELECT id,status,revision,created_at FROM public.%I
+    WHERE %I = %L::uuid AND created_at<=%L::timestamptz
+    ORDER BY created_at DESC,id DESC LIMIT 51',
+    check_item.table_name,check_item.owner_column,
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','2026-10-23T00:00:00Z'
+  ) INTO plan_json;
+  IF position(check_item.index_name IN plan_json::text)=0
+  THEN RAISE EXCEPTION 'G26 indexed pagination plan unavailable for %: %',
+    check_item.table_name,plan_json; END IF;
+ END LOOP;
+END $plans$;
+SET LOCAL enable_seqscan=on;
+
 -- Validate real PostgreSQL RLS policies for all THREE tables in one transaction.
 DO $privileges$
 BEGIN
