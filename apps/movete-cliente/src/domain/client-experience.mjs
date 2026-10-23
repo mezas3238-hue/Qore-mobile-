@@ -111,7 +111,12 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(!user)return fail('AUTH_REQUIRED');
   const oldTrip=tracking.snapshot().tripId;
   const result=tracking.begin(tripId,user.subject);
-  if(result.ok&&oldTrip!==tripId){cancellation.clear();fareFlow.clear();quote.clear();}
+  if(result.ok&&oldTrip!==tripId){
+   cancellation.clear();fareFlow.clear();
+   // Un viaje nuevo invalida precios de otro sujeto, pero conserva
+   // cotizaciones verificadas que pertenecen EXACTAMENTE al mismo tripId.
+   if(quote.current()?.subjectId!==tripId)quote.clear();
+  }
   return result;
  }
  async function syncTracking(){
