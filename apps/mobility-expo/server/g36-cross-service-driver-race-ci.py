@@ -22,6 +22,8 @@ CARGO_REQ="b6360000-0000-4636-8636-000000000004"
 AUTO_ACCEPT_KEY="b6360000-0000-4636-8636-000000000005"
 CARGO_ACCEPT_KEY="b6360000-0000-4636-8636-000000000006"
 CANCEL_KEY="b6360000-0000-4636-8636-000000000007"
+AUTO_OFFER_KEY="b6360000-0000-4636-8636-000000000008"
+CARGO_OFFER_KEY="b6360000-0000-4636-8636-000000000009"
 def conn():
     return psycopg.connect(connect_timeout=15)
 
@@ -58,12 +60,22 @@ def prepare():
             assert c.fetchone()[0] is True, "AUTO selected-vehicle preflight unavailable"
             c.execute("SELECT public.mobility_stage_delivery_courier_preflight(%s::uuid,%s::uuid,%s::uuid)",(DRIVER,VEHICLE,delivery))
             assert c.fetchone()[0] is True, "DELIVERY selected-vehicle preflight unavailable"
+            # G4 and G10 revoked direct accept: only driver-specific private
+            # OFFER acceptance is authorized to the server service_role.
+            c.execute("""SELECT public.mobility_stage_auto_demo_offer(
+               %s::uuid,%s::uuid,%s::uuid,%s::uuid,30)""",
+               (trip,DRIVER,VEHICLE,AUTO_OFFER_KEY))
+            offer_auto=c.fetchone()[0]
+            c.execute("""SELECT public.mobility_stage_delivery_offer(
+               %s::uuid,%s::uuid,%s::uuid,%s::uuid,45)""",
+               (delivery,DRIVER,VEHICLE,CARGO_OFFER_KEY))
+            offer_cargo=c.fetchone()[0]
             # The service_role deliberately cannot SELECT internal slots;
             # the disposable database owner (qore_ci) alone inspects them.
             c.execute("RESET ROLE")
             c.execute("SELECT count(*) FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s::uuid",(DRIVER,))
             assert c.fetchone()[0] == 0, "Previous AUTO slot did not release"
-    return trip,delivery
+    return trip,delivery,offer_auto,offer_cargo
 
 def attempt(kind,job,barrier):
     with conn() as db:
@@ -72,13 +84,13 @@ def attempt(kind,job,barrier):
             barrier.wait(timeout=20)
             try:
                 if kind=="AUTO_RIDE":
-                    c.execute("""SELECT public.mobility_stage_auto_demo_accept(
-                      %s::uuid,%s::uuid,%s::uuid,%s::uuid)""",
-                      (job,DRIVER,VEHICLE,AUTO_ACCEPT_KEY))
+                    c.execute("""SELECT public.mobility_stage_auto_demo_accept_offer(
+                      %s::uuid,%s::uuid,%s::uuid)""",
+                      (job,DRIVER,AUTO_ACCEPT_KEY))
                 else:
-                    c.execute("""SELECT public.mobility_stage_delivery_accept(
-                      %s::uuid,%s::uuid,%s::uuid,%s::uuid)""",
-                      (job,DRIVER,VEHICLE,CARGO_ACCEPT_KEY))
+                    c.execute("""SELECT public.mobility_stage_delivery_accept_offer(
+                      %s::uuid,%s::uuid,%s::uuid)""",
+                      (job,DRIVER,CARGO_ACCEPT_KEY))
                 receipt=c.fetchone()[0]
                 db.commit()
                 return kind,"success",str(receipt)
@@ -108,10 +120,10 @@ def verify(trip,delivery,results):
           "exactly one durable slot, no dual-service Driver",results,flush=True)
 
 if __name__=="__main__":
-    trip,delivery=prepare()
+    trip,delivery,offer_auto,offer_cargo=prepare()
     barrier=Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as ex:
-        future_auto=ex.submit(attempt,"AUTO_RIDE",trip,barrier)
-        future_cargo=ex.submit(attempt,"DELIVERY",delivery,barrier)
+        future_auto=ex.submit(attempt,"AUTO_RIDE",offer_auto,barrier)
+        future_cargo=ex.submit(attempt,"DELIVERY",offer_cargo,barrier)
         outcomes=[future_auto.result(timeout=35),future_cargo.result(timeout=35)]
     verify(trip,delivery,outcomes)
