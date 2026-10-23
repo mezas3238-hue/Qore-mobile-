@@ -229,3 +229,65 @@ test('una cancelación defectuosa del gateway no impide limpiar chat del móvil'
  assert.doesNotThrow(()=>flow.clear());
  assert.equal(flow.snapshot().messages.length,0);
 });
+
+test('reintento tras TTL vencido revalida asignación antes de usar la MISMA clave',async()=>{
+ let clock=now,reads=0,sends=0;
+ const sent=[];
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async()=>{
+    reads++;
+    return {ok:true,data:{...page(),generatedAt:clock-1000,
+     expiresAt:clock+60000,messages:[]}};
+   },
+   sendMessage:async args=>{
+    sends++;sent.push(args.requestKey);
+    return sends===1?{ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'}:
+     {ok:true,data:{...ack(),createdAt:clock-100}};
+   }
+  })
+ });
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,'CHAT_NETWORK_OR_TIMEOUT');
+ clock+=60001;
+ assert.equal(flow.snapshot().pendingSend,true);
+ assert.equal(flow.snapshot().active,true);
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal((await flow.retryPending()).ok,true);
+ assert.deepEqual(sent,[key,key]);
+ assert.equal(reads,2);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
+test('si el chat caduca y la red falla, no se reenvía sin validar asignación',async()=>{
+ let clock=now,n=0,sends=0;
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async()=>++n===1?{ok:true,data:page()}:
+     {ok:false,code:'SERVICE_UNAVAILABLE'},
+   sendMessage:async()=>{sends++;return {ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'};}
+  })
+ });
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ await flow.send({body:'Estoy aquí',requestKey:key});
+ clock+=60001;
+ assert.equal((await flow.retryPending()).code,'SERVICE_UNAVAILABLE');
+ assert.equal(sends,1);
+ assert.equal(flow.snapshot().pendingSend,true);
+});
+test('hilo diferente tras expiración revoca la autorización del mensaje anterior',async()=>{
+ let clock=now,n=0,sends=0;
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async()=>++n===1?{ok:true,data:page()}:
+    {ok:true,data:{...page(),conversationId:id(99),
+     generatedAt:clock-1000,expiresAt:clock+60000}},
+   sendMessage:async()=>{sends++;return {ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'};}
+  })
+ });
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ await flow.send({body:'Estoy aquí',requestKey:key});
+ clock+=60001;
+ assert.equal((await flow.retryPending()).code,'INVALID_CHAT_PAGE');
+ assert.equal(sends,1);
+ assert.equal(flow.snapshot().pendingSend,false);
+});

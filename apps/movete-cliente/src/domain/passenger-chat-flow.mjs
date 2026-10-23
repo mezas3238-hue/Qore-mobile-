@@ -98,14 +98,18 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  }
  function snapshot(){
   const valid=state.header&&state.header.expiresAt>now();
+  // Un mensaje incierto conserva contexto para reconciliar la MISMA clave,
+  // pero las filas caducadas nunca vuelven a exponerse al dispositivo.
+  const pending=Boolean(state.header&&state.pending);
   return Object.freeze({
-   contractReady:ready(),loading,sending,active:Boolean(valid&&!loading),
-   serviceId:valid?state.header.serviceId:null,
-   serviceKind:valid?state.header.serviceKind:null,
+   contractReady:ready(),loading,sending,
+   active:Boolean((valid||pending)&&!loading),
+   serviceId:valid||pending?state.header.serviceId:null,
+   serviceKind:valid||pending?state.header.serviceKind:null,
    pageNumber:valid&&!loading?state.pageNumber:0,
    messages:Object.freeze(valid&&!loading?[...state.messages]:[]),
    hasOlder:Boolean(valid&&!loading&&state.nextCursor),
-   pendingSend:Boolean(valid&&state.pending),
+   pendingSend:pending,
    error:state.error,phoneNumbersRequired:false,
    deliveredWithoutAck:false,attachmentsEnabled:false,
    window:Object.freeze({maxMessages:windowLimit,
@@ -232,8 +236,54 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    return Object.freeze({ok:true,serverStored:true});
   }finally{if(started===generation)sending=false;}
  }
- const retryPending=()=>state.pending
-  ?send({body:state.pending.body,requestKey:state.pending.requestKey,retry:true})
-  :Promise.resolve(fail('NO_PENDING_MESSAGE'));
+ async function retryPending(){
+  if(!state.pending||!state.header)return fail('NO_PENDING_MESSAGE');
+  if(!ready())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
+  if(loading||sending)return fail('CHAT_BUSY');
+  if(state.header.expiresAt<=now()){
+   // Antes de un reintento con token/permiso temporal vencido,
+   // releer el hilo desde backend A y revalidar asignación persistida.
+   const started=++generation,prior=state.header;
+   loading=true;state.error=null;
+   try{
+    let before;
+    try{before=await getActor();}catch{before=null;}
+    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+    if(!actorOk(before)||before.subject!==prior.ownerId){
+     clear();return fail('AUTH_REQUIRED');
+    }
+    let response;
+    try{response=await gateway.readMessages({
+     serviceId:prior.serviceId,serviceKind:prior.serviceKind,cursor:null,
+     subject:before.subject,sessionRevision:before.sessionRevision
+    });}catch{response=fail('CHAT_NETWORK_OR_TIMEOUT');}
+    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+    let after;
+    try{after=await getActor();}catch{after=null;}
+    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+    if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
+    if(response?.ok!==true){
+     const code=response?.code||'CHAT_UNAVAILABLE';
+     if(['CHAT_NETWORK_OR_TIMEOUT','RATE_LIMITED','SERVICE_UNAVAILABLE']
+       .includes(code)){state.error=code;return fail(code);}
+     clear();state.error=code;return fail(code);
+    }
+    const verified=validPage(response.data,{
+     serviceId:prior.serviceId,serviceKind:prior.serviceKind,
+     ownerId:before.subject,conversationId:prior.conversationId,now:now()
+    });
+    if(!verified){
+     clear();state.error='INVALID_CHAT_PAGE';return fail('INVALID_CHAT_PAGE');
+    }
+    state.header=verified;state.messages=[...verified.messages];
+    state.nextCursor=verified.nextCursor;state.pageNumber=1;
+    state.seenIds=new Set(verified.messages.map(item=>item.messageId));
+    state.seenCursor=new Set();state.readCount=verified.messages.length;
+    state.evictedCount=0;
+   }finally{if(started===generation)loading=false;}
+  }
+  if(!state.pending)return fail('NO_PENDING_MESSAGE');
+  return send({body:state.pending.body,requestKey:state.pending.requestKey,retry:true});
+ }
  return Object.freeze({open,send,retryPending,snapshot,clear,isConfigured:ready});
 }
