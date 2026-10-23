@@ -16,6 +16,11 @@ export type ClientSnapshot={
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
  cancellation:{phase:string;tripId:string|null;requestKey:string|null;contractReady:boolean};
  fareRequest:{phase:string;tripId:string|null;requestKey:string|null;error:string|null;contractReady:boolean};
+ incidentReport:{phase:string;requestKey:string|null;statusFresh:boolean;
+  receipt:{incidentId:string;receiptId:string;state:string;revision:number;
+   createdAt:string;observedAt:string;receiptStatus:'RECEIVED_IN_QA_DATABASE_ONLY'}|null;
+  error:string|null;contractReady:boolean;qaDatabaseOnly:true;
+  sosDispatched:false;operatorNotified:false};
  history:{ownerId:string;nextCursor:string|null;
   window:{maxItems:number;evictedCount:number;rowsRead:number;hasEvictedNewer:boolean};
   items:readonly {serviceId:string;kind:string;status:string;createdAt:number;revision:number}[]}|null;
@@ -27,6 +32,13 @@ export type ClientExperience={
  refreshSession():Promise<ClientResult>;
  signOut():Promise<ClientResult>;
  clear():void;
+ prepareIncidentReport(request:{requestKey:string;subjectKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';
+  subjectId:string;category:'SAFETY'|'LOSS'|'DISPUTE'|'FRAUD'|'QUALITY';
+  severity:'LOW'|'MEDIUM'|'HIGH'}):ClientResult;
+ discardIncidentReport():ClientResult;
+ submitIncidentReport():Promise<ClientResult>;
+ retryIncidentReport():Promise<ClientResult>;
+ refreshIncidentStatus():Promise<ClientResult>;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
  prepareDelivery(body:unknown):ClientResult;
@@ -51,6 +63,12 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ incidentGatewayOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;
+ }|null;
  cancelGatewayOptions?:{
   enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;

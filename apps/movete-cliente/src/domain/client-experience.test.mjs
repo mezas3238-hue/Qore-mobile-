@@ -623,3 +623,78 @@ test('relogin con misma cuenta sigue invalidando alcance privado tras logout',as
  await api.refreshSession();
  assert.ok(api.snapshot().privateViewRevision>exited);
 });
+
+
+const structuredIncident={requestKey:key,subjectKind:'RIDE',subjectId:trip,
+ category:'QUALITY',severity:'LOW'};
+const incidentReceipt=()=>({incidentId:'123e4567-e89b-42d3-a456-426614174080',
+ receiptId:'123e4567-e89b-42d3-a456-426614174081',state:'open',revision:1,
+ createdAt:new Date(now-1000).toISOString(),observedAt:new Date(now).toISOString(),
+ receiptStatus:'RECEIVED_IN_QA_DATABASE_ONLY'});
+const incidentAnswer=()=>({ok:true,status:201,redirected:false,
+ headers:{get:k=>k==='content-type'?'application/json':null},
+ text:async()=>JSON.stringify(incidentReceipt())});
+const incidentOptions=fetchImpl=>({
+ enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+ origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+ fetchImpl
+});
+test('G40 no usa red si A no certifica runtime de STAGING',async()=>{
+ let hits=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  incidentGatewayOptions:{...incidentOptions(async()=>{hits++;return incidentAnswer();}),
+   stagingRuntimeVerified:false}});
+ await api.refreshSession();
+ assert.equal(api.snapshot().incidentReport.contractReady,false);
+ assert.equal(api.prepareIncidentReport(structuredIncident).code,'INCIDENT_RUNTIME_NOT_CERTIFIED');
+ assert.equal((await api.submitIncidentReport()).code,'NO_READY_INCIDENT');
+ assert.equal(hits,0);assert.equal(api.snapshot().incidentReport.receipt,null);
+});
+test('G40 ligado a sesión propia muestra SOLO recibo QA sin SOS',async()=>{
+ let hits=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  incidentGatewayOptions:incidentOptions(async (url,req)=>{
+   hits++;assert.equal(req.method,'POST');
+   assert.equal(url,'https://staging.example.invalid/v1/staging/safety/incidents/report');
+   assert.deepEqual(JSON.parse(req.body),structuredIncident);return incidentAnswer();
+  })});
+ await api.refreshSession();
+ assert.equal(api.prepareIncidentReport(structuredIncident).ok,true);
+ assert.equal((await api.submitIncidentReport()).ok,true);assert.equal(hits,1);
+ assert.equal(api.snapshot().incidentReport.receipt.receiptStatus,'RECEIVED_IN_QA_DATABASE_ONLY');
+ assert.equal(api.snapshot().incidentReport.operatorNotified,false);
+ await api.signOut();
+ assert.equal(api.snapshot().incidentReport.phase,'idle');
+ assert.equal(api.snapshot().incidentReport.receipt,null);
+});
+test('rotación JWT durante POST G40 borra recibo obsoleto',async()=>{
+ let current=fakeSession(),release;
+ const pending=new Promise(done=>release=done);
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>current},
+  incidentGatewayOptions:incidentOptions(async()=>pending)});
+ await api.refreshSession();api.prepareIncidentReport(structuredIncident);
+ const task=api.submitIncidentReport();await Promise.resolve();await Promise.resolve();
+ current={...current,token:'synthetic-new-jwt-after-submit'};
+ await api.refreshSession();
+ release(incidentAnswer());
+ assert.equal((await task).ok,false);
+ assert.equal(api.snapshot().incidentReport.phase,'idle');
+ assert.equal(api.snapshot().incidentReport.receipt,null);
+});
+test('runtime G40 reintenta con misma clave y no borra estado ambiguo',async()=>{
+ const keys=[];let n=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  incidentGatewayOptions:incidentOptions(async (_url,request)=>{
+   keys.push(JSON.parse(request.body).requestKey);
+   return ++n===1?{status:503,ok:false,redirected:false}:incidentAnswer();
+  })});
+ await api.refreshSession();api.prepareIncidentReport(structuredIncident);
+ assert.equal((await api.submitIncidentReport()).code,'SERVICE_UNAVAILABLE');
+ assert.equal(api.discardIncidentReport().code,'NOT_UNSENT_INCIDENT');
+ assert.equal((await api.retryIncidentReport()).ok,true);
+ assert.deepEqual(keys,[key,key]);
+});

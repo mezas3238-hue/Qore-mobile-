@@ -9,6 +9,8 @@ import {createFareQuoteFlow} from './fare-quote-flow.mjs';
 import {createRideCancellationGateway,createRideCancellationController} from './ride-cancellation.mjs';
 import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
+import {createIncidentG40Gateway} from './incident-g40-gateway.mjs';
+import {createIncidentReportFlow} from './incident-report-flow.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -18,11 +20,11 @@ import {createRiderStatusStore} from './rider-status.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,now=()=>Date.now()}={}){
+export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let mutations,tracking,cancellation,fareFlow;
+ let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
  const observers=new Set();
@@ -32,6 +34,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(tracking)tracking.stop();
   if(cancellation)cancellation.clear();
   if(fareFlow)fareFlow.clear();
+  if(incidentFlow)incidentFlow.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -55,6 +58,27 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  cancellation=createRideCancellationController({
   gateway:cancelGateway,getSession:async()=>actorSession()
  });
+
+
+ // G40 no está montado por A: inyección explícita, sin red por defecto.
+ const incidentGateway=incidentGatewayOptions?createIncidentG40Gateway({
+  ...incidentGatewayOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ incidentFlow=createIncidentReportFlow({
+  gateway:incidentGateway,getActor:async()=>actorSession(),now
+ });
+ function prepareIncidentReport(request){
+  const user=actor();
+  if(!user)return fail('AUTH_REQUIRED');
+  return incidentFlow.prepare({request,subject:user.subject,
+   sessionRevision:session.privacyRevision()});
+ }
 
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
   ...historyGatewayOptions,now,
@@ -229,7 +253,9 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
-    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot()});
+    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
+   incidentReport:incidentFlow.snapshot(),
+    incidentReport:incidentFlow.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -256,6 +282,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   refreshSession:async()=>{const result=await session.refresh();notify();return result;},
   signOut:async()=>{const result=await signOut();notify();return result;},
   clear:()=>{session.clear();clearPrivate();notify();},
+  prepareIncidentReport:request=>{const result=prepareIncidentReport(request);notify();return result;},
+  discardIncidentReport:()=>{const result=incidentFlow.discard();notify();return result;},
+  submitIncidentReport:async()=>{const result=await incidentFlow.submit();notify();return result;},
+  retryIncidentReport:async()=>{const result=await incidentFlow.retry();notify();return result;},
+  refreshIncidentStatus:async()=>{const result=await incidentFlow.refresh();notify();return result;},
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
