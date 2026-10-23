@@ -514,3 +514,44 @@ test('cotización G24 bloqueada sin contrato certificado',async()=>{
  assert.equal(app.prepareServerFare({tripId:trip,requestKey:key}).code,'FARE_CONTRACT_PENDING');
  assert.equal(app.snapshot().fareRequest.contractReady,false);
 });
+
+test('borrador local de viaje o envío puede descartarse sin enviar red ni perder sesión',async()=>{
+ const f=fixture(fakeSession(),async()=>{throw Error('Nunca llamar servidor');});
+ const api=f.api;
+ await api.refreshSession();
+ assert.equal(api.prepareRide(ride).ok,true);
+ assert.equal(api.snapshot().mutation.phase,'ready');
+ assert.equal(api.discardPreparedMutation({operation:'rideRequest',requestKey:key}).ok,true);
+ assert.equal(api.snapshot().mutation.phase,'idle');
+ assert.equal(api.snapshot().authenticated,true);
+ assert.equal(api.prepareDelivery({requestKey:key,vehicleKind:'MOTO',category:'DOCUMENTS',
+  grams:1500,lengthCm:10,widthCm:5,heightCm:5,
+  pickupTag:'Centro Asuncion',deliveryTag:'Villa Morra',
+  restrictedItemDeclared:false}).ok,true);
+ assert.equal(api.discardPreparedMutation({operation:'deliveryRequest',requestKey:key}).ok,true);
+ assert.equal(api.snapshot().mutation.phase,'idle');
+});
+test('no se puede borrar ni preparar otra operación con una clave ajena',async()=>{
+ const f=fixture();
+ const api=f.api;
+ await api.refreshSession();api.prepareRide(ride);
+ assert.equal(api.discardPreparedMutation({operation:'deliveryRequest',requestKey:key}).code,'REQUEST_ID_MISMATCH');
+ assert.equal(api.discardPreparedMutation({operation:'rideRequest',
+  requestKey:'123e4567-e89b-42d3-a456-426614174099'}).code,'REQUEST_ID_MISMATCH');
+ assert.equal(api.snapshot().mutation.phase,'ready');
+});
+test('jamás descarta requestKey tras timeout: riesgo de doble despacho',async()=>{
+ const f=fixture(fakeSession(),async()=>({ok:false,code:'NETWORK_OR_TIMEOUT'}));
+ const api=f.api;await api.refreshSession();api.prepareRide(ride);
+ assert.equal((await api.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(api.discardPreparedMutation({operation:'rideRequest',requestKey:key}).code,'NOT_UNSENT_REQUEST');
+ assert.equal(api.snapshot().mutation.phase,'retryable');
+ assert.equal(api.snapshot().mutation.requestKey,key);
+});
+test('solicitud reconocida no se puede borrar hasta reconciliar servidor',async()=>{
+ const f=fixture(fakeSession(),async()=>({ok:true,status:201}));
+ const api=f.api;await api.refreshSession();api.prepareRide(ride);
+ assert.equal((await api.submit()).ok,true);
+ assert.equal(api.discardPreparedMutation({operation:'rideRequest',requestKey:key}).code,'NOT_UNSENT_REQUEST');
+ assert.equal(api.snapshot().mutation.phase,'acknowledged');
+});

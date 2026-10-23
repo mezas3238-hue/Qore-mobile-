@@ -25,6 +25,7 @@ export type ClientExperience={
  signOut():Promise<ClientResult>;
  clear():void;
  prepareRide(body:unknown):ClientResult;
+ discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
  prepareDelivery(body:unknown):ClientResult;
  prepareFare(body:unknown):ClientResult;
  prepareServerFare(args:{tripId:string;requestKey:string}):ClientResult;

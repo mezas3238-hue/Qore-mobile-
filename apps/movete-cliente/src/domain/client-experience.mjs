@@ -101,6 +101,16 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  tracking=createRiderPollingCoordinator({
   gateway:trackGateway,getSession:async()=>actor(),store:riderStore,now
  });
+ function discardPreparedMutation({operation,requestKey}={}){
+  if(!actor())return fail('AUTH_REQUIRED');
+  const current=mutations.publicState();
+  // Nunca limpiar una operación enviada, ambigua o ya reconocida;
+  // la conciliación server-side es obligatoria primero.
+  if(current.phase!=='ready')return fail('NOT_UNSENT_REQUEST');
+  if(current.operation!==operation||current.requestKey!==requestKey)
+   return fail('REQUEST_ID_MISMATCH');
+  mutations.clear();return {ok:true};
+ }
  function prepare(operation,body){
   const user=actor();
   if(!user)return fail('AUTH_REQUIRED');
@@ -239,6 +249,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   signOut:async()=>{const result=await signOut();notify();return result;},
   clear:()=>{session.clear();clearPrivate();notify();},
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
+  discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
   prepareFare:body=>{const result=prepare('fareQuote',body);notify();return result;},
   prepareServerFare:args=>{const result=prepareServerFare(args);notify();return result;},
