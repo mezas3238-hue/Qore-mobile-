@@ -33,6 +33,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G44_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G45_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G46_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G47_*'
+      - 'apps/mobility-expo/server/g47-*'
       - 'apps/mobility-expo/server/g45-*'
       - 'apps/mobility-expo/server/g43-*'
       - 'apps/mobility-expo/server/g36-*'
@@ -310,3 +312,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G46_MERCHANT_COMMERCE_PRIVILEGE_LOCKDOWN_POSTGRES_CI_ONLY.sql
       - name: G46 prove 8 merchant tables and 11 RPCs are not publicly accessible
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G46_MERCHANT_COMMERCE_PRIVILEGE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G47 install protected Driver Storage evidence metadata and 60s session leases
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G47_PRIVATE_DRIVER_EVIDENCE_LEASES_POSTGRES_CI_ONLY.sql
+      - name: G47 assert private Storage attestation, role isolation, revocation and immutable access audit
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G47_PRIVATE_DRIVER_EVIDENCE_LEASES_ASSERT_POSTGRES_CI_ONLY.sql
