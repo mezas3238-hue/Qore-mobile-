@@ -84,7 +84,7 @@ function validateRows(rows,after,kind,ctx){
   }
   last=id;
  }
- return last;
+ return {last};
 }
 export function createG44BuyerCatalogQa({
  environment,liveEnabled,localQaOnly,projectRef,cursorSecrets,
@@ -176,14 +176,14 @@ export function createG44BuyerCatalogQa({
     !nat(data.expiresAt)||data.expiresAt<=at||data.expiresAt>at+TTL||
     data.orderEnabled!==false||data.eligibleByPolicy!==false))
    return error(503,'BUYER_CATALOG_UNSAFE_PAGE');
-  const last=validateRows(data.items,page.after,kind,{
+  const validated=validateRows(data.items,page.after,kind,{
    hasMore:data.hasMore,municipality,serviceKind
   });
-  if(last===null||data.hasMore&&last===page.after)
+  if(validated===null||data.hasMore&&validated.last===page.after)
    return error(503,'BUYER_CATALOG_UNSAFE_PAGE');
   let nextCursor=null;
   if(data.hasMore){
-   try{nextCursor=signed.encode(ctx,last,kind==='catalog'?data.version:null,at);}
+   try{nextCursor=signed.encode(ctx,validated.last,kind==='catalog'?data.version:null,at);}
    catch{return error(503,'BUYER_CURSOR_SIGNING_UNAVAILABLE');}
   }
   const body=kind==='catalog'?{
