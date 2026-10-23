@@ -263,3 +263,86 @@ test('nuevo inicio de sesión vacía eventos de auditoría del anterior admin',a
  await app.refreshSession();
  assert.equal(app.snapshot().audit,null);
 });
+
+const mockReply=data=>({
+ ok:true,status:200,redirected:false,
+ headers:{get:key=>key==='content-type'?'application/json':null},
+ text:async()=>JSON.stringify(data)
+});
+const readConfig=fetchImpl=>({
+ enabled:true,certifiedContracts:['zones','kyc','finance','incidents','audit'],
+ origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+ fetchImpl
+});
+test('sin contrato certificado el runtime no hace solicitudes de red',async()=>{
+ const app=createAdminExperience({authProvider:{readSession:async()=>auth()},
+  now:()=>now});
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('zones')).code,'READ_CONTRACT_NOT_CERTIFIED');
+ assert.equal(app.snapshot().zones,null);
+});
+test('consulta STAGING de zonas acepta solo DTO validado después de Auth y MFA',async()=>{
+ const url=[];
+ const app=createAdminExperience({
+  now:()=>now,
+  authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async (path,options)=>{
+   url.push([path,options.method,options.credentials]);
+   return mockReply(zone);
+  })
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('zones')).ok,true);
+ assert.equal(app.snapshot().zones.items[0].municipality,'Luque');
+ assert.deepEqual(url,[['https://staging.example.invalid/v1/staging/admin/zones/overview','GET','omit']]);
+});
+test('frontend rechaza DTO no certificado aunque HTTP devuelva 200',async()=>{
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async()=>mockReply({scope:'admin.zones.read',items:[{driverName:'PII'}]}))
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('zones')).code,'INVALID_READ_DTO');
+ assert.equal(app.snapshot().zones,null);
+});
+test('logout durante GET evita restaurar información privada antigua',async()=>{
+ let unblock;
+ const waiting=new Promise(resolve=>unblock=resolve);
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>auth(),signOut:async()=>{}},
+  readGatewayOptions:readConfig(async()=>waiting)
+ });
+ await app.refreshSession();
+ const task=app.syncFromServer('zones');
+ await Promise.resolve();await Promise.resolve();
+ await app.logout();
+ unblock(mockReply(zone));
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(app.snapshot().zones,null);
+});
+test('Owner no puede consultar endpoint zonas de Admin ni usar su rol para audit',async()=>{
+ let hits=0;
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>({...auth(owner),role:'owner'})},
+  readGatewayOptions:readConfig(async()=>{hits++;return mockReply(zone)})
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('zones')).code,'FORBIDDEN');
+ assert.equal((await app.syncFromServer('audit')).code,'FORBIDDEN');
+ assert.equal(hits,0);
+});
+test('dos consultas simultáneas al mismo endpoint no crean doble llamada',async()=>{
+ let unblock,hits=0;
+ const waiting=new Promise(resolve=>unblock=resolve);
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async()=>{hits++;return waiting;})
+ });
+ await app.refreshSession();
+ const first=app.syncFromServer('zones');
+ assert.equal((await app.syncFromServer('zones')).code,'READ_IN_FLIGHT');
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(hits,1);
+ unblock(mockReply(zone));
+ assert.equal((await first).ok,true);
+});

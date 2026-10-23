@@ -4,6 +4,7 @@ import {createOwnerFinanceStore} from './owner-finance.mjs';
 import {createZoneOverviewStore} from './zone-overview.mjs';
 import {createIncidentQueueStore} from './incidents-overview.mjs';
 import {createAuditFeedStore} from './audit-feed.mjs';
+import {createAdminReadGateway} from './admin-read-gateway.mjs';
 
 /**
  * Composición web B11: ninguna sesión/cola real se crea por defecto.
@@ -11,7 +12,7 @@ import {createAuditFeedStore} from './audit-feed.mjs';
  * Las operaciones de escritura siguen bajo validación y autorización de A.
  */
 const fail=code=>({ok:false,code});
-export function createAdminExperience({authProvider=null,gateway=null,now=()=>Date.now()}={}){
+export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,now=()=>Date.now()}={}){
  const queue=createKycQueueStore({now});
  const finance=createOwnerFinanceStore({now});
  const zones=createZoneOverviewStore({now});
@@ -22,6 +23,14 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
  const notify=()=>{for(const callback of listeners){try{callback();}catch{/* no filtrar secretos */}}};
  const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
+ const readGateway=readGatewayOptions?createAdminReadGateway({
+  ...readGatewayOptions,
+  now,
+  getSession:()=>session.getSessionForGateway(),
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ const stores=Object.freeze({kyc:queue,finance,zones,incidents,audit});
+ const reading=new Set();
  function snapshot(){
   const current=session.publicSession();
   if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,actionsEnabled:false});}
@@ -68,6 +77,39 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
   const accepted=audit.replace(dto,current.role);
   notify();return accepted;
  }
+ async function syncFromServer(operation){
+  if(!Object.hasOwn(stores,operation))return fail('UNKNOWN_READ_OPERATION');
+  const current=session.publicSession();
+  if(!current)return fail('ADMIN_AUTH_REQUIRED');
+  const required=operation==='finance'?'owner':'admin';
+  if(current.role!==required)return fail('FORBIDDEN');
+  const store=stores[operation];
+  if(!readGateway||!readGateway.isConfigured(operation)){
+   return fail('READ_CONTRACT_NOT_CERTIFIED');
+  }
+  if(reading.has(operation))return fail('READ_IN_FLIGHT');
+  reading.add(operation);
+  const tokenEpoch=session.revision();
+  try{
+   let result;
+   try{result=await readGateway.read(operation);}
+   catch{result=fail('NETWORK_OR_TIMEOUT');}
+   const latest=session.publicSession();
+   if(!latest||latest.subject!==current.subject||latest.role!==current.role
+      ||session.revision()!==tokenEpoch){
+    // No borrar datos de la nueva cuenta: su sesión podría ser válida.
+    return fail('STALE_SESSION_RESPONSE');
+   }
+   if(!result||result.ok!==true){
+    store.clear();notify();
+    return fail(result?.code||'READ_UNAVAILABLE');
+   }
+   const accepted=operation==='finance'?store.replace(result.data,latest)
+     :store.replace(result.data,latest.role);
+   notify();
+   return accepted?Object.freeze({ok:true}):fail('INVALID_READ_DTO');
+  }finally{reading.delete(operation);}
+ }
  async function reviewVehicle(dto){
   // No inferir permisos/contrato desde una sesión en browser.
   const current=session.publicSession();
@@ -102,6 +144,6 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
   refreshSession:async()=>{const result=await session.refresh();notify();return result;},
   logout:async()=>{clearPrivate();const result=await session.logout();notify();return result;},
   clear:()=>{session.clear();notify();},
-  readKyc,readFinance,readZones,readIncidents,readAudit,reviewVehicle,snapshot
+  readKyc,readFinance,readZones,readIncidents,readAudit,syncFromServer,reviewVehicle,snapshot
  });
 }

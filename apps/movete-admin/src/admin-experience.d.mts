@@ -36,11 +36,17 @@ export type AdminExperience={
  readZones:(data:unknown)=>boolean;
  readIncidents:(data:unknown)=>boolean;
  readAudit:(data:unknown)=>boolean;
+ syncFromServer:(operation:string)=>Promise<{ok:boolean;code?:string}>;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };
 export declare function createAdminExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{isConfigured:()=>boolean;reviewVehicle:(body:unknown)=>unknown|Promise<unknown>}|null;
+ readGatewayOptions?:{
+  enabled?:boolean;certifiedContracts?:string[];origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  now?:()=>number;
 }):AdminExperience;
