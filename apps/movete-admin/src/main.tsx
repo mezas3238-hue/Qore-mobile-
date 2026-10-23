@@ -174,6 +174,31 @@ function ZoneReadOnly({zones,allowed}:{
  </Panel>;
 }
 
+function IncidentReadOnly({incidents,allowed}:{
+ incidents:AdminSnapshot['incidents'];allowed:boolean;
+}){
+ const severities:Record<string,string>={LOW:'Baja',MEDIUM:'Media',HIGH:'Alta',CRITICAL:'Crítica'};
+ return <Panel className="detail">
+  <div className="section-head"><div><h2>Bandeja privada de incidentes</h2>
+   <p>Solo metadatos operativos autorizados, sin nombres, teléfonos o documentación de personas.</p>
+  </div><span className="muted-tag">LECTURA · NO SOS</span></div>
+  {!allowed?<div className="empty"><h3>Sin autorización Admin</h3>
+    <p>Los incidentes no se muestran a propietarios ni pasajeros sin un permiso específico.</p></div>
+   :!incidents?<div className="empty"><h3>Sin conexión al canal seguro</h3>
+    <p>No se puede afirmar que hay cero incidentes. No hay recepción ni respuesta de emergencias activa.</p></div>
+   :incidents.items.length===0?<div className="empty"><h3>Sin resultados en esta consulta</h3>
+    <p>No certifica que no haya incidentes pendientes en otras páginas.</p></div>
+   :<div className="zone-rows">{incidents.items.map(item=>
+    <div className="zone-row" key={item.incidentId}>
+     <div><strong>{item.category} · {severities[item.severity]??'Sin nivel'}</strong>
+      <small>Estado: {item.status}</small>
+      <small>Fecha de servidor: {new Date(item.createdAt).toLocaleString('es-PY')}</small>
+     </div><div className="zone-count">#{item.revision}<small>Revisión</small></div>
+    </div>)}</div>}
+  <p className="training-disclaimer">Sin acceso a detalles personales ni herramientas para suspender cuentas. Las decisiones requieren autorización y auditoría del backend.</p>
+ </Panel>;
+}
+
 function App(){
  const {view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
@@ -215,7 +240,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='incidentes'?<IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>

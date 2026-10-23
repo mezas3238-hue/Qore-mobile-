@@ -16,6 +16,10 @@ export type AdminSnapshot={
    coverageStatus:string;eligibleByPolicy:boolean;onDutyVehicles:number|null;
    availabilityFresh:boolean;availabilityConfirmed:false;
  }[]}|null;
+ incidents:{revision:number;expiresAt:number;items:readonly {
+  incidentId:string;category:string;severity:string;status:string;
+  createdAt:number;revision:number;
+ }[]}|null;
  actionsEnabled:false;
 };
 export type AdminExperience={
@@ -26,6 +30,7 @@ export type AdminExperience={
  readKyc:(data:unknown)=>boolean;
  readFinance:(data:unknown)=>boolean;
  readZones:(data:unknown)=>boolean;
+ readIncidents:(data:unknown)=>boolean;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };

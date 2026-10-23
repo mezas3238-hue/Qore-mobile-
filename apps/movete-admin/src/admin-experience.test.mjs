@@ -213,3 +213,27 @@ test('cambio de cuenta y logout retiran zonas privadas',async()=>{
  await app.logout();
  assert.equal(app.snapshot().zones,null);
 });
+
+const incidentFeed={scope:'admin.incidents.read',revision:2,generatedAt:now-1000,
+ expiresAt:now+30000,items:[{incidentId:vehicle,category:'SAFETY',severity:'HIGH',
+ status:'OPEN',createdAt:now-10000,revision:1}]};
+test('Admin visualiza exclusivamente la cola agregada de incidentes sin PII',async()=>{
+ const {app}=fixture();
+ await app.refreshSession();
+ assert.equal(app.readIncidents(incidentFeed),true);
+ assert.equal(app.snapshot().incidents.items[0].severity,'HIGH');
+ assert.equal(Object.hasOwn(app.snapshot().incidents.items[0],'reporterName'),false);
+});
+test('Owner no hereda derecho a incidentes ni datos del operador',async()=>{
+ const {app}=fixture({...auth(owner),role:'owner'});
+ await app.refreshSession();
+ assert.equal(app.readIncidents(incidentFeed),false);
+ assert.equal(app.snapshot().incidents,null);
+});
+test('cambio de cuenta borra el resumen previo de incidentes',async()=>{
+ const {app,setUser}=fixture();
+ await app.refreshSession();
+ app.readIncidents(incidentFeed);
+ setUser(auth(another));await app.refreshSession();
+ assert.equal(app.snapshot().incidents,null);
+});
