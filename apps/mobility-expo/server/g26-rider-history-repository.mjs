@@ -1,9 +1,12 @@
 /**
- * G26 isolated STAGING Client history. Private read-only PostgreSQL/Supabase
- * gateway, no public grants or mobile SQL client. Initial QA page <=50 only:
- * refuse larger histories until cursor pagination is independently certified.
+ * G26.1 — unlimited TOTAL own history, bounded page size, server-scoped keyset.
+ * Every request reads at most PAGE_SIZE+1 rows per source and merges them.
+ * Continuation uses (created_at,id,kind) descending, never SQL offset.
+ * All three sources are required; errors are fail closed, not empty history.
+ * No public deployment or credentials in this module.
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const HISTORY_PAGE_SIZE=50;
 const config=[
  {table:'mobility_stage_auto_demo_trips',actor:'passenger_id',kind:'RIDE',
   statuses:{searching:'searching',accepted:'assigned',arriving:'assigned',
@@ -16,39 +19,74 @@ const config=[
    ready:'in_progress',handed_to_courier:'in_progress',delivered:'completed',
    cancelled:'cancelled'}}
 ];
+const OWN_TIME=/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,6}))?(?:Z|\+00:00)$/;
+function normalizedUtc(t){
+ if(typeof t!=='string')throw Error('Malformed history time');
+ const m=OWN_TIME.exec(t);
+ if(!m)throw Error('History timestamps must be UTC');
+ const value=m[1]+'.'+(m[2]||'').padEnd(6,'0')+'Z';
+ if(!Number.isFinite(Date.parse(value)))throw Error('History time unavailable');
+ return value;
+}
+function validPosition(position){
+ return position===null||(position&&typeof position==='object'&&
+  typeof position.time==='string'&&
+  normalizedUtc(position.time)===position.time&&
+  typeof position.id==='string'&&UUID.test(position.id)&&
+  config.some(t=>t.kind===position.kind));
+}
 export function createQoreOwnHistoryRepository(client){
- if(!client||typeof client.from!=='function')throw Error('Server-side history DB client required');
- return async({ownerId,limit=51})=>{
-  if(!UUID.test(ownerId??'')||limit!==51)
-   throw Error('Invalid private history query');
-  const pages=await Promise.all(config.map(async ({table,actor,kind,statuses})=>{
-   // All scopes are enforced by the server, never client-provided ownerId.
-   const {data,error}=await client.from(table)
-    .select(`id,${actor},status,revision,created_at`)
-    .eq(actor,ownerId).order('created_at',{ascending:false})
-    .order('id',{ascending:false}).limit(51);
-   if(error||!Array.isArray(data)||data.length>51)
-    throw Error('History source unavailable');
+ if(!client||typeof client.from!=='function')
+  throw Error('Server-only private history DB required');
+ return async({ownerId,anchorMs,after=null})=>{
+  if(typeof ownerId!=='string'||!UUID.test(ownerId)||
+    !Number.isSafeInteger(anchorMs)||anchorMs<0||!validPosition(after))
+   throw Error('Invalid owner history page');
+  const anchor=new Date(anchorMs).toISOString();
+  const pages=await Promise.all(config.map(async({table,actor,kind,statuses})=>{
+   // Mandatory SQL owner filter on EVERY source; no caller-controlled owner.
+   let q=client.from(table).select(`id,${actor},status,revision,created_at`)
+    .eq(actor,ownerId).lte('created_at',anchor);
+   if(after!==null){
+    // Descending (time,id,kind) lexicographic keyset.
+    // With equal timestamp + id, only lexicographically LOWER kinds follow.
+    const op=kind<after.kind?'lte':'lt';
+    q=q.or(`created_at.lt.${after.time},and(created_at.eq.${after.time},id.${op}.${after.id})`);
+   }
+   const {data,error}=await q.order('created_at',{ascending:false})
+    .order('id',{ascending:false}).limit(HISTORY_PAGE_SIZE+1);
+   if(error||!Array.isArray(data)||data.length>HISTORY_PAGE_SIZE+1)
+    throw Error('Own history query unavailable');
    return data.map(row=>{
-    if(!row||row[actor]!==ownerId||!UUID.test(row.id??'')||
+    if(!row||row[actor]!==ownerId||
+      typeof row.id!=='string'||!UUID.test(row.id)||
       !Object.hasOwn(statuses,row.status)||
-      !Number.isSafeInteger(row.revision)||row.revision<1||
-      typeof row.created_at!=='string')
-     throw Error('Private history mismatch');
-    const createdAt=Date.parse(row.created_at);
-    if(!Number.isSafeInteger(createdAt)||createdAt<0)
-     throw Error('History clock corrupt');
+      !Number.isSafeInteger(row.revision)||row.revision<1)
+     throw Error('Own history row invalid');
+    const time=normalizedUtc(row.created_at);
+    const createdAt=Date.parse(time);
+    if(createdAt>anchorMs||after!==null&&
+      (time>after.time||(time===after.time&&
+       (row.id>after.id||(row.id===after.id&&kind>=after.kind)))))
+     throw Error('Own history keyset mismatch');
     return {serviceId:row.id,kind,status:statuses[row.status],
-     createdAt,revision:row.revision};
+     createdAt,revision:row.revision,time};
    });
   }));
-  const rows=pages.flat().sort((a,b)=>b.createdAt-a.createdAt||
-   b.serviceId.localeCompare(a.serviceId)||a.kind.localeCompare(b.kind));
-  // Duplicate resource id across kinds is ambiguous for Client's stable ID map.
-  if(new Set(rows.map(x=>x.serviceId)).size!==rows.length)
-   throw Error('History ID collision');
-  // Never silently hide older rows while claiming nextCursor:null.
-  if(rows.length>50)throw Error('History requires certified pagination');
-  return rows;
+  const rows=pages.flat().sort((a,b)=>
+   b.time.localeCompare(a.time)||b.serviceId.localeCompare(a.serviceId)||
+   b.kind.localeCompare(a.kind));
+  // Client keyed by serviceId; never feed ambiguous IDs within one page.
+  const top=rows.slice(0,HISTORY_PAGE_SIZE);
+  if(new Set(top.map(x=>x.serviceId)).size!==top.length)
+   throw Error('History identifier collision');
+  const last=top.at(-1);
+  return {
+   items:top.map(({serviceId,kind,status,createdAt,revision})=>({
+    serviceId,kind,status,createdAt,revision
+   })),
+   nextPosition:rows.length>HISTORY_PAGE_SIZE?
+    {time:last.time,id:last.serviceId,kind:last.kind}:null
+  };
  };
 }
