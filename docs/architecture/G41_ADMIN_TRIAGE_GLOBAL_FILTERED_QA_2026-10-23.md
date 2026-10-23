@@ -1,0 +1,11 @@
+# G41 — Admin triage global severity/status, pagination auténtica (QA)
+
+**Arquitecto A · 23-10-2026**. PR #7 DRAFT, no deployment, no merge.
+
+G28 mostraba una cola global ordenada por antigüedad, pero los filtros de B eran solo de la **página visible**. En G41 creamos `mobility_stage_g41_admin_incident_triage_page` que filtra **en PostgreSQL antes de aplicar `LIMIT 51`** y ordena CRITICAL, HIGH, MEDIUM, LOW, cada grupo por `created_at DESC, id DESC`. El siguiente cursor conserva `prioridad(1 dígito) + ms(13) + UUID(32)`; el filtro `status` permite OPEN, TRIAGED, INVESTIGATING, RESOLVED o CLOSED (mapeado desde `dismissed`). `NULL` significa sin filtro. No hay límite global; 50 son filas **por página**.
+
+`server/g41-admin-triage-qa.mjs` sólo construye un servicio local no montado. El actor viene del JWT verificado de proveedor; revocación, rol Admin exclusivo, scope `admin.incidents.read`, rate limit y MFA AAL2 vinculado a la sesión son necesarios. El cursor HMAC (10 min) está vinculado a proyecto, actor, sesión, filtros y posición, con rotación de claves. Se invalidan registros PII, anómalos, desordenados o parcialmente suministrados. El servidor consulta exclusivamente SQL privado con `service_role`; RLS/GRANT no permite navegador. El resultado tiene `snapshotConsistent:false`: la paginación anclada por tiempo es **eventualmente consistente** frente a cambios de estado; no se garantiza instantánea MVCC entre peticiones.
+
+**QA:** SQL PG16 descartable crea y recorre 241 incidentes en 5 páginas más subconjuntos combinados, controles de rol/cursor/orden y reversión; Node prueba HMAC, filtros cruzados, JWT/MFA/revocación, distintos Admin y rotación de clave. Contrato OpenAPI G41 añade `GET /v1/staging/admin/incidents/triage-queue`, con `x-qore-runtime-wired:false`; no es endpoint público. B debe conservar indicador «solo esta página» hasta autorización de STAGING y integración auditada. El panel no puede presentar las cifras como triaje real y no hay operador/SOS 911 certificado.
+
+Pendientes: integración autenticación real, cursor en gateway HTTPS autorizado, pruebas E2E reales B↔A y política operacional/legal de incidentes. No tocar carpeta B, no desplegar, no habilitar servicios.

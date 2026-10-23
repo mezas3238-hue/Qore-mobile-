@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g40",
+    "version": "1.0.0-g41",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G40 typed owner incident receipts (QA unmounted), G39 signed proof QA"
+    "x-qore-contract-extension": "G41 private server-side globally filtered incident triage, QA-only unmounted"
   },
   "servers": [
     {
@@ -1801,6 +1801,95 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackofficeOwnerFinanceA05"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/admin/incidents/triage-queue": {
+      "get": {
+        "operationId": "g41QaReadGloballyFilteredAdminIncidentTriage",
+        "tags": [
+          "admin"
+        ],
+        "summary": "G41 globally filtered Admin incident queue, UNMOUNTED local QA",
+        "description": "Server applies severity/status before 50-row pagination and globally sorts critical first. JWT Admin, provider AAL2 MFA, revocation, signed filter/session-scoped cursor. Eventual consistency, no LIVE/SOS or emergency response.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "parameters": [
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CRITICAL",
+                "HIGH",
+                "MEDIUM",
+                "LOW"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "TRIAGED",
+                "INVESTIGATING",
+                "RESOLVED",
+                "CLOSED"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 384,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-filtered private QA queue, 50 records per page; NO global limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentTriagePageG41"
                 }
               }
             }
@@ -4185,6 +4274,109 @@
           "receiptStatus": {
             "type": "string",
             "const": "RECEIVED_IN_QA_DATABASE_ONLY"
+          }
+        }
+      },
+      "IncidentTriagePageG41": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "priorityOrder",
+          "severityFilter",
+          "statusFilter",
+          "revision",
+          "items",
+          "nextCursor",
+          "generatedAt",
+          "expiresAt",
+          "snapshotConsistent",
+          "productionEnabled"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "const": "admin.incidents.read"
+          },
+          "priorityOrder": {
+            "type": "string",
+            "const": "SEVERITY_THEN_NEWEST"
+          },
+          "severityFilter": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CRITICAL",
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statusFilter": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "OPEN",
+                  "TRIAGED",
+                  "INVESTIGATING",
+                  "RESOLVED",
+                  "CLOSED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BackofficeIncidentRowA05"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 44,
+                "maxLength": 384,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "snapshotConsistent": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
           }
         }
       }
