@@ -130,3 +130,16 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - El Arquitecto A actualizó su rama por separado. Último OpenAPI A observado: versión `1.0.0-g11`, 39 operaciones; sigue sin DTO completos de Auth Passenger/Admin, historia y KYC. No asumir server online. Issue #9 abierto.
 - **CI Admin npm check/build:** pendiente por restricciones de propiedad de workflows; solicitar job a A. No equiparar pruebas de aislamiento con validación de Admin.
 - Backend/Driver/contratos/migraciones/CI central: cero cambios del Arquitecto B. Toda la implementación continúa QA NO LIVE, PR #8 DRAFT, sin merge/despliegue.
+
+## Quinta sesión — Owner Dashboard y separación de permisos, 22-10-2026
+- Nuevo objetivo aprobado: Admin Web incluye un dashboard de **Propietario** con ingresos y comisiones de Movete Fácil, independiente de los permisos de operadores administrativos. El Owner no hereda KYC por defecto.
+- `129b36dede0713cdaa23931ad9a01963c8a09ef7`: módulo `owner-finance` y tests Node para DTO financiero PYG, allowlist sin PII, periodo/titular, conciliación ledger, expiración y revisiones.
+- `ede7c29650e0c248e1532f88debd6cbe7ab23677`: `admin-session` separa roles `owner` / `admin` bajo MFA. `admin-experience` impide lectura financiera al Admin y evita revisiones KYC por Owner.
+- `1fb2e232583a642d65b82273de1d8c4aed06e357`: UI propietario con tarjetas de bruto, comisiones, pagos a conductores, reembolsos, costos y neto + recuentos de servicios. Muestra `—` ante falta de datos, **nunca Gs inventados**.
+- `d30ad5eb` / `ace3760a`: revisión KYC segura ante logout/cambio de administrador durante llamada asíncrona.
+- `fe2ef569` / `5c0878c7`: el neto de plataforma permite pérdidas negativas conciliadas, sin falsear contabilidad.
+- `935030820b64b45703d8ddb8fd7c640c960f6a8a`: pantalla KYC niega el rol owner en lugar de interpretar privilegios heredados.
+- Handoff técnico, campos propuestos y matriz Owner/Admin: [OWNER_DASHBOARD_FINANCE_RBAC_2026-10-22.md](./OWNER_DASHBOARD_FINANCE_RBAC_2026-10-22.md).
+- [Issue #9](https://github.com/mezas3238-hue/Qore-mobile-/issues/9) ampliado: A debe proponer/certificar un **endpoint nuevo solo owner** para lectura de finanzas conciliadas, JWT+MFA verificados en servidor, 403 para todos los demás. **No existe contrato ni endpoint certificado** por el solo hecho de solicitarlo.
+- CI sobre commit UI `1fb2e232`: ownership SUCCESS (#39887088244), two-app isolation SUCCESS (#39887088331); CI sobre `9350308` igualmente SUCCESS (#39887573946, #39887574089). Estos checks no compilan ni ejecutan el código Admin Web: **Admin npm check/build sigue pendiente de un workflow que debe agregar A en su carpeta .github**.
+- Propiedad de archivos preservada: únicamente `apps/movete-cliente/**`, `apps/movete-admin/**`, `docs/architect-b/**`. PR #8 DRAFT, sin merge/LIVE o pagos reales.
