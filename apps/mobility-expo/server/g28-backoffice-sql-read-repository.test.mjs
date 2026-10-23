@@ -23,7 +23,7 @@ test('G28 keeps other scopes fail-closed until real sources are certified',async
  const repo=createQoreBackofficeSqlReadRepository({rpc:async()=>{
   called++;return {data:{revision:0,items:[],hasMore:false},error:null};
  }});
- for(const scope of ['admin.zones.read','admin.audit.read',
+ for(const scope of ['admin.zones.read',
   'owner.finance.read','owner.finance.write','unknown']){
   await assert.rejects(()=>repo({...args,scope}),/not yet independently certified/);
  }
@@ -73,6 +73,25 @@ test('G29 only source-backed Admin KYC reads can reach private vehicle RPC',asyn
   params:{_actor:admin,_anchor_ms:ms,_after:null,_limit:50}});
  for(const after of ['f'.repeat(31),'a'.repeat(33),position,'bad']){
   await assert.rejects(()=>repo({...kyc,after}),/Malformed/);
+ }
+ assert.equal(calls.length,2);
+});
+
+
+test('G30 private audit scope uses the real append-only sources and timestamp keyset',async()=>{
+ const calls=[];
+ const repo=createQoreBackofficeSqlReadRepository({rpc:async(name,params)=>{
+  calls.push({name,params});
+  return {data:{revision:2,items:[],hasMore:false},error:null};
+ }});
+ const audit={...args,scope:'admin.audit.read'};
+ assert.deepEqual(await repo(audit),{revision:2,items:[],hasMore:false});
+ await repo({...audit,after:position});
+ assert.equal(calls.length,2);
+ assert.deepEqual(calls[0],{name:'mobility_stage_g30_admin_audit_page',
+  params:{_actor:admin,_anchor_ms:ms,_after:null,_limit:50}});
+ for(const after of ['bad',admin.replaceAll('-',''),position+'00']){
+  await assert.rejects(()=>repo({...audit,after}),/Malformed/);
  }
  assert.equal(calls.length,2);
 });
