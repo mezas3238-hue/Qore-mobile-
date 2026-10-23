@@ -153,3 +153,60 @@ test('MFA revocada mientras lee bloquea respuesta anterior',async()=>{
  assert.equal((await request).code,'STALE_SESSION_RESPONSE');
  assert.equal(flow.snapshot().page,null);
 });
+
+test('sesión nueva puede consultar aunque GET viejo siga pendiente tras logout',async()=>{
+ let releaseOld,releaseNew,requests=0;
+ const old=new Promise(resolve=>{releaseOld=resolve;});
+ const newer=new Promise(resolve=>{releaseNew=resolve;});
+ let active=actor();
+ const flow=createGlobalTriageFlow({now:()=>t,getActor:async()=>active,
+  gateway:{isConfigured:()=>true,fetchPage:async()=>{
+   requests++;return requests===1?old:newer;
+  }}
+ });
+ const oldTask=flow.load();
+ await Promise.resolve();await Promise.resolve();
+ flow.clear();
+ active={...active,subject:id(98),authRevision:4};
+ const newTask=flow.load();
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(requests,2);
+ assert.equal(flow.snapshot().loading,true);
+ releaseOld({ok:true,page:page()});
+ assert.equal((await oldTask).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(flow.snapshot().loading,true);
+ assert.equal(flow.snapshot().page,null);
+ releaseNew({ok:true,page:page()});
+ assert.equal((await newTask).ok,true);
+ assert.equal(flow.snapshot().pageNumber,1);
+ assert.equal(flow.snapshot().loading,false);
+});
+test('MFA perdida durante siguiente página purga la cola privada visible',async()=>{
+ let active=actor();
+ const flow=createGlobalTriageFlow({now:()=>t,getActor:async()=>active,
+  gateway:{isConfigured:()=>true,fetchPage:async()=>({ok:true,page:page('C'.repeat(44))})}
+ });
+ assert.equal((await flow.load()).ok,true);
+ assert.equal(flow.snapshot().pageNumber,1);
+ active={...active,mfaVerified:false};
+ assert.equal((await flow.load({next:true})).code,'FORBIDDEN');
+ assert.equal(flow.snapshot().page,null);
+ assert.equal(flow.snapshot().pageNumber,0);
+ assert.equal(flow.snapshot().error,'FORBIDDEN');
+});
+test('G41 oculta temporalmente filas anteriores mientras pagina y restaura solo el nuevo GET',async()=>{
+ let resume,calls=0;
+ const pending=new Promise(resolve=>{resume=resolve;});
+ const flow=config(async()=>{
+  calls++;return calls===1?{ok:true,page:page('D'.repeat(44))}:pending;
+ });
+ assert.equal((await flow.load()).ok,true);
+ const task=flow.load({next:true});
+ assert.equal(flow.snapshot().loading,true);
+ assert.equal(flow.snapshot().page,null);
+ assert.equal(flow.snapshot().hasNext,false);
+ resume({ok:true,page:page(null)});
+ assert.equal((await task).ok,true);
+ assert.equal(flow.snapshot().pageNumber,2);
+ assert.ok(flow.snapshot().page);
+});

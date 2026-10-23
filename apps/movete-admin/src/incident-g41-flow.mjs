@@ -14,19 +14,23 @@ export function createGlobalTriageFlow({gateway,getActor,now=()=>Date.now()}={})
  let state={page:null,pageNumber:0,severityFilter:null,statusFilter:null,
   anchors:[null],seen:new Set(),error:null};
  const clear=()=>{
-  epoch++;
+  epoch++;busy=false;
   state={page:null,pageNumber:0,severityFilter:null,statusFilter:null,
    anchors:[null],seen:new Set(),error:null};
  };
- const snapshot=()=>Object.freeze({
+ const snapshot=()=>{
+  // Un refresh pendiente no debe exponer filas de la consulta anterior.
+  const visible=Boolean(!busy&&state.page&&state.page.expiresAt>now());
+  return Object.freeze({
   contractReady:Boolean(gateway?.isConfigured?.()),loading:busy,
-  page:state.page&&state.page.expiresAt>now()?state.page:null,
-  pageNumber:state.page&&state.page.expiresAt>now()?state.pageNumber:0,
-  hasNext:Boolean(state.page&&state.page.expiresAt>now()&&state.page.nextCursor),
-  hasPrevious:Boolean(state.page&&state.page.expiresAt>now()&&state.pageNumber>1),
+  page:visible?state.page:null,
+  pageNumber:visible?state.pageNumber:0,
+  hasNext:Boolean(visible&&state.page.nextCursor),
+  hasPrevious:Boolean(visible&&state.pageNumber>1),
   severityFilter:state.severityFilter,statusFilter:state.statusFilter,
   error:state.error,globalTotalKnown:false,emergencyDispatchEnabled:false
- });
+  });
+ };
  async function load({severityFilter=null,statusFilter=null,next=false,previous=false}={}){
   if(!gateway?.isConfigured?.())return fail('G41_RUNTIME_NOT_CERTIFIED');
   if(!valid(severityFilter,severities)||!valid(statusFilter,statuses)
@@ -51,8 +55,9 @@ export function createGlobalTriageFlow({gateway,getActor,now=()=>Date.now()}={})
    let before;
    try{before=await getActor();}catch{before=null;}
    if(started!==epoch)return fail('STALE_RESPONSE_IGNORED');
-   if(!before||before.role!=='admin'||before.mfaVerified!==true)
-    return fail('FORBIDDEN');
+   if(!before||before.role!=='admin'||before.mfaVerified!==true){
+    clear();state.error='FORBIDDEN';return fail('FORBIDDEN');
+   }
    let response;
    try{response=await gateway.fetchPage({severityFilter,statusFilter,cursor});}
    catch{response=fail('NETWORK_OR_TIMEOUT');}
@@ -92,7 +97,7 @@ export function createGlobalTriageFlow({gateway,getActor,now=()=>Date.now()}={})
    state.error=null;
    return Object.freeze({ok:true,pageNumber:state.pageNumber,
     hasNext:page.nextCursor!==null,hasPrevious:state.pageNumber>1});
-  }finally{busy=false;}
+  }finally{if(started===epoch)busy=false;}
  }
  return Object.freeze({load,snapshot,clear});
 }
