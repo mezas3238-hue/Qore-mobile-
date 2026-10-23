@@ -27,6 +27,8 @@ import {createSupabaseStagingDeliveryOfferRepository} from './g10-supabase-deliv
 import {createQoreDeliveryOfferGateway} from './g10-delivery-offer-gateway.mjs';
 import {createCourierPrivatePollRepository} from './g15-courier-private-poll-repository.mjs';
 import {createCourierPrivatePollGateway} from './g15-courier-private-poll-gateway.mjs';
+import {createDriverPrivateInboxRepository} from './g16-driver-private-inbox-repository.mjs';
+import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -157,6 +159,9 @@ export async function prepareQoreG4StagingRuntime({
   createSupabaseStagingMerchantManagementRepository(admin);
  const deliveryOfferPersistence=createSupabaseStagingDeliveryOfferRepository(admin);
  const privatePollPersistence=createCourierPrivatePollRepository({
+  rpc:(name,params)=>admin.rpc(name,params)
+ });
+ const driverInboxPersistence=createDriverPrivateInboxRepository({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const verified=async token=>{
@@ -340,6 +345,11 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const driverInbox=createDriverPrivateInboxGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,now,
+  listForDriver:params=>driverInboxPersistence.listForDriver(params),
+ });
  const courierPoll=createCourierPrivatePollGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeCourier:id=>roleHas(admin,id,'driver'),allowRequest,now,
@@ -368,6 +378,7 @@ export async function prepareQoreG4StagingRuntime({
    merchantManagementHandler:guard(merchantManagement),
    deliveryOfferHandler:guard(deliveryOffers),
    courierPollHandler:guard(courierPoll),
+   driverInboxHandler:guard(driverInbox),
   }),
  };
 }
