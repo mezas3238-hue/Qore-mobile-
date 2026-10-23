@@ -11,6 +11,7 @@ import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST='/v1/staging/rider/trips/request';
 const TRANSITION=/^\/v1\/staging\/trips\/([0-9a-f-]{36})\/transition$/i;
+const RIDER_CANCEL=/^\/v1\/staging\/rider\/trips\/([0-9a-f-]{36})\/cancel$/i;
 const DRIVER_EVENTS=new Set(['arrive','pickup','complete']);
 const SERVICES=new Set(['economico','confort','xl']);
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&
@@ -32,6 +33,7 @@ const requestBody=body=>fields(body,
 const transitionBody=body=>fields(body,['event','eventKey'])&&
  UUID.test(body.eventKey??'')&&
  (DRIVER_EVENTS.has(body.event)||body.event==='cancel');
+const cancelBody=body=>fields(body,['requestKey'])&&UUID.test(body.requestKey??'');
 const response=(status,body)=>({status,body});
 
 export function createQoreTripCommandGateway({
@@ -44,9 +46,11 @@ export function createQoreTripCommandGateway({
  return async({method,path,headers,body})=>{
   const create=method==='POST'&&path===REQUEST;
   const found=method==='POST'&&typeof path==='string'?TRANSITION.exec(path):null;
-  if(!create&&!found)return response(404,{error:'Not found'});
+  const cancel=method==='POST'&&typeof path==='string'?RIDER_CANCEL.exec(path):null;
+  if(!create&&!found&&!cancel)return response(404,{error:'Not found'});
   if(create&&!requestBody(body))return response(400,{error:'Invalid trip request'});
   if(found&&!transitionBody(body))return response(400,{error:'Invalid trip transition'});
+  if(cancel&&!cancelBody(body))return response(400,{error:'Invalid passenger cancellation'});
   const bearer=tokenFrom(headers);
   if(!bearer)return response(401,{error:'Verified session required'});
   let user;
@@ -60,13 +64,13 @@ export function createQoreTripCommandGateway({
   }
   if(role!=='passenger'&&role!=='driver')
    return response(403,{error:'Single passenger or driver role required'});
-  if(create&&role!=='passenger')return response(403,{error:'Passenger role required'});
+  if((create||cancel)&&role!=='passenger')return response(403,{error:'Passenger role required'});
   if(found&&((body.event==='cancel'&&role!=='passenger')||
     (DRIVER_EVENTS.has(body.event)&&role!=='driver')))
    return response(403,{error:'Role cannot perform transition'});
   try{
    if(allowRequest({
-    userId:user.id,operation:create?'trip_request':'trip_'+body.event,
+    userId:user.id,operation:create?'trip_request':cancel?'trip_cancel':'trip_'+body.event,
    })!==true)return response(429,{error:'Trip command limit reached'});
   }catch{return response(503,{error:'Request limiter unavailable'});}
   try{
@@ -83,14 +87,17 @@ export function createQoreTripCommandGateway({
      tripId:result.tripId,status:'searching',serverPersisted:true,
     });
    }
+   const tripId=cancel?.[1]??found[1];
+   const event=cancel?'cancel':body.event;
+   const eventKey=cancel?body.requestKey:body.eventKey;
    const result=await transitionTrip({
-    actorId:user.id,tripId:found[1],event:body.event,eventKey:body.eventKey,
+    actorId:user.id,tripId,event,eventKey,
    });
    if(!plain(result)||result.ok!==true||result.liveEnabled!==false||
      !UUID.test(result.eventId??''))throw Error('Invalid transition receipt');
    return response(200,{
     mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
-    tripId:found[1],event:body.event,eventId:result.eventId,
+    tripId,event,eventId:result.eventId,
     serverPersisted:true,
    });
   }catch{
