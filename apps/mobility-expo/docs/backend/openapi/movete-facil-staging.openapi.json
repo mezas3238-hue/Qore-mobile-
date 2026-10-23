@@ -2,8 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-a05-qa",
-    "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado."
+    "version": "1.0.0-g11",
+    "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
+    "x-qore-contract-extension": "A05.1 read schemas, QA-only, unmounted"
   },
   "servers": [
     {
@@ -1494,6 +1495,9 @@
           },
           "503": {
             "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "parameters": [
@@ -1553,6 +1557,9 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
             "$ref": "#/components/responses/Error"
           }
         },
@@ -1614,6 +1621,9 @@
           },
           "503": {
             "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "parameters": [
@@ -1674,6 +1684,9 @@
           },
           "503": {
             "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
           }
         },
         "parameters": [
@@ -1733,6 +1746,9 @@
             "$ref": "#/components/responses/Error"
           },
           "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
             "$ref": "#/components/responses/Error"
           }
         }
