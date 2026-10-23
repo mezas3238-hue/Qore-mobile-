@@ -11,6 +11,12 @@ INSERT INTO auth.users(id) VALUES
  ('00000000-0000-4000-8000-000000000101'), -- reviewer/admin
  ('00000000-0000-4000-8000-000000000102'), -- sender
  ('00000000-0000-4000-8000-000000000103'); -- courier
+-- G1 gives synthetic Auth users the default passenger role. Replace it
+-- so the reviewer and courier have exactly one verified role.
+DELETE FROM public.user_roles WHERE user_id IN (
+ '00000000-0000-4000-8000-000000000101',
+ '00000000-0000-4000-8000-000000000103'
+);
 INSERT INTO public.user_roles(user_id,role) VALUES
  ('00000000-0000-4000-8000-000000000101','admin'),
  ('00000000-0000-4000-8000-000000000103','driver');
