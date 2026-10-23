@@ -26,6 +26,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G36_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G37_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G38_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G40_*'
       - 'apps/mobility-expo/server/g36-*'
       - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
@@ -260,3 +261,8 @@ jobs:
 
       - name: G38.2 forged proof and fresh synthetic GPS must never unlock legal zone dispatch
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_2_FORGED_PROOF_SIGNAL_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G40 mount typed incident receipt and owner-only read SQL in disposable PG
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G40_INCIDENT_RECEIPT_STATUS_POSTGRES_CI_ONLY.sql
+      - name: G40 verify persistent receipt, idempotency, cross-account and blocked SOS
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G40_INCIDENT_RECEIPT_STATUS_ASSERT_POSTGRES_CI_ONLY.sql

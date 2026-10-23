@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g11",
+    "version": "1.0.0-g40",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "A05.1 read schemas, QA-only, unmounted"
+    "x-qore-contract-extension": "G40 typed owner incident receipts (QA unmounted), G39 signed proof QA"
   },
   "servers": [
     {
@@ -762,16 +762,54 @@
           "safety"
         ],
         "requestBody": {
-          "$ref": "#/components/requestBodies/IncidentReport"
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentReportG40"
+              }
+            }
+          }
         },
         "responses": {
           "201": {
-            "$ref": "#/components/responses/Success"
+            "description": "Durable QA database receipt, no real emergency/operator delivery",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentReceiptG40"
+                }
+              }
+            }
           },
-          "default": {
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "summary": "G40 Owner-only typed incident receipt, QA NOT deployed",
+        "description": "Synthetic disposable PostgreSQL receipt, NOT a live emergency dispatcher; SOS/CRITICAL denied. JWT-derived reporter and independent revocation required; 50 is never a global incident cap.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
       }
     },
     "/v1/staging/safety/incidents/{incidentId}/status": {
@@ -787,12 +825,40 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/Success"
+            "description": "Own receipt and state read from DB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentReceiptG40"
+                }
+              }
+            }
           },
-          "default": {
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "summary": "G40 JWT-owner-only minimal incident status, QA NOT deployed",
+        "description": "No PII. Another reporter's incident returns 404. Receipt is database persistence only, not service response.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
       }
     },
     "/v1/staging/admin/safety/incidents/{incidentId}/transition": {
@@ -4020,6 +4086,99 @@
                 "maximum": 1000000000000
               }
             }
+          }
+        }
+      },
+      "IncidentReportG40": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "subjectKind",
+          "subjectId",
+          "category",
+          "severity"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/RequestKey"
+          },
+          "subjectKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "SAFETY",
+              "LOSS",
+              "DISPUTE",
+              "FRAUD",
+              "QUALITY"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
+          }
+        }
+      },
+      "IncidentReceiptG40": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incidentId",
+          "receiptId",
+          "state",
+          "revision",
+          "createdAt",
+          "observedAt",
+          "receiptStatus"
+        ],
+        "properties": {
+          "incidentId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "receiptId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "triaged",
+              "investigating",
+              "resolved",
+              "dismissed"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "receiptStatus": {
+            "type": "string",
+            "const": "RECEIVED_IN_QA_DATABASE_ONLY"
           }
         }
       }
