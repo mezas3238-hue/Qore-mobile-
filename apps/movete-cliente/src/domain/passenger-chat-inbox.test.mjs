@@ -266,3 +266,33 @@ test('página validada caducada jamás permanece visible durante desconexión',a
  assert.equal((await inbox.load()).code,'NETWORK_OR_TIMEOUT');
  assert.equal(inbox.snapshot().items.length,0);
 });
+
+test('refresco con revisión menor no reautoriza conversación de caché antiguo',async()=>{
+ let n=0;
+ const inbox=make(flags({readInbox:async()=>({ok:true,data:
+  ++n===1?page([row(1)]):{...page([{...row(2),revision:8}]),revision:8}})}));
+ assert.equal((await inbox.load()).ok,true);
+ assert.equal((await inbox.load()).code,'CHAT_INBOX_REVISION_ROLLBACK');
+ assert.equal(inbox.snapshot().items.length,0);
+ assert.equal(inbox.snapshot().stale,false);
+});
+test('refresco con revisión mayor sustituye listado sin mezclar anteriores',async()=>{
+ let n=0;
+ const inbox=make(flags({readInbox:async()=>({ok:true,
+  data:++n===1?page([row(1)]):{...page([row(2)]),revision:10}})}));
+ assert.equal((await inbox.load()).ok,true);
+ assert.equal((await inbox.load()).ok,true);
+ assert.deepEqual(inbox.snapshot().items.map(x=>x.conversationId),[id(102)]);
+});
+test('timeout al paginar mantiene vista verificada pero no permite seguir paginando',async()=>{
+ let n=0;const cursor='z'.repeat(44);
+ const inbox=make(flags({readInbox:async()=>++n===1
+  ?{ok:true,data:page([row(1)],cursor)}
+  :{ok:false,code:'RATE_LIMITED'}}));
+ assert.equal((await inbox.load()).ok,true);
+ assert.equal((await inbox.load({next:true})).code,'RATE_LIMITED');
+ assert.equal(inbox.snapshot().items.length,1);
+ assert.equal(inbox.snapshot().stale,true);
+ assert.equal(inbox.snapshot().hasNext,false);
+ assert.equal((await inbox.load({next:true})).code,'CHAT_INBOX_NEXT_UNAVAILABLE');
+});

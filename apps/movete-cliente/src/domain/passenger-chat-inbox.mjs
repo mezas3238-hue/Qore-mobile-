@@ -141,6 +141,13 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
     revision:next?old.revision:null});
    if(!page){clear();state.error='INVALID_CHAT_INBOX_DTO';
     return fail('INVALID_CHAT_INBOX_DTO');}
+   // No aceptar versiones antiguas al refrescar la misma cuenta/sesión.
+   // Una revocación podría quedar oculta si el backend sirve caché vieja.
+   if(!next&&old.ownerId===before.subject&&old.expiresAt>now()
+    &&page.revision<old.revision){
+    clear();state.error='CHAT_INBOX_REVISION_ROLLBACK';
+    return fail('CHAT_INBOX_REVISION_ROLLBACK');
+   }
    // Refresco confirmado: sustituye atómicamente el snapshot anterior.
    if(!next)state=empty();
    if(page.nextCursor!==null&&(page.nextCursor===cursor
