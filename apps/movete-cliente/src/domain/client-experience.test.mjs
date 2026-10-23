@@ -313,3 +313,51 @@ test('TTL de historial vencido inicia nueva secuencia sin falsos cursores repeti
  assert.equal(api.snapshot().history.nextCursor,nextCursor);
  assert.deepEqual(seen,[null,nextCursor,null]);
 });
+
+test('cancelación QA propia usa estado de viaje y ACK servidor, sin alterar estado local',async()=>{
+ const receipt={mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
+  tripId:trip,event:'cancel',eventId:key,serverPersisted:true};
+ const response={ok:true,status:200,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':null},
+  text:async()=>JSON.stringify(receipt)};
+ const calls=[];
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  gateway:{send:async()=>({ok:true,data:fakeTrip()})},
+  cancelGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async(url,init)=>{calls.push([url,JSON.parse(init.body)]);return response;}}
+ });
+ await app.refreshSession();
+ assert.equal(app.startTracking(trip).ok,true);
+ assert.equal((await app.syncTracking()).ok,true);
+ assert.equal(app.prepareCancelRide({tripId:trip,requestKey:key}).ok,true);
+ assert.equal((await app.submitCancelRide()).ok,true);
+ assert.equal(calls.length,1);
+ assert.deepEqual(calls[0][1],{requestKey:key});
+ assert.equal(app.snapshot().tracking.state,'assigned');
+ assert.equal(app.snapshot().cancellation.phase,'acknowledged');
+ assert.equal((await app.submitCancelRide()).code,'NO_READY_CANCEL');
+});
+test('sin contrato o sin viaje activo Cliente jamás emite cancelación',async()=>{
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},cancelGatewayOptions:null
+ });
+ await app.refreshSession();
+ assert.equal(app.prepareCancelRide({tripId:trip,requestKey:key}).code,'CANCEL_CONTRACT_PENDING');
+ assert.equal(app.snapshot().cancellation.contractReady,false);
+});
+test('logout elimina solicitud preparada de cancelación en el mismo tick',async()=>{
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  gateway:{send:async()=>({ok:true,data:fakeTrip()})},
+  cancelGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{throw Error('sin red');}}
+ });
+ await app.refreshSession();app.startTracking(trip);await app.syncTracking();
+ assert.equal(app.prepareCancelRide({tripId:trip,requestKey:key}).ok,true);
+ await app.signOut();
+ assert.equal(app.snapshot().cancellation.phase,'idle');
+ assert.equal(app.snapshot().cancellation.requestKey,null);
+});

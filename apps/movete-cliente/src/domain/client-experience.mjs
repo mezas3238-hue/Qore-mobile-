@@ -3,6 +3,7 @@ import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
 import {createClientHistoryGateway} from './client-history-gateway.mjs';
+import {createRideCancellationGateway,createRideCancellationController} from './ride-cancellation.mjs';
 import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
 
@@ -14,11 +15,11 @@ import {createRiderStatusStore} from './rider-status.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,now=()=>Date.now()}={}){
+export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let mutations,tracking;
+ let mutations,tracking,cancellation;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
  const observers=new Set();
@@ -26,12 +27,27 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  const clearPrivate=()=>{
   if(mutations)mutations.clear();
   if(tracking)tracking.stop();
+  if(cancellation)cancellation.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
  };
  const session=createClientSessionController({provider:authProvider,clearPrivateState:clearPrivate,now});
  const actor=()=>session.publicSession();
+ const cancelGateway=cancelGatewayOptions?createRideCancellationGateway({
+  ...cancelGatewayOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway();
+   const visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ cancellation=createRideCancellationController({
+  gateway:cancelGateway,getSession:async()=>actor()
+ });
+
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
   ...historyGatewayOptions,now,
   getSession:()=>{
@@ -60,6 +76,15 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  async function syncTracking(){
   if(!actor()){clearPrivate();return fail('AUTH_REQUIRED');}
   return tracking.tick();
+ }
+ function prepareCancelRide({tripId,requestKey}={}){
+  const user=actor();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(!cancelGateway?.isConfigured())return fail('CANCEL_CONTRACT_PENDING');
+  const active=tracking.snapshot();
+  if(active.tripId!==tripId||!['searching','assigned','arriving'].includes(active.state))
+   return fail('CANCEL_REQUIRES_ACTIVE_RIDE');
+  return cancellation.prepare({tripId,requestKey,subject:user.subject});
  }
  function acceptQuote(dto){
   const user=actor();
@@ -130,7 +155,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    clearPrivate();
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     tracking:tracking.snapshot(),quote:null,history:null,
-    historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured())});
+    historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
+    cancellation:cancellation.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -140,7 +166,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    quote:quote.current(),
    history:history.current(user.subject),
    historyLoading,historyLoadError,
-   historyConfigured:Boolean(historyGateway?.isConfigured())
+   historyConfigured:Boolean(historyGateway?.isConfigured()),
+   cancellation:cancellation.snapshot()
   });
  }
  async function signOut(){
@@ -167,6 +194,9 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   acceptQuote:dto=>{const result=acceptQuote(dto);notify();return result;},
   acceptHistory:(dto,options)=>{const result=acceptHistory(dto,options);notify();return result;},
   loadHistoryPage,
+  prepareCancelRide:args=>{const result=prepareCancelRide(args);notify();return result;},
+  submitCancelRide:async()=>{const result=await cancellation.submit();notify();return result;},
+  retryCancelRide:async()=>{const result=await cancellation.retry();notify();return result;},
   snapshot
  });
 }
