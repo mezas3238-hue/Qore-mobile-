@@ -200,3 +200,12 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - `6315889`: integra cancelación en `client-experience` para viajes activos con `prepareCancelRide/submitCancelRide/retryCancelRide`, borrado al logout, no cambia estado hasta GET autoritativo. **Gateway inactivo por defecto**, faltan Auth STAGING y UUID seguro del SO antes de añadir botón final en app.
 - [CI Cliente/Driver #39932010765 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39932010765): **131/131 pruebas Cliente**, TypeScript y export QA. [CI Admin #39932010585 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39932010585): 109/109 pruebas, build. Boundary #39932010630 SUCCESS.
 - Handoff especializado: [CANCELACION_CLIENTE_QA_SEGURIDAD_2026-10-23.md](./CANCELACION_CLIENTE_QA_SEGURIDAD_2026-10-23.md). A: entregar pruebas de cancelación atomica/JWT/RLS y respuesta de estado; no habilitar LIVE sin Owner. PR #8 DRAFT, sin merge ni datos reales.
+
+## HANDOFF MAESTRO FINAL PARA NUEVO CHAT — 23/10/2026
+
+**DOCUMENTO PRINCIPAL NUEVO:** [HANDOFF_MAESTRO_INTEGRAL_ARQUITECTO_B_CLIENTE_ADMIN_CONTINUIDAD_2026-10-23.md](./HANDOFF_MAESTRO_INTEGRAL_ARQUITECTO_B_CLIENTE_ADMIN_CONTINUIDAD_2026-10-23.md).
+
+- Documento publicado y leído de vuelta desde GitHub: **545 líneas**, 16 secciones, inventario previo de **84 archivos** B: 41 Cliente, 33 Admin y 10 documentos; al añadir el handoff PR #8 pasó a 85 archivos, ninguno fuera del alcance.
+- El handoff incluye historial completo de las 11 fases anteriores, matriz de propiedad A/B, QA exacto (Cliente 131/131, Admin 109/109), CI de los dos móviles, OpenAPI G11 con 42 rutas al corte, cancelación/historial reales en CONTRATO (sin afirmar servicio desplegado), módulos de ambas interfaces, 35 riesgos/problemas pendientes, fallos resueltos, criterios DoD, plan ejecutable B-P0→B-P4 y texto listo para comenzar chat.
+- PR #8 DRAFT, base rama A, no merge/LIVE. El documento ordena al sucesor **continuar sin parar** excepto bloqueo real. Cuando A cambie HEAD/OpenAPI, comprobar versión nueva antes de conectar.
+- GitHub SHA inicial del documento: `ca225829b4254a22f405d328e506fd1df1fa6a5d`. Todo avance posterior debe quedar documentado con su propio SHA y CI.
