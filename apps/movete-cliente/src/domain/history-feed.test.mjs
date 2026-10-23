@@ -61,3 +61,20 @@ test('cursor de historial no admite rutas, parámetros, tokens ni valor inválid
  }
  assert.equal(projectClientHistory({...page,nextCursor:'p_123'},{subject:owner,now:1100}).nextCursor,'p_123');
 });
+
+test('historial grande reutiliza lista ya ordenada sin recalcular cada refresco UI',()=>{
+ const store=createClientHistoryStore({now:()=>1100});
+ const one={...entry,createdAt:400,serviceId:'123e4567-e89b-42d3-a456-426614174011'};
+ const two={...entry,createdAt:500,serviceId:'123e4567-e89b-42d3-a456-426614174012'};
+ assert.equal(store.consume({...page,items:[one,two]},owner),true);
+ const initial=store.current(owner);
+ const repeat=store.current(owner);
+ assert.equal(initial.items,repeat.items);
+ assert.equal(initial.items[0].serviceId,two.serviceId);
+ assert.equal(store.consume({...page,items:[{...one,revision:4}]},owner,{append:true}),true);
+ const after=store.current(owner);
+ assert.notEqual(after.items,initial.items);
+ assert.equal(after.items[1].revision,4);
+ store.clear();
+ assert.equal(store.current(owner),null);
+});

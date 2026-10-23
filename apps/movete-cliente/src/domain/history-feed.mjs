@@ -33,8 +33,8 @@ export function projectClientHistory(raw,{subject,now=Date.now()}={}){
 }
 export function createClientHistoryStore({now=()=>Date.now()}={}){
  // Cursor por página; el mapa admite tantas páginas como existan, NO un máximo de usuarios.
- let owner=null,entries=new Map(),expiry=null,nextCursor=null;
- function clear(){owner=null;entries.clear();expiry=null;nextCursor=null;}
+ let owner=null,entries=new Map(),expiry=null,nextCursor=null,cachedItems=null;
+ function clear(){owner=null;entries.clear();expiry=null;nextCursor=null;cachedItems=null;}
  function consume(raw,subject,{append=false}={}){
   const page=projectClientHistory(raw,{subject,now:now()});
   if(!page){clear();return false;}
@@ -44,13 +44,14 @@ export function createClientHistoryStore({now=()=>Date.now()}={}){
    const prior=entries.get(item.serviceId);
    if(!prior||item.revision>prior.revision)entries.set(item.serviceId,item);
   }
-  owner=subject;expiry=page.expiresAt;nextCursor=page.nextCursor;
+  owner=subject;expiry=page.expiresAt;nextCursor=page.nextCursor;cachedItems=null;
   return true;
  }
  function current(subject){
   if(!uuid(subject)||owner!==subject||expiry===null||expiry<=now()){clear();return null;}
-  const items=[...entries.values()].sort((a,b)=>b.createdAt-a.createdAt);
-  return Object.freeze({ownerId:owner,items:Object.freeze(items),nextCursor});
+  if(cachedItems===null)cachedItems=Object.freeze([...entries.values()]
+    .sort((a,b)=>b.createdAt-a.createdAt||a.serviceId.localeCompare(b.serviceId)));
+  return Object.freeze({ownerId:owner,items:cachedItems,nextCursor});
  }
  return Object.freeze({consume,current,clear});
 }
