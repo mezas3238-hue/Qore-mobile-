@@ -19,7 +19,11 @@ const fail=code=>Object.freeze({ok:false,code});
 const cleanMessage=s=>typeof s==='string'&&s.length>=1&&s.length<=500
  &&s.trim().length>=1&&s===s.trim()
  &&!/[\u0000-\u001f\u007f<>]/u.test(s)
- &&!/(?:https?:\/\/|www\.)/i.test(s);
+ &&!/(?:https?:\/\/|www\.)/i.test(s)
+ // No compartir teléfonos, correo ni caracteres bidi de suplantación.
+ &&!/[\u202a-\u202e\u2066-\u2069\u200e\u200f]/u.test(s)
+ &&!/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(s)
+ &&!/(?:\+?\d[\s().-]*){7,}/u.test(s);
 const actorOk=a=>isObject(a)&&a.role==='passenger'&&validId(a.subject)
  &&validInt(a.sessionRevision);
 const sameActor=(a,b)=>actorOk(b)&&a.subject===b.subject
@@ -51,7 +55,8 @@ function validPage(dto,{serviceId,serviceKind,ownerId,now,conversationId=null}){
   ||!validCursor(dto.nextCursor))return null;
  const ids=new Set(),rows=[];
  for(const row of dto.messages){
-  if(!validateMessage(row,now)||ids.has(row.messageId))return null;
+  if(!validateMessage(row,now)||row.revision>dto.revision
+   ||ids.has(row.messageId))return null;
   ids.add(row.messageId);
   rows.push(Object.freeze({...row}));
  }
@@ -63,7 +68,8 @@ function validAck(row,header,body,key,now){
  return exact(row,ACK)&&row.conversationId===header.conversationId
   &&row.serviceId===header.serviceId&&row.requestKey===key
   &&row.senderRole==='passenger'&&row.body===body
-  &&row.serverStored===true&&validateMessage({
+  &&row.serverStored===true&&row.revision>=header.revision
+  &&validateMessage({
    messageId:row.messageId,senderRole:row.senderRole,body:row.body,
    createdAt:row.createdAt,revision:row.revision
   },now);

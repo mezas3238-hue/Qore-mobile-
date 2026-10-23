@@ -170,3 +170,30 @@ test('una respuesta ambigua impide cambiar de hilo sin conciliar requestKey',asy
  assert.equal(f.snapshot().serviceKind,'RIDE');
  assert.equal(f.snapshot().pendingSend,true);
 });
+
+test('chat protege teléfonos, correos, enlaces y Unicode bidi sin bloquear español',async()=>{
+ const flow=make();
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ for(const body of [
+  '0981123456','+595 981 123 456','soporte@example.com',
+  'usuario.nombre+1@dominio.com','www.tienda.test',
+  'http://ejemplo.test','Te aviso\u202Eahora',
+  'Casa # <script>', 'Llámame al 981123456',
+ ]){
+  assert.equal((await flow.send({body,requestKey:key})).code,'INVALID_MESSAGE',body);
+ }
+ assert.equal((await flow.send({body:'La casa está en el número 120',requestKey:key})).code,
+  'INVALID_CHAT_ACK');
+});
+test('chat descarta filas de revisión futura sin mezclar versiones',async()=>{
+ const dto={...page(),messages:[{...row(1),revision:8}]};
+ const flow=make(flags({readMessages:async()=>({ok:true,data:dto})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,'INVALID_CHAT_PAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('un ACK viejo nunca se confunde con un nuevo envío confirmado',async()=>{
+ const flow=make(flags({sendMessage:async()=>({ok:true,data:{...ack(),revision:6}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,'INVALID_CHAT_ACK');
+ assert.equal(flow.snapshot().messages.length,0);
+});
