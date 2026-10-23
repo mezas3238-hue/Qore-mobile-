@@ -33,6 +33,8 @@ import {createDriverDocumentRepository} from './g17-driver-document-repository.m
 import {createDriverDocumentGateway} from './g17-driver-document-gateway.mjs';
 import {createDriverEnrollmentRepository} from './g18-driver-enrollment-repository.mjs';
 import {createDriverEnrollmentGateway} from './g18-driver-enrollment-gateway.mjs';
+import {createDriverKycReadinessRepository} from './g20-driver-kyc-readiness-repository.mjs';
+import {createDriverKycReadinessGateway} from './g20-driver-kyc-readiness-gateway.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -189,6 +191,9 @@ export async function prepareQoreG4StagingRuntime({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const driverEnrollmentPersistence=createDriverEnrollmentRepository({
+  rpc:(name,params)=>admin.rpc(name,params)
+ });
+ const driverKycReadinessRepository=createDriverKycReadinessRepository({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const verified=async token=>{
@@ -372,6 +377,11 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const driverKycReadiness=createDriverKycReadinessGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
+  currentLicenseApproved:params=>driverKycReadinessRepository.currentLicenseApproved(params)
+ });
  const driverEnrollment=createDriverEnrollmentGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeNewDriver:id=>roleHas(admin,id,'passenger'),
@@ -427,6 +437,7 @@ export async function prepareQoreG4StagingRuntime({
    driverInboxHandler:guard(driverInbox),
    driverDocumentHandler:guard(driverDocuments),
    driverEnrollmentHandler:guard(driverEnrollment),
+   driverLicenseReadinessHandler:guard(driverKycReadiness),
   }),
  };
 }
