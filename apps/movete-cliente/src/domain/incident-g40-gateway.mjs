@@ -31,7 +31,7 @@ function originOf(raw){
    &&!u.hash&&!u.port&&!u.hostname.endsWith('.')&&u.pathname==='/'?u.origin:null;
  }catch{return null;}
 }
-function validRequest(body){
+export function validateIncidentG40Request(body){
  return exact(body,fields)&&uuid(body.requestKey)&&kind.has(body.subjectKind)
   &&uuid(body.subjectId)&&category.has(body.category)&&severity.has(body.severity);
 }
@@ -64,7 +64,7 @@ export function createIncidentG40Gateway({
  async function perform(operation,{request=null,incidentId=null,minimumRevision=1,
   expectedSessionRevision=null}={}){
   if(!ready)return fail('INCIDENT_RUNTIME_NOT_CERTIFIED');
-  if(operation==='report'?!validRequest(request):!uuid(incidentId))
+  if(operation==='report'?!validateIncidentG40Request(request):!uuid(incidentId))
    return fail('INVALID_INPUT');
   if(!Number.isSafeInteger(minimumRevision)||minimumRevision<1)
    return fail('INVALID_INPUT');
