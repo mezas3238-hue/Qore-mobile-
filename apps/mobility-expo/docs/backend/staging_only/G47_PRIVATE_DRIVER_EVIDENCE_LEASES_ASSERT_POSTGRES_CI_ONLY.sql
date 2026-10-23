@@ -27,6 +27,14 @@ INSERT INTO public.mobility_stage_g42_provider_session_grants(
   pg_catalog.clock_timestamp()-interval '5 minutes',
   pg_catalog.clock_timestamp()+interval '1 hour',
   'QA_SYNTHETIC_PROVIDER_SESSION_ONLY');
+-- Establish this test's independent G17 synthetic evidence; earlier CI
+-- exercises may intentionally roll back their own document test rows.
+SELECT public.mobility_stage_register_driver_document(
+ '00000000-0000-4000-8000-000000000181',
+ '47470000-0000-4747-8747-000000000001',
+ 'licencia',
+ '00000000-0000-4000-8000-000000000181/licencia-abcdefghijklmnop.jpg',
+ 'image/jpeg',8500,repeat('a',64));
 DO $tests$
 DECLARE
  driver uuid:='00000000-0000-4000-8000-000000000181';
