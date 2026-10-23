@@ -58,6 +58,8 @@ DECLARE
  at_now timestamptz:=pg_catalog.clock_timestamp();
  observed timestamptz;
  earlier public.mobility_stage_g32_signal_state%ROWTYPE;
+ consent_opted_in timestamptz;
+ consent_revoked timestamptz;
 BEGIN
  IF _driver IS NULL OR _event IS NULL OR _zone IS NULL
  OR _sequence IS NULL OR _sequence<1
@@ -74,9 +76,7 @@ BEGIN
  IF (SELECT count(*) FROM public.user_roles r WHERE r.user_id=_driver)<>1
  OR NOT EXISTS(SELECT 1 FROM public.user_roles r
     WHERE r.user_id=_driver AND r.role='driver'::public.app_role)
- OR NOT EXISTS(SELECT 1 FROM public.mobility_location_consents c
-    WHERE c.driver_id=_driver
-    AND c.revoked_at IS NULL AND c.opted_in_at<=observed)
+
  THEN RAISE EXCEPTION 'G32 Driver identity/consent unavailable'
    USING ERRCODE='G3201'; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.mobility_stage_g31_zone_coverage c
@@ -87,6 +87,17 @@ BEGIN
  -- fences persisted quarantine signals after independent Node verification.
  PERFORM pg_catalog.pg_advisory_xact_lock(
   pg_catalog.hashtextextended('qore:g32:driver:'||_driver::text,0));
+ -- Lock the consent row AFTER the per-Driver fence, before accepting a
+ -- signal. Concurrent revocation must commit before this check or wait
+ -- for this atomic quarantine transaction to finish.
+ SELECT c.opted_in_at,c.revoked_at
+  INTO consent_opted_in,consent_revoked
+  FROM public.mobility_location_consents c
+  WHERE c.driver_id=_driver FOR SHARE;
+ IF NOT FOUND OR consent_opted_in IS NULL OR consent_revoked IS NOT NULL
+ OR consent_opted_in>observed
+ THEN RAISE EXCEPTION 'G32 consent withdrawn during signal write'
+  USING ERRCODE='G3201'; END IF;
  SELECT * INTO earlier FROM public.mobility_stage_g32_signal_state
   WHERE driver_id=_driver FOR UPDATE;
  IF FOUND AND (_sequence<=earlier.last_sequence OR
