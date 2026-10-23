@@ -18,20 +18,33 @@ export function createCommerceCatalogFlow({
   &&gateway?.isConfigured?.()===true
   &&typeof gateway.readCatalog==='function';
  const clear=()=>{generation++;loading=false;error=null;cart.clear();};
- const snapshot=()=>Object.freeze({...cart.snapshot(),
-  catalogItems:Object.freeze(cart.currentCatalog?.()??[]),
-  catalogReadReady:configured(),catalogLoading:loading,catalogError:error,
-  checkoutEnabled:false,paymentEnabled:false,serverOrderReceipt:null});
+ const snapshot=()=>{
+  const current=cart.snapshot();
+  // No exponer precios ni carrito previo durante Auth/refresh pendientes.
+  const view=loading?{...current,branchId:null,catalogVersion:null,
+   catalogExpiresAt:null,items:Object.freeze([]),estimatedSubtotalPyg:null,
+   stock:'UNVERIFIED',stage:'CATALOG_LOADING'}:current;
+  return Object.freeze({...view,
+   catalogItems:Object.freeze(loading?[]:cart.currentCatalog?.()??[]),
+   catalogReadReady:configured(),catalogLoading:loading,catalogError:error,
+   checkoutEnabled:false,paymentEnabled:false,serverOrderReceipt:null});
+ };
  async function loadCatalog(branchId){
   if(!configured())return fail('CATALOG_READ_NOT_CERTIFIED');
   if(typeof branchId!=='string'||!UUID.test(branchId))return fail('INVALID_BRANCH');
   if(loading)return fail('CATALOG_READ_IN_FLIGHT');
-  if(typeof getActor!=='function')return fail('AUTH_REQUIRED');
-  let before;try{before=await getActor();}catch{before=null;}
-  if(!validActor(before))return fail('AUTH_REQUIRED');
-  cart.selectBranch(branchId);
+  if(typeof getActor!=='function'){
+   clear();error='AUTH_REQUIRED';return fail('AUTH_REQUIRED');
+  }
+  // Bloquear ANTES de await: evita doble tap/sucursal competidora durante Auth.
   const id=++generation;loading=true;error=null;
   try{
+   let before;try{before=await getActor();}catch{before=null;}
+   if(generation!==id)return fail('STALE_RESPONSE_IGNORED');
+   if(!validActor(before)){
+    clear();error='AUTH_REQUIRED';return fail('AUTH_REQUIRED');
+   }
+   cart.selectBranch(branchId);
    let result;
    try{result=await gateway.readCatalog(branchId,{
     subject:before.subject,sessionRevision:before.sessionRevision
@@ -63,10 +76,12 @@ export function createCommerceCatalogFlow({
  }
  function changeVehicle(vehicle){
   if(!configured())return fail('CATALOG_READ_NOT_CERTIFIED');
+  if(loading)return fail('CATALOG_READ_IN_FLIGHT');
   return cart.selectVehicle(vehicle);
  }
  function preview(requestKey){
   if(!configured())return fail('CATALOG_READ_NOT_CERTIFIED');
+  if(loading)return fail('CATALOG_READ_IN_FLIGHT');
   return cart.previewRequest(requestKey);
  }
  return Object.freeze({isConfigured:configured,clear,snapshot,loadCatalog,

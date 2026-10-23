@@ -70,3 +70,64 @@ test('error del servidor elimina precios y borrador que podrían estar vencidos'
  assert.equal(flow.snapshot().estimatedSubtotalPyg,null);
  assert.equal(flow.snapshot().items.length,0);
 });
+
+test('doble tap queda bloqueado incluso durante espera de identidad; solo una lectura',async()=>{
+ let releaseAuth,hits=0;
+ const authPending=new Promise(resolve=>{releaseAuth=resolve;});
+ const flow=create(gateway(async()=>{hits++;return {ok:true,data:catalog()};}),()=>authPending);
+ const first=flow.loadCatalog(id(2));
+ assert.equal(flow.snapshot().catalogLoading,true);
+ assert.equal((await flow.loadCatalog(id(2))).code,'CATALOG_READ_IN_FLIGHT');
+ assert.equal((await flow.loadCatalog(id(8))).code,'CATALOG_READ_IN_FLIGHT');
+ assert.equal(hits,0);
+ releaseAuth(actor());
+ assert.equal((await first).ok,true);
+ assert.equal(hits,1);
+ assert.equal(flow.snapshot().branchId,id(2));
+ assert.equal(flow.snapshot().catalogLoading,false);
+});
+test('logout durante Auth invalida solicitud antes de tocar gateway',async()=>{
+ let finishAuth,hits=0;
+ const authPending=new Promise(resolve=>{finishAuth=resolve;});
+ const flow=create(gateway(async()=>{hits++;return {ok:true,data:catalog()};}),()=>authPending);
+ const task=flow.loadCatalog(id(2));
+ flow.clear();
+ finishAuth(actor());
+ assert.equal((await task).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(hits,0);
+ assert.equal(flow.snapshot().catalogItems.length,0);
+ assert.equal(flow.snapshot().catalogLoading,false);
+});
+test('error o pérdida de Auth purga carrito viejo; no revive cotización',async()=>{
+ let currentActor=actor(),hits=0;
+ const flow=create(gateway(async()=>{hits++;return {ok:true,data:catalog()};}),async()=>currentActor);
+ await flow.loadCatalog(id(2));
+ flow.changeQuantity(id(3),2);
+ currentActor=null;
+ assert.equal((await flow.loadCatalog(id(2))).code,'AUTH_REQUIRED');
+ assert.equal(hits,1);
+ assert.equal(flow.snapshot().items.length,0);
+ assert.equal(flow.snapshot().estimatedSubtotalPyg,null);
+ assert.equal(flow.snapshot().catalogError,'AUTH_REQUIRED');
+});
+test('refresh pendiente oculta datos anteriores y bloquea mutaciones sin perderlos si se valida',async()=>{
+ let secondRelease,hits=0;
+ const wait=new Promise(resolve=>{secondRelease=resolve;});
+ const flow=create(gateway(async()=>{
+  hits++;return hits===1?{ok:true,data:catalog()}:wait;
+ }));
+ assert.equal((await flow.loadCatalog(id(2))).ok,true);
+ assert.equal(flow.changeQuantity(id(3),2).ok,true);
+ const refresh=flow.loadCatalog(id(2));
+ assert.equal(flow.snapshot().catalogLoading,true);
+ assert.equal(flow.snapshot().catalogItems.length,0);
+ assert.equal(flow.snapshot().items.length,0);
+ assert.equal(flow.snapshot().estimatedSubtotalPyg,null);
+ assert.equal(flow.changeQuantity(id(3),3).code,'CATALOG_READ_IN_FLIGHT');
+ assert.equal(flow.changeVehicle('AUTO').code,'CATALOG_READ_IN_FLIGHT');
+ assert.equal(flow.preview(id(4)).code,'CATALOG_READ_IN_FLIGHT');
+ secondRelease({ok:true,data:catalog()});
+ assert.equal((await refresh).ok,true);
+ assert.equal(flow.snapshot().estimatedSubtotalPyg,17000);
+ assert.equal(flow.snapshot().items[0].quantity,2);
+});
