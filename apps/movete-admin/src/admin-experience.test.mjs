@@ -443,3 +443,48 @@ test('rotación JWT mismo Owner borra cifras financieras antiguas',async()=>{
  assert.equal(app.snapshot().finance,null);
  assert.equal(app.snapshot().account.subject,owner);
 });
+
+test('G28: Admin consulta 121 incidentes en 3 páginas 50/50/21, sin tope global',async()=>{
+ const ids=n=>'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0');
+ const signed=n=>'g28_'+String(n).padStart(40,'0');
+ let hits=0;
+ const app=createAdminExperience({now:()=>now,authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async url=>{
+   hits++;
+   const match=url.match(/cursor=g28_(\d+)/);
+   const p=match?Number(match[1]):1;
+   const count=p===3?21:50;
+   const items=Array.from({length:count},(_,i)=>({
+    incidentId:ids((p-1)*50+i+1),category:'SAFETY',
+    severity:i===0?'CRITICAL':'LOW',status:'OPEN',
+    createdAt:now-2000-i,revision:2
+   }));
+   return mockReply({...incidentFeed,items,revision:5,
+    nextCursor:p>=3?null:signed(p+1)});
+  })
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('incidents','reset')).ok,true);
+ assert.equal(app.snapshot().incidents.items.length,50);
+ assert.equal((await app.syncFromServer('incidents','next')).ok,true);
+ assert.equal(app.snapshot().incidents.items.length,50);
+ assert.equal((await app.syncFromServer('incidents','next')).ok,true);
+ const final=app.snapshot();
+ assert.equal(hits,3);
+ assert.equal(final.pagination.incidents.pageNumber,3);
+ assert.equal(final.pagination.incidents.hasNext,false);
+ assert.equal(final.incidents.items.length,21);
+ assert.equal(final.incidents.items[20].incidentId,ids(121));
+ assert.equal((await app.syncFromServer('incidents','next')).code,'NO_ADDITIONAL_PAGE');
+});
+test('G28: una respuesta HTTP con 51 incidentes no autoriza parcial o falso vacío',async()=>{
+ const ids=n=>'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0');
+ const app=createAdminExperience({now:()=>now,authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async()=>mockReply({...incidentFeed,items:
+   Array.from({length:51},(_,i)=>({...incidentFeed.items[0],incidentId:ids(i+1)})),
+   nextCursor:null}))});
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('incidents','reset')).code,'INVALID_READ_DTO');
+ assert.equal(app.snapshot().incidents,null);
+ assert.equal(app.snapshot().pagination.incidents.hasNext,false);
+});

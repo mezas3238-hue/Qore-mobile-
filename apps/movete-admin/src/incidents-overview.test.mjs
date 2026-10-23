@@ -32,3 +32,10 @@ test('sin red o expiración no afirma casos abiertos en cero',()=>{
  store.replace({...feed,expiresAt:now+120000},'admin');
  assert.equal(store.current('owner'),null);
 });
+
+test('G28/A05 acepta 50 incidencias por página, rechaza 51 sin perder registros de otras páginas',()=>{
+ const make=n=>({...row,incidentId:'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0')});
+ const fifty=Array.from({length:50},(_,i)=>make(i+1));
+ assert.equal(projectIncidentQueue({...feed,items:fifty,nextCursor:'Z'.repeat(44)},{role:'admin',now}).items.length,50);
+ assert.equal(projectIncidentQueue({...feed,items:[...fifty,make(51)]},{role:'admin',now}),null);
+});
