@@ -160,3 +160,13 @@ test('ACK cruzado de conversación, clave, remitente o estado nunca se acepta',a
   assert.equal(flow.snapshot().messages.length,0);
  }
 });
+
+test('una respuesta ambigua impide cambiar de hilo sin conciliar requestKey',async()=>{
+ const f=make(flags({sendMessage:async()=>({ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'})}));
+ await f.open({serviceId,serviceKind:'RIDE'});
+ assert.equal((await f.send({body:'Estoy aquí',requestKey:key})).code,'CHAT_NETWORK_OR_TIMEOUT');
+ assert.equal((await f.open({serviceId,serviceKind:'DELIVERY'})).code,
+  'PENDING_MESSAGE_RECONCILIATION');
+ assert.equal(f.snapshot().serviceKind,'RIDE');
+ assert.equal(f.snapshot().pendingSend,true);
+});

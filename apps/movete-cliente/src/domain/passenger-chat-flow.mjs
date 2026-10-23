@@ -96,6 +96,9 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  async function open({serviceId,serviceKind,older=false}={}){
   if(!ready())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
+  // Un resultado de red ambiguo debe conciliarse con la misma clave antes
+  // de permitir abrir otra conversación o generar una solicitud nueva.
+  if(state.pending)return fail('PENDING_MESSAGE_RECONCILIATION');
   if(older){
    if(!state.header||state.header.serviceId!==serviceId
     ||state.header.serviceKind!==serviceKind||!snapshot().hasOlder)
@@ -191,7 +194,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     clear();state.error=code;return fail(code);
    }
    const ack=result.data;
-   if(!validAck(ack,currentHeader,body,requestKey,now())){
+   if(currentHeader.expiresAt<=now()||!validAck(ack,currentHeader,body,requestKey,now())){
     clear();state.error='INVALID_CHAT_ACK';return fail('INVALID_CHAT_ACK');
    }
    const accepted=Object.freeze({messageId:ack.messageId,
