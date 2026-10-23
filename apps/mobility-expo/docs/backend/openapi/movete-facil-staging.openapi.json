@@ -1399,14 +1399,14 @@
     },
     "/v1/staging/rider/history": {
       "get": {
-        "operationId": "listOwnRiderHistoryInitialPage",
+        "operationId": "listOwnRiderHistoryPaginated",
         "tags": [
           "rides",
           "delivery",
           "merchant"
         ],
-        "summary": "JWT-scoped own history read, first 50 only; no incomplete responses",
-        "description": "Driver/Admin/Owner forbidden. Reads owner-matched rows for trips, deliveries, merchant orders; endpoint fails 503 if any source missing, malformed, or history >50 pending signed cursor implementation. QA local only.",
+        "summary": "Retrieve all passenger history through private, signed keyset pages",
+        "description": "No total-record limit. Fetch pages of up to 50 records using the nextCursor of the previous page in the X-Qore-History-Cursor request header. Cursors are HMAC-SHA256 signed, bound to verified JWT owner, expire after ten minutes of inactivity and advance through the same time-anchored history. Any bad cursor is 400, any failed source is 503; no arbitrary total cap.",
         "responses": {
           "200": {
             "description": "Strictly private sanitized history, first page complete or error",
@@ -1417,6 +1417,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1433,7 +1436,20 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "X-Qore-History-Cursor",
+            "in": "header",
+            "required": false,
+            "description": "Opaque nextCursor from preceding page; never client-generated. Omit only for the first page.",
+            "schema": {
+              "type": "string",
+              "minLength": 40,
+              "maxLength": 200
+            }
+          }
+        ]
       }
     }
   },
@@ -3037,7 +3053,7 @@
       "RiderOwnHistoryV1": {
         "type": "object",
         "additionalProperties": false,
-        "description": "QA-only first page limited to <=50 results; if older results exist, 503 until certified pagination. No PII/driver/location/prices.",
+        "description": "All historic owned trips, deliveries and merchant orders, with no total record ceiling. Each page carries up to 50 entries and an opaque JWT-owner-bound HMAC keyset cursor; repeat until nextCursor=null. STAGING QA only.",
         "required": [
           "ownerId",
           "generatedAt",
@@ -3067,7 +3083,14 @@
             }
           },
           "nextCursor": {
-            "type": "null"
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 40,
+            "maxLength": 200,
+            "pattern": "^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$",
+            "description": "Opaque signed continuation, returned until all owned historical rows have been retrieved; no global maximum."
           }
         }
       }
