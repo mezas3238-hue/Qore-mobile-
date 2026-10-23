@@ -200,11 +200,42 @@ function AuditReadOnly({audit,allowed}:{
  </Panel>;
 }
 
+const readOperation:Record<Page,string|null>={
+ resumen:null,propietario:'finance',kyc:'kyc',zonas:'zones',incidentes:'incidents',auditoria:'audit'
+};
+const safeFeedback:Record<string,string>={
+ AUTH_REQUIRED:'La sesión caducó. Volvé a autenticarte.',
+ FORBIDDEN:'No tenés permiso para consultar estos datos.',
+ STALE_SESSION_RESPONSE:'La cuenta cambió durante la lectura. Se descartó la respuesta.',
+ INVALID_READ_DTO:'La respuesta del servidor no cumple el contrato aprobado.',
+ NETWORK_OR_TIMEOUT:'No se obtuvo respuesta segura del servidor.',
+ READ_CONTRACT_NOT_CERTIFIED:'Contrato pendiente de certificación.'
+};
 function App(){
- const {view:adminState}=useAdminView();
+ const {client,view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
  const [menuOpen,setMenuOpen]=useState(false);
+ const [refreshing,setRefreshing]=useState(false);
+ const [refreshStatus,setRefreshStatus]=useState<{page:Page;description:string}|null>(null);
  const view=sections.find(x=>x.id===page)!;
+ const operation=readOperation[page];
+ const expectedRole=page==='propietario'?'owner':'admin';
+ const canRefresh=operation!==null
+   &&adminState.account?.role===expectedRole
+   &&client.isReadConfigured(operation);
+ async function refreshPage(){
+  if(!operation||!canRefresh||refreshing)return;
+  const requestedPage=page;
+  setRefreshing(true);
+  try{
+   const result=await client.syncFromServer(operation);
+   setRefreshStatus({page:requestedPage,
+    description:result.ok?'Lectura validada. Datos actualizados según permisos y vigencia.':
+     safeFeedback[result.code??'']??'No se pudo validar la lectura. No se mostraron datos nuevos.'});
+  }catch{
+   setRefreshStatus({page:requestedPage,description:'Consulta no confirmada. No se mostraron datos nuevos.'});
+  }finally{setRefreshing(false);}
+ }
  return <div className="shell">
   <aside className={'sidebar '+(menuOpen?'is-open':'')} aria-label="Navegación administrativa">
    <div className="brand"><span className="mark">M</span><div><strong>Movete Fácil</strong><small>ADMIN · QA</small></div></div>
@@ -228,6 +259,17 @@ function App(){
      <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
      <span><strong>Modo demostración técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
+    {operation!==null&&<div className="refresh-panel" aria-label="Actualización segura del panel">
+     <div>
+      <strong>Consulta segura del servidor</strong>
+      <small>{canRefresh?'Contrato habilitado para esta sesión y rol.':
+        'Pendiente de autorización Backend y contrato STAGING certificado.'}</small>
+     </div>
+     <button type="button" disabled={!canRefresh||refreshing} onClick={()=>{void refreshPage();}}>
+      {refreshing?'Consultando…':'Actualizar datos'}
+     </button>
+     {refreshStatus?.page===page&&<p role="status">{refreshStatus.description}</p>}
+    </div>}
     {page==='resumen'?<>
       <div className="metric-grid">{cards.map(([label,value,desc])=><Panel key={label} className="metric">
        <small>{label}</small><strong>{value}</strong><span>{desc}</span></Panel>)}</div>

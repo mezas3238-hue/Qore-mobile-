@@ -29,3 +29,16 @@
 .owner-counts{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid #e2ebf2;margin-top:18px;padding-top:16px;color:#486b80;font-size:13px}
 @media(max-width:960px){.owner-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.owner-metrics{grid-template-columns:1fr}}
+
+/* Read-only Admin gateway: manual opt-in after server contract certification. */
+.refresh-panel{border:1px solid #dce7ee;background:#f8fafc;border-radius:12px;
+ padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:12px;margin-bottom:18px}
+.refresh-panel>div{display:grid;gap:4px}
+.refresh-panel strong{font-size:13px;color:#143d55}
+.refresh-panel small{font-size:12px;color:#5f7785}
+.refresh-panel button{border:1px solid #b8cbd8;background:#fff;color:#204e6b;
+ padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}
+.refresh-panel button:disabled{opacity:.55;cursor:not-allowed}
+.refresh-panel button:focus-visible{outline:3px solid #418fc0;outline-offset:2px}
+.refresh-panel p{flex-basis:100%;margin:0;font-size:12px;color:#47677d}
