@@ -46,7 +46,11 @@ CREATE INDEX mobility_stage_driver_docs_owner_idx
 ALTER TABLE public.mobility_stage_driver_documents ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mobility_stage_driver_documents
  FROM PUBLIC,anon,authenticated,service_role;
-GRANT SELECT,INSERT,UPDATE ON public.mobility_stage_driver_documents TO service_role;
+GRANT SELECT,INSERT ON public.mobility_stage_driver_documents TO service_role;
+-- The review RPC changes only review status and audit identity/time. Never
+-- allow service-role updates to owner, object path, hash, byte size or kind.
+GRANT UPDATE (status,reviewer_id,reviewed_at)
+ ON public.mobility_stage_driver_documents TO service_role;
 
 -- Immutable single decision per evidence record. No update/delete privileges.
 CREATE TABLE public.mobility_stage_driver_document_reviews (
@@ -79,6 +83,7 @@ DECLARE existing public.mobility_stage_driver_documents%ROWTYPE;
  result_id uuid;
 BEGIN
  IF _driver_id IS NULL OR _request_key IS NULL OR _kind IS NULL
+  OR _kind<>'licencia'::public.mobility_stage_driver_document_kind
   OR _object_key IS NULL OR _mime_type IS NULL OR _byte_size IS NULL
   OR _sha256_hex IS NULL OR
   _object_key !~ ('^'||_driver_id::text||'/'||_kind::text||
