@@ -8,7 +8,7 @@ const actor=()=>({role:'passenger',subject:owner,sessionRevision:3});
 const row=n=>({conversationId:id(n+100),serviceId:id(n+500),
  serviceKind:n%3===0?'RIDE':n%3===1?'DELIVERY':'MERCHANT_ORDER',
  state:'ACTIVE',assignmentVerified:true,counterpartRole:'driver',
- revision:9,unreadCount:n%20,updatedAt:now-1000,canSend:true});
+ revision:9,unreadCount:n%20,updatedAt:now-1000-n,canSend:true});
 const page=(items=[row(1)],nextCursor=null)=>({ownerId:owner,
  generatedAt:now-2000,expiresAt:now+60000,revision:9,items,nextCursor,
  productionEnabled:false});
@@ -168,4 +168,42 @@ test('otra página no puede presentar un segundo hilo para un mismo servicio act
  assert.equal((await inbox.load()).ok,true);
  assert.equal((await inbox.load({next:true})).code,'DUPLICATE_ACTIVE_SERVICE');
  assert.equal(inbox.snapshot().items.length,0);
+});
+
+test('páginas desordenadas en el mismo snapshot se rechazan',async()=>{
+ const inbox=make(flags({readInbox:async()=>({
+  ok:true,data:page([row(2),row(1)])
+ })}));
+ assert.equal((await inbox.load()).code,'INVALID_CHAT_INBOX_DTO');
+ assert.equal(inbox.snapshot().items.length,0);
+});
+test('no reingresa una conversación descartada de memoria después de 110 páginas',async()=>{
+ const cursor=n=>'C'+String(n).padStart(43,'0');
+ let n=0;
+ const inbox=createPassengerChatInbox({gateway:flags({
+  readInbox:async()=>{
+   n++;
+   const item=n===111?row(1):row(n);
+   return {ok:true,data:page([item],n<111?cursor(n):null)};
+  }
+ }),getActor:async()=>actor(),now:()=>now,maxCachedConversations:100});
+ assert.equal((await inbox.load()).ok,true);
+ for(let i=2;i<=110;i++)
+  assert.equal((await inbox.load({next:true})).ok,true);
+ assert.equal(inbox.snapshot().items.length,100);
+ assert.equal(inbox.snapshot().window.evictedCount,10);
+ assert.equal((await inbox.load({next:true})).code,'CHAT_INBOX_ORDER_VIOLATION');
+ assert.equal(inbox.snapshot().items.length,0);
+});
+test('mismo updatedAt acepta desempate estable por conversationId descendente',async()=>{
+ const sameTime=now-9000;
+ const first={...row(1),conversationId:id(900),updatedAt:sameTime};
+ const second={...row(2),conversationId:id(800),updatedAt:sameTime};
+ const cursor='q'.repeat(44);let n=0;
+ const inbox=make(flags({readInbox:async()=>({
+  ok:true,data:page([n++===0?first:second],n===1?cursor:null)
+ })}));
+ assert.equal((await inbox.load()).ok,true);
+ assert.equal((await inbox.load({next:true})).ok,true);
+ assert.equal(inbox.snapshot().items.length,2);
 });

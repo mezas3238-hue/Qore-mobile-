@@ -19,9 +19,17 @@ const actorOk=x=>x!==null&&typeof x==='object'&&x.role==='passenger'
 const sameActor=(a,b)=>actorOk(b)&&a.subject===b.subject
  &&a.sessionRevision===b.sessionRevision;
 const fail=code=>Object.freeze({ok:false,code});
+// Orden inmutable descendente por actividad + UUID como desempate.
+// Sin esta cerca, la paginación sobre ventana móvil puede repetir filas
+// que ya fueron descartadas de RAM; cursor firmado de A debe respetarlo.
+function strictlyOlder(row,previous){
+ return row.updatedAt<previous.updatedAt||
+  row.updatedAt===previous.updatedAt
+   &&row.conversationId<previous.conversationId;
+}
 const empty=()=>({ownerId:null,expiresAt:0,revision:null,nextCursor:null,
  items:[],seenIds:new Set(),seenCursors:new Set(),pagesRead:0,rowsRead:0,
- evictedCount:0,error:null});
+ evictedCount:0,error:null,lastSort:null});
 function validatePage(dto,{ownerId,now,revision=null}){
  if(!exact(dto,PAGE)||!validId(ownerId)||dto.ownerId!==ownerId
   ||dto.productionEnabled!==false||!natural(dto.revision)
@@ -47,6 +55,7 @@ function validatePage(dto,{ownerId,now,revision=null}){
    ||row.updatedAt<0||row.updatedAt>now
    ||local.has(row.conversationId)
    ||services.has(row.serviceKind+':'+row.serviceId))return null;
+  if(items.length>0&&!strictlyOlder(row,items[items.length-1]))return null;
   local.add(row.conversationId);
   services.add(row.serviceKind+':'+row.serviceId);
   items.push(Object.freeze({...row}));
@@ -137,6 +146,13 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
      return fail('DUPLICATE_ACTIVE_SERVICE');
     }
    }
+   // También impide repetir una conversación descartada de la ventana
+   // anterior: la nueva página ha de ser estrictamente más antigua.
+   if(next&&old.lastSort&&page.items.length>0
+    &&!strictlyOlder(page.items[0],old.lastSort)){
+    clear();state.error='CHAT_INBOX_ORDER_VIOLATION';
+    return fail('CHAT_INBOX_ORDER_VIOLATION');
+   }
    for(const row of page.items){state.items.push(row);state.seenIds.add(row.conversationId);}
    state.rowsRead+=page.items.length;
    if(state.items.length>max){
@@ -147,6 +163,7 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
    if(cursor!==null)state.seenCursors.add(cursor);
    state.ownerId=page.ownerId;state.expiresAt=page.expiresAt;
    state.revision=page.revision;state.nextCursor=page.nextCursor;
+   if(page.items.length>0)state.lastSort=page.items[page.items.length-1];
    state.pagesRead++;
    return Object.freeze({ok:true,hasNext:page.nextCursor!==null,
     loaded:page.items.length});
