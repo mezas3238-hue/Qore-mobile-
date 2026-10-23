@@ -4,7 +4,8 @@ import {CLIENT_ENDPOINTS,createClientGateway,validateClientOperation} from './cl
 const key='123e4567-e89b-42d3-a456-426614174000';
 const body={requestKey:key,originTag:'Centro Asunción',destinationTag:'Villa Morra',service:'economico'};
 const subject='123e4567-e89b-42d3-a456-426614174099';
-const session=()=>({subject,role:'passenger',authRevision:2,token:'synthetic-jwt-of-sufficient-length',expiresAt:Date.now()+90000});
+const expiry=Date.now()+90000;
+const session=()=>({subject,role:'passenger',authRevision:2,token:'synthetic-jwt-of-sufficient-length',expiresAt:expiry});
 const make=(fetchImpl,opts={})=>createClientGateway({
  origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
  enabled:true,contractCertified:true,
@@ -72,7 +73,7 @@ test('403 y 401 invalidan sesión sin filtrar datos',async()=>{
 test('rechaza operación ajena y UUID inválido',async()=>{
  let hits=0;const gateway=make(async()=>{hits++;return success});
  assert.equal((await gateway.send('driverOfferAccept',{body})).code,'OPERATION_DENIED');
- assert.equal((await gateway.send('rideStatus',{id:'../../other'})).code,'INVALID_INPUT');
+ assert.equal((await gateway.send('rideStatus',{id:'../../other'})).code,'DEDICATED_GATEWAY_REQUIRED');
  assert.equal(hits,0);
 });
 test('no admite payload no validado de compra',async()=>{
