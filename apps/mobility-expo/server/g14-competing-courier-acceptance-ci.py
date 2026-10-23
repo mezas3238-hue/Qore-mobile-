@@ -27,6 +27,8 @@ decision_key_b = "00000000-0000-4000-8000-000000000169"
 # Synthetic seeded courier has all cargo checks and no passenger-mode bypass.
 with psycopg.connect(dsn) as seed:
     seed.execute("INSERT INTO auth.users(id) VALUES (%s),(%s)", (sender, courier_b))
+    # Supabase G1 fixture grants default passenger role. Remove it before verified Driver role.
+    seed.execute("DELETE FROM public.user_roles WHERE user_id=%s", (courier_b,))
     seed.execute("INSERT INTO public.user_roles(user_id,role) VALUES (%s,'driver')", (courier_b,))
     seed.execute(
         """INSERT INTO public.mobility_vehicles
