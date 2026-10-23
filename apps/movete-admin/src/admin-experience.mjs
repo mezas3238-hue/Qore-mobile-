@@ -48,7 +48,15 @@ export function createAdminExperience({authProvider=null,gateway=null,now=()=>Da
   if(current.role!=='admin')return fail('FORBIDDEN');
   if(!gateway||typeof gateway.isConfigured!=='function'||gateway.isConfigured()!==true
    ||typeof gateway.reviewVehicle!=='function')return fail('ADMIN_CONTRACT_PENDING');
-  const response=await gateway.reviewVehicle(dto);
+  let response;
+  try{response=await gateway.reviewVehicle(dto);}
+  catch{response=fail('NETWORK_OR_TIMEOUT');}
+  const after=session.publicSession();
+  // Un ACK viejo de una cuenta ya cerrada o sustituida no puede confirmar
+  // una operación administrativa sobre la nueva sesión.
+  if(!after||after.subject!==current.subject||after.role!==current.role){
+   clearPrivate();notify();return fail('STALE_SESSION_RESPONSE');
+  }
   // Ningún resultado de revisión se refleja optimistamente en lista.
   // Se requiere nueva lectura servidor con revisión más reciente.
   queue.clear();
