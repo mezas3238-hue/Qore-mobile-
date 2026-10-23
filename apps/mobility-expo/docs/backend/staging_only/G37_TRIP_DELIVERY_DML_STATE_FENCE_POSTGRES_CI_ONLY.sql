@@ -91,6 +91,13 @@ ALTER FUNCTION public.mobility_stage_auto_demo_request(
  uuid,uuid,text,text,public.mobility_service_kind) SECURITY DEFINER;
 ALTER FUNCTION public.mobility_stage_auto_demo_transition(
  uuid,uuid,public.mobility_stage_trip_status,uuid) SECURITY DEFINER;
+-- Offer creation takes SELECT ... FOR UPDATE on the underlying job row.
+-- PostgreSQL requires UPDATE privilege for FOR UPDATE; retain this exclusively
+-- inside the callable server RPC rather than regrant direct table UPDATE.
+ALTER FUNCTION public.mobility_stage_auto_demo_offer(
+ uuid,uuid,uuid,uuid,integer) SECURITY DEFINER;
+ALTER FUNCTION public.mobility_stage_delivery_offer(
+ uuid,uuid,uuid,uuid,integer) SECURITY DEFINER;
 ALTER FUNCTION public.mobility_stage_auto_demo_accept_offer(
  uuid,uuid,uuid) SECURITY DEFINER;
 ALTER FUNCTION public.mobility_stage_delivery_request(
