@@ -1,0 +1,30 @@
+# G32 / G31.3 — Driver GPS telemetry: verified gates and SQL quarantine
+
+**Fecha:** 2026-10-23 · Arquitecto A · rama `feature/mobility-monorepo-isolated-20261016` · PR #7 DRAFT.
+
+## Resultado real de ingeniería
+
+Se añadió una **puerta de entrada de telemetría del Driver para QA aislado**, con **NINGÚN listener HTTP** y sin integración con ubicación real en teléfonos. No habilita viajes, entregas, cobertura comercial, pagos, avisos ni disponibilidad.
+
+- `apps/mobility-expo/server/g32-driver-telemetry-intake-qa.mjs`: solo acepta `POST` y un paquete exacto con `eventId, sequence, capturedAtMs, location(lat,lng,accuracyMeters)`. Rechaza driverId, zona o servicio propuestos por el teléfono. Latitud/longitud deben ser finitas en rangos terrestres, exactitud declarada <=50m, antigüedad <=30s y anticipo <=5s. **Esta validación numérica no demuestra ausencia de GPS falsificado.**
+- Exige siete verificaciones independientes del lado servidor antes de persistir: JWT Driver revocable y vinculado a identidad/sesión; limitador de tasa; consentimiento en servidor, activo y anterior a la captura; prueba de integridad de localización vinculada a Driver y evento; cálculo independiente de geocerca en Paraguay, con versión de geometría y revisión; elegibilidad específica del Driver para la zona y servicio; persistencia SQL confirmada. Cada atestación debe estar asociada al actor y ser reciente. Todos los adaptadores actuales en tests son **sintéticos**, no se ha conectado proveedor Auth, GPS ni geodatos externos.
+- `g32-driver-telemetry-persistence-qa.mjs`: adaptador a RPC `mobility_stage_g32_quarantine_signal` exclusivo de backend. No envía GPS a SQL, solo Driver, evento, secuencia, tiempo, zona verificada por el adaptador, servicio validado y revisiones de consentimiento/geometría. Un resultado de SQL distinto del ID de evento, un error de base, una respuesta parcial o replay deniegan persistencia.
+- `G32_DRIVER_LOCATION_SIGNAL_QUARANTINE_POSTGRES_CI_ONLY.sql`: tablas privadas `mobility_stage_g32_signal_quarantine` (append-only para service_role) y `mobility_stage_g32_signal_state` (última secuencia por Driver). Exige rol único Driver G1, consentimiento vigente en `mobility_location_consents` G2, zona+servicio G31 existente en Paraguay, secuencia estrictamente creciente por Driver, captura temporal no caducada y UUID de evento único. Un advisory lock por Driver, junto con **bloqueo FOR SHARE del consentimiento dentro de la sección crítica**, impide aceptar una señal cuya revocación ya se confirmó en otra transacción. Los clientes `anon/authenticated` no pueden consultar ni escribir las tablas o llamar el RPC.
+- El único resultado positivo es **202 / LOCATION_QA_QUARANTINED** con banderas `productionEnabled:false, availabilityConfirmed:false, dispatchAuthorized:false`. **NINGÚN evento G32 alimenta `mobility_stage_g31_zone_observations`**: no suma guardias, no promociona la moto pasajero a entrega, no crea asignaciones de viaje ni localiza automáticamente en polígonos reales.
+
+## Pruebas y limitaciones
+
+- `g32-driver-telemetry-intake-qa.test.mjs`: identidad incorrecta, caducidad JWT, cookie/origen web, cliente que propone zona o rol, coordenadas corruptas, precisión fuera de rango, captura vencida/futura, consentimiento ausente o revocado, atestación de integridad/país/geocerca/servicio falsa, fallo de limitador/RPC y respuesta SQL incompleta.
+- `G32_DRIVER_SIGNAL_QUARANTINE_ASSERT_POSTGRES_CI_ONLY.sql`: ensayos contra PostgreSQL 16 descartable de primer evento, replay de eventId, secuencia repetida, captura caducada, cruce de servicio, actualización monotónica, revocación y doble rol Passenger/Driver. Verifica que el conteo G31 permanece intacto.
+- `g32-driver-telemetry-concurrency-ci.py`: dos conexiones PostgreSQL compiten por la misma secuencia; exactamente una debe persistir. Otra prueba mantiene una revocación de consentimiento sin confirmar mientras intenta ingresarse la siguiente señal, y exige denegación después del commit de revocación. Este ensayo utiliza solo localhost y datos sintéticos temporales.
+- La existencia de verificadores inyectables **NO significa** contar ya con detección real de mock location, attestation del dispositivo, mapa/polígonos de Paraguay, GPS consentido ni autorización de reparto. Sin fuentes confiables conectadas, G32 es solo contrato y ensayo controlado. Todo LIVE permanece bloqueado.
+- La revisión de consentimiento en SQL usa el estado activo de G2; `consentRevision` es metadato del adaptador QA y no existe aún una versión autoritativa equivalente en G2. Una futura migración debe añadir versionado/procedencia, soporte de reconfirmación y retención antes de activación.
+- Faltan evaluación de privacidad y retención de localización, limitación anti-correlación, tolerancia a puntos GPS erráticos, spoofing de sensores, verificación de geocercas reales, red de STAGING HTTPS autorizada, reconciliación de flota con ocupación de viajes, contadores no falsificables y E2E Android/iOS.
+
+## Coordinación A/B y próximos bloques
+
+Este trabajo se realizó solo en el servidor y los documentos del Arquitecto A. **No modificar** `apps/movete-admin/**`, `apps/movete-cliente/**`, ni `docs/architect-b/**`. El Admin de B continúa viendo solo las muestras G31 ya probadas, sintéticas, y no recibirá los eventos individuales G32. `enabled=false` y `certifiedContracts=[]` permanecen.
+
+Próximo G32.3: crear una fuente de **observaciones agregadas por zona y servicio** a partir de señales verificadas, respetando TTL, consentimientos revocados y asignaciones activas; NO habilitar hasta vincular geofence real, antifraude, KYC y estado operacional. A04.3: proveedor JWT/revocación y atestación real con secretos solo servidor. Owner Finance permanece bloqueado porque el ledger G7 es de pagos simulados.
+
+**Gobernanza:** PR #7 DRAFT, no merge, no LIVE, no deploy, no SQL remoto, no VPS, no PSP, no datos personales de producción. Base de QA `qore_disposable_chain` con `PGAPPNAME=qore_ci_disposable_chain`; documentación + pruebas deben verificarse en el SHA final antes de declarar DONE.
