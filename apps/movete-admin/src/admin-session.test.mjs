@@ -69,3 +69,21 @@ test('dos refresh superpuestos usan solo la última lectura autenticada',async()
  assert.equal((await first).code,'STALE_SESSION_RESPONSE');
  assert.equal(ctrl.publicSession().subject,other);
 });
+
+test('token rotado de mismo Admin borra metadatos privados de sesión anterior',async()=>{
+ let state=ok(),clears=0;
+ const ctrl=createAdminSessionController({provider:{readSession:()=>state},
+  clearSensitive:()=>clears++,now:()=>10000});
+ await ctrl.refresh();
+ state={...state,token:'synthetic-admin-new-token-same-subject'};
+ assert.equal((await ctrl.refresh()).ok,true);
+ assert.equal(clears,1);assert.equal(ctrl.publicSession().subject,who);
+});
+test('refresco de token idéntico preserva datos, vencimiento diferente no',async()=>{
+ let state=ok(),clears=0;
+ const ctrl=createAdminSessionController({provider:{readSession:()=>state},
+  clearSensitive:()=>clears++,now:()=>10000});
+ await ctrl.refresh();await ctrl.refresh();assert.equal(clears,0);
+ state={...state,expiresAt:95000};
+ assert.equal((await ctrl.refresh()).ok,true);assert.equal(clears,1);
+});

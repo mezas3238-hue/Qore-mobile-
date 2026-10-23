@@ -25,7 +25,11 @@ export function createAdminSessionController({provider,clearSensitive=()=>{},now
    ||!Number.isFinite(value.expiresAt)||value.expiresAt<=now()+1000){
    clear();return {ok:false,code:'ADMIN_AUTH_REQUIRED'};
   }
-  if(current&&(current.subject!==value.subject||current.role!==value.role))clearSensitive();
+  // Nuevo JWT o caducidad equivale a nueva sesión, aunque el rol sea idéntico.
+  // Borrar también KYC, GPS operativo, incidentes, finanzas y cursores antiguos.
+  if(current&&(current.subject!==value.subject||current.role!==value.role
+   ||current.token!==value.token||current.expiresAt!==value.expiresAt))
+   clearSensitive();
   current={subject:value.subject,role:value.role,mfaVerified:true,token:value.token,expiresAt:value.expiresAt};
   return {ok:true,subject:current.subject,expiresAt:current.expiresAt};
  }

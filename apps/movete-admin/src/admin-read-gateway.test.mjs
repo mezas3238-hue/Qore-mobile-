@@ -5,8 +5,8 @@ const t=1800000000000;
 const owner='123e4567-e89b-42d3-a456-426614174000';
 const admin='123e4567-e89b-42d3-a456-426614174001';
 const token='synthetic-only-opaque-token-222';
-const session=(role='admin')=>({role,subject:role==='owner'?owner:admin,mfaVerified:true,token,expiresAt:t+90000});
-const response=(data={scope:'synthetic'})=>({
+const session=(role='admin')=>({role,subject:role==='owner'?owner:admin,mfaVerified:true,token,expiresAt:t+90000,authRevision:1});
+const response=(data={scope:'synthetic',nextCursor:null})=>({
  ok:true,status:200,redirected:false,
  headers:{get:key=>key==='content-type'?'application/json; charset=utf-8':null},
  text:async()=>JSON.stringify(data)
@@ -164,9 +164,44 @@ test('paginación cursor segura sin tope de registros en la plataforma',async()=
  const gateway=createAdminReadGateway({...settings,fetchImpl:async url=>{
   urls.push(url);return response();
  }});
- assert.equal((await gateway.read('kyc',{cursor:'cursor_10001'})).ok,true);
- assert.equal(urls[0],'https://staging.example.invalid/v1/staging/admin/vehicle-review-queue?cursor=cursor_10001');
+ const signed='S'.repeat(44);
+ assert.equal((await gateway.read('kyc',{cursor:signed})).ok,true);
+ assert.equal(urls[0],'https://staging.example.invalid/v1/staging/admin/vehicle-review-queue?cursor='+signed);
  assert.equal((await gateway.read('kyc',{cursor:'hello&role=owner'})).code,'INVALID_CURSOR');
  assert.equal((await gateway.read('finance',{cursor:'cursor_1'})).code,'INVALID_CURSOR');
  assert.equal(urls.length,1);
+});
+
+test('A05 nunca acepta cursores GET cortos o no opacos',async()=>{
+ let hits=0;
+ const gateway=createAdminReadGateway({...settings,fetchImpl:async()=>{hits++;return response();}});
+ for(const cursor of ['page_1','a'.repeat(43),'a'.repeat(257),
+  'v1.payload.signature','abc.def','x?scope=owner']){
+  assert.equal((await gateway.read('incidents',{cursor})).code,'INVALID_CURSOR');
+ }
+ assert.equal(hits,0);
+ assert.equal((await gateway.read('incidents',{cursor:'C'.repeat(44)})).ok,true);
+ assert.equal(hits,1);
+});
+test('A05 no acepta 200 con cursor inexistente ni no firmado',async()=>{
+ for(const body of [{scope:'admin.incidents.read'},
+  {scope:'admin.incidents.read',nextCursor:'page_2'},
+  {scope:'admin.incidents.read',nextCursor:'a'.repeat(257)}]){
+  const gateway=createAdminReadGateway({...settings,fetchImpl:async()=>response(body)});
+  assert.equal((await gateway.read('incidents')).code,'BAD_SERVER_CURSOR');
+ }
+});
+test('A05 400 cursor vencido informa error específico',async()=>{
+ const gateway=createAdminReadGateway({...settings,
+  fetchImpl:async()=>({status:400,ok:false,redirected:false})});
+ assert.equal((await gateway.read('incidents',{cursor:'C'.repeat(44)})).code,
+  'INVALID_OR_EXPIRED_CURSOR');
+});
+test('sin authRevision no hay lectura administrativa',async()=>{
+ let hits=0;
+ const gateway=createAdminReadGateway({...settings,getSession:async()=>{
+  const current=session();delete current.authRevision;return current;
+ },fetchImpl:async()=>{hits++;return response();}});
+ assert.equal((await gateway.read('incidents')).code,'FORBIDDEN');
+ assert.equal(hits,0);
 });

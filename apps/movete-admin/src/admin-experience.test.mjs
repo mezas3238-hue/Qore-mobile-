@@ -267,7 +267,8 @@ test('nuevo inicio de sesión vacía eventos de auditoría del anterior admin',a
 const mockReply=data=>({
  ok:true,status:200,redirected:false,
  headers:{get:key=>key==='content-type'?'application/json':null},
- text:async()=>JSON.stringify(data)
+ text:async()=>JSON.stringify(data&&typeof data==='object'&&!Array.isArray(data)
+  &&!Object.hasOwn(data,'nextCursor')?{...data,nextCursor:null}:data)
 });
 const readConfig=fetchImpl=>({
  enabled:true,certifiedContracts:['zones','kyc','finance','incidents','audit'],
@@ -375,7 +376,7 @@ test('paginación KYC 151 páginas: cada página se reemplaza, el universo no se
    const match=url.match(/cursor=page_(\d+)/);
    const p=match?Number(match[1]):1;
    const payload={...dto,items:[{...dto.items[0],vehicleId:ids(p)}],
-    nextCursor:p>=151?null:'page_'+(p+1)};
+    nextCursor:p>=151?null:'page_'+String(p+1).padStart(39,'0')};
    return mockReply(payload);
   })
  });
@@ -395,7 +396,7 @@ test('paginación KYC 151 páginas: cada página se reemplaza, el universo no se
 test('no se acepta cursor circular que podría reiterar la misma página',async()=>{
  const app=createAdminExperience({now:()=>now,
   authProvider:{readSession:async()=>auth()},
-  readGatewayOptions:readConfig(async()=>mockReply({...dto,nextCursor:'same'}))
+  readGatewayOptions:readConfig(async()=>mockReply({...dto,nextCursor:'S'.repeat(44)}))
  });
  await app.refreshSession();
  assert.equal((await app.syncFromServer('kyc','reset')).ok,true);
@@ -406,11 +407,39 @@ test('no se acepta cursor circular que podría reiterar la misma página',async(
 test('logout borra cursores de distintas bandejas sin filtrar páginas previas',async()=>{
  const app=createAdminExperience({
   now:()=>now,authProvider:{readSession:async()=>auth(),signOut:async()=>{}},
-  readGatewayOptions:readConfig(async()=>mockReply({...dto,nextCursor:'next_cursor'}))
+  readGatewayOptions:readConfig(async()=>mockReply({...dto,nextCursor:'N'.repeat(44)}))
  });
  await app.refreshSession();
  await app.syncFromServer('kyc','reset');
  assert.equal(app.snapshot().pagination.kyc.hasNext,true);
  await app.logout();
  assert.equal(app.snapshot().pagination.kyc.hasNext,false);
+});
+
+test('rotación JWT mismo Admin limpia todas las vistas con información privada',async()=>{
+ const current=auth();
+ const {app,setUser}=fixture(current);
+ await app.refreshSession();
+ assert.equal(app.readKyc(dto),true);
+ assert.equal(app.readZones(zone),true);
+ assert.equal(app.readIncidents(incidentFeed),true);
+ assert.equal(app.readAudit(auditFeed),true);
+ setUser({...current,token:'synthetic-rotated-admin-jwt-new-token'});
+ await app.refreshSession();
+ const state=app.snapshot();
+ assert.equal(state.account.subject,admin);
+ assert.equal(state.kyc,null);assert.equal(state.zones,null);
+ assert.equal(state.incidents,null);assert.equal(state.audit,null);
+ assert.equal(state.pagination.kyc.hasNext,false);
+});
+test('rotación JWT mismo Owner borra cifras financieras antiguas',async()=>{
+ let current={...auth(owner),role:'owner'};
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>current}});
+ await app.refreshSession();
+ assert.equal(app.readFinance(financeData),true);
+ current={...current,token:'synthetic-rotated-owner-jwt-new-token'};
+ await app.refreshSession();
+ assert.equal(app.snapshot().finance,null);
+ assert.equal(app.snapshot().account.subject,owner);
 });

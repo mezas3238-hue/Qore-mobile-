@@ -1,4 +1,6 @@
-import {isValidCursor} from './page-cursor.mjs';
+// A05: cursor HMAC opaco base64url, firmado por backend, de 44 a 256 caracteres.
+const A05_CURSOR=/^[A-Za-z0-9_-]{44,256}$/;
+const isSignedA05Cursor=x=>typeof x==='string'&&A05_CURSOR.test(x);
 /**
  * Frontera de lectura de Admin Web — SOLO STAGING, bloqueada por defecto.
  * Rutas PROPUESTAS, todavía no contratadas/certificadas por Backend A.
@@ -28,7 +30,8 @@ const validActor=(s,expected,now)=>s!==null&&typeof s==='object'
  &&s.role===expected&&s.mfaVerified===true
  &&typeof s.subject==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.subject)
  &&typeof s.token==='string'&&s.token.length>=20
- &&Number.isFinite(s.expiresAt)&&s.expiresAt>now+1000;
+ &&Number.isFinite(s.expiresAt)&&s.expiresAt>now+1000
+ &&Number.isSafeInteger(s.authRevision)&&s.authRevision>=0;
 
 /**
  * Ejemplo de configuración segura: enabled=false hasta que A publique
@@ -50,7 +53,7 @@ export function createAdminReadGateway({
  }
  async function read(operation,{cursor=null}={}){
   if(!isConfigured(operation))return fail('READ_CONTRACT_NOT_CERTIFIED');
-  if(cursor!==null&&!isValidCursor(cursor))return fail('INVALID_CURSOR');
+  if(cursor!==null&&!isSignedA05Cursor(cursor))return fail('INVALID_CURSOR');
   if(operation==='finance'&&cursor!==null)return fail('INVALID_CURSOR');
   if(inFlight.has(operation))return fail('READ_IN_FLIGHT');
   inFlight.add(operation); // before await: no parallel duplicate GET
@@ -85,6 +88,7 @@ export function createAdminReadGateway({
     onSessionInvalid();
     return fail(result.status===401?'AUTH_REQUIRED':'FORBIDDEN',result.status);
    }
+   if(result.status===400)return fail('INVALID_OR_EXPIRED_CURSOR',400);
    if(result.status===429)return fail('RATE_LIMITED',429);
    if(result.status===503)return fail('SERVICE_UNAVAILABLE',503);
    if(result.status!==200||result.ok!==true)return fail('SERVER_DENIED',result.status);
@@ -102,6 +106,10 @@ export function createAdminReadGateway({
    try{json=JSON.parse(body);}
    catch{return fail('BAD_SERVER_RESPONSE');}
    if(!json||typeof json!=='object'||Array.isArray(json))return fail('BAD_SERVER_RESPONSE');
+   // No aceptar cursores del navegador ni resultados parciales con cursor falso.
+   if(operation!=='finance'&&(!Object.hasOwn(json,'nextCursor')
+     ||!(json.nextCursor===null||isSignedA05Cursor(json.nextCursor))))
+    return fail('BAD_SERVER_CURSOR');
    // Strict post-response identity check: no old admin/owner data on new user.
    let latest;
    try{latest=await getSession();}
