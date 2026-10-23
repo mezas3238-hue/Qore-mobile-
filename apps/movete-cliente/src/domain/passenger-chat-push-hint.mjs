@@ -3,7 +3,6 @@
  * Texto privado y datos del destinatario nunca deben salir en la alerta.
  * El push NO autoriza abrir el chat; require server-side assignment check.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9a-f]{0}$/i;
 const SERVICE_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KINDS=new Set(['RIDE','DELIVERY','MERCHANT_ORDER']);
 const REQUIRED=['eventId','ownerId','serviceId','serviceKind',

@@ -19,6 +19,7 @@ export function canShowPassengerServiceChat({authenticated=false,
  * React debe desmontar INMEDIATAMENTE el borrador local al cambiar de
  * servicio (incluso con el mismo pasajero/JWT). No depender de useEffect.
  */
+/** @param {{sessionRevision?:number,serviceId?:string|null,serviceKind?:string|null}} [options] */
 export function passengerChatPrivateViewKey({sessionRevision,
  serviceId=null,serviceKind=null}={}){
  const rev=Number.isSafeInteger(sessionRevision)&&sessionRevision>=0
