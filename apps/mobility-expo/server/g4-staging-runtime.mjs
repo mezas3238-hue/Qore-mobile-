@@ -33,6 +33,7 @@ import {createDriverDocumentRepository} from './g17-driver-document-repository.m
 import {createDriverDocumentGateway} from './g17-driver-document-gateway.mjs';
 import {createDriverEnrollmentRepository} from './g18-driver-enrollment-repository.mjs';
 import {createDriverEnrollmentGateway} from './g18-driver-enrollment-gateway.mjs';
+import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -63,6 +64,9 @@ const STAGE_TABLES=[
  'mobility_stage_merchant_management_events',
  'mobility_stage_delivery_offers',
  'mobility_stage_delivery_offer_outbox',
+ 'mobility_stage_driver_documents',
+ 'mobility_stage_driver_document_reviews',
+ 'mobility_stage_driver_enrollments',
 ];
 const required=(v,name)=>{
  if(typeof v!=='string'||!v.trim())throw Error('Missing '+name);
@@ -138,7 +142,7 @@ export async function prepareQoreG4StagingRuntime({
  projectRef,anonKey,serviceKey,
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
- observePrivateObject=unavailablePrivateObjectObservation,now=Date.now,
+ privateEvidenceAdapters=null,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -148,7 +152,9 @@ export async function prepareQoreG4StagingRuntime({
  if(anonKey===serviceKey||typeof createClient!=='function'||
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
    typeof pricingContext!=='function'||
-   typeof observePrivateObject!=='function'||typeof now!=='function')
+   !(privateEvidenceAdapters===null||
+     (typeof privateEvidenceAdapters==='object'&&
+      !Array.isArray(privateEvidenceAdapters)))||typeof now!=='function')
   throw Error('G4 server-only secret separation and adapters required');
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
@@ -371,6 +377,11 @@ export async function prepareQoreG4StagingRuntime({
   authorizeNewDriver:id=>roleHas(admin,id,'passenger'),
   allowRequest,enroll:params=>driverEnrollmentPersistence.enroll(params)
  });
+ // G19: only verified metadata + version-pinned bytes + external clean scan
+ // can ever unlock registration. No scanner configured by default.
+ const observePrivateObject=privateEvidenceAdapters===null?
+  unavailablePrivateObjectObservation:
+  createVerifiedPrivateDriverEvidenceObserver(privateEvidenceAdapters);
  const driverDocuments=createDriverDocumentGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),
