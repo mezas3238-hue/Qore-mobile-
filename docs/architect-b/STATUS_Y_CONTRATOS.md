@@ -227,3 +227,13 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - QA local: **204/204 Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS. Cuatro pruebas nuevas, ninguna eliminada.
 - Documento: [SAFE_AUTO_UI_JOURNEY_HARNESS_2026-10-23.md](./SAFE_AUTO_UI_JOURNEY_HARNESS_2026-10-23.md).
 - Próxima prioridad: B-03, harness equivalente de envíos AUTO/MOTO carga con privacidad, límites y estados offline; no activar delivery backend.
+
+**Cierre GitHub B25:** commit `916db657c56c405027af8fda2fd5305196d456f3`; ownership #39963055725 SUCCESS, Admin #39963055703 SUCCESS y two-app isolation #39963055851 SUCCESS.
+
+## B26 — Harness UI seguro de envíos AUTO/MOTO carga (23-10-2026)
+- B-03 implementado con `safe-delivery-ui-harness.mjs`: editar/validar/preparar/mostrar no enviado/bloquear online-offline/descartar.
+- Reglas probadas: MOTO <=10 kg, dimensiones <=200 cm, enteros sin exponente/decimal, artículos restringidos bloqueados; AUTO conserva su límite de 100 kg del validador.
+- La superficie no incorpora PII de destinatario: `recipient`, `deliveryId`, `courier` y `gps` quedan `null`; cero llamadas de red.
+- QA local: **208/208 Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS. Cuatro pruebas nuevas.
+- Documento: [SAFE_DELIVERY_UI_JOURNEY_HARNESS_2026-10-23.md](./SAFE_DELIVERY_UI_JOURNEY_HARNESS_2026-10-23.md).
+- Próxima prioridad realizable: B-04 comercios sobre catálogo/stock versionado y checkout DEMO, sin crear API ni compra LIVE.

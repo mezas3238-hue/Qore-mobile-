@@ -288,4 +288,14 @@ El commit B24 quedó certificado en GitHub como `93cb5bf13ec8`: los tres workflo
 - QA local: **204/204 tests Cliente**, TypeScript y Expo export web SUCCESS. Verificar SHA/CI GitHub del commit B25.
 - Evidencia: `docs/architect-b/SAFE_AUTO_UI_JOURNEY_HARNESS_2026-10-23.md`.
 
-La siguiente prioridad ejecutable pasa a **B-03: harness seguro de envíos AUTO/MOTO de carga**, incluyendo error/offline y privacidad del destinatario, sin activar backend.
+El commit B25 quedó certificado en GitHub como `916db657c56c`: los tres workflows SUCCESS.
+
+## B26 — B-03 completado
+
+- Harness headless de envíos AUTO/MOTO carga: edición, validación, preparación temporal, estados online/offline y descarte.
+- Valida límites de peso/dimensiones y artículos restringidos antes de generar UUID.
+- No modela ni expone PII de destinatario; deliveryId, repartidor y GPS permanecen nulos.
+- QA local: **208/208 tests Cliente**, TypeScript y Expo export web SUCCESS. Verificar SHA/CI GitHub del commit B26.
+- Evidencia: `docs/architect-b/SAFE_DELIVERY_UI_JOURNEY_HARNESS_2026-10-23.md`.
+
+La siguiente prioridad ejecutable pasa a **B-04: recorrido seguro de comercios**, usando únicamente catálogo/stock versionado ya validado y checkout DEMO sin compra LIVE.

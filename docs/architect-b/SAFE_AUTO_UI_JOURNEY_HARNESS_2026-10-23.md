@@ -2,7 +2,7 @@
 
 **Fecha:** 23 de octubre de 2026
 **Ámbito:** Arquitecto B; Cliente Passenger QA, sin backend ni operación comercial.
-**Estado:** pruebas locales completas; GitHub Actions del commit de este bloque pendientes al redactar.
+**Estado:** publicado y certificado en GitHub Actions.
 
 ## Objetivo
 
@@ -41,6 +41,13 @@ El harness es headless y determinista: prueba el contrato de experiencia sin dep
 - TypeScript: SUCCESS.
 - Expo web export: SUCCESS.
 - El bloque agrega 4 pruebas; no elimina ni relaja las 200 existentes.
+
+## Evidencia GitHub
+
+- Commit: `916db657c56c405027af8fda2fd5305196d456f3`.
+- Architect B ownership boundary #39963055725: SUCCESS.
+- Admin Web QA #39963055703: SUCCESS.
+- Two app isolation #39963055851: SUCCESS, Cliente 204/204 en B25.
 
 ## Límites
 
