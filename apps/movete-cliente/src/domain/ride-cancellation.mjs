@@ -100,7 +100,11 @@ export function createRideCancellationController({gateway,getSession}={}){
   requestKey:state.requestKey,contractReady:Boolean(gateway?.isConfigured?.())});
  function prepare({tripId,requestKey,subject}={}){
   if(state.phase==='in_flight')return fail('CANCEL_IN_FLIGHT');
+  // Después de timeout, 409 o ACK, nunca fabricar otro eventKey para el mismo
+  // viaje: una nueva clave podría duplicar una transición ya persistida.
+  if(state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
   if(state.phase==='acknowledged')return fail('ALREADY_ACKNOWLEDGED');
+  if(state.phase==='failed')return fail('RELOAD_TRIP_BEFORE_NEW_CANCEL');
   if(!uuid(tripId)||!uuid(requestKey)||!uuid(subject))return fail('INVALID_INPUT');
   if(state.subject&&state.subject!==subject)clear();
   generation++;state={phase:'ready',tripId,requestKey,subject};

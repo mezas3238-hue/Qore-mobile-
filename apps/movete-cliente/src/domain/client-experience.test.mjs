@@ -361,3 +361,44 @@ test('logout elimina solicitud preparada de cancelación en el mismo tick',async
  assert.equal(app.snapshot().cancellation.phase,'idle');
  assert.equal(app.snapshot().cancellation.requestKey,null);
 });
+
+test('ACK de cancelación dispara GET status autoritativo, no cambia estado optimistamente',async()=>{
+ const receipt={mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
+  tripId:trip,event:'cancel',eventId:key,serverPersisted:true};
+ let statusReads=0,cancelWrites=0;
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  gateway:{send:async op=>{if(op==='rideStatus'){statusReads++;return {ok:true,data:fakeTrip()};}
+   return {ok:false,code:'DENIED'};}},
+  cancelGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{cancelWrites++;return {ok:true,status:200,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify(receipt)};}}
+ });
+ await app.refreshSession();app.startTracking(trip);await app.syncTracking();
+ assert.equal(statusReads,1);
+ app.prepareCancelRide({tripId:trip,requestKey:key});
+ const answer=await app.submitCancelRide();
+ assert.equal(answer.ok,true);assert.equal(answer.refreshAttempted,true);
+ assert.equal(answer.statusRefreshed,true);assert.equal(statusReads,2);
+ assert.equal(cancelWrites,1);
+ assert.equal(app.snapshot().tracking.state,'assigned');
+});
+test('409 de cancelación fuerza relectura GET y no permite un nuevo UUID',async()=>{
+ let statusReads=0;
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  gateway:{send:async()=>{statusReads++;return {ok:true,data:fakeTrip()};}},
+  cancelGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>({ok:false,status:409,redirected:false})}
+ });
+ await app.refreshSession();app.startTracking(trip);await app.syncTracking();
+ app.prepareCancelRide({tripId:trip,requestKey:key});
+ const response=await app.submitCancelRide();
+ assert.equal(response.code,'CONFLICT_RELOAD_TRIP');
+ assert.equal(response.refreshAttempted,true);
+ assert.equal(statusReads,2);
+ assert.equal(app.prepareCancelRide({tripId:trip,requestKey:quoteId}).code,'RELOAD_TRIP_BEFORE_NEW_CANCEL');
+});

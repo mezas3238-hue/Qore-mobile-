@@ -71,7 +71,10 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  function startTracking(tripId){
   const user=actor();
   if(!user)return fail('AUTH_REQUIRED');
-  return tracking.begin(tripId,user.subject);
+  const oldTrip=tracking.snapshot().tripId;
+  const result=tracking.begin(tripId,user.subject);
+  if(result.ok&&oldTrip!==tripId)cancellation.clear();
+  return result;
  }
  async function syncTracking(){
   if(!actor()){clearPrivate();return fail('AUTH_REQUIRED');}
@@ -195,8 +198,24 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   acceptHistory:(dto,options)=>{const result=acceptHistory(dto,options);notify();return result;},
   loadHistoryPage,
   prepareCancelRide:args=>{const result=prepareCancelRide(args);notify();return result;},
-  submitCancelRide:async()=>{const result=await cancellation.submit();notify();return result;},
-  retryCancelRide:async()=>{const result=await cancellation.retry();notify();return result;},
+  submitCancelRide:async()=>{
+   const result=await cancellation.submit();notify();
+   // La escritura no actualiza el estado del viaje. Incluso ante un 409,
+   // consultar GET autoritativo antes de informar al pasajero.
+   if(result.ok||result.code==='CONFLICT_RELOAD_TRIP'){
+    const refresh=await syncTracking();notify();
+    return Object.freeze({...result,refreshAttempted:true,statusRefreshed:refresh.ok===true});
+   }
+   return result;
+  },
+  retryCancelRide:async()=>{
+   const result=await cancellation.retry();notify();
+   if(result.ok||result.code==='CONFLICT_RELOAD_TRIP'){
+    const refresh=await syncTracking();notify();
+    return Object.freeze({...result,refreshAttempted:true,statusRefreshed:refresh.ok===true});
+   }
+   return result;
+  },
   snapshot
  });
 }

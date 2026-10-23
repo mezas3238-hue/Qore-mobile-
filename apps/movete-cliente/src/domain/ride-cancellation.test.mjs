@@ -122,3 +122,26 @@ test('sin respuesta 200 válida, 409 exige refrescar estado y no inventa cancela
  const gw=createRideCancellationGateway({...opts,fetchImpl:async()=>({ok:false,status:409,redirected:false})});
  assert.equal((await gw.cancel(trip,key)).code,'CONFLICT_RELOAD_TRIP');
 });
+
+test('timeout nunca permite preparar cancelación con un segundo eventKey',async()=>{
+ const keys=[];
+ const gateway={isConfigured:()=>true,cancel:async (_id,k)=>{
+  keys.push(k);return keys.length===1?{ok:false,code:'NETWORK_OR_TIMEOUT'}:{ok:true};
+ }};
+ const c=createRideCancellationController({gateway,getSession:async()=>session()});
+ assert.equal(c.prepare({tripId:trip,requestKey:key,subject:a}).ok,true);
+ assert.equal((await c.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(c.prepare({tripId:trip,requestKey:event,subject:a}).code,'EXPLICIT_RETRY_REQUIRED');
+ assert.equal((await c.retry()).ok,true);
+ assert.deepEqual(keys,[key,key]);
+ assert.equal(c.prepare({tripId:trip,requestKey:event,subject:a}).code,'ALREADY_ACKNOWLEDGED');
+});
+test('409 exige lectura autoritativa y bloquea nueva clave para el mismo viaje',async()=>{
+ const c=createRideCancellationController({
+  gateway:{isConfigured:()=>true,cancel:async()=>({ok:false,code:'CONFLICT_RELOAD_TRIP',status:409})},
+  getSession:async()=>session()
+ });
+ c.prepare({tripId:trip,requestKey:key,subject:a});
+ assert.equal((await c.submit()).code,'CONFLICT_RELOAD_TRIP');
+ assert.equal(c.prepare({tripId:trip,requestKey:event,subject:a}).code,'RELOAD_TRIP_BEFORE_NEW_CANCEL');
+});
