@@ -304,6 +304,8 @@ jobs:
       - name: G45 real two-session duplicate-key and oversell race in PostgreSQL
         run: python3 apps/mobility-expo/server/g45-buyer-order-race-ci.py
 
+      - name: G46 install previously unwired historical G9 merchant management on disposable chain
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G9_MERCHANT_MANAGEMENT_POSTGRES_CI_ONLY.sql
       - name: G46 revoke legacy G6/G9 commerce DML and identity-spoofable service-role RPCs
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G46_MERCHANT_COMMERCE_PRIVILEGE_LOCKDOWN_POSTGRES_CI_ONLY.sql
       - name: G46 prove 8 merchant tables and 11 RPCs are not publicly accessible
