@@ -24,7 +24,8 @@ function token(headers){
 const confirmed=u=>plain(u)&&uuid(u.id)&&u.is_anonymous!==true&&
  (typeof u.email_confirmed_at==='string'||typeof u.phone_confirmed_at==='string');
 function safeObject(userId,kind,key){
- return uuid(userId)&&KINDS.has(kind)&&typeof key==='string'&&
+ // The currently installed G1 private bucket policy only permits license.
+ return uuid(userId)&&kind==='licencia'&&typeof key==='string'&&
   key.length<=180&&
   new RegExp('^'+userId+'/'+kind+'-[A-Za-z0-9_-]{12,80}[.](jpg|jpeg|png)$').test(key);
 }
