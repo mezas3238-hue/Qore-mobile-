@@ -1345,6 +1345,57 @@
           }
         }
       }
+    },
+    "/v1/staging/rider/trips/{tripId}/cancel": {
+      "post": {
+        "operationId": "cancelOwnRideIdempotent",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Cancel caller-owned trip using server-side G3 atomic transition",
+        "description": "Passenger JWT only, eventKey=requestKey; body cannot specify amount, refund, cancellation fee, actor or rider. Persistence enforces trip state, owner, idempotency and concurrency. This endpoint never promises a fee or PSP refund; STAGING QA only.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TripId"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/RideCancellationV1"
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent server-persisted cancellation event, not a financial refund",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RideCancellationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1648,6 +1699,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/CatalogItem"
+            }
+          }
+        }
+      },
+      "RideCancellationV1": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RideCancellationV1"
             }
           }
         }
@@ -2838,6 +2899,54 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "RideCancellationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        }
+      },
+      "RideCancellationReceiptV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialRidesEnabled",
+          "tripId",
+          "event",
+          "eventId",
+          "serverPersisted"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialRidesEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "event": {
+            "type": "string",
+            "const": "cancel"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
           }
         }
       }
