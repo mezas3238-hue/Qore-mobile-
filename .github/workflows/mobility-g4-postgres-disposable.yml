@@ -239,3 +239,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G36_CROSS_SERVICE_DRIVER_SLOT_POSTGRES_CI_ONLY.sql
       - name: G36 reject direct-write and cross-service double-booking, validate terminal release and replay
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G36_CROSS_SERVICE_DRIVER_SLOT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G36.2 two true PostgreSQL connections race AUTO and delivery acceptance for same Driver
+        run: python3 apps/mobility-expo/server/g36-cross-service-driver-race-ci.py
