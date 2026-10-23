@@ -18,7 +18,7 @@ function fx(options={}){
  const calls=[];
  const config={
   environment:'isolated_staging',liveEnabled:false,localQaOnly:true,
-  projectRef:'qore-staging-only-project',
+  projectRef:'staging1234567890abcd',
   now:()=>at,verifyAccessToken:async()=>actor,
   verifySessionNotRevoked:async()=>true,
   resolveExclusiveRole:async user=>user===admin?'admin':'driver',
@@ -41,7 +41,7 @@ test('G47 issues 60s metadata-only opaque lease with the signed actor/session',a
  assert.deepEqual(t.calls[0],{name:'mobility_stage_g47_issue_lease_qa',
   args:{_actor:driver,_session:sessionId,_iat_ms:at-15000,
    _document:documentId,_request_key:requestKey,_purpose:'DRIVER_SELF_VIEW'}});
- assert.doesNotMatch(JSON.stringify(out),/objectKey|sha256|mimeType|bucket|signedUrl/i);
+ assert.doesNotMatch(JSON.stringify(out),/objectKey|sha256|mimeType|bucket|https:|fileBytes/i);
 });
 test('G47 probed lease has no file access even when active in synthetic DB',async()=>{
  const t=fx();const r=await t.api.probe({bearer,
