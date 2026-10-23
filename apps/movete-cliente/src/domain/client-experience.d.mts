@@ -34,6 +34,11 @@ export type ClientSnapshot={
   hasOlder:boolean;pendingSend:boolean;error:string|null;
   phoneNumbersRequired:false;deliveredWithoutAck:false;attachmentsEnabled:false;
   window:{maxMessages:number;rowsRead:number;evictedCount:number;hasEvictedNewer:boolean}};
+ chatHints:readonly {eventId:string;serviceId:string;
+  serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';revision:number;
+  title:string;body:string;badgeText:string;expiresAt:number;
+  requiresServerAuthorization:true;containsMessageBody:false;
+  containsSenderIdentity:false}[];
  branchDirectory:{readReady:boolean;loading:boolean;error:string|null;
   municipality:string|null;serviceKind:string|null;pageNumber:number;
   items:readonly {branchId:string;branchTag:string;merchantKind:string;
@@ -75,6 +80,7 @@ export type ClientExperience={
  openChat(args:{serviceId:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';older?:boolean}):Promise<ClientResult>;
  sendChat(args:{body:string;requestKey:string}):Promise<ClientResult>;
  retryChat():Promise<ClientResult>;
+ acceptChatPushHint(dto:unknown):boolean;
  setCommerceQuantity(itemId:string,quantity:number):ClientResult;
  selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
  previewCommerceOrder(requestKey:string):ClientResult;

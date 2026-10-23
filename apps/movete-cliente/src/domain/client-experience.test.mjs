@@ -1016,3 +1016,50 @@ test('Chat privado no se restaura tras JWT nuevo en la misma cuenta',async()=>{
  assert.equal(api.snapshot().chat.messages.length,0);
  assert.equal(api.snapshot().chat.active,false);
 });
+
+test('avisos chat permanecen OFF sin backend certificado, aunque un push sea válido',async()=>{
+ const {api}=fixture();await api.refreshSession();
+ const hint={eventId:key,ownerId:a,serviceId:chatService,
+  serviceKind:'DELIVERY',kind:'CHAT_ACTIVITY',revision:1,
+  issuedAt:now-500,expiresAt:now+60000,unreadCount:1,
+  contentIncluded:false};
+ assert.equal(api.acceptChatPushHint(hint),false);
+ assert.equal(api.snapshot().chatHints.length,0);
+});
+test('avisos chat autenticados no muestran cuerpos y se borran al logout',async()=>{
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  chatGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>true,readMessages:async()=>({ok:false,code:'NOT_MOUNTED'}),
+   sendMessage:async()=>({ok:false,code:'NOT_MOUNTED'})}
+ });
+ await api.refreshSession();
+ const hint={eventId:key,ownerId:a,serviceId:chatService,
+  serviceKind:'MERCHANT_ORDER',kind:'CHAT_ACTIVITY',revision:1,
+  issuedAt:now-500,expiresAt:now+60000,unreadCount:2,
+  contentIncluded:false};
+ assert.equal(api.acceptChatPushHint({...hint,body:'mensaje secreto'}),false);
+ assert.equal(api.acceptChatPushHint(hint),true);
+ assert.equal(api.snapshot().chatHints.length,1);
+ assert.equal(api.snapshot().chatHints[0].containsMessageBody,false);
+ assert.equal(api.snapshot().chatHints[0].requiresServerAuthorization,true);
+ await api.signOut();
+ assert.equal(api.snapshot().chatHints.length,0);
+});
+test('avisos en nueva sesión JWT no reaniman lista privada previa',async()=>{
+ let session=fakeSession();
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>session,signOut:async()=>{}},
+  chatGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>true,readMessages:async()=>({ok:false,code:'QA'}),
+   sendMessage:async()=>({ok:false,code:'QA'})}
+ });
+ await api.refreshSession();
+ const hint={eventId:key,ownerId:a,serviceId:chatService,
+  serviceKind:'RIDE',kind:'CHAT_ACTIVITY',revision:1,
+  issuedAt:now-500,expiresAt:now+60000,unreadCount:1,contentIncluded:false};
+ assert.equal(api.acceptChatPushHint(hint),true);
+ session={...session,token:'jwt-rotated-passenger-synthetic-abc'};
+ await api.refreshSession();
+ assert.equal(api.snapshot().chatHints.length,0);
+});

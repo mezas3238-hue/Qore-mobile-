@@ -2,7 +2,9 @@ import React from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {router} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
+import {useClientView} from '../src/ClientRuntime';
 export default function ClientHome(){
+ const {view}=useClientView();
  return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}>
@@ -21,6 +23,17 @@ export default function ClientHome(){
    <Action secondary label="Comercios y pedidos" onPress={()=>router.push('/comercios')}/>
    <Action secondary label="Cotizaciones en Gs" onPress={()=>router.push('/cotizacion')}/>
   </Panel>
+  {view.authenticated&&view.chat.contractReady&&view.chatHints.length>0&&
+   <Panel>
+    <Text accessibilityRole="header" style={styles.heading}>Avisos de mensajes</Text>
+    <Text style={styles.small}>Estos avisos solo indican actividad, no confirman la identidad del repartidor ni la autorización para abrir el chat.</Text>
+    {view.chatHints.map(hint=><View key={hint.eventId}>
+     <Text style={styles.text}>{hint.body} · {hint.badgeText}</Text>
+     <Action secondary label="Comprobar conversación"
+      onPress={()=>router.push({pathname:'/mensajes',
+       params:{serviceId:hint.serviceId,serviceKind:hint.serviceKind}})}/>
+    </View>)}
+   </Panel>}
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Mis actividades</Text>
    <Action secondary label="Seguimiento" onPress={()=>router.push('/seguimiento')}/>

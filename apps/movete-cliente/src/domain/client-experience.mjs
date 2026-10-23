@@ -17,6 +17,7 @@ import {createG44BranchDirectory} from './g44-branch-directory.mjs';
 import {createG44BuyerCatalogAdapter} from './g44-buyer-contract.mjs';
 import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
 import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
+import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -32,6 +33,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
+ const chatHintStore=createPassengerChatPushHintStore({now});
  let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
@@ -49,6 +51,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(branchDirectory)branchDirectory.clear();
   if(g44Http)g44Http.cancelPending();
   if(chatFlow)chatFlow.clear();
+  chatHintStore.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -306,7 +309,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
     incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
     commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
-    chat:chatFlow.snapshot()});
+    chat:chatFlow.snapshot(),chatHints:Object.freeze([])});
   }
   return Object.freeze({
    authenticated:true,
@@ -321,7 +324,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
    commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
-   chat:chatFlow.snapshot()
+   chat:chatFlow.snapshot(),
+   chatHints:chatFlow.isConfigured()?chatHintStore.snapshot(user.subject):Object.freeze([])
   });
  }
  async function signOut(){
@@ -344,6 +348,14 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   openChat:async args=>{const p=chatFlow.open(args);notify();const r=await p;notify();return r;},
   sendChat:async args=>{const p=chatFlow.send(args);notify();const r=await p;notify();return r;},
   retryChat:async()=>{const p=chatFlow.retryPending();notify();const r=await p;notify();return r;},
+  // El hint Push no contiene texto del remitente ni concede acceso al hilo.
+  acceptChatPushHint:dto=>{
+   const user=actor();
+   if(!user||!chatFlow.isConfigured())return false;
+   const result=chatHintStore.accept(dto,user.subject);
+   if(result.ok===true)notify();
+   return result.ok===true;
+  },
   setCommerceQuantity:(itemId,quantity)=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeQuantity(itemId,quantity);notify();return r;},
   selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
   previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},
