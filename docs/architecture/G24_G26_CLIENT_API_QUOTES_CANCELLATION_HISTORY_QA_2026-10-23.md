@@ -34,6 +34,14 @@
 - **Pendiente, sin reclamar certificación de producción:** el gateway HTTP del Cliente B todavía no incluye `riderHistory` GET ni cabecera `X-Qore-History-Cursor` (aunque B ya corrigió el regex `nextCursor`); se notificó en el issue #9. Continúan pendientes pruebas con millones de registros, escrituras retroactivas concurrentes, redes móviles reales, JWT/Auth de STAGING, SDK móvil y una política de retención/archivado aprobada.
 - **Límite de consistencia conocido:** el cursor fija una fecha ancla y excluye inserciones nuevas con `created_at` posterior a ella. No constituye un snapshot transaccional persistente entre llamadas; inserciones retroactivas o ediciones de `created_at` deberán prohibirse/auditarse en la capa de persistencia y ensayarse antes de operación real.
 
+## G26.4 — Integridad del origen histórico y escrituras concurrentes (23 oct 2026)
+
+- **Migración aislada agregada en A, SIN habilitar remoto:** `G26_HISTORY_IMMUTABLE_ORIGIN_POSTGRES_CI_ONLY.sql` instala tres triggers `BEFORE INSERT OR UPDATE` en las tablas G3, G5 y G6. Para operaciones nuevas exige `created_at = transaction_timestamp()`, impidiendo a la capa normal de servicio crear viajes, envíos o pedidos retrodatados con un parámetro arbitrario. Para operaciones ya registradas prohíbe cambiar `id`, `request_key`, propietario (`passenger_id`, `sender_id` o `buyer_id`) y `created_at`. Permite cambios legítimos de `status`, `revision` y `changed_at`.
+- **Verificación SQL adversarial sobre 31.200 registros sintéticos:** `G26_HISTORY_IMMUTABLE_ORIGIN_ASSERT_POSTGRES_CI_ONLY.sql` confirma que 12 intentos de modificar fecha/propietario/ID/clave y tres intentos de INSERT histórico retrodatado fallaron con el código del trigger; tres nuevas filas con fecha predeterminada del servidor y tres actualizaciones de ciclo de vida sí se admitieron. Todo se ejecutó en PostgreSQL 16 descartable, workflow #204 **SUCCESS**: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39932663942 .
+- **Alcance correcto:** la política prohíbe backdating vía comandos ordinarios después de instalar el guard. No existe todavía una migración aprobada para Supabase remoto ni se garantiza snapshot transaccional entre páginas. Transacciones largas iniciadas antes de una página y confirmadas después requieren análisis adicional de visibilidad. Backfill histórico excepcional, eliminación legal y correcciones administrativas deberán usar un flujo independiente auditado y autorizado (nunca levantar el guard por defecto).
+- **Cliente B:** integra las páginas con `X-Qore-History-Cursor`, su validación ya acepta puntos `v1.<payload>.<firma>`; el gateway HTTP aún requiere la operación `riderHistory`. No mezclar su código con la rama A.
+- **Política de privacidad:** los documentos, los nombres, la localización, el precio individual y otros campos personales no forman parte del DTO del historial en esta fase. Retención y derechos de rectificación/eliminación necesitan evaluación jurídica específica antes de operación comercial.
+
 ## Evidencia de pruebas
 - `g7-finance-gateway.test.mjs` + `g4-staging-runtime.test.mjs`: recibos fuente servidor, TTL, MOTO pasajeros denegado.
 - `g4-trip-command-gateway.test.mjs` + `g4-loopback-http-transport.test.mjs`: autorización, rechazo de datos de cobro y transiciones seguras.
@@ -41,7 +49,7 @@
 - `g11-openapi-contract.test.mjs` certifica presencia y forma de los 3 contratos. Todos los tests usan identidad y datos SINTÉTICOS; concluir `SUCCESS` únicamente al verificar los workflows del HEAD exacto.
 
 ## Próximos trabajos de A (sin tocar carpetas B)
-1. G26.4: probar escritura retroactiva, inmutabilidad/auditoría de created_at y sincronización autenticada con Cliente B; el historial continúa sin tope global.
+1. G26.5: diseñar consistencia para transacciones no confirmadas, auditoría de backfill/retención y ensayo auténtico con Cliente B; el historial continúa sin límite global.
 2. Contratos Auth Passenger/Admin/Owner y MFA real en servidor, DTO KYC/zonas/incidentes y finanzas Owner, pruebas RLS no vacías.
 3. Desplegar solamente STAGING bajo autorización y HTTPS/pinned origin; conectar SDK Auth sin credenciales por GitHub.
 4. Validar sesión, privacidad, cotización y cancelación en dos apps físicas; observar race, offline, GPS y red.
