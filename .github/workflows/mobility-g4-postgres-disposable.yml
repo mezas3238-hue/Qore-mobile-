@@ -11,6 +11,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
+      - 'apps/mobility-expo/server/g18-*'
       - 'apps/mobility-expo/server/g17-*'
       - 'apps/mobility-expo/server/g15-*'
       - 'apps/mobility-expo/server/g13-*'
@@ -149,3 +151,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G17_PRIVATE_DRIVER_DOCUMENTS_POSTGRES_CI_ONLY.sql
       - name: Test G17 role isolation, KYC evidence and immutable admin review
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G17_PRIVATE_DRIVER_DOCUMENTS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G18 exclusive Driver onboarding role transition
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G18_DRIVER_ROLE_ENROLLMENT_POSTGRES_CI_ONLY.sql
+      - name: Verify G18 no mixed passenger/Driver identity or fake driver eligibility
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G18_DRIVER_ROLE_ENROLLMENT_ASSERT_POSTGRES_CI_ONLY.sql
