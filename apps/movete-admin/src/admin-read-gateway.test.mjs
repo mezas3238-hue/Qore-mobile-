@@ -205,3 +205,36 @@ test('sin authRevision no hay lectura administrativa',async()=>{
  assert.equal((await gateway.read('incidents')).code,'FORBIDDEN');
  assert.equal(hits,0);
 });
+
+test('respuesta 200 posterior al plazo se rechaza aun si fetch ignora AbortSignal',async()=>{
+ let clock=t;
+ const gateway=createAdminReadGateway({...settings,now:()=>clock,timeoutMs:1000,
+  fetchImpl:async()=>{clock+=1001;return response({scope:'admin.incidents.read',nextCursor:null});}});
+ assert.equal((await gateway.read('incidents')).code,'NETWORK_OR_TIMEOUT');
+});
+test('401 tardío no revoca sesión actual ni acepta resultado fuera de plazo',async()=>{
+ let clock=t,invalidations=0;
+ const gateway=createAdminReadGateway({...settings,now:()=>clock,timeoutMs:1000,
+  onSessionInvalid:()=>invalidations++,
+  fetchImpl:async()=>{clock+=1001;return {status:401,ok:false,redirected:false};}});
+ assert.equal((await gateway.read('kyc')).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(invalidations,0);
+});
+test('texto JSON resuelto luego del plazo nunca se acepta',async()=>{
+ let clock=t;
+ const gateway=createAdminReadGateway({...settings,now:()=>clock,timeoutMs:1000,
+  fetchImpl:async()=>({...response({scope:'admin.incidents.read',nextCursor:null}),
+   text:async()=>{clock+=1001;return JSON.stringify({scope:'admin.incidents.read',nextCursor:null});}})});
+ assert.equal((await gateway.read('incidents')).code,'NETWORK_OR_TIMEOUT');
+});
+test('límite de respuesta se mide en bytes UTF-8, no caracteres JavaScript',async()=>{
+ const unicode=response({scope:'admin.incidents.read',nextCursor:null,text:'á'.repeat(600)});
+ const gateway=createAdminReadGateway({...settings,maxBytes:1024,
+  fetchImpl:async()=>unicode});
+ assert.equal((await gateway.read('incidents')).code,'RESPONSE_TOO_LARGE');
+});
+test('bytes bajo límite y respuesta vigente permiten consulta segura',async()=>{
+ const gateway=createAdminReadGateway({...settings,maxBytes:1024,
+  fetchImpl:async()=>response({scope:'admin.incidents.read',nextCursor:null})});
+ assert.equal((await gateway.read('incidents')).ok,true);
+});

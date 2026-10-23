@@ -66,7 +66,9 @@ export function createAdminReadGateway({
    if(!validActor(first,definition.role,now()))return fail('FORBIDDEN');
    const ctl=new AbortController();
    const ms=Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
+   const deadline=now()+ms;
    timeout=setTimeout(()=>ctl.abort(),ms);
+   const timedOut=()=>ctl.signal.aborted||now()>=deadline;
    const query=cursor===null?'':'?cursor='+encodeURIComponent(cursor);
    const result=await fetchImpl(host+definition.path+query,{
     method:'GET',redirect:'error',credentials:'omit',cache:'no-store',
@@ -74,6 +76,9 @@ export function createAdminReadGateway({
     headers:{Authorization:'Bearer '+first.token,Accept:'application/json'},
     signal:ctl.signal
    });
+   // Un fetch de prueba/proveedor que ignore AbortSignal nunca podrá aceptar
+   // datos tardíos ni revocar una sesión activa mediante 401/403 tardío.
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!result||result.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(result.status===401||result.status===403){
     // No revocar sesión nueva por el 401/403 de una petición vieja.
@@ -101,7 +106,9 @@ export function createAdminReadGateway({
     return fail('RESPONSE_TOO_LARGE');
    if(typeof result.text!=='function')return fail('BAD_SERVER_RESPONSE');
    const body=await result.text();
-   if(typeof body!=='string'||body.length>limit)return fail('RESPONSE_TOO_LARGE');
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
+   if(typeof body!=='string'||body.length>limit
+     ||new TextEncoder().encode(body).byteLength>limit)return fail('RESPONSE_TOO_LARGE');
    let json;
    try{json=JSON.parse(body);}
    catch{return fail('BAD_SERVER_RESPONSE');}
@@ -114,6 +121,7 @@ export function createAdminReadGateway({
    let latest;
    try{latest=await getSession();}
    catch{return fail('STALE_SESSION_RESPONSE');}
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!validActor(latest,definition.role,now())
     ||first.subject!==latest.subject||first.token!==latest.token
     ||first.expiresAt!==latest.expiresAt
