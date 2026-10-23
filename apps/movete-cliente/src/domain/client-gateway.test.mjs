@@ -79,6 +79,13 @@ test('carga MOTO superior a 10kg y declaración restringida bloqueadas',()=>{
  assert.equal(validateClientOperation('deliveryRequest',{...d,grams:3000,restrictedItemDeclared:true}),false);
  assert.equal(validateClientOperation('deliveryRequest',{...d,grams:3000}),true);
 });
+test('compra exige líneas con itemId UUID y cantidad válida',()=>{
+ const item={itemId:key,quantity:2};
+ const order={requestKey:key,branchId:key,vehicleKind:'MOTO',items:[item]};
+ assert.equal(validateClientOperation('orderRequest',order),true);
+ assert.equal(validateClientOperation('orderRequest',{...order,items:[{itemId:key,quantity:0}]}),false);
+ assert.equal(validateClientOperation('orderRequest',{...order,items:[{...item,price:0}]}),false);
+});
 test('pago siempre SIMULADO',()=>{
  assert.equal(validateClientOperation('paymentAuthorize',{requestKey:key,quoteId:key,method:'CARD'}),false);
  assert.equal(validateClientOperation('paymentAuthorize',{requestKey:key,quoteId:key,method:'SIMULATED_CARD'}),true);
