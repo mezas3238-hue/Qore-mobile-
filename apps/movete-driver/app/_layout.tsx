@@ -1,8 +1,9 @@
 import React from 'react';
 import {Stack} from 'expo-router';
 import {StatusBar} from 'expo-status-bar';
+import {DriverWorkspaceProvider} from '../src/DriverWorkspaceProvider';
 export default function DriverLayout(){
- return <>
+ return <DriverWorkspaceProvider>
   <StatusBar style="dark"/>
   <Stack screenOptions={{headerTintColor:'#112F37',headerStyle:{backgroundColor:'#F2F7F6'},headerTitleStyle:{fontWeight:'700'}}}>
    <Stack.Screen name="index" options={{title:'Movete Fácil Driver'}}/>
@@ -10,5 +11,5 @@ export default function DriverLayout(){
    <Stack.Screen name="ofertas" options={{title:'Ofertas para mí'}}/>
    <Stack.Screen name="ganancias" options={{title:'Ganancias'}}/>
   </Stack>
- </>;
+ </DriverWorkspaceProvider>;
 }
