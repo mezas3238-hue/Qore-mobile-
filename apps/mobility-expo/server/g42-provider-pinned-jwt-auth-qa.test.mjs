@@ -83,11 +83,15 @@ test('G42 crypto verifies pinned ES256, RS256 and EdDSA public keys',()=>{
   assert.equal(Object.isFrozen(actual),true);
  }
 });
-test('G42 forbids algorithm confusion, attacker kid/URL, weak signing and modified bytes',()=>{
+test('G42 forbids algorithm confusion, attacker kid/URL, weak signing and modified bytes',async()=>{
  const alternate=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
  const p=jwt(),parts=p.split('.');
+ // An independently signed JWT for another valid user is NOT a bad
+ // signature. The provider user/session authority must deny that actor.
+ const foreign=jwt({...claims,sub:'99999999-9999-4999-8999-999999999999'});
+ assert.equal(verifier()(foreign).id,'99999999-9999-4999-8999-999999999999');
+ await assert.rejects(()=>setup().adapters.verifyAccessToken(foreign));
  for(const wrong of [
-  jwt({...claims,sub:'99999999-9999-4999-8999-999999999999'}),
   jwt(claims,{alg:'ES256',privateKey:alternate.privateKey}),
   jwt(claims,{kid:'evil-provider'}),
   jwt(claims,{typ:'qore-proof'}),
