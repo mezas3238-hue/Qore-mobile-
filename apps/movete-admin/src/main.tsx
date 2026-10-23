@@ -140,7 +140,7 @@ function ZoneReadOnly({zones,allowed}:{
    :zones.items.length===0?<div className="empty"><h3>Sin resultados en esta consulta</h3>
     <p>No se infiere que Paraguay carezca de zonas operativas.</p></div>
    :<div className="zone-rows">{zones.items.map(item=>
-    <div className="zone-row" key={item.zoneId}>
+    <div className="zone-row" key={item.zoneId+":"+item.serviceKind}>
      <div><strong>{item.municipality}</strong>
       <small>{item.serviceKind.replaceAll('_',' ')} · Cobertura: {item.coverageStatus}</small>
       <small>Permiso operativo: {item.eligibleByPolicy?'Reportado habilitado':'No habilitado'}</small></div>

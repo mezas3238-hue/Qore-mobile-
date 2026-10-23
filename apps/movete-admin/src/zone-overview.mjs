@@ -22,14 +22,14 @@ export function projectZoneOverview(payload,{role,now=Date.now()}={}){
   ||!Array.isArray(payload.items)||payload.items.length>200||!readContinuation(payload).ok)return null;
  const ids=new Set(),items=[];
  for(const row of payload.items){
-  if(!exact(row,keys)||!validId(row.zoneId)||ids.has(row.zoneId)
+  if(!exact(row,keys)||!validId(row.zoneId)||ids.has(row.zoneId+'|'+row.serviceKind)
    ||typeof row.municipality!=='string'||row.municipality.trim().length<2
    ||row.municipality.trim().length>80||!kinds.has(row.serviceKind)
    ||!coverage.has(row.coverageStatus)||typeof row.eligibleByPolicy!=='boolean'
    ||!Number.isSafeInteger(row.onDutyVehicles)||row.onDutyVehicles<0||row.onDutyVehicles>100000
    ||!Number.isSafeInteger(row.availabilityObservedAt)
    ||row.availabilityObservedAt>now)return null;
-  ids.add(row.zoneId);
+  ids.add(row.zoneId+'|'+row.serviceKind);
   const recent=now-row.availabilityObservedAt<=60000;
   items.push(Object.freeze({
    zoneId:row.zoneId,municipality:row.municipality.trim(),

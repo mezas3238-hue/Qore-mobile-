@@ -64,3 +64,14 @@ test('conductores en línea dejan de mostrarse después de 60 segundos sin nueva
  assert.equal(store.current('admin').items[0].availabilityFresh,false);
  assert.equal(store.current('admin').items[0].coverageStatus,'ACTIVE');
 });
+
+test('una misma zona admite automóvil, autoenvío y motoenvío sin colisión de registros',()=>{
+ const rows=['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY'].map(serviceKind=>({
+  ...row,serviceKind
+ }));
+ const result=projectZoneOverview({...data,items:rows},{role:'admin',now});
+ assert.equal(result.items.length,3);
+ assert.deepEqual(result.items.map(x=>x.serviceKind),
+  ['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY']);
+ assert.equal(result.items.every(x=>x.availabilityConfirmed===false),true);
+});
