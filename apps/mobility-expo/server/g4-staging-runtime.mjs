@@ -29,6 +29,8 @@ import {createCourierPrivatePollRepository} from './g15-courier-private-poll-rep
 import {createCourierPrivatePollGateway} from './g15-courier-private-poll-gateway.mjs';
 import {createDriverPrivateInboxRepository} from './g16-driver-private-inbox-repository.mjs';
 import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
+import {createDriverDocumentRepository} from './g17-driver-document-repository.mjs';
+import {createDriverDocumentGateway} from './g17-driver-document-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -106,6 +108,12 @@ async function adminRole(admin,id){
  if(error)throw Error('Admin role lookup failed');
  return Array.isArray(data)&&data.length===1&&data[0]?.role==='admin';
 }
+async function exclusiveAdminRole(admin,id){
+ const {data,error}=await admin.from('user_roles').select('role')
+  .eq('user_id',id).limit(3);
+ if(error)throw Error('Exclusive admin role lookup failed');
+ return Array.isArray(data)&&data.length===1&&data[0]?.role==='admin';
+}
 function checkedIsoToMs(iso){
  if(typeof iso!=='string')return NaN;
  const at=Date.parse(iso);
@@ -117,6 +125,9 @@ function checkedIsoToMs(iso){
 async function unavailableArrivalEvidence(){
  throw Error('No independently verified driver display/GPS/road ETA adapter');
 }
+async function unavailablePrivateObjectObservation(){
+ throw Error('No independently verified, scanned private Storage object adapter');
+}
 async function unavailablePricingContext(){
  throw Error('No independently verified road pricing context adapter');
 }
@@ -124,7 +135,8 @@ export async function prepareQoreG4StagingRuntime({
  environment,liveTripsEnabled,allowQa,
  projectRef,anonKey,serviceKey,
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
- pricingContext=unavailablePricingContext,now=Date.now,
+ pricingContext=unavailablePricingContext,
+ observePrivateObject=unavailablePrivateObjectObservation,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -133,7 +145,8 @@ export async function prepareQoreG4StagingRuntime({
  parseServiceRole(serviceKey,ref);
  if(anonKey===serviceKey||typeof createClient!=='function'||
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
-   typeof pricingContext!=='function'||typeof now!=='function')
+   typeof pricingContext!=='function'||
+   typeof observePrivateObject!=='function'||typeof now!=='function')
   throw Error('G4 server-only secret separation and adapters required');
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
@@ -162,6 +175,9 @@ export async function prepareQoreG4StagingRuntime({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const driverInboxPersistence=createDriverPrivateInboxRepository({
+  rpc:(name,params)=>admin.rpc(name,params)
+ });
+ const driverDocumentPersistence=createDriverDocumentRepository({
   rpc:(name,params)=>admin.rpc(name,params)
  });
  const verified=async token=>{
@@ -345,6 +361,15 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ const driverDocuments=createDriverDocumentGateway({
+  projectRef:ref,verifyAccessToken:verified,
+  authorizeDriver:id=>roleHas(admin,id,'driver'),
+  authorizeAdmin:id=>exclusiveAdminRole(admin,id),allowRequest,
+  readStatus:params=>driverDocumentPersistence.readStatus(params),
+  registerObservation:params=>driverDocumentPersistence.registerObservation(params),
+  review:params=>driverDocumentPersistence.review(params),
+  observePrivateObject
+ });
  const driverInbox=createDriverPrivateInboxGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,now,
@@ -379,6 +404,7 @@ export async function prepareQoreG4StagingRuntime({
    deliveryOfferHandler:guard(deliveryOffers),
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
+   driverDocumentHandler:guard(driverDocuments),
   }),
  };
 }
