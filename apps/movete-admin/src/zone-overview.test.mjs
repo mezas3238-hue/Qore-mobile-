@@ -52,3 +52,15 @@ test('revisión obsoleta se rechaza sin restaurar datos viejos',()=>{
  assert.equal(store.replace({...data,revision:1},'admin'),false);
  assert.equal(store.current('admin'),null);
 });
+
+test('conductores en línea dejan de mostrarse después de 60 segundos sin nueva lectura',()=>{
+ let tick=now;
+ const store=createZoneOverviewStore({now:()=>tick});
+ const source={...data,expiresAt:now+180000};
+ store.replace(source,'admin');
+ assert.equal(store.current('admin').items[0].onDutyVehicles,12);
+ tick=now+61000;
+ assert.equal(store.current('admin').items[0].onDutyVehicles,null);
+ assert.equal(store.current('admin').items[0].availabilityFresh,false);
+ assert.equal(store.current('admin').items[0].coverageStatus,'ACTIVE');
+});
