@@ -6,6 +6,7 @@ const spec=JSON.parse(readFileSync(new URL(
 const transport=readFileSync(new URL('./g4-loopback-http-transport.mjs',import.meta.url),'utf8');
 const runtimePaths=[
  '/v1/staging/rider/trips/request','/v1/staging/rider/trips/{tripId}/status',
+ '/v1/staging/rider/trips/{tripId}/cancel','/v1/staging/rider/history',
  '/v1/staging/driver/inbox',
  '/v1/staging/driver/license-readiness',
  '/v1/staging/driver/enrollment',
@@ -77,4 +78,23 @@ test('G10 removes direct acceptance by delivery ID from transport and interface 
  assert.equal(spec.paths['/v1/staging/courier/deliveries/{deliveryId}/accept'],undefined);
  assert.doesNotMatch(transport,/deliveryAcceptRoute/);
  assert.match(transport,/deliveryOfferDecisionRoute/);
+});
+
+test('G24/G25/G26 public Client DTOs are versioned, auth-bound, and sealed',()=>{
+ for(const [path,method,schema] of [
+  ['/v1/staging/fares/quote','post','ServerPricedQuoteV1'],
+  ['/v1/staging/rider/trips/{tripId}/cancel','post','RideCancellationReceiptV1'],
+  ['/v1/staging/rider/history','get','RiderOwnHistoryV1']
+ ]){
+  const operation=spec.paths[path]?.[method];
+  assert.ok(operation,`missing ${path}`);
+  const success=method==='post'&&path.includes('quote')?'201':'200';
+  assert.equal(operation.responses[success]?.content?.['application/json']?.schema?.$ref,
+   '#/components/schemas/'+schema);
+  assert.equal(spec.components.schemas[schema].additionalProperties,false);
+  assert.ok(operation.responses['401']&&operation.responses['403']&&
+   operation.responses['503'],`${path}: fail-closed Auth/infra response required`);
+ }
+ assert.equal(spec.components.schemas.RiderOwnHistoryV1.properties.nextCursor.type,'null');
+ assert.equal(spec.components.schemas.RideCancellationV1.additionalProperties,false);
 });
