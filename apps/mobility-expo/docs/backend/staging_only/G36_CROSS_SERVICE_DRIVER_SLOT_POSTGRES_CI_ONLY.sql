@@ -16,7 +16,8 @@ BEGIN;
 CREATE TABLE public.mobility_stage_g36_driver_slots (
  driver_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE RESTRICT,
  assignment_kind text NOT NULL CHECK(assignment_kind IN ('AUTO_RIDE','DELIVERY')),
- assignment_id uuid NOT NULL UNIQUE,
+ assignment_id uuid NOT NULL,
+ UNIQUE(assignment_kind,assignment_id),
  created_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
 );
 ALTER TABLE public.mobility_stage_g36_driver_slots ENABLE ROW LEVEL SECURITY;
