@@ -1,4 +1,7 @@
 # QORE MOBILE / MOVETE FÁCIL — HANDOFF MAESTRO DE CIERRE Y CONTINUIDAD
+
+> **ACTUALIZACIÓN R3 (23-10-2026):** Este documento conserva el corte histórico del Arquitecto B. El handoff maestro vigente y más completo está en [HANDOFF_MAESTRO_B_R3_CLIENTE_ADMIN_TOTAL_2026-10-23.md](./HANDOFF_MAESTRO_B_R3_CLIENTE_ADMIN_TOTAL_2026-10-23.md), con [anexo de los 153 commits originales](./HANDOFF_R3_ANEXO_153_COMMITS_2026-10-23.md). Para nuevo chat usar R3; no asumir que cifras de este documento siguen vigentes.
+
 ## Arquitecto B · App Cliente, Admin Web, QA, errores, bloqueos, contratos y próximos pasos
 **Fecha:** 23 de octubre de 2026. **Carácter:** fuente de transferencia ACTUALIZADA sobre el handoff histórico anterior (545 líneas). **Modo de continuidad ordenado por Owner: SIN DETENERSE salvo bloqueo real.**
 
