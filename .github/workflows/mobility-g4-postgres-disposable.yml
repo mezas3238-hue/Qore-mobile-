@@ -9,6 +9,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
       - 'apps/mobility-expo/server/g15-*'
       - 'apps/mobility-expo/server/g13-*'
       - 'apps/mobility-expo/server/g14-*'
@@ -138,3 +139,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G15_COURIER_PRIVATE_OFFER_POLL_POSTGRES_CI_ONLY.sql
       - name: Verify G15 polling without push, privacy and expiry
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G15_COURIER_PRIVATE_POLL_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G16 private AUTO driver offer polling
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G16_DRIVER_PRIVATE_AUTO_POLL_POSTGRES_CI_ONLY.sql
+      - name: Validate real G16 private AUTO discovery and one-winner acceptance
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G16_DRIVER_PRIVATE_AUTO_POLL_ASSERT_POSTGRES_CI_ONLY.sql
