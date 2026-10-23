@@ -3,7 +3,7 @@
  * NO live GPS, no public listener, no SERVICE_ROLE anywhere on a mobile app.
  * A response counts as persisted only when the private SQL returns eventId.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SERVICE=new Set(['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY']);
 export function createQoreG32QuarantineRepository({rpc}){
  if(typeof rpc!=='function')throw Error('Private SQL RPC required for location signal quarantine');
