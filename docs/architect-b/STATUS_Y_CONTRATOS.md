@@ -117,3 +117,16 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - Integrar pantallas contra adaptadores únicamente después de contratos/gates de A. No activar compras, cobros, tracking o solicitudes reales durante QA local.
 
 **Invariante:** archivos A/CI global/Driver no modificados por B; PR #8 DRAFT, sin merge, sin LIVE.
+
+## Cuarta sesión — integración de frontend Cliente/Admin (22-10-2026, 22:31 PY)
+**Documento de evidencias:** [QA_INTEGRACION_FRONTENDS_2026-10-22.md](./QA_INTEGRACION_FRONTENDS_2026-10-22.md).
+
+- `b5640dd` — B03/B04/B05/B06/B09: primera integración real de módulos Cliente con `client-experience`, limpieza conjunta de cuenta. CI Cliente #39884794024 SUCCESS.
+- `1f226178` — `ClientRuntimeProvider` y pantallas Cuenta, Seguimiento, Historial y Cotización ya leen estado común, sin Auth/backend reales. CI Cliente #39885053406 SUCCESS.
+- `010f2f50` — Pruebas de observadores, revocación, precio vencido; refresco de vista enfocada sin red para no mostrar GPS o importes caducados. CI Cliente #39885185094 SUCCESS.
+- `0f549954` — Admin `admin-experience`: sesión Admin MFA, cola KYC propia, sin aprobaciones optimistas; tests Node creados pero **no ejecutados en CI Admin**.
+- `912a6cb` y `caabeff` — `AdminRuntimeProvider`, lectura de cola autorizada en web, fallback de entrenamiento sintético, corrección de nombre de variable `view`.
+- `3ab9782` — matriz QA, arquitectura, contratos y resultados incluidos en documento dedicado.
+- El Arquitecto A actualizó su rama por separado. Último OpenAPI A observado: versión `1.0.0-g11`, 39 operaciones; sigue sin DTO completos de Auth Passenger/Admin, historia y KYC. No asumir server online. Issue #9 abierto.
+- **CI Admin npm check/build:** pendiente por restricciones de propiedad de workflows; solicitar job a A. No equiparar pruebas de aislamiento con validación de Admin.
+- Backend/Driver/contratos/migraciones/CI central: cero cambios del Arquitecto B. Toda la implementación continúa QA NO LIVE, PR #8 DRAFT, sin merge/despliegue.
