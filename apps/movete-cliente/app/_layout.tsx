@@ -6,6 +6,7 @@ export default function ClientLayout(){
   <StatusBar style="dark"/>
   <Stack screenOptions={{headerTintColor:'#183044',headerStyle:{backgroundColor:'#F4F7FB'},headerTitleStyle:{fontWeight:'700'}}}>
    <Stack.Screen name="index" options={{title:'Movete Fácil Cliente'}}/>
+   <Stack.Screen name="viaje" options={{title:'Solicitar automóvil'}}/>
    <Stack.Screen name="envios" options={{title:'Pedir envío'}}/>
    <Stack.Screen name="seguimiento" options={{title:'Seguimiento'}}/>
    <Stack.Screen name="historial" options={{title:'Mis viajes y envíos'}}/>

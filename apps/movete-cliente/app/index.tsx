@@ -1,31 +1,18 @@
-import React,{useState} from 'react';
-import {ScrollView,Text,TextInput,View} from 'react-native';
+import React from 'react';
+import {ScrollView,Text,View} from 'react-native';
 import {router} from 'expo-router';
-import {Action,Panel,palette,styles} from '../src/ClientUI';
-import {validateRideDraft} from '../src/domain/capabilities.mjs';
+import {Action,Panel,styles} from '../src/ClientUI';
 export default function ClientHome(){
- const [pickup,setPickup]=useState('');
- const [destination,setDestination]=useState('');
- const [result,setResult]=useState('');
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Movete Fácil Cliente</Text>
    <Text style={styles.heroSub}>Automóviles, envíos y comercios en una sola app de cliente. Versión de QA sin solicitudes reales.</Text>
   </View>
   <Panel>
-   <Text style={styles.heading}>Prepará tu viaje en automóvil</Text>
-   <Text style={styles.text}>Origen</Text>
-   <TextInput style={styles.field} value={pickup} onChangeText={setPickup}
-    placeholder="Punto de origen" accessibilityLabel="Origen del viaje" maxLength={120}/>
-   <Text style={styles.text}>Destino</Text>
-   <TextInput style={styles.field} value={destination} onChangeText={setDestination}
-    placeholder="Punto de destino" accessibilityLabel="Destino del viaje" maxLength={120}/>
-   <Text style={styles.small}>Solo automóvil: la moto para pasajeros no está habilitada. Una zona cubierta no implica que haya vehículos disponibles.</Text>
-   <Action label="Validar borrador de viaje (DEMO)" onPress={()=>{
-    const checked=validateRideDraft({pickup,destination,vehicleKind:'AUTO'});
-    setResult(checked.ok?'Borrador válido. No se solicitó conductor ni se calculó un precio.':checked.reason);
-   }}/>
-   {result!==''&&<Text accessibilityRole="alert" style={[styles.text,{color:palette.primary}]}>{result}</Text>}
+   <Text style={styles.heading}>Tu próximo viaje en automóvil</Text>
+   <Text style={styles.text}>Indicá origen, destino y el tipo de servicio que preferís. La tarifa y la disponibilidad deben venir del servidor.</Text>
+   <Action label="Preparar viaje" onPress={()=>router.push('/viaje')}/>
+   <Text style={styles.small}>Motocicleta para pasajeros permanece deshabilitada hasta completar todos los permisos y seguros.</Text>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Más servicios</Text>
