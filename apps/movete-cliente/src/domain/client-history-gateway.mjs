@@ -44,7 +44,9 @@ export function createClientHistoryGateway({
    if(!validSession(before,now()))return fail('AUTH_REQUIRED');
    const controller=new AbortController();
    const ms=Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
+   const deadline=now()+ms;
    timeout=setTimeout(()=>controller.abort(),ms);
+   const timedOut=()=>controller.signal.aborted||now()>=deadline;
    const url=host+'/v1/staging/rider/history';
    const res=await fetchImpl(url,{
     method:'GET',redirect:'error',credentials:'omit',cache:'no-store',
@@ -53,6 +55,9 @@ export function createClientHistoryGateway({
       ...(cursor!==null?{'X-Qore-History-Cursor':cursor}:{})},
     signal:controller.signal
    });
+   // Incluso si un fetch provisto ignora AbortSignal, una respuesta después
+   // del plazo no puede revelar historial ni invalidar la sesión actual.
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!res||res.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(res.status===401||res.status===403){
     let after;
@@ -75,12 +80,15 @@ export function createClientHistoryGateway({
     return fail('RESPONSE_TOO_LARGE');
    if(typeof res.text!=='function')return fail('BAD_SERVER_RESPONSE');
    const text=await res.text();
-   if(typeof text!=='string'||text.length>limit)return fail('RESPONSE_TOO_LARGE');
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
+   if(typeof text!=='string'||text.length>limit
+    ||new TextEncoder().encode(text).byteLength>limit)return fail('RESPONSE_TOO_LARGE');
    let data;
    try{data=JSON.parse(text);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!data||typeof data!=='object'||Array.isArray(data))return fail('BAD_SERVER_RESPONSE');
    let after;
    try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!validSession(after,now())||!sameSession(before,after))
     return fail('STALE_SESSION_RESPONSE');
    return Object.freeze({ok:true,data,status:200});

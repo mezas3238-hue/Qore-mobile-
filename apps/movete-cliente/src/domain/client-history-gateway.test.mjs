@@ -112,3 +112,33 @@ test('cursor rechazado o vencido en servidor retorna error explícito sin datos'
   fetchImpl:async()=>({ok:false,status:400,redirected:false})});
  assert.equal((await gateway.fetchPage(signed('page_5'))).code,'INVALID_OR_EXPIRED_CURSOR');
 });
+
+test('historial propio no acepta 200 tardío de fetch que ignora AbortSignal',async()=>{
+ let tick=now;
+ const g=createClientHistoryGateway({...configured,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>{tick+=1001;return result();}});
+ assert.equal((await g.fetchPage()).code,'NETWORK_OR_TIMEOUT');
+});
+test('401 tardío no invalida sesión del pasajero',async()=>{
+ let tick=now,invalidated=0;
+ const g=createClientHistoryGateway({...configured,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>{tick+=1001;return {status:401,ok:false,redirected:false};},
+  onSessionInvalid:()=>invalidated++});
+ assert.equal((await g.fetchPage()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(invalidated,0);
+});
+test('historial recibido después de leer body fuera de plazo se rechaza',async()=>{
+ let tick=now;
+ const g=createClientHistoryGateway({...configured,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>({...result(),text:async()=>{tick+=1001;return '{"scope":"test"}';}})});
+ assert.equal((await g.fetchPage()).code,'NETWORK_OR_TIMEOUT');
+});
+test('historial UTF-8 controla bytes y no longitud JS',async()=>{
+ const g=createClientHistoryGateway({...configured,maxBytes:1024,
+  fetchImpl:async()=>result({scope:'test',notes:'á'.repeat(600)})});
+ assert.equal((await g.fetchPage()).code,'RESPONSE_TOO_LARGE');
+});
+test('historial pequeño y vigente sigue pasando con HTTPS y JWT',async()=>{
+ const g=createClientHistoryGateway({...configured,maxBytes:1024});
+ assert.equal((await g.fetchPage()).ok,true);
+});
