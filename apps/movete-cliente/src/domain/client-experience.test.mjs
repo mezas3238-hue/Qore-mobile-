@@ -474,3 +474,43 @@ test('cancelación más GET tipado muestra Cancelado solo tras revisión persist
  assert.equal(app.prepareCancelRide({tripId:trip,requestKey:quoteId}).code,
   'CANCEL_REQUIRES_ACTIVE_RIDE');
 });
+
+
+test('G24 integra precio firmado por autoridad QA solo después de viaje propio',async()=>{
+ const verified={mode:'STAGING_DEMO_ONLY',livePaymentsEnabled:false,serverPriced:true,
+  ownerId:a,quoteId,amountGs:22500,fareMode:'AUTO',subjectKind:'RIDE',
+  subjectId:trip,expiresAt:now+60000,fareVersion:'g24-1',routingVerified:true,
+  quote:{id:quoteId,mode:'AUTO',subjectKind:'RIDE',subjectId:trip,
+   ruleVersion:'g24-1',totalPyg:22500,expiresAt:new Date(now+60000).toISOString()}};
+ let calls=0;
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  gateway:{send:async()=>({ok:true,data:fakeTrip()})},
+  fareGatewayOptions:{enabled:true,contractCertified:true,
+   origin:'https://staging.example.invalid',pinnedOrigin:'https://staging.example.invalid',
+   fetchImpl:async()=>{calls++;return {ok:true,status:201,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify(verified)};}}
+ });
+ await app.refreshSession();
+ assert.equal(app.prepareServerFare({tripId:trip,requestKey:key}).code,'FARE_REQUIRES_SERVER_TRIP');
+ app.startTracking(trip);await app.syncTracking();
+ assert.equal(app.prepareServerFare({tripId:trip,requestKey:key}).ok,true);
+ assert.equal(app.snapshot().quote,null);
+ assert.equal((await app.submitServerFare()).ok,true);
+ assert.equal(calls,1);
+ assert.equal(app.snapshot().quote.amountGs,22500);
+ assert.equal(app.snapshot().fareRequest.phase,'acknowledged');
+ await app.signOut();
+ assert.equal(app.snapshot().quote,null);
+ assert.equal(app.snapshot().fareRequest.phase,'idle');
+});
+test('cotización G24 bloqueada sin contrato certificado',async()=>{
+ const app=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession()},
+  gateway:{send:async()=>({ok:true,data:fakeTrip()})}
+ });
+ await app.refreshSession();app.startTracking(trip);await app.syncTracking();
+ assert.equal(app.prepareServerFare({tripId:trip,requestKey:key}).code,'FARE_CONTRACT_PENDING');
+ assert.equal(app.snapshot().fareRequest.contractReady,false);
+});
