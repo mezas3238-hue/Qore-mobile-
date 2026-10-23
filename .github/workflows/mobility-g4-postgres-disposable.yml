@@ -19,6 +19,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G29_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G30_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G31_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G32_*'
+      - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
@@ -210,3 +212,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONE_COVERAGE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G31.2 real PostgreSQL stress — 30030 zone-service rows and 601 keyset pages, unlimited total
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONES_30030_ROWS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G32 install private Driver signal quarantine and atomic sequence fencing
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_LOCATION_SIGNAL_QUARANTINE_POSTGRES_CI_ONLY.sql
+      - name: G32 assert real DB revocation, replay denial and no location-to-availability promotion
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_SIGNAL_QUARANTINE_ASSERT_POSTGRES_CI_ONLY.sql
