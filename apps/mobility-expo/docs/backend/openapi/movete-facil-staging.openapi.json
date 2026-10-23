@@ -1396,6 +1396,45 @@
           }
         }
       }
+    },
+    "/v1/staging/rider/history": {
+      "get": {
+        "operationId": "listOwnRiderHistoryInitialPage",
+        "tags": [
+          "rides",
+          "delivery",
+          "merchant"
+        ],
+        "summary": "JWT-scoped own history read, first 50 only; no incomplete responses",
+        "description": "Driver/Admin/Owner forbidden. Reads owner-matched rows for trips, deliveries, merchant orders; endpoint fails 503 if any source missing, malformed, or history >50 pending signed cursor implementation. QA local only.",
+        "responses": {
+          "200": {
+            "description": "Strictly private sanitized history, first page complete or error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiderOwnHistoryV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2947,6 +2986,88 @@
           "serverPersisted": {
             "type": "boolean",
             "const": true
+          }
+        }
+      },
+      "RiderOwnHistoryItemV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "serviceId",
+          "kind",
+          "status",
+          "createdAt",
+          "revision"
+        ],
+        "properties": {
+          "serviceId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "assigned",
+              "in_progress",
+              "completed",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "RiderOwnHistoryV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "QA-only first page limited to <=50 results; if older results exist, 503 until certified pagination. No PII/driver/location/prices.",
+        "required": [
+          "ownerId",
+          "generatedAt",
+          "expiresAt",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/RiderOwnHistoryItemV1"
+            }
+          },
+          "nextCursor": {
+            "type": "null"
           }
         }
       }
