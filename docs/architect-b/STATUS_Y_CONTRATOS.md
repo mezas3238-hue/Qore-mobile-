@@ -161,3 +161,12 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - Se corrigieron `ERESOLVE` de tipos React, TS de JSX exhaustivo, 4 validadores UUID mal formados en Admin y variable `payload` indefinida del store de zonas. No usar `--force` ni saltarse tests. Histórico y reproducciones: [CERTIFICACION_ADMIN_WEB_QA_2026-10-23.md](./CERTIFICACION_ADMIN_WEB_QA_2026-10-23.md).
 - Se incorporó `audit-feed` y pantalla Admin de auditoría mínima con 79 tests totales de seguridad, finanzas, KYC, zonas, incidentes y Auth. Sin PII, documentos ni operaciones LIVE.
 - **El job Admin no es permiso para producción**: faltan Auth/MFA/RLS del backend, contratos, E2E navegador, API certificada y aprobación del Owner. Mantener PR #8 DRAFT; no merge/deploy/pagos.
+
+## Octava sesión — Gateway de lectura Admin, seguridad MFA y actualización manual (23-10-2026)
+- `9b34e1c26d6e6e4cb457911361bf257fab1110de`: nuevo `admin-read-gateway.mjs` bloqueado por defecto y tests de HTTPS pinned, 5 operaciones propuestas, JWT/MFA, sin redirecciones, caché, cookies ni referrer. Rol por lectura, revisión posterior de sesión y tamaño/JSON.
+- `23b235e2314ee22b1a852caf206749a354491d76`: `admin-experience` integra el gateway opcional. DTOs entrantes pasan validaciones de KYC, zonas, incidentes, auditoría o finanzas del titular. Rechazo de sesión obsoleta antes de proyectar y prevención de doble lectura.
+- `dd56e16c5684e3b62d6f8f06c59fa0d620a231c7`: reparó carrera crítica en 401/403: una petición de sesión anterior no invalida el nuevo login; coteja también `authRevision` para relogins con mismo sujeto/token.
+- `d385ab1c4a4ecdd126bca8b8dd9aaa18bca2349c`: botón accesible «Actualizar datos» en cada sección del Admin con permisos; deshabilitado hasta certificación de contratos y sesión correspondiente, sin red automática.
+- [**CI Admin Web #39896092740 SUCCESS**](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/39896092740): **100 tests, 100 PASS, 0 FAIL, TypeScript y Vite build SUCCESS**. Boundary #39896092581 SUCCESS. Los checks prueban código/QA, no la API real.
+- Documento con rutas STAGING propuestas, matrices de acceso, evidencias, limitaciones y plan: [ADMIN_READ_GATEWAY_QA_2026-10-23.md](./ADMIN_READ_GATEWAY_QA_2026-10-23.md).
+- A presenta OpenAPI `1.0.0-g11` con **40 rutas** al último chequeo: cinco GET Admin/Owner siguen sin contratos certificados. Se requieren MFA servidor, JWT/RLS, DTO versionado, E2E navegador y autorización STAGING del propietario. No live, no merge ni pagos.
