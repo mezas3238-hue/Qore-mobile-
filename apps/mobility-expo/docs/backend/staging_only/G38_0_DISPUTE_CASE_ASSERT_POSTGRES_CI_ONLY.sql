@@ -66,4 +66,6 @@ BEGIN
  THEN RAISE EXCEPTION 'G38 return did not preserve released slot'; END IF;
  RAISE NOTICE 'G38.0 PASS: delivered/disputed/returned replay preserves case and no reassignment';
 END $final$;
-ROLLBACK;
+-- Commit synthetic-only fixture so the next G38.1 gate sees a released Driver.
+-- This database exists ONLY within the disposable CI job.
+COMMIT;
