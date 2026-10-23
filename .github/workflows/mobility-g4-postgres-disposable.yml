@@ -208,3 +208,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONE_COVERAGE_POSTGRES_CI_ONLY.sql
       - name: G31 prove 121 zone-service rows, stale/unknown telemetry, no live eligibility and Admin-only scope
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONE_COVERAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G31.2 real PostgreSQL stress — 30030 zone-service rows and 601 keyset pages, unlimited total
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONES_30030_ROWS_ASSERT_POSTGRES_CI_ONLY.sql
