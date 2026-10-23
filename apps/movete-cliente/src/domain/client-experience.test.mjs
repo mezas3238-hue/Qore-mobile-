@@ -944,3 +944,75 @@ test('G44 401 con sesión estable limpia vistas privadas y revoca solo Cliente',
  assert.equal(app.snapshot().commercePager.visibleItems.length,0);
  assert.equal(app.snapshot().branchDirectory.items.length,0);
 });
+
+const chatService='123e4567-e89b-42d3-a456-426614174082';
+const chatConversation='123e4567-e89b-42d3-a456-426614174083';
+const chatMessage='123e4567-e89b-42d3-a456-426614174084';
+test('Chat Cliente por defecto OFF y nunca publica mensajes falsos',async()=>{
+ const {api}=fixture();await api.refreshSession();
+ assert.equal(api.snapshot().chat.contractReady,false);
+ assert.equal((await api.openChat({serviceId:chatService,serviceKind:'DELIVERY'})).code,
+  'CHAT_CONTRACT_NOT_CERTIFIED');
+ assert.equal(api.snapshot().chat.messages.length,0);
+});
+test('Chat Cliente vincula remitente autenticado y solo acepta ACK del servidor',async()=>{
+ const calls=[];
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  chatGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>true,
+   readMessages:async args=>{
+    calls.push(['read',args]);
+    return {ok:true,data:{
+     conversationId:chatConversation,serviceId:chatService,
+     serviceKind:'DELIVERY',ownerId:a,counterpartRole:'driver',
+     assignmentVerified:true,state:'ACTIVE',revision:3,
+     generatedAt:now-1000,expiresAt:now+60000,messages:[],nextCursor:null,
+     canSend:true,productionEnabled:false
+    }};
+   },
+   sendMessage:async args=>{
+    calls.push(['send',args]);return {ok:true,data:{
+     conversationId:chatConversation,serviceId:chatService,
+     requestKey:key,messageId:chatMessage,senderRole:'passenger',
+     body:'Voy a salir a recibir el paquete',createdAt:now-1,
+     revision:4,serverStored:true
+    }};
+   }
+  }
+ });
+ await api.refreshSession();
+ assert.equal((await api.openChat({serviceId:chatService,serviceKind:'DELIVERY'})).ok,true);
+ assert.equal(api.snapshot().chat.active,true);
+ assert.equal((await api.sendChat({body:'Voy a salir a recibir el paquete',requestKey:key})).ok,true);
+ assert.equal(api.snapshot().chat.messages.length,1);
+ assert.equal(api.snapshot().chat.messages[0].senderRole,'passenger');
+ assert.equal(api.snapshot().chat.deliveredWithoutAck,false);
+ assert.equal(calls[0][1].subject,a);
+ await api.signOut();
+ assert.equal(api.snapshot().chat.messages.length,0);
+ assert.equal(api.snapshot().chat.active,false);
+});
+test('Chat privado no se restaura tras JWT nuevo en la misma cuenta',async()=>{
+ let session=fakeSession();
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>session,signOut:async()=>{}},
+  chatGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>true,
+   readMessages:async()=>({ok:true,data:{
+    conversationId:chatConversation,serviceId:chatService,
+    serviceKind:'RIDE',ownerId:a,counterpartRole:'driver',
+    assignmentVerified:true,state:'ACTIVE',revision:3,generatedAt:now-1000,
+    expiresAt:now+60000,messages:[],nextCursor:null,
+    canSend:true,productionEnabled:false
+   }}),
+   sendMessage:async()=>({ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'})
+  }
+ });
+ await api.refreshSession();
+ assert.equal((await api.openChat({serviceId:chatService,serviceKind:'RIDE'})).ok,true);
+ session={...session,token:'jwt-new-synthetic-token-passenger'};
+ await api.refreshSession();
+ assert.equal(api.snapshot().chat.messages.length,0);
+ assert.equal(api.snapshot().chat.active,false);
+});

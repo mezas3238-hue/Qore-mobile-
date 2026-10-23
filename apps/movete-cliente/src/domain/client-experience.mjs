@@ -16,6 +16,7 @@ import {createCommerceCatalogPager} from './commerce-catalog-pages.mjs';
 import {createG44BranchDirectory} from './g44-branch-directory.mjs';
 import {createG44BuyerCatalogAdapter} from './g44-buyer-contract.mjs';
 import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
+import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -27,11 +28,11 @@ import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
- g44BuyerHttpOptions=null,now=()=>Date.now()}={}){
+ g44BuyerHttpOptions=null,chatGateway=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let commerceFlow,commercePager,branchDirectory,g44Http=null;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
@@ -47,6 +48,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(commercePager)commercePager.clear();
   if(branchDirectory)branchDirectory.clear();
   if(g44Http)g44Http.cancelPending();
+  if(chatFlow)chatFlow.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -57,6 +59,10 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
+ // Chat Cliente ↔ Driver/MOTO delivery, sujeto a asignación certificada por A.
+ // No hay transporte habilitado hasta que A implemente Auth + conversaciones.
+ chatFlow=createPassengerChatFlow({gateway:chatGateway,
+  getActor:async()=>actorSession(),now});
  const cancelGateway=cancelGatewayOptions?createRideCancellationGateway({
   ...cancelGatewayOptions,now,
   getSession:()=>{
@@ -299,7 +305,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
     incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
-    commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot()});
+    commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
+    chat:chatFlow.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -313,7 +320,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    historyConfigured:Boolean(historyGateway?.isConfigured()),
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
-   commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot()
+   commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
+   chat:chatFlow.snapshot()
   });
  }
  async function signOut(){
@@ -333,6 +341,9 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   clearCommercePage:()=>{commercePager.clear();notify();},
   loadBuyerBranches:async args=>{const p=branchDirectory.load(args);notify();const r=await p;notify();return r;},
   clearBuyerBranches:()=>{branchDirectory.clear();notify();},
+  openChat:async args=>{const p=chatFlow.open(args);notify();const r=await p;notify();return r;},
+  sendChat:async args=>{const p=chatFlow.send(args);notify();const r=await p;notify();return r;},
+  retryChat:async()=>{const p=chatFlow.retryPending();notify();const r=await p;notify();return r;},
   setCommerceQuantity:(itemId,quantity)=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeQuantity(itemId,quantity);notify();return r;},
   selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
   previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},

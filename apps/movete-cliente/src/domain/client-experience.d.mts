@@ -27,6 +27,12 @@ export type ClientSnapshot={
   stage:string;stock:string;generation:number;
   catalogReadReady:boolean;catalogLoading:boolean;catalogError:string|null;
   checkoutEnabled:false;paymentEnabled:false;serverOrderReceipt:null};
+ chat:{contractReady:boolean;loading:boolean;sending:boolean;active:boolean;
+  serviceId:string|null;serviceKind:string|null;pageNumber:number;
+  messages:readonly {messageId:string;senderRole:'passenger'|'driver';
+   body:string;createdAt:number;revision:number}[];
+  hasOlder:boolean;pendingSend:boolean;error:string|null;
+  phoneNumbersRequired:false;deliveredWithoutAck:false;attachmentsEnabled:false};
  branchDirectory:{readReady:boolean;loading:boolean;error:string|null;
   municipality:string|null;serviceKind:string|null;pageNumber:number;
   items:readonly {branchId:string;branchTag:string;merchantKind:string;
@@ -65,6 +71,9 @@ export type ClientExperience={
  loadBuyerBranches(args:{municipality:string;serviceKind:'AUTO_DELIVERY'|'MOTO_DELIVERY';
   next?:boolean;previous?:boolean}):Promise<ClientResult>;
  clearBuyerBranches():void;
+ openChat(args:{serviceId:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';older?:boolean}):Promise<ClientResult>;
+ sendChat(args:{body:string;requestKey:string}):Promise<ClientResult>;
+ retryChat():Promise<ClientResult>;
  setCommerceQuantity(itemId:string,quantity:number):ClientResult;
  selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
  previewCommerceOrder(requestKey:string):ClientResult;
@@ -100,6 +109,15 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ chatGateway?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  isConfigured?:()=>boolean;cancelPending?:()=>void;
+  readMessages?:(args:{serviceId:string;serviceKind:string;cursor:string|null;
+   subject:string;sessionRevision:number})=>Promise<{ok:boolean;code?:string;data?:unknown}>;
+  sendMessage?:(args:{conversationId:string;serviceId:string;serviceKind:string;
+   body:string;requestKey:string;subject:string;sessionRevision:number})=>
+   Promise<{ok:boolean;code?:string;data?:unknown}>;
+ }|null;
  g44BuyerHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   origin?:string;pinnedOrigin?:string;
