@@ -238,3 +238,18 @@ test('bytes bajo límite y respuesta vigente permiten consulta segura',async()=>
   fetchImpl:async()=>response({scope:'admin.incidents.read',nextCursor:null})});
  assert.equal((await gateway.read('incidents')).ok,true);
 });
+
+test('gateway Admin consume stream HTTP y no llama text()',async()=>{
+ const payload=new TextEncoder().encode(JSON.stringify({scope:'synthetic',nextCursor:null}));
+ const gateway=createAdminReadGateway({...settings,fetchImpl:async()=>({
+  ...response(),body:new ReadableStream({start(c){c.enqueue(payload);c.close();}}),
+  text:async()=>{throw Error('text no permitido');}
+ })});
+ assert.equal((await gateway.read('incidents')).ok,true);
+});
+test('gateway Admin detiene JSON streaming antes del límite de bytes',async()=>{
+ const gateway=createAdminReadGateway({...settings,maxBytes:1024,fetchImpl:async()=>({
+  ...response(),body:new ReadableStream({start(c){c.enqueue(new Uint8Array(1300));c.close();}})
+ })});
+ assert.equal((await gateway.read('incidents')).code,'RESPONSE_TOO_LARGE');
+});

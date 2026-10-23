@@ -1,3 +1,4 @@
+import {readBoundedResponseText} from './bounded-json-response.mjs';
 // A05: cursor HMAC opaco base64url, firmado por backend, de 44 a 256 caracteres.
 const A05_CURSOR=/^[A-Za-z0-9_-]{44,256}$/;
 const isSignedA05Cursor=x=>typeof x==='string'&&A05_CURSOR.test(x);
@@ -104,13 +105,12 @@ export function createAdminReadGateway({
    const limit=Number.isSafeInteger(maxBytes)&&maxBytes>=1024&&maxBytes<=1048576?maxBytes:262144;
    if(advertised!==null&&advertised!==undefined&&(!/^\d+$/.test(advertised)||Number(advertised)>limit))
     return fail('RESPONSE_TOO_LARGE');
-   if(typeof result.text!=='function')return fail('BAD_SERVER_RESPONSE');
-   const body=await result.text();
-   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
-   if(typeof body!=='string'||body.length>limit
-     ||new TextEncoder().encode(body).byteLength>limit)return fail('RESPONSE_TOO_LARGE');
+   // Streaming acotado cuando Response.body está disponible. Sin stream,
+   // fallback text() sujeto al mismo límite posterior a la lectura.
+   const bodyResult=await readBoundedResponseText(result,{limit,signal:ctl.signal,timedOut});
+   if(!bodyResult.ok)return fail(bodyResult.code);
    let json;
-   try{json=JSON.parse(body);}
+   try{json=JSON.parse(bodyResult.text);}
    catch{return fail('BAD_SERVER_RESPONSE');}
    if(!json||typeof json!=='object'||Array.isArray(json))return fail('BAD_SERVER_RESPONSE');
    // No aceptar cursores del navegador ni resultados parciales con cursor falso.
