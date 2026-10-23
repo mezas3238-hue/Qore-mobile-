@@ -82,12 +82,12 @@ BEGIN
   OR _object_key IS NULL OR _mime_type IS NULL OR _byte_size IS NULL
   OR _sha256_hex IS NULL OR
   _object_key !~ ('^'||_driver_id::text||'/'||_kind::text||
-    '-[A-Za-z0-9_-]{12,80}\\.(jpg|jpeg|png)$')
+    '-[A-Za-z0-9_-]{12,80}[.](jpg|jpeg|png)$')
   OR _mime_type NOT IN ('image/jpeg','image/png')
   OR _byte_size NOT BETWEEN 1 AND 5242880
   OR _sha256_hex !~ '^[0-9a-f]{64}$'
-  OR (_mime_type='image/png' AND _object_key !~ '\\.png$')
-  OR (_mime_type='image/jpeg' AND _object_key !~ '\\.(jpg|jpeg)$')
+  OR (_mime_type='image/png' AND _object_key !~ '[.]png$')
+  OR (_mime_type='image/jpeg' AND _object_key !~ '[.](jpg|jpeg)$')
  THEN RAISE EXCEPTION 'Invalid private document observation'; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.user_roles r
      WHERE r.user_id=_driver_id AND r.role='driver'::public.app_role)
