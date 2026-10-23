@@ -3,15 +3,22 @@
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createClientSessionController({provider,clearPrivateState=()=>{},now=()=>Date.now()}={}){
- let current=null;
+ let current=null,epoch=0;
  const clear=()=>{
+  epoch++;
   current=null;
   clearPrivateState();
  };
  async function refresh(){
+  const started=++epoch;
   if(!provider||typeof provider.readSession!=='function'){clear();return {ok:false,code:'NO_AUTH_PROVIDER'};}
   let session;
-  try{session=await provider.readSession();}catch{clear();return {ok:false,code:'AUTH_UNAVAILABLE'};}
+  try{session=await provider.readSession();}
+  catch{
+   if(epoch!==started)return {ok:false,code:'STALE_SESSION_RESPONSE'};
+   clear();return {ok:false,code:'AUTH_UNAVAILABLE'};
+  }
+  if(epoch!==started)return {ok:false,code:'STALE_SESSION_RESPONSE'};
   if(!session||session.role!=='passenger'||typeof session.subject!=='string'
    ||!UUID.test(session.subject)||typeof session.token!=='string'
    ||session.token.length<20||!Number.isFinite(session.expiresAt)
@@ -36,5 +43,5 @@ export function createClientSessionController({provider,clearPrivateState=()=>{}
    return {ok:true};
   }catch{return {ok:false,code:'SERVER_REVOCATION_UNCONFIRMED'};}
  }
- return Object.freeze({refresh,publicSession,getSessionForGateway,logout,clear});
+ return Object.freeze({refresh,publicSession,getSessionForGateway,logout,clear,revision:()=>epoch});
 }

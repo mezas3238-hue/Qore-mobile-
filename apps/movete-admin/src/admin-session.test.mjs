@@ -45,3 +45,27 @@ test('rol owner requiere MFA y no se convierte en admin',async()=>{
  assert.equal(ctrl.publicSession().role,'owner');
  assert.equal(ctrl.getSessionForGateway().role,'owner');
 });
+
+test('logout durante Auth pendiente jamás restaura sesión admin',async()=>{
+ let complete;
+ const pending=new Promise(resolve=>complete=resolve);
+ const ctrl=createAdminSessionController({
+  provider:{readSession:()=>pending,signOut:()=>{}},now:()=>10000
+ });
+ const task=ctrl.refresh();
+ await ctrl.logout();
+ complete(ok());
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(ctrl.publicSession(),null);
+});
+test('dos refresh superpuestos usan solo la última lectura autenticada',async()=>{
+ const done=[];
+ const provider={readSession:()=>new Promise(resolve=>done.push(resolve))};
+ const ctrl=createAdminSessionController({provider,now:()=>10000});
+ const first=ctrl.refresh(),second=ctrl.refresh();
+ done[1](ok(other));
+ assert.equal((await second).ok,true);
+ done[0](ok());
+ assert.equal((await first).code,'STALE_SESSION_RESPONSE');
+ assert.equal(ctrl.publicSession().subject,other);
+});

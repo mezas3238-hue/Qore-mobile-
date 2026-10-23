@@ -156,3 +156,17 @@ test('ACK de revisión de otro administrador se rechaza tras cambio de sesión',
  assert.equal(app.snapshot().account.subject,'123e4567-e89b-42d3-a456-426614174020');
  assert.equal(app.snapshot().kyc,null);
 });
+
+test('re-login de mismo Admin durante revisión invalida respuesta del token anterior',async()=>{
+ let done;
+ const pending=new Promise(resolve=>done=resolve);
+ const gateway={isConfigured:()=>true,reviewVehicle:async()=>pending};
+ const {app}=fixture(auth(),gateway);
+ await app.refreshSession();
+ const first=app.reviewVehicle({});
+ await app.logout();
+ await app.refreshSession(); // mismo sujeto en cuenta, sesión nueva
+ done({ok:true,status:200});
+ assert.equal((await first).code,'STALE_SESSION_RESPONSE');
+ assert.equal(app.snapshot().kyc,null);
+});

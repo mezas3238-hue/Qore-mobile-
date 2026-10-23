@@ -5,15 +5,20 @@
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createAdminSessionController({provider,clearSensitive=()=>{},now=()=>Date.now()}={}){
- let current=null;
- const clear=()=>{current=null;clearSensitive();};
+ let current=null,epoch=0;
+ const clear=()=>{epoch++;current=null;clearSensitive();};
  async function refresh(){
+  const started=++epoch;
   if(typeof provider?.readSession!=='function'){
    clear();return {ok:false,code:'NO_AUTH_PROVIDER'};
   }
   let value;
   try{value=await provider.readSession();}
-  catch{clear();return {ok:false,code:'AUTH_UNAVAILABLE'};}
+  catch{
+   if(epoch!==started)return {ok:false,code:'STALE_SESSION_RESPONSE'};
+   clear();return {ok:false,code:'AUTH_UNAVAILABLE'};
+  }
+  if(epoch!==started)return {ok:false,code:'STALE_SESSION_RESPONSE'};
   if(!value||!['admin','owner'].includes(value.role)||value.mfaVerified!==true
    ||typeof value.subject!=='string'||!UUID.test(value.subject)
    ||typeof value.token!=='string'||value.token.length<20
@@ -43,5 +48,5 @@ export function createAdminSessionController({provider,clearSensitive=()=>{},now
    return {ok:true};
   }catch{return {ok:false,code:'REVOCATION_UNCONFIRMED'};}
  }
- return Object.freeze({refresh,publicSession,getSessionForGateway,logout,clear});
+ return Object.freeze({refresh,publicSession,getSessionForGateway,logout,clear,revision:()=>epoch});
 }

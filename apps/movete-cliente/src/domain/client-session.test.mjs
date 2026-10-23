@@ -42,3 +42,28 @@ test('caducidad elimina sesión y token al consultar',async()=>{
  assert.equal(state.publicSession(),null);
  assert.equal(state.getSessionForGateway(),null);
 });
+
+test('cierre mientras Auth lee no restaura sesión pasajero',async()=>{
+ let complete;
+ const pending=new Promise(resolve=>complete=resolve);
+ const ctrl=createClientSessionController({
+  provider:{readSession:()=>pending,signOut:()=>{}},now:()=>10000
+ });
+ const old=ctrl.refresh();
+ await ctrl.logout();
+ complete(valid());
+ assert.equal((await old).code,'STALE_SESSION_RESPONSE');
+ assert.equal(ctrl.getSessionForGateway(),null);
+});
+test('en dos refresh pasajeros gana el último, sin mezclar identidades',async()=>{
+ const done=[];
+ const ctrl=createClientSessionController({
+  provider:{readSession:()=>new Promise(resolve=>done.push(resolve))},now:()=>10000
+ });
+ const older=ctrl.refresh(),newer=ctrl.refresh();
+ done[1](valid(u));
+ assert.equal((await newer).ok,true);
+ done[0](valid());
+ assert.equal((await older).code,'STALE_SESSION_RESPONSE');
+ assert.equal(ctrl.publicSession().subject,u);
+});
