@@ -324,3 +324,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G48_SCOPED_DB_DELEGATION_POSTGRES_CI_ONLY.sql
       - name: G48 prove least-privilege ticket, Driver status, Buyer server price and revocation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G48_SCOPED_DB_DELEGATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G48 real two-connection one-use ticket race and revoked provider grant
+        run: python3 apps/mobility-expo/server/g48-scoped-db-delegation-race-ci.py
