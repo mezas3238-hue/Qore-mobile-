@@ -404,7 +404,11 @@ npm run build
 
 # 11. REFERENCIAS OBLIGATORIAS — DOCUMENTACIÓN HISTÓRICA EN GITHUB
 
-En rama A:
+En rama A (existen otras dos actas complementarias publicadas durante este corte; **no** implican código nuevo ni sustituyen este handoff):
+- `docs/handoff/HANDOFF_MAESTRO_ARQUITECTO_A_G0_G22_MOVETE_FACIL_2026-10-22.md` — acta A complementaria.
+- `docs/handoff/HANDOFF_MAESTRO_INTEGRAL_QORE_MOBILE_ARQUITECTO_A_G0_G22_2026-10-22.md` — acta A+B complementaria.
+
+En rama A (referencias obligatorias):
 - `docs/handoff/DIVISION_TRABAJO_DOS_ARQUITECTOS_MOVETE_FACIL_2026-10-22.md` — límites exclusivos, checklist B01–B13.
 - `docs/architecture/MOVETE_TWO_MOBILE_APPS_2026-10-22.md` — apps y binarios separados.
 - `docs/architecture/G16_DRIVER_PRIVATE_INBOX_AND_SESSION_QA_2026-10-22.md`.
