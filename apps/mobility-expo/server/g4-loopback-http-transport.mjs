@@ -35,6 +35,7 @@ const merchantOnboardingRoute=/^\/v1\/staging\/merchant\/onboarding\/request$/;
 const merchantReviewRoute=/^\/v1\/staging\/admin\/merchants\/[0-9a-f-]{36}\/review$/i;
 const merchantBranchWriteRoute=/^\/v1\/staging\/merchant\/branches\/upsert$/;
 const merchantCatalogWriteRoute=/^\/v1\/staging\/merchant\/catalog\/upsert$/;
+const driverLicenseReadinessRoute=/^\/v1\/staging\/driver\/license-readiness$/;
 const driverEnrollmentRoute=/^\/v1\/staging\/driver\/enrollment$/;
 const driverDocumentReadRoute=/^\/v1\/staging\/driver\/documents$/;
 const driverDocumentObserveRoute=/^\/v1\/staging\/driver\/documents\/observe$/;
@@ -64,6 +65,7 @@ export function createQoreRadarLoopbackTransport({
  riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
+ driverLicenseReadinessHandler,
 }){
  if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
@@ -73,7 +75,8 @@ export function createQoreRadarLoopbackTransport({
    (courierPollHandler!==undefined&&typeof courierPollHandler!=='function')||
    (driverInboxHandler!==undefined&&typeof driverInboxHandler!=='function')||
    (driverDocumentHandler!==undefined&&typeof driverDocumentHandler!=='function')||
-   (driverEnrollmentHandler!==undefined&&typeof driverEnrollmentHandler!=='function'))
+   (driverEnrollmentHandler!==undefined&&typeof driverEnrollmentHandler!=='function')||
+   (driverLicenseReadinessHandler!==undefined&&typeof driverLicenseReadinessHandler!=='function'))
   throw new Error('All G4/G5/G6/G7/G8/G9/G10 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
@@ -106,6 +109,7 @@ export function createQoreRadarLoopbackTransport({
   const merchantManagementPost=req.method==='POST'&&
    (merchantOnboardingRoute.test(path)||merchantReviewRoute.test(path)||
     merchantBranchWriteRoute.test(path)||merchantCatalogWriteRoute.test(path));
+  const driverLicenseReadinessGet=req.method==='GET'&&driverLicenseReadinessRoute.test(path);
   const driverEnrollmentPost=req.method==='POST'&&driverEnrollmentRoute.test(path);
   const driverDocumentGet=req.method==='GET'&&driverDocumentReadRoute.test(path);
   const driverDocumentPost=req.method==='POST'&&
@@ -118,7 +122,8 @@ export function createQoreRadarLoopbackTransport({
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
-    !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost){
+    !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&
+    !driverLicenseReadinessGet){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
@@ -126,7 +131,8 @@ export function createQoreRadarLoopbackTransport({
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
   if((rider||offerGet||deliveryGet||merchantGet||financeGet||safetyGet||
-      deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet)&&
+      deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
+      driverLicenseReadinessGet)&&
      (req.headers['transfer-encoding']!==undefined||
       (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0'))){
    send(res,400,{error:'GET body not supported'});return;
@@ -158,6 +164,8 @@ export function createQoreRadarLoopbackTransport({
     (financeGet||financePost)?financeHandler:
     (safetyGet||safetyPost)?safetyHandler:
     merchantManagementPost?merchantManagementHandler:
+    driverLicenseReadinessGet?
+     (driverLicenseReadinessHandler??(()=>({status:503,body:{error:'Driver KYC readiness not configured'}}))):
     driverEnrollmentPost?(driverEnrollmentHandler??(()=>({status:503,body:{error:'Driver enrollment not configured'}}))):
     (driverDocumentGet||driverDocumentPost)?
      (driverDocumentHandler??(()=>({status:503,body:{error:'Private Driver documents not configured'}}))):
