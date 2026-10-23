@@ -140,3 +140,30 @@ test('errores HTTP, red, contenido y tamaño fallan cerrados',async()=>{
  const offline=createRiderStatusGateway({...config,fetchImpl:async()=>{throw Error('no network');}});
  assert.equal((await offline.fetchStatus(trip)).code,'NETWORK_OR_TIMEOUT');
 });
+
+test('status 200 tardío nunca revela GPS de un fetch que ignora cancelación',async()=>{
+ let tick=clock;
+ const gw=createRiderStatusGateway({...config,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>{tick+=1001;return result(data());}});
+ assert.equal((await gw.fetchStatus(trip)).code,'NETWORK_OR_TIMEOUT');
+});
+test('status 401 tardío no invalida sesión vigente',async()=>{
+ let tick=clock,invalid=0;
+ const gw=createRiderStatusGateway({...config,now:()=>tick,timeoutMs:1000,
+  onSessionInvalid:()=>invalid++,
+  fetchImpl:async()=>{tick+=1001;return {status:401,ok:false,redirected:false};}});
+ assert.equal((await gw.fetchStatus(trip)).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(invalid,0);
+});
+test('lectura tardía del body de GPS no actualiza estado',async()=>{
+ let tick=clock;
+ const gw=createRiderStatusGateway({...config,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>({...result(data()),text:async()=>{
+   tick+=1001;return JSON.stringify(data());}})});
+ assert.equal((await gw.fetchStatus(trip)).code,'NETWORK_OR_TIMEOUT');
+});
+test('límite status se aplica sobre bytes reales y no caracteres',async()=>{
+ const gw=createRiderStatusGateway({...config,maxBytes:1024,
+  fetchImpl:async()=>result({...data(),extra:'á'.repeat(600)})});
+ assert.equal((await gw.fetchStatus(trip)).code,'RESPONSE_TOO_LARGE');
+});

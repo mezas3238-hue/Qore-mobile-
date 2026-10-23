@@ -1,3 +1,4 @@
+import {utf8ByteLength} from './response-bytes.mjs';
 /**
  * Pasajero: GET de estado de viaje propio según OpenAPI RiderStatusV1 (G11).
  * JWT/RLS y propiedad se verifican solo en servidor A. Bloqueado por defecto.
@@ -102,12 +103,17 @@ export function createRiderStatusGateway({
    try{before=await getSession();}catch{return fail('AUTH_UNAVAILABLE');}
    if(!validSession(before,now()))return fail('AUTH_REQUIRED');
    const ctl=new AbortController();
-   timer=setTimeout(()=>ctl.abort(),int(timeoutMs,1000,30000)?timeoutMs:8000);
+   const ms=int(timeoutMs,1000,30000)?timeoutMs:8000;
+   const deadline=now()+ms;
+   timer=setTimeout(()=>ctl.abort(),ms);
+   const timedOut=()=>ctl.signal.aborted||now()>=deadline;
    const response=await fetchImpl(host+'/v1/staging/rider/trips/'+encodeURIComponent(tripId)+'/status',{
     method:'GET',redirect:'error',credentials:'omit',cache:'no-store',
     referrerPolicy:'no-referrer',
     headers:{Authorization:'Bearer '+before.token,Accept:'application/json'},signal:ctl.signal
    });
+   // Ignorar transportes que resuelven después de AbortSignal/deadline.
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!response||response.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(response.status===401||response.status===403){
     let after;
@@ -128,11 +134,14 @@ export function createRiderStatusGateway({
    if(len!=null&&(!/^\d+$/.test(len)||Number(len)>limit))return fail('RESPONSE_TOO_LARGE');
    if(typeof response.text!=='function')return fail('BAD_SERVER_RESPONSE');
    const body=await response.text();
-   if(typeof body!=='string'||body.length>limit)return fail('RESPONSE_TOO_LARGE');
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
+   if(typeof body!=='string'||body.length>limit||utf8ByteLength(body)>limit)
+    return fail('RESPONSE_TOO_LARGE');
    let data;
    try{data=JSON.parse(body);}catch{return fail('BAD_SERVER_RESPONSE');}
    let after;
    try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!validSession(after,now())||!same(before,after))return fail('STALE_SESSION_RESPONSE');
    if(!validStatus(data,tripId,before.subject,now()))return fail('INVALID_SERVER_SNAPSHOT');
    return Object.freeze({ok:true,status:200,data});

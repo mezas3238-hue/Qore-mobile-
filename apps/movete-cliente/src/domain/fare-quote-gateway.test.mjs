@@ -77,3 +77,30 @@ test('errores 409 429 503 y sin red no crean cotización',async()=>{
  const g=createFareQuoteGateway({...opts,fetchImpl:async()=>{throw Error('offline');}});
  assert.equal((await g.fetchQuote(trip,key)).code,'NETWORK_OR_TIMEOUT');
 });
+
+test('precio 201 recibido fuera del plazo no se muestra como cotización',async()=>{
+ let tick=t;
+ const g=createFareQuoteGateway({...opts,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>{tick+=1001;return reply(dto());}});
+ assert.equal((await g.fetchQuote(trip,key)).code,'NETWORK_OR_TIMEOUT');
+});
+test('precio 401 tardío no revoca identidad actual del cliente',async()=>{
+ let tick=t,invalid=0;
+ const g=createFareQuoteGateway({...opts,now:()=>tick,timeoutMs:1000,
+  onSessionInvalid:()=>invalid++,
+  fetchImpl:async()=>{tick+=1001;return {status:401,ok:false,redirected:false};}});
+ assert.equal((await g.fetchQuote(trip,key)).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(invalid,0);
+});
+test('recepción tardía del body cotización nunca acepta importe obsoleto',async()=>{
+ let tick=t;
+ const g=createFareQuoteGateway({...opts,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>({...reply(dto()),text:async()=>{tick+=1001;return JSON.stringify(dto());}})});
+ assert.equal((await g.fetchQuote(trip,key)).code,'NETWORK_OR_TIMEOUT');
+});
+test('JSON con Unicode sobre 32 KB se rechaza por bytes aunque no alcance caracteres',async()=>{
+ const content='á'.repeat(17000);
+ const g=createFareQuoteGateway({...opts,
+  fetchImpl:async()=>reply({...dto(),unexpected:content})});
+ assert.equal((await g.fetchQuote(trip,key)).code,'RESPONSE_TOO_LARGE');
+});

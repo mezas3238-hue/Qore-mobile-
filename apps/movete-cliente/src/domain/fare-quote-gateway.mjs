@@ -1,3 +1,4 @@
+import {utf8ByteLength} from './response-bytes.mjs';
 /** G24: servidor determina precio en Gs, sin dinero ni GPS del móvil. */
 const ID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const uuid=x=>typeof x==='string'&&ID.test(x);
@@ -51,14 +52,18 @@ export function createFareQuoteGateway({enabled=false,contractCertified=false,or
    if(expectedSessionRevision!==null&&before.sessionRevision!==expectedSessionRevision)
     return fail('STALE_SESSION_RESPONSE');
    const ctl=new AbortController();
-   timer=setTimeout(()=>ctl.abort(),Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000
-    &&timeoutMs<=30000?timeoutMs:8000);
+   const ms=Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000
+    &&timeoutMs<=30000?timeoutMs:8000;
+   const deadline=now()+ms;
+   timer=setTimeout(()=>ctl.abort(),ms);
+   const timedOut=()=>ctl.signal.aborted||now()>=deadline;
    const r=await fetchImpl(h+'/v1/staging/fares/quote',{
     method:'POST',credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',
     headers:{Authorization:'Bearer '+before.token,Accept:'application/json',
       'Content-Type':'application/json'},
     body:JSON.stringify({requestKey,fareMode:'AUTO',subjectKind:'RIDE',subjectId:tripId}),signal:ctl.signal
    });
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!r||r.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(r.status===401||r.status===403){
     let after;
@@ -77,11 +82,14 @@ export function createFareQuoteGateway({enabled=false,contractCertified=false,or
     return fail('RESPONSE_TOO_LARGE');
    if(typeof r.text!=='function')return fail('BAD_SERVER_RESPONSE');
    const body=await r.text();
-   if(typeof body!=='string'||body.length>32768)return fail('RESPONSE_TOO_LARGE');
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
+   if(typeof body!=='string'||body.length>32768||utf8ByteLength(body)>32768)
+    return fail('RESPONSE_TOO_LARGE');
    let data;
    try{data=JSON.parse(body);}catch{return fail('BAD_SERVER_RESPONSE');}
    let after;
    try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!valid(after,now())||!same(before,after))return fail('STALE_SESSION_RESPONSE');
    if(!inspectFareReceipt(data,before.subject,tripId,now()))return fail('INVALID_SERVER_QUOTE');
    return Object.freeze({ok:true,status:201,data});

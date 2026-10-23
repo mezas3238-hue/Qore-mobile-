@@ -1,3 +1,4 @@
+import {utf8ByteLength} from './response-bytes.mjs';
 /**
  * CLIENTE: paginación de historial solo lectura.
  * GET /v1/staging/rider/history consta en OpenAPI STAGING de A:
@@ -82,7 +83,7 @@ export function createClientHistoryGateway({
    const text=await res.text();
    if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(typeof text!=='string'||text.length>limit
-    ||new TextEncoder().encode(text).byteLength>limit)return fail('RESPONSE_TOO_LARGE');
+    ||utf8ByteLength(text)>limit)return fail('RESPONSE_TOO_LARGE');
    let data;
    try{data=JSON.parse(text);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!data||typeof data!=='object'||Array.isArray(data))return fail('BAD_SERVER_RESPONSE');
