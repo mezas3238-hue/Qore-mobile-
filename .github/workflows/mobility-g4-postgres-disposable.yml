@@ -31,6 +31,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G42_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G43_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G44_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G45_*'
+      - 'apps/mobility-expo/server/g45-*'
       - 'apps/mobility-expo/server/g43-*'
       - 'apps/mobility-expo/server/g36-*'
       - 'apps/mobility-expo/server/g32-*'
@@ -293,3 +295,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G44_BUYER_DISCOVERY_CATALOG_POSTGRES_CI_ONLY.sql
       - name: G44 test 205 products in 3 pages, mapped branch, role and invalidation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G44_BUYER_DISCOVERY_CATALOG_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G45 install owner-only synthetic buyer order and cancel receipts
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_BUYER_ORDER_STOCK_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G45 prove server priced stock reservation, replay, version change and cancellation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_BUYER_ORDER_STOCK_ASSERT_POSTGRES_CI_ONLY.sql
