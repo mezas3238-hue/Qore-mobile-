@@ -1238,6 +1238,60 @@
           }
         }
       }
+    },
+    "/v1/staging/driver/license-readiness": {
+      "get": {
+        "operationId": "getOwnDriverCurrentLicenseReadiness",
+        "tags": [
+          "driver-documents"
+        ],
+        "summary": "Read the latest reviewed license status for the authenticated Driver",
+        "description": "STAGING QA only. A reviewed license is necessary but NOT sufficient for vehicle eligibility. No identity, path, hash, GPS or document bytes are returned.",
+        "responses": {
+          "200": {
+            "description": "Document-only KYC readiness for this JWT-bound Driver",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "mode",
+                    "currentLicenseApproved",
+                    "driverEligible",
+                    "liveOperationsEnabled",
+                    "verificationScope"
+                  ],
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "const": "STAGING_DEMO_ONLY"
+                    },
+                    "currentLicenseApproved": {
+                      "type": "boolean"
+                    },
+                    "driverEligible": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "liveOperationsEnabled": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "verificationScope": {
+                      "type": "string",
+                      "const": "CURRENT_LICENSE_REVIEW_ONLY"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
