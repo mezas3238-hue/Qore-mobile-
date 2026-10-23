@@ -16,7 +16,8 @@ export type ClientSnapshot={
  history:{ownerId:string;nextCursor:string|null;
   items:readonly {serviceId:string;kind:string;status:string;createdAt:number;revision:number}[]}|null;
 };
-export type ClientResult={ok:boolean;code?:string;status?:number;requestKey?:string};
+export type ClientResult={ok:boolean;code?:string;status?:number;requestKey?:string;
+ refreshAttempted?:boolean;statusRefreshed?:boolean};
 export type ClientExperience={
  subscribe(listener:()=>void):()=>void;
  refreshSession():Promise<ClientResult>;
