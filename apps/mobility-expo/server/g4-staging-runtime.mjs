@@ -211,7 +211,7 @@ export async function prepareQoreG4StagingRuntime({
  // prevents exhaustive high-rate polling on the local QA loopback.
  const allowRequest=({userId})=>limit({userId,operation:'draft'});
  const riderHistory=createQoreRiderHistoryGateway({
-  projectRef:ref,verifyAccessToken:verified,
+  projectRef:ref,verifyAccessToken:verified,cursorSecret:serviceKey,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   loadOwnHistory:createQoreOwnHistoryRepository(admin),now
  });
