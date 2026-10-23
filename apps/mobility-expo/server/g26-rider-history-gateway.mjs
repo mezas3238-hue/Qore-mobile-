@@ -4,7 +4,7 @@
  * Incomplete page/errors never become an apparently complete empty list.
  */
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PATH='/v1/staging/rider/history';
 const kinds=new Set(['RIDE','DELIVERY','MERCHANT_ORDER']);
 const states=new Set(['searching','assigned','in_progress','completed','cancelled','failed']);
