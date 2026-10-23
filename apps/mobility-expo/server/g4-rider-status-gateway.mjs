@@ -70,8 +70,14 @@ export function createQoreRiderStatusGateway({
    source:'server',tripId:trip.id,passengerId:user.id,
    serverRevision:trip.revision,trackingSequence:trip.trackingSequence,
   };
+  // Public Client B DTO v1 is additive to the legacy G4 event envelope.
+  // ownerId is ALWAYS derived from independently verified JWT, not request JSON.
+  const clientBase={tripId:trip.id,ownerId:user.id,revision:trip.revision};
   if(['searching','cancelled','completed'].includes(trip.status)){
-   return RESP(200,{mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
+   return RESP(200,{...clientBase,state:trip.status,assignmentPersisted:false,
+    driver:null,vehicle:null,gpsConsent:false,location:null,
+    etaVerified:false,etaMinutes:null,
+    mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
     event:{...base,status:trip.status,acceptedDriver:null,tracking:null},
     locationVisible:false,deliveryConfirmed:false});
   }
@@ -112,8 +118,20 @@ export function createQoreRiderStatusGateway({
     trafficAware:true,fallbackUsed:false,
    }:null,
   };
-  return RESP(200,{mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
-   event,locationVisible:arrival.trackingAvailable===true,
-   deliveryConfirmed:false});
+  // No device-side guesswork: fields consumed by the separate Client app are
+  // projected only after persisted assignment and verified server evidence.
+  const hasTracking=arrival.trackingAvailable===true;
+  const minutes=hasTracking?Math.ceil(arrival.etaSeconds/60):null;
+  const safeEta=minutes!==null&&minutes<=240?minutes:null;
+  return RESP(200,{...clientBase,
+   state:trip.status==='accepted'?'assigned':trip.status,
+   assignmentPersisted:true,
+   driver:{verified:true,displayName:name},vehicle:{kind:'AUTO',plate},
+   gpsConsent:hasTracking,
+   location:hasTracking?{latitude:arrival.location.lat,
+    longitude:arrival.location.lng,observedAt:arrival.updatedAtMs}:null,
+   etaVerified:safeEta!==null,etaMinutes:safeEta,
+   mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
+   event,locationVisible:hasTracking,deliveryConfirmed:false});
  };
 }
