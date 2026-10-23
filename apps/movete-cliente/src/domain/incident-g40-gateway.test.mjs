@@ -124,3 +124,45 @@ test('HTTPS pin, JWT Passenger y rol denegado',async()=>{
  assert.equal((await denied.report(request)).code,'AUTH_REQUIRED');
  assert.equal(calls,0);
 });
+
+test('G40 rechaza stream descomunal antes de construir recibo o leer text()',async()=>{
+ let textCalled=0;
+ const bytes=new Uint8Array(8193).fill(65);
+ const g=createIncidentG40Gateway({...config,fetchImpl:async()=>({
+  ...answer(),body:new ReadableStream({start(c){c.enqueue(bytes);c.close();}}),
+  text:async()=>{textCalled++;throw Error('not expected');}
+ })});
+ const result=await g.report(request);
+ assert.equal(result.code,'RESPONSE_TOO_LARGE');
+ assert.equal(result.ok,false);
+ assert.equal(textCalled,0);
+ assert.equal(Object.hasOwn(result,'receipt'),false);
+});
+test('G40 descarta JSON truncado y jamás declara SOS/recepción humana',async()=>{
+ const g=createIncidentG40Gateway({...config,fetchImpl:async()=>({
+  ...answer(),body:new ReadableStream({start(c){
+   c.enqueue(new TextEncoder().encode('{"incidentId":'));c.close();
+  }})
+ })});
+ const result=await g.report(request);
+ assert.equal(result.code,'BAD_SERVER_RESPONSE');
+ assert.equal(result.ok,false);
+ assert.equal(Object.hasOwn(result,'qaDatabaseOnly'),false);
+ assert.equal(Object.hasOwn(result,'sosDispatched'),false);
+});
+test('G40 descarta un ACK válido de otra cuenta tras rotación de JWT',async()=>{
+ let live=actor(),release;
+ const paused=new Promise(resolve=>{release=resolve;});
+ const g=createIncidentG40Gateway({...config,
+  getSession:async()=>live,
+  fetchImpl:async()=>paused
+ });
+ const inFlight=g.report(request,3);
+ await Promise.resolve();await Promise.resolve();
+ live={...live,subject:'123e4567-e89b-42d3-a456-426614174099',
+  token:'different-synthetic-jwt-for-second-actor',authRevision:2,sessionRevision:4};
+ release(answer());
+ const response=await inFlight;
+ assert.equal(response.code,'STALE_SESSION_RESPONSE');
+ assert.equal(Object.hasOwn(response,'receipt'),false);
+});
