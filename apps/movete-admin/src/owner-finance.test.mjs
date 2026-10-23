@@ -34,7 +34,7 @@ test('estricta lista blanca impide PII, secretos y cuentas en respuesta',()=>{
   [...OWNER_TOTAL_FIELDS].sort());
 });
 test('no interpreta montos fraccionarios, negativos, NaN o String como guaraníes',()=>{
- for(const invalid of [15.25,-1,NaN,Infinity,'17000',Number.MAX_SAFE_INTEGER]){
+ for(const invalid of [15.25,NaN,Infinity,'17000',Number.MAX_SAFE_INTEGER]){
   assert.equal(projectOwnerFinance({...data,totals:{...totals,netPlatformGs:invalid}},
    {role:'owner',subject:owner,now}),null);
  }
@@ -90,4 +90,12 @@ test('store impide reutilizar datos entre sesiones owner distintas',()=>{
  const bad={...data,ownerId:outsider};
  assert.equal(store.replace(bad,{role:'owner',subject:outsider}),false);
  assert.equal(store.current(session),null);
+});
+
+test('resultado neto puede ser negativo si el ledger concilia pérdidas',()=>{
+ const result=projectOwnerFinance({...data,totals:{...totals,netPlatformGs:-25000}},
+  {role:'owner',subject:owner,now});
+ assert.equal(result.totals.netPlatformGs,-25000);
+ assert.equal(projectOwnerFinance({...data,totals:{...totals,platformCommissionGs:-1}},
+  {role:'owner',subject:owner,now}),null);
 });
