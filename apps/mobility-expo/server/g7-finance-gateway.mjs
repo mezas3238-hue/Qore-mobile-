@@ -11,7 +11,7 @@ const SUBJECTS=new Set(['RIDE','DELIVERY','MERCHANT_ORDER']);
 const METHODS=new Set(['SIMULATED_CASH','SIMULATED_CARD']);
 const EVENTS=new Set(['capture','refund','cancel']);
 const SUBJECT_MODE=new Map([
- ['RIDE',new Set(['AUTO','MOTO'])],['DELIVERY',new Set(['DELIVERY'])],
+ ['RIDE',new Set(['AUTO'])],['DELIVERY',new Set(['DELIVERY'])],
  ['MERCHANT_ORDER',new Set(['MERCHANT_DELIVERY'])],
 ]);
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&
@@ -37,11 +37,11 @@ const response=(status,body)=>({status,body});
 
 export function createQoreFinanceGateway({
  projectRef,verifyAccessToken,authorizePassenger,allowRequest,loadPricingContext,
- quoteFare,authorizePayment,transitionPayment,loadPayment,
+ quoteFare,authorizePayment,transitionPayment,loadPayment,now=Date.now,
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,loadPricingContext,
-  quoteFare,authorizePayment,transitionPayment,loadPayment]
+  quoteFare,authorizePayment,transitionPayment,loadPayment,now]
   .every(value=>typeof value==='function'))throw Error('Finance adapters required');
  return async({method,path,headers,body})=>{
   const quote=method==='POST'&&path===QUOTE;
@@ -84,12 +84,27 @@ export function createQoreFinanceGateway({
     const result=await quoteFare({actorId:user.id,...body,zoneTag:pricing.zoneTag,
      distanceMeters:pricing.distanceMeters,durationSeconds:pricing.durationSeconds,
      tollsPyg:pricing.tollsPyg});
+    const receipt=result?.quote;
+    const at=now();
+    const deadline=Date.parse(receipt?.expiresAt);
     if(!plain(result)||result.ok!==true||result.liveEnabled!==false||
-      !plain(result.quote)||!UUID.test(result.quote.id??'')||
-      result.quote.subjectId!==body.subjectId||result.quote.mode!==body.fareMode)
-     throw Error('Invalid quote receipt');
+      !plain(receipt)||!UUID.test(receipt.id??'')||
+      receipt.subjectId!==body.subjectId||receipt.mode!==body.fareMode||
+      receipt.subjectKind!==body.subjectKind||
+      !Number.isSafeInteger(receipt.totalPyg)||receipt.totalPyg<=0||
+      receipt.totalPyg>100000000||
+      typeof receipt.ruleVersion!=='string'||
+      !/^[a-zA-Z0-9._-]{1,48}$/.test(receipt.ruleVersion)||
+      typeof receipt.expiresAt!=='string'||!Number.isSafeInteger(at)||
+      !Number.isFinite(deadline)||deadline<=at||deadline>at+3600000)
+     throw Error('Unverified, stale or mismatched quote receipt');
     return response(201,{mode:'STAGING_DEMO_ONLY',livePaymentsEnabled:false,
-     quote:result.quote,serverPriced:true});
+     quote:receipt,serverPriced:true,
+     // Contract consumed by the separate Client app; no client-side pricing.
+     ownerId:user.id,quoteId:receipt.id,amountGs:receipt.totalPyg,
+     fareMode:receipt.mode,subjectKind:receipt.subjectKind,
+     subjectId:receipt.subjectId,expiresAt:deadline,
+     fareVersion:receipt.ruleVersion,routingVerified:true});
    }
    if(authorize){
     const result=await authorizePayment({actorId:user.id,...body});
