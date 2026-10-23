@@ -29,7 +29,7 @@ test('catálogo inyectado y versionado admite carrito privado; jamás checkout',
   args={branch,identity};return {ok:true,data:catalog()};
  }));
  assert.equal((await flow.loadCatalog(id(2))).ok,true);
- assert.deepEqual(args,{branch:id(2),identity:actor()});
+ assert.deepEqual(args,{branch:id(2),identity:{subject:id(1),sessionRevision:2}});
  assert.equal(flow.snapshot().catalogItems[0].unitPricePyg,8500);
  assert.equal(flow.changeQuantity(id(3),2).ok,true);
  assert.equal(flow.snapshot().estimatedSubtotalPyg,17000);
