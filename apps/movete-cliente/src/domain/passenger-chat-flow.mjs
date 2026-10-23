@@ -207,5 +207,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    return Object.freeze({ok:true,serverStored:true});
   }finally{if(started===generation)sending=false;}
  }
- return Object.freeze({open,send,snapshot,clear,isConfigured:ready});
+ const retryPending=()=>state.pending
+  ?send({body:state.pending.body,requestKey:state.pending.requestKey,retry:true})
+  :Promise.resolve(fail('NO_PENDING_MESSAGE'));
+ return Object.freeze({open,send,retryPending,snapshot,clear,isConfigured:ready});
 }
