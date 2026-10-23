@@ -17,7 +17,7 @@ const quote={requestKey,fareMode:'MERCHANT_DELIVERY',subjectKind:'MERCHANT_ORDER
 function fixture(){
  const calls=[];
  const gateway=createQoreFinanceGateway({
-  projectRef:ref,
+  projectRef:ref,now:()=>Date.parse('2026-10-23T03:15:00Z'),
   verifyAccessToken:async token=>{
    const id=[passenger,outsider].find(value=>bearer(value)===token);
    if(!id)throw Error('unauthorized');
@@ -31,7 +31,8 @@ function fixture(){
   };},
   quoteFare:async input=>{calls.push({operation:'quote',input});return {ok:true,
    liveEnabled:false,quote:{id:quoteId,mode:input.fareMode,
-    subjectKind:input.subjectKind,subjectId:input.subjectId,totalPyg:15000}};},
+    subjectKind:input.subjectKind,subjectId:input.subjectId,totalPyg:15000,
+    ruleVersion:'PY_ASU_V1',expiresAt:'2026-10-23T03:20:00Z'}};},
   authorizePayment:async input=>{calls.push({operation:'authorize',input});return {
    ok:true,liveEnabled:false,paymentId};},
   transitionPayment:async input=>{calls.push({operation:'transition',input});return {
@@ -105,4 +106,50 @@ test('Auth, trusted route evidence, rate limit and live receipts fail closed',as
   loadPricingContext:async()=>({})});
  assert.equal((await limited({method:'POST',path:'/v1/staging/fares/quote',
   headers:headers(passenger),body:quote})).status,429);
+});
+
+test('G24 server-owned Cliente quote DTO: verified price, owner, TTL and no motorcycle passenger quote',async()=>{
+ const {gateway}=fixture();
+ const result=await gateway({method:'POST',path:'/v1/staging/fares/quote',
+  headers:headers(passenger),body:quote});
+ assert.equal(result.status,201);
+ assert.equal(result.body.ownerId,passenger);
+ assert.equal(result.body.quoteId,quoteId);
+ assert.equal(result.body.amountGs,15000);
+ assert.equal(result.body.fareMode,'MERCHANT_DELIVERY');
+ assert.equal(result.body.subjectKind,'MERCHANT_ORDER');
+ assert.equal(result.body.subjectId,subject);
+ assert.equal(result.body.expiresAt,Date.parse('2026-10-23T03:20:00Z'));
+ assert.equal(result.body.fareVersion,'PY_ASU_V1');
+ assert.equal(result.body.routingVerified,true);
+ assert.equal(result.body.livePaymentsEnabled,false);
+ assert.equal((await gateway({method:'POST',path:'/v1/staging/fares/quote',
+  headers:headers(passenger),body:{...quote,fareMode:'MOTO',subjectKind:'RIDE'}})).status,400);
+});
+
+test('G24 rejects quote receipts without provable server amount, version, ownership and expiry',async()=>{
+ const clean={id:quoteId,mode:'MERCHANT_DELIVERY',subjectId:subject,
+  subjectKind:'MERCHANT_ORDER',totalPyg:15000,
+  ruleVersion:'PY_ASU_V1',expiresAt:'2026-10-23T03:20:00Z'};
+ const common={projectRef:ref,now:()=>Date.parse('2026-10-23T03:15:00Z'),
+  verifyAccessToken:async()=>({id:passenger,is_anonymous:false,
+   email_confirmed_at:'2026-10-22T12:00:00Z'}),
+  authorizePassenger:async()=>true,allowRequest:()=>true,
+  loadPricingContext:async()=>({zoneTag:'ASUNCION_FIXTURE',distanceMeters:5000,
+   durationSeconds:900,tollsPyg:2000,trafficAware:true,fallbackUsed:false}),
+  authorizePayment:async()=>{},transitionPayment:async()=>{},loadPayment:async()=>{}};
+ for(const forged of [
+  {...clean,totalPyg:0},{...clean,totalPyg:1.5},
+  {...clean,subjectId:outsider},{...clean,subjectKind:'RIDE'},
+  {...clean,ruleVersion:''},{...clean,ruleVersion:'BAD RULE'},
+  {...clean,expiresAt:'2026-10-23T03:14:00Z'},
+  {...clean,expiresAt:'2026-10-23T05:15:00Z'}
+ ]){
+  const gateway=createQoreFinanceGateway({...common,
+   quoteFare:async()=>({ok:true,liveEnabled:false,quote:forged})});
+  const result=await gateway({method:'POST',path:'/v1/staging/fares/quote',
+   headers:headers(passenger),body:quote});
+  assert.equal(result.status,409,JSON.stringify(forged));
+  assert.doesNotMatch(JSON.stringify(result),/PY_ASU_V1|15000/);
+ }
 });
