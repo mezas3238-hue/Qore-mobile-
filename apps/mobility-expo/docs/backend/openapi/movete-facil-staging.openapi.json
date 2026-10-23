@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g11",
+    "version": "1.0.0-a05-qa",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado."
   },
   "servers": [
@@ -1450,6 +1450,292 @@
             }
           }
         ]
+      }
+    },
+    "/v1/staging/admin/vehicle-review-queue": {
+      "get": {
+        "operationId": "a05QaReadAdminKycRead",
+        "tags": [
+          "admin"
+        ],
+        "summary": "A05 QA-only, not deployed: server-authorized admin.kyc.read",
+        "description": "UNMOUNTED QA contract. Admin-exclusive JWT RBAC+verified provider-bound AAL2 MFA required; response fields are strictly whitelisted. Keyset pagination: max 50 per response, UNBOUNDED total records, no global cap. Continuations are signed base64url and session/scope-bound; data is eventually consistent, not an immutable MVCC snapshot. HTTP deployment forbidden without staging authorization.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-role": "admin",
+        "x-qore-permission": "admin.kyc.read",
+        "responses": {
+          "200": {
+            "description": "Trusted minimal response from server repository (once certified)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackofficeKycPageA05"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque base64url value supplied only as nextCursor by the previous page. No user/tenant scope accepted from query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{44,256}$",
+              "minLength": 44,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/v1/staging/admin/zones/overview": {
+      "get": {
+        "operationId": "a05QaReadAdminZonesRead",
+        "tags": [
+          "admin"
+        ],
+        "summary": "A05 QA-only, not deployed: server-authorized admin.zones.read",
+        "description": "UNMOUNTED QA contract. Admin-exclusive JWT RBAC+verified provider-bound AAL2 MFA required; response fields are strictly whitelisted. Keyset pagination: max 50 per response, UNBOUNDED total records, no global cap. Continuations are signed base64url and session/scope-bound; data is eventually consistent, not an immutable MVCC snapshot. HTTP deployment forbidden without staging authorization.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-role": "admin",
+        "x-qore-permission": "admin.zones.read",
+        "responses": {
+          "200": {
+            "description": "Trusted minimal response from server repository (once certified)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackofficeZonePageA05"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque base64url value supplied only as nextCursor by the previous page. No user/tenant scope accepted from query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{44,256}$",
+              "minLength": 44,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/v1/staging/admin/incidents/queue": {
+      "get": {
+        "operationId": "a05QaReadAdminIncidentsRead",
+        "tags": [
+          "admin"
+        ],
+        "summary": "A05 QA-only, not deployed: server-authorized admin.incidents.read",
+        "description": "UNMOUNTED QA contract. Admin-exclusive JWT RBAC+verified provider-bound AAL2 MFA required; response fields are strictly whitelisted. Keyset pagination: max 50 per response, UNBOUNDED total records, no global cap. Continuations are signed base64url and session/scope-bound; data is eventually consistent, not an immutable MVCC snapshot. HTTP deployment forbidden without staging authorization.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-role": "admin",
+        "x-qore-permission": "admin.incidents.read",
+        "responses": {
+          "200": {
+            "description": "Trusted minimal response from server repository (once certified)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackofficeIncidentPageA05"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque base64url value supplied only as nextCursor by the previous page. No user/tenant scope accepted from query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{44,256}$",
+              "minLength": 44,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/v1/staging/admin/audit/events": {
+      "get": {
+        "operationId": "a05QaReadAdminAuditRead",
+        "tags": [
+          "admin"
+        ],
+        "summary": "A05 QA-only, not deployed: server-authorized admin.audit.read",
+        "description": "UNMOUNTED QA contract. Admin-exclusive JWT RBAC+verified provider-bound AAL2 MFA required; response fields are strictly whitelisted. Keyset pagination: max 50 per response, UNBOUNDED total records, no global cap. Continuations are signed base64url and session/scope-bound; data is eventually consistent, not an immutable MVCC snapshot. HTTP deployment forbidden without staging authorization.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-role": "admin",
+        "x-qore-permission": "admin.audit.read",
+        "responses": {
+          "200": {
+            "description": "Trusted minimal response from server repository (once certified)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackofficeAuditPageA05"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque base64url value supplied only as nextCursor by the previous page. No user/tenant scope accepted from query.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{44,256}$",
+              "minLength": 44,
+              "maxLength": 256
+            }
+          }
+        ]
+      }
+    },
+    "/v1/staging/owner/finance/summary": {
+      "get": {
+        "operationId": "a05QaReadOwnerFinanceRead",
+        "tags": [
+          "finance"
+        ],
+        "summary": "A05 QA-only, not deployed: server-authorized owner.finance.read",
+        "description": "UNMOUNTED QA contract. Owner-exclusive JWT RBAC+verified provider-bound AAL2 MFA required; source ledger must be authoritatively RECONCILED; no inferred revenue or PII. HTTP deployment forbidden without staging authorization.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-role": "owner",
+        "x-qore-permission": "owner.finance.read",
+        "responses": {
+          "200": {
+            "description": "Trusted minimal response from server repository (once certified)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackofficeOwnerFinanceA05"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     }
   },
@@ -3091,6 +3377,633 @@
             "maxLength": 200,
             "pattern": "^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$",
             "description": "Opaque signed continuation, returned until all owned historical rows have been retrieved; no global maximum."
+          }
+        }
+      },
+      "BackofficeKycRowA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "vehicleId",
+          "vehicleKind",
+          "applicationStatus",
+          "licenseStatus",
+          "insuranceStatus",
+          "inspectionStatus",
+          "reviewRevision"
+        ],
+        "properties": {
+          "vehicleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "vehicleKind": {
+            "type": "string",
+            "enum": [
+              "AUTO",
+              "MOTO_DELIVERY"
+            ]
+          },
+          "applicationStatus": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "under_review",
+              "rejected",
+              "approved",
+              "expired"
+            ]
+          },
+          "licenseStatus": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "pending",
+              "valid",
+              "expired",
+              "rejected"
+            ]
+          },
+          "insuranceStatus": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "pending",
+              "valid",
+              "expired",
+              "rejected"
+            ]
+          },
+          "inspectionStatus": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "pending",
+              "valid",
+              "expired",
+              "rejected"
+            ]
+          },
+          "reviewRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "BackofficeZoneRowA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "zoneId",
+          "municipality",
+          "serviceKind",
+          "coverageStatus",
+          "eligibleByPolicy",
+          "onDutyVehicles",
+          "availabilityObservedAt"
+        ],
+        "properties": {
+          "zoneId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "municipality": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "AUTO_RIDE",
+              "AUTO_DELIVERY",
+              "MOTO_DELIVERY"
+            ]
+          },
+          "coverageStatus": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "PLANNED",
+              "PAUSED",
+              "CLOSED"
+            ]
+          },
+          "eligibleByPolicy": {
+            "type": "boolean"
+          },
+          "onDutyVehicles": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "availabilityObservedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "BackofficeIncidentRowA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "incidentId",
+          "category",
+          "severity",
+          "status",
+          "createdAt",
+          "revision"
+        ],
+        "properties": {
+          "incidentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "SAFETY",
+              "RIDE",
+              "DELIVERY",
+              "PAYMENT_SIMULATED",
+              "OTHER"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "TRIAGED",
+              "INVESTIGATING",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "BackofficeAuditRowA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "actorRole",
+          "operation",
+          "targetKind",
+          "outcome",
+          "occurredAt",
+          "revision"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "owner",
+              "security_operator"
+            ]
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "KYC_REVIEW",
+              "ZONE_POLICY_CHANGE",
+              "INCIDENT_TRIAGE",
+              "ACCOUNT_SUSPEND",
+              "ACCOUNT_RESTORE",
+              "TARIFF_PROPOSAL",
+              "COMMISSION_PROPOSAL"
+            ]
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "VEHICLE",
+              "ZONE",
+              "INCIDENT",
+              "ACCOUNT",
+              "TARIFF",
+              "COMMISSION"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "DENIED",
+              "CONFIRMED",
+              "ROLLED_BACK"
+            ]
+          },
+          "occurredAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "BackofficeKycPageA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "revision",
+          "generatedAt",
+          "expiresAt",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "admin.kyc.read"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BackofficeKycRowA05"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{44,256}$",
+                "minLength": 44,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackofficeZonePageA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "revision",
+          "generatedAt",
+          "expiresAt",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "admin.zones.read"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BackofficeZoneRowA05"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{44,256}$",
+                "minLength": 44,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackofficeIncidentPageA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "revision",
+          "generatedAt",
+          "expiresAt",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "admin.incidents.read"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BackofficeIncidentRowA05"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{44,256}$",
+                "minLength": 44,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackofficeAuditPageA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "revision",
+          "generatedAt",
+          "expiresAt",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "admin.audit.read"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BackofficeAuditRowA05"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{44,256}$",
+                "minLength": 44,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackofficeOwnerFinanceA05": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "ownerId",
+          "period",
+          "currency",
+          "revision",
+          "ledgerRevision",
+          "reconciliationStatus",
+          "generatedAt",
+          "expiresAt",
+          "totals"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "owner.finance.read"
+            ]
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "period": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "timezone"
+            ],
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date"
+              },
+              "to": {
+                "type": "string",
+                "format": "date"
+              },
+              "timezone": {
+                "type": "string",
+                "enum": [
+                  "America/Asuncion"
+                ]
+              }
+            }
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "PYG"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "ledgerRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": [
+              "RECONCILED"
+            ]
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "totals": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completedRides",
+              "completedDeliveries",
+              "completedMerchantOrders",
+              "grossCollectedGs",
+              "driverPayoutGs",
+              "platformCommissionGs",
+              "refundsGs",
+              "processingFeesGs",
+              "netPlatformGs"
+            ],
+            "properties": {
+              "completedRides": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "completedDeliveries": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "completedMerchantOrders": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "grossCollectedGs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "driverPayoutGs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "platformCommissionGs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "refundsGs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "processingFeesGs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              "netPlatformGs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": -1000000000000,
+                "maximum": 1000000000000
+              }
+            }
           }
         }
       }
