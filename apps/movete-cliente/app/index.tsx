@@ -6,7 +6,7 @@ export default function ClientHome(){
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Movete Fácil Cliente</Text>
-   <Text style={styles.heroSub}>Automóviles, envíos y comercios en una sola app de cliente. Versión de QA sin solicitudes reales.</Text>
+   <Text style={styles.heroSub}>Automóviles, envíos y comercios en una sola app de cliente. Las operaciones se habilitan solo con contratos y autorización certificados.</Text>
   </View>
   <Panel>
    <Text style={styles.heading}>Tu próximo viaje en automóvil</Text>

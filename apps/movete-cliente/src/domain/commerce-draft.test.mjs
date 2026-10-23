@@ -4,57 +4,113 @@ import {createCommerceDraftCart,projectCatalog} from './commerce-draft.mjs';
 const b1='123e4567-e89b-42d3-a456-426614174001';
 const b2='123e4567-e89b-42d3-a456-426614174002';
 const itemId='123e4567-e89b-42d3-a456-426614174003';
+const secondId='123e4567-e89b-42d3-a456-426614174005';
 const key='123e4567-e89b-42d3-a456-426614174004';
-test('carrito nunca calcula total ni inventa stock',()=>{
- const cart=createCommerceDraftCart();
- cart.selectBranch(b1);cart.setQuantity(itemId,2);
- const snap=cart.snapshot();
- assert.equal(snap.totalGs,null);
- assert.equal(snap.stock,'UNVERIFIED');
- assert.equal(snap.stage,'LOCAL_DRAFT');
+let clock=1000;
+const base={branchId:b1,version:'catalog-7',expiresAt:65000,items:[
+ {itemId,itemTag:'ARROZ_1KG',itemClass:'GENERAL',active:true,unitPricePyg:9900,stockUnits:8},
+ {itemId:secondId,itemTag:'JABON',itemClass:'GENERAL',active:true,unitPricePyg:4200,stockUnits:3}
+]};
+const cart=()=>createCommerceDraftCart({now:()=>clock});
+
+test('catálogo de comprador exige identidad, versión, vencimiento, precio y stock del servidor',()=>{
+ const projected=projectCatalog(base,{branchId:b1,now:clock});
+ assert.equal(projected.version,'catalog-7');assert.equal(projected.items[0].stockUnits,8);
+ for(const broken of [
+  {...base,branchId:b2},{...base,version:''},{...base,expiresAt:clock},
+  {...base,items:[{...base.items[0],unitPricePyg:99}]},
+  {...base,items:[{...base.items[0],stockUnits:-1}]},
+  {...base,items:[base.items[0],base.items[0]]},
+  {...base,items:[{...base.items[0],itemClass:'PRESCRIPTION'}]}
+ ])assert.equal(projectCatalog(broken,{branchId:b1,now:clock}),null);
 });
-test('al cambiar sucursal descarta items y evita mezcla de comercios',()=>{
- const cart=createCommerceDraftCart();
- cart.selectBranch(b1);cart.setQuantity(itemId,2);cart.selectBranch(b2);
- assert.equal(cart.snapshot().items.length,0);
- assert.equal(cart.snapshot().branchId,b2);
+
+test('carrito solo admite artículos y cantidades disponibles en catálogo vigente',()=>{
+ const c=cart();c.selectBranch(b1);
+ assert.equal(c.setQuantity(itemId,1).code,'CATALOG_REQUIRED');
+ assert.equal(c.acceptCatalog(base).ok,true);
+ assert.equal(c.setQuantity(itemId,9).code,'INSUFFICIENT_STOCK');
+ assert.equal(c.setQuantity('123e4567-e89b-42d3-a456-426614174099',1).code,'ITEM_UNAVAILABLE');
+ assert.equal(c.setQuantity(itemId,2).ok,true);
 });
-test('cantidades invalidas y más de 50 productos se bloquean',()=>{
- const cart=createCommerceDraftCart();cart.selectBranch(b1);
- assert.equal(cart.setQuantity(itemId,-1).ok,false);
- assert.equal(cart.setQuantity(itemId,1.5).ok,false);
- assert.equal(cart.setQuantity(itemId,1000).ok,false);
- for(let i=0;i<50;i++){
-  const id='123e4567-e89b-42d3-a456-'+(426614100000+i).toString();
-  assert.equal(cart.setQuantity(id,1).ok,true);
+
+test('cantidades inválidas y más de 50 líneas se bloquean con catálogo real',()=>{
+ const many={...base,version:'catalog-many',items:Array.from({length:51},(_,index)=>({
+  itemId:'123e4567-e89b-42d3-a456-'+String(426614100000+index),
+  itemTag:'ITEM_'+index,itemClass:'GENERAL',active:true,unitPricePyg:1000,stockUnits:10
+ }))};
+ const c=cart();c.selectBranch(b1);assert.equal(c.acceptCatalog(many).ok,true);
+ assert.equal(c.setQuantity(many.items[0].itemId,-1).code,'INVALID_ITEM');
+ assert.equal(c.setQuantity(many.items[0].itemId,1.5).code,'INVALID_ITEM');
+ assert.equal(c.setQuantity(many.items[0].itemId,1000).code,'INVALID_ITEM');
+ for(const item of many.items.slice(0,50))assert.equal(c.setQuantity(item.itemId,1).ok,true);
+ assert.equal(c.setQuantity(many.items[50].itemId,1).code,'CART_LIMIT');
+});
+
+test('subtotal es derivado del snapshot del servidor y nunca es total final',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,2);
+ const snap=c.snapshot();
+ assert.equal(snap.estimatedSubtotalPyg,19800);assert.equal(snap.finalTotalPyg,null);
+ assert.equal(snap.stock,'SERVER_SNAPSHOT');assert.equal(snap.catalogVersion,'catalog-7');
+ assert.equal(snap.items[0].unitPricePyg,9900);
+});
+
+test('cambiar sucursal descarta catálogo, líneas y precios anteriores',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,2);
+ c.selectBranch(b2);const snap=c.snapshot();
+ assert.equal(snap.branchId,b2);assert.equal(snap.items.length,0);
+ assert.equal(snap.catalogVersion,null);assert.equal(snap.estimatedSubtotalPyg,null);
+});
+
+test('misma versión con contenido distinto se rechaza y obliga a recargar',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,1);
+ const result=c.acceptCatalog({...base,items:[{...base.items[0],unitPricePyg:10900}]});
+ assert.equal(result.code,'CATALOG_REVISION_CONFLICT');
+ assert.equal(c.snapshot().items.length,0);assert.equal(c.snapshot().catalogVersion,null);
+});
+
+test('cambio de precio invalida el carrito antes del checkout',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,2);
+ const next={...base,version:'catalog-8',items:base.items.map(item=>
+  item.itemId===itemId?{...item,unitPricePyg:10900}:item)};
+ assert.equal(c.acceptCatalog(next).code,'PRICE_CHANGED');
+ assert.equal(c.snapshot().items.length,0);assert.equal(c.snapshot().catalogVersion,'catalog-8');
+});
+
+test('cualquier cambio de stock o baja de artículo invalida el carrito',()=>{
+ for(const [patch,code] of [[{stockUnits:7},'STOCK_CHANGED'],[{active:false},'ITEM_UNAVAILABLE']]){
+  const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,2);
+  const next={...base,version:'catalog-9',items:base.items.map(item=>
+   item.itemId===itemId?{...item,...patch}:item)};
+  assert.equal(c.acceptCatalog(next).code,code);assert.equal(c.snapshot().items.length,0);
  }
- assert.equal(cart.setQuantity('123e4567-e89b-42d3-a456-426614199999',1).code,'CART_LIMIT');
 });
-test('previsualiza DTO OpenAPI pero no autoriza compra',()=>{
- const cart=createCommerceDraftCart();cart.selectBranch(b1);cart.setQuantity(itemId,3);
- const preview=cart.previewRequest(key);
- assert.equal(preview.ok,true);assert.equal(preview.submissionAllowed,false);
- assert.equal(preview.body.items[0].quantity,3);
- assert.equal(Object.hasOwn(preview.body.items[0],'priceGs'),false);
+
+test('revisión nueva sin cambios en líneas elegidas conserva carrito y precondición',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,2);
+ const next={...base,version:'catalog-10',items:base.items.map(item=>
+  item.itemId===secondId?{...item,unitPricePyg:4500}:item)};
+ assert.equal(c.acceptCatalog(next).ok,true);
+ const preview=c.previewRequest(key);
+ assert.equal(preview.precondition.catalogVersion,'catalog-10');
+ assert.deepEqual(preview.body,{requestKey:key,branchId:b1,vehicleKind:'MOTO',
+  items:[{itemId,quantity:2}]});
+ assert.equal(preview.submissionAllowed,false);
+ assert.equal(preview.reason,'ATOMIC_ORDER_CONTRACT_PENDING');
+ assert.equal(Object.hasOwn(preview.body.items[0],'unitPricePyg'),false);
 });
-test('cambio de cuenta limpia carrito y no persiste estado',()=>{
- const cart=createCommerceDraftCart();cart.selectBranch(b1);cart.setQuantity(itemId,2);
- cart.clear();assert.equal(cart.snapshot().items.length,0);
- assert.equal(cart.snapshot().branchId,null);
+
+test('catálogo vencido oculta precios e impide preparar checkout',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,1);
+ clock=65000;
+ assert.equal(c.snapshot().stage,'CATALOG_EXPIRED');
+ assert.equal(c.snapshot().estimatedSubtotalPyg,null);
+ assert.equal(c.previewRequest(key).code,'CATALOG_EXPIRED');
+ clock=1000;
 });
-const catalog={branchId:b1,revision:1,expiresAt:65000,items:[
- {itemId,title:'Producto QA sin receta',category:'PHARMACY_OTC',available:true,priceGs:9900}]};
-test('catálogo sin expiración vigente o mal enlazado se oculta',()=>{
- assert.equal(projectCatalog(catalog,{branchId:b1,now:1000}).items[0].priceGs,9900);
- assert.equal(projectCatalog(catalog,{branchId:b2,now:1000}),null);
- assert.equal(projectCatalog(catalog,{branchId:b1,now:65000}),null);
-});
-test('precio inválido o categoria regulada no se visualiza',()=>{
- assert.equal(projectCatalog({...catalog,items:[{...catalog.items[0],priceGs:-1}]},{branchId:b1,now:1000}),null);
- assert.equal(projectCatalog({...catalog,items:[{...catalog.items[0],category:'PRESCRIPTION'}]},{branchId:b1,now:1000}),null);
-});
-test('items duplicados y sin stock señalado se rechazan',()=>{
- assert.equal(projectCatalog({...catalog,items:[catalog.items[0],catalog.items[0]]},{branchId:b1,now:1000}),null);
- const result=projectCatalog({...catalog,items:[{...catalog.items[0],available:false,priceGs:0}]},{branchId:b1,now:1000});
- assert.equal(result.items[0].priceGs,null);
+
+test('logout limpia sucursal, catálogo, líneas y subtotal',()=>{
+ const c=cart();c.selectBranch(b1);c.acceptCatalog(base);c.setQuantity(itemId,1);c.clear();
+ const snap=c.snapshot();assert.equal(snap.branchId,null);assert.equal(snap.items.length,0);
+ assert.equal(snap.catalogVersion,null);assert.equal(snap.estimatedSubtotalPyg,null);
 });

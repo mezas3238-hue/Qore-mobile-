@@ -2,7 +2,7 @@
 Fecha de inicio: 22-10-2026. Rama exclusiva `feature/mobility-cliente-admin-parallel-20261022`. PR [#8](https://github.com/mezas3238-hue/Qore-mobile-/pull/8) **DRAFT** (base PR #7). No merge, LIVE, VPS, pagos, push ni SQL remoto.
 
 ## Evidencia auditada
-- `apps/movete-cliente` existe: proyecto Expo 57, identificador `com.movetefacil.cliente`; rutas `index`, `envios`, `seguimiento`, `historial`. Son demos locales sin API ni sesiones reales.
+- `apps/movete-cliente` existe: proyecto Expo 57, identificador `com.movetefacil.cliente`; las vistas y dominios son fail-closed y están preparados para adaptadores reales, pero Auth y varios contratos de backend todavía no están certificados.
 - `apps/movete-admin` no existía al primer análisis. Se debe construir WEB independiente, no otra app móvil ni función de Driver.
 - `apps/mobility-expo/docs/backend/openapi/movete-facil-staging.openapi.json` declara 34 rutas, `version=1.0.0-g11`. Descripción explícita: STAGING, NO LIVE. La presencia del esquema no prueba disponibilidad en internet.
 - Contratos presentes: `POST /v1/staging/rider/trips/request`, `GET /v1/staging/rider/trips/{tripId}/status`, `POST /v1/staging/sender/deliveries/request`, `GET /v1/staging/deliveries/{deliveryId}/status`, `POST /v1/staging/fares/quote`, `POST /v1/staging/buyer/orders/request`, `GET /v1/staging/orders/{orderId}/status`, `POST /v1/staging/payments/authorize`. Request JSON definido pero la respuesta genérica Success **no proporciona contrato tipado de resultados**.
@@ -19,7 +19,7 @@ Fecha de inicio: 22-10-2026. Rama exclusiva `feature/mobility-cliente-admin-para
 | B05 Tarifas | Endpoint quote catalogado, no conectado | Respuesta G7 server-derived |
 | B06 Seguimiento | Pantalla vacía honesta | Snapshot versionado y frescura GPS |
 | B07 Envíos | Borrador AUTO/MOTO carga y validador; endpoint no activo | Respuestas y capacidad por zona |
-| B08 Comercios | Sin catálogo real | Contrato stock/listas del servidor |
+| B08 Comercios | Dominio productivo de carrito ligado a catálogo versionado; red bloqueada | Lectura buyer de catálogo + revalidación atómica y receipt tipado |
 | B09 Pagos/historial/soporte | Sin ledger ni historia real | APIs de recibos y casos |
 | B10 QA | `npm run check` / web export por ejecutar tras commits | CI de app separada |
 | B11 Admin WEB | Sin proyecto al inicio | Auth admin + permisos acción backend |
@@ -31,7 +31,7 @@ Fecha de inicio: 22-10-2026. Rama exclusiva `feature/mobility-cliente-admin-para
 2. **RIDER-STATUS**: respuesta tipada con `tripId`, `revision` monotónica, `state`, `assigned` persistido y `locationObservedAt`; sin placa, GPS ni ETA antes de aceptación, después de expiración o cancelación.
 3. **RIDER-CANCEL**: POST idempotente, autorización de propietario, estado y revisión persistidos, 409 para carreras; no aparece aún un contrato confirmado de cancelación independiente.
 4. **FARES**: esquema de respuesta Gs entero, `quoteId`, `expiresAt`, `fareVersion`, `routeEvidence`; precio solo servidor; 409/410 para desactualizado.
-5. **COMMERCE**: endpoints de sucursales/catálogo/stock y respuesta tipada de pedido con revisiones; no mostrar stock inventado ni medicamentos de receta.
+5. **COMMERCE**: lectura autenticada de sucursales/catálogo/stock con `itemId`, versión y expiración; pedido con precondición de catálogo/stock revalidada atómicamente y respuesta tipada. El OpenAPI actual solo define upsert Merchant, request Buyer sin versión y `Success` genérico; eso no basta para compra real. No mostrar stock inventado ni medicamentos de receta.
 6. **HISTORY/SUPPORT**: paginación filtrada por usuario, receipt ledger y reporte de incidentes; nunca PII ajena.
 7. **ADMIN**: sesión web/MFA y permisos por acción, GET cola vehículos/doc metadatos seguros, URLs temporales de evidencia, POST decisión idempotente y auditada, zonas, incidentes y reportes; sin `service_role` en browser.
 
@@ -236,4 +236,11 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - La superficie no incorpora PII de destinatario: `recipient`, `deliveryId`, `courier` y `gps` quedan `null`; cero llamadas de red.
 - QA local: **208/208 Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS. Cuatro pruebas nuevas.
 - Documento: [SAFE_DELIVERY_UI_JOURNEY_HARNESS_2026-10-23.md](./SAFE_DELIVERY_UI_JOURNEY_HARNESS_2026-10-23.md).
-- Próxima prioridad realizable: B-04 comercios sobre catálogo/stock versionado y checkout DEMO, sin crear API ni compra LIVE.
+- B-04 deja de definirse como “checkout DEMO”: el objetivo es checkout productivo fail-closed. El dominio Cliente exige snapshot versionado, precio/stock del servidor e invalida cambios; el envío real queda bloqueado hasta que A certifique lectura Buyer, precondición atómica y receipt tipado.
+
+## B27 — B-04 guardas productivas de Comercio (23-10-2026)
+- `commerce-draft.mjs` dejó de ser un carrito sintético libre: toda línea depende de un snapshot vigente del servidor con `branchId`, `itemId`, versión, expiración, `unitPricePyg`, `stockUnits`, clase y actividad.
+- El subtotal visible deriva exclusivamente de ese snapshot; `finalTotalPyg` permanece `null` porque total, tasas, reserva de stock y autorización pertenecen al backend.
+- Cambiar sucursal elimina catálogo y líneas. Reutilizar una versión con contenido distinto falla por conflicto. Cualquier precio, stock o baja de un artículo elegido invalida el carrito antes de checkout.
+- El body mantiene exactamente el `MerchantOrderRequest` actual; la versión queda como precondición separada y `submissionAllowed=false` hasta disponer de semántica atómica certificada. No se inventó ruta ni campo de API.
+- QA local: **211/211 Cliente PASS**, TypeScript y Expo web export SUCCESS; falta registrar SHA y GitHub Actions del cierre.

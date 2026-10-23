@@ -45,5 +45,5 @@ Nuevo `safe-delivery-ui-harness.mjs`, que usa `validateDeliveryForm`, `prepareLo
 - No existe receipt/status de entrega tipado y certificado por A; no se crea gateway de estado ficticio.
 - No es prueba Android táctil ni autoriza datos de destinatarios reales.
 - No certifica capacidad de zona, precio, repartidor, entrega, firma, foto, notificación ni prueba de recepción.
-- Siguiente trabajo B independiente: B-04 comercios, restringido a catálogo/stock versionado y checkout DEMO sin compra live.
+- Siguiente trabajo B independiente: B-04 comercios, orientado a checkout productivo con catálogo/stock versionado y bloqueo seguro hasta contar con revalidación atómica real.
 

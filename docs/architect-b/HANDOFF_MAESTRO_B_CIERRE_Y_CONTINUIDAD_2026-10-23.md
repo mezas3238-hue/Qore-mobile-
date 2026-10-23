@@ -174,7 +174,7 @@ A-13. Completar auditoría G30 de tarifas/comisiones/zonas/comercios/accesos y r
 B-01. Auditoría de seguridad de mutaciones **en todo ciclo**: si rota JWT entre prepare/submit/ACK, limpiar formulario privado y bloquear envío obsoleto; test same subject / new token / logout.
 B-02. Armar harness de UI tests e2e sintético de pasos de viaje AUTO -> preparación -> visualización segura -> borrador descartable -> pendiente de servidor. No inventar tramo dispatch.
 B-03. Análogo en envíos AUTO/MOTO: clasificación legal, pesos/dimensiones, categoria, estado de error/offline, bloquear exposición de destinatarios, persistencia solo local temporal.
-B-04. Comercios: derivar draft de catálogo/stock/version servidor, checkout DEMO, invalidaciones por cambios de price/stock, error de sucursal y sin compra live. Elegir campo mínimo del OpenAPI actual; no crear una API.
+B-04. Comercios: dominio de checkout productivo ligado a catálogo/stock/version servidor, invalidaciones por cambios de precio/stock/sucursal y fail-closed hasta revalidación atómica. No crear rutas o campos inexistentes ni sustituir la integración real por una demo.
 B-05. Status envíos: estudiar contrato exacto A; si sigue respuesta genérica no mostrar prueba de entrega/ubicación/estado como autoritativo. Crear gateway tipado sólo cuando DTO real disponible o adaptador QA OFF.
 B-06. Historial a escala: cursor y FlatList ya completados; falta política de retención en memoria/windowed cache con desplazamiento y carga reversa sin limitar registros globales. Test 100k+ registros sintéticos, cambio de cuentas y memory pressure.
 B-07. Accesibilidad real RN: lector de pantalla, fuentes grandes, safe area, teclado, contraste, foco de modal, errores con accessibilityRole=alert, Android emulador; sin datos reales.
@@ -298,4 +298,15 @@ El commit B25 quedó certificado en GitHub como `916db657c56c`: los tres workflo
 - QA local: **208/208 tests Cliente**, TypeScript y Expo export web SUCCESS. Verificar SHA/CI GitHub del commit B26.
 - Evidencia: `docs/architect-b/SAFE_DELIVERY_UI_JOURNEY_HARNESS_2026-10-23.md`.
 
-La siguiente prioridad ejecutable pasa a **B-04: recorrido seguro de comercios**, usando únicamente catálogo/stock versionado ya validado y checkout DEMO sin compra LIVE.
+## B27 — B-04 completado hasta el límite real del contrato
+
+- El carrito ahora deriva cada línea de un catálogo vigente del servidor y utiliza los nombres de precio, stock y clase ya presentes en `CatalogItem` del OpenAPI.
+- Requiere `branchId`, `itemId`, versión opaca y expiración; bloquea artículo ajeno/inactivo, cantidad mayor al stock, catálogo vencido y contenido distinto bajo la misma versión.
+- Cualquier cambio de precio o stock de una línea elegida invalida el carrito. Cambiar sucursal elimina líneas, versión y subtotal anteriores.
+- El subtotal es informativo y deriva del servidor; el total final, tasas, reserva y compra no se calculan en el móvil.
+- El `MerchantOrderRequest` se conserva sin campos inventados. La precondición de versión queda separada y no puede enviarse todavía: el OpenAPI no ofrece lectura Buyer de catálogo, revalidación atómica ni receipt de pedido tipado.
+- La pantalla ya no se presenta como demo: explica el gate de integración real y nunca muestra productos ficticios.
+- QA local del bloque: **211/211 tests Cliente**, TypeScript y Expo web export SUCCESS. Consultar el SHA/CI del commit B27 antes de declarar GitHub verde.
+- Evidencia: `docs/architect-b/COMMERCE_PRODUCTION_CHECKOUT_GUARD_2026-10-23.md`.
+
+La siguiente prioridad independiente pasa a **B-05: estudiar el status de envíos**. Si la respuesta de A continúa genérica, registrar el bloqueo exacto y seguir con B-06 sin representar entrega, ubicación o estado no autoritativo.
