@@ -5,6 +5,7 @@ One transaction must win across AUTO and DELIVERY; never two assignments.
 """
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from time import sleep
 import os
 import psycopg
 
@@ -24,6 +25,13 @@ CARGO_ACCEPT_KEY="b6360000-0000-4636-8636-000000000006"
 CANCEL_KEY="b6360000-0000-4636-8636-000000000007"
 AUTO_OFFER_KEY="b6360000-0000-4636-8636-000000000008"
 CARGO_OFFER_KEY="b6360000-0000-4636-8636-000000000009"
+P_RIDE_2="b6360000-0000-4636-8636-000000000010"
+P_CARGO_2="b6360000-0000-4636-8636-000000000011"
+AUTO_REQ_2="b6360000-0000-4636-8636-000000000012"
+CARGO_REQ_2="b6360000-0000-4636-8636-000000000013"
+AUTO_OFFER_KEY_2="b6360000-0000-4636-8636-000000000014"
+CARGO_OFFER_KEY_2="b6360000-0000-4636-8636-000000000015"
+CANCEL_KEY_2="b6360000-0000-4636-8636-000000000016"
 def conn():
     return psycopg.connect(connect_timeout=15)
 
@@ -77,11 +85,13 @@ def prepare():
             assert c.fetchone()[0] == 0, "Previous AUTO slot did not release"
     return trip,delivery,offer_auto,offer_cargo
 
-def attempt(kind,job,barrier):
+def attempt(kind,job,barrier,delay_auto=0):
     with conn() as db:
         with db.cursor() as c:
             c.execute("SET LOCAL ROLE service_role")
             barrier.wait(timeout=20)
+            if kind=='AUTO_RIDE' and delay_auto:
+                sleep(delay_auto)
             try:
                 if kind=="AUTO_RIDE":
                     c.execute("""SELECT public.mobility_stage_auto_demo_accept_offer(
@@ -119,6 +129,40 @@ def verify(trip,delivery,results):
     print("G36 PASS: two independent AUTO/cargo accepts raced; "
           "exactly one durable slot, no dual-service Driver",results,flush=True)
 
+def prepare_reverse(trip,delivery,previous_winner):
+    with conn() as db:
+        with db.cursor() as c:
+            c.execute("INSERT INTO auth.users(id) VALUES (%s::uuid),(%s::uuid) ON CONFLICT DO NOTHING",(P_RIDE_2,P_CARGO_2))
+            c.execute("SET LOCAL ROLE service_role")
+            if previous_winner=="AUTO_RIDE":
+                c.execute("""SELECT public.mobility_stage_auto_demo_transition(
+                  %s::uuid,%s::uuid,'cancelled',%s::uuid)""",
+                  (trip,P_RIDE,CANCEL_KEY_2))
+            else:
+                c.execute("""SELECT public.mobility_stage_delivery_transition(
+                  %s::uuid,%s::uuid,'cancel',%s::uuid)""",
+                  (delivery,P_CARGO,CANCEL_KEY_2))
+            c.execute("""SELECT public.mobility_stage_auto_demo_request(
+              %s::uuid,%s::uuid,'CENTRO','SAN_LORENZO','economico')""",
+              (P_RIDE_2,AUTO_REQ_2))
+            next_trip=c.fetchone()[0]
+            c.execute("""SELECT public.mobility_stage_delivery_request(
+              %s::uuid,%s::uuid,'AUTO','PARCEL',310,10,10,10,
+              'CENTRO','LAMBRARE',false)""",(P_CARGO_2,CARGO_REQ_2))
+            next_delivery=c.fetchone()[0]
+            c.execute("""SELECT public.mobility_stage_auto_demo_offer(
+              %s::uuid,%s::uuid,%s::uuid,%s::uuid,30)""",
+              (next_trip,DRIVER,VEHICLE,AUTO_OFFER_KEY_2))
+            next_auto_offer=c.fetchone()[0]
+            c.execute("""SELECT public.mobility_stage_delivery_offer(
+              %s::uuid,%s::uuid,%s::uuid,%s::uuid,45)""",
+              (next_delivery,DRIVER,VEHICLE,CARGO_OFFER_KEY_2))
+            next_delivery_offer=c.fetchone()[0]
+            c.execute("RESET ROLE")
+            c.execute("SELECT count(*) FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s::uuid",(DRIVER,))
+            assert c.fetchone()[0]==0,"G36 prior accepted service was not released"
+    return next_trip,next_delivery,next_auto_offer,next_delivery_offer
+
 if __name__=="__main__":
     trip,delivery,offer_auto,offer_cargo=prepare()
     barrier=Barrier(2)
@@ -127,3 +171,17 @@ if __name__=="__main__":
         future_cargo=ex.submit(attempt,"DELIVERY",offer_cargo,barrier)
         outcomes=[future_auto.result(timeout=35),future_cargo.result(timeout=35)]
     verify(trip,delivery,outcomes)
+    # Release the first winner. Then favor courier acceptance so the
+    # opposite race order must also enforce the exact same single slot.
+    reverse=prepare_reverse(trip,delivery,
+                            [x[0] for x in outcomes if x[1]=="success"][0])
+    next_trip,next_delivery,offer_a,offer_d=reverse
+    barrier2=Barrier(2)
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        future_auto=ex.submit(attempt,"AUTO_RIDE",offer_a,barrier2,.20)
+        future_cargo=ex.submit(attempt,"DELIVERY",offer_d,barrier2)
+        opposite=[future_auto.result(timeout=35),future_cargo.result(timeout=35)]
+    verify(next_trip,next_delivery,opposite)
+    assert [x[0] for x in opposite if x[1]=="success"]==["DELIVERY"],opposite
+    print("G36 PASS: reversed order DELIVERY wins, AUTO denied, "
+          "one durable Driver slot",flush=True)
