@@ -442,3 +442,25 @@ test('HTTP: G10 delivery offer routes reach only recipient offer gateway',async 
  assert.equal(calls.length,1);
  assert.equal(calls[0].path,'/v1/staging/courier/delivery-offers/'+offerA);
 });
+
+test('G25 HTTP: passenger cancellation is bound to JWT, atomic state and cannot set fees',async t=>{
+ const {state,server}=fixture(),base=await listenQoreRadarLoopback(server);
+ t.after(()=>close(server));
+ const path='/v1/staging/rider/trips/'+tripId+'/cancel';
+ assert.equal((await client(base,path,{id:driverA,method:'POST',
+  body:{requestKey:keyA}})).status,403);
+ assert.equal((await client(base,path,{id:riderId,method:'POST',
+  body:{requestKey:keyA,amountGs:0}})).status,400);
+ const result=await client(base,path,{id:riderId,method:'POST',
+  body:{requestKey:keyA}});
+ assert.equal(result.status,200);
+ assert.equal(result.body.event,'cancel');
+ assert.equal(result.body.commercialRidesEnabled,false);
+ assert.equal(state.trip.status,'cancelled');
+ const old=await client(base,path,{id:riderId,method:'POST',
+  body:{requestKey:keyB}});
+ assert.equal(old.status,409);
+ assert.equal((await client(base,riderPath)).body.state,'cancelled');
+ assert.equal((await client(base,path+'?actorId='+driverA,{id:riderId,
+  method:'POST',body:{requestKey:keyA}})).status,404);
+});
