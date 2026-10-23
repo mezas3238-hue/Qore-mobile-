@@ -63,7 +63,6 @@ BEGIN
  THEN RAISE EXCEPTION 'G29 private KYC RPC permission leak'; END IF;
 END $priv$;
 
-CREATE TEMP TABLE g29_seen(id uuid PRIMARY KEY) ON COMMIT DROP;
 SET LOCAL ROLE service_role;
 DO $pages$
 DECLARE
@@ -71,6 +70,7 @@ DECLARE
  anchor bigint:=floor(extract(epoch from clock_timestamp())*1000)::bigint;
  cur text:=NULL;
  r jsonb; itm jsonb; pages integer:=0; total integer:=0; last text;
+ seen uuid[]:=ARRAY[]::uuid[];
 BEGIN
  LOOP
   r:=public.mobility_stage_g29_admin_kyc_page(actor,anchor,cur,50);
@@ -86,7 +86,9 @@ BEGIN
    OR itm->>'inspectionStatus'<>'missing'
    OR itm->>'reviewRevision'<>'1'
    THEN RAISE EXCEPTION 'G29 fabricated KYC state or unsafe DTO'; END IF;
-   INSERT INTO g29_seen VALUES ((itm->>'vehicleId')::uuid);
+   IF (itm->>'vehicleId')::uuid=ANY(seen) THEN
+    RAISE EXCEPTION 'G29 duplicate vehicle across pages'; END IF;
+   seen:=array_append(seen,(itm->>'vehicleId')::uuid);
    total:=total+1;
    last:=replace(itm->>'vehicleId','-','');
    IF cur IS NOT NULL AND last>=cur
@@ -100,7 +102,7 @@ BEGIN
   ELSE EXIT; END IF;
   IF pages>10 THEN RAISE EXCEPTION 'G29 pagination loop'; END IF;
  END LOOP;
- IF total<>121 OR pages<>3 OR (SELECT count(*) FROM g29_seen)<>121
+ IF total<>121 OR pages<>3 OR cardinality(seen)<>121
  THEN RAISE EXCEPTION 'G29 incomplete KYC history %, % pages',total,pages; END IF;
  RAISE NOTICE 'G29 KYC real SQL: % rows, % pages, no duplicates, MOTO passenger excluded',
    total,pages;
