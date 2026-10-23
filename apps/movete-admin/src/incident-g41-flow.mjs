@@ -15,6 +15,7 @@ export function createGlobalTriageFlow({gateway,getActor,now=()=>Date.now()}={})
   anchors:[null],seen:new Set(),error:null};
  const clear=()=>{
   epoch++;busy=false;
+  gateway?.cancelPending?.();
   state={page:null,pageNumber:0,severityFilter:null,statusFilter:null,
    anchors:[null],seen:new Set(),error:null};
  };

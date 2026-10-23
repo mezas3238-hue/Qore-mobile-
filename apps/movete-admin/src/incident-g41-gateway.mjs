@@ -81,19 +81,27 @@ export function createIncidentTriageG41Gateway({
  // G41 OpenAPI: x-qore-runtime-wired=false, nunca conectar por simple contrato.
  const ready=enabled===true&&contractCertified===true&&stagingRuntimeVerified===true
   &&host!==null&&host===pin&&typeof getSession==='function'&&typeof fetchImpl==='function';
- let busy=false;
+ let busy=false,epoch=0,activeController=null;
+ function cancelPending(){
+  // Revocación local en logout/rotación; nunca autoriza ni reintenta HTTP.
+  epoch++;busy=false;
+  if(activeController)activeController.abort();
+  activeController=null;
+ }
  async function fetchPage({severityFilter=null,statusFilter=null,cursor=null}={}){
   if(!ready)return fail('G41_RUNTIME_NOT_CERTIFIED');
   if(!allow(severityFilter,severities)||!allow(statusFilter,statuses)
    ||!(cursor===null||(typeof cursor==='string'&&CURSOR.test(cursor))))
    return fail('INVALID_FILTER_OR_CURSOR');
   if(busy)return fail('TRIAGE_READ_IN_FLIGHT');
-  busy=true;let timer=null;
+  const started=++epoch;busy=true;let timer=null;
   try{
    let first;
    try{first=await getSession();}catch{return fail('AUTH_UNAVAILABLE');}
+   if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(!validSession(first,now()))return fail('FORBIDDEN');
-   const ctl=new AbortController(),ms=Number.isSafeInteger(timeoutMs)
+   const ctl=new AbortController();activeController=ctl;
+   const ms=Number.isSafeInteger(timeoutMs)
     &&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
    const deadline=now()+ms;
    timer=setTimeout(()=>ctl.abort(),ms);
@@ -110,11 +118,13 @@ export function createIncidentTriageG41Gateway({
     headers:{Authorization:'Bearer '+first.token,Accept:'application/json'},
     signal:ctl.signal
    });
+   if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!response||response.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(response.status===401||response.status===403){
     let after;
     try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+    if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
     if(timedOut())return fail('NETWORK_OR_TIMEOUT');
     if(!validSession(after,now())||!same(first,after))return fail('STALE_SESSION_RESPONSE');
     onSessionInvalid();
@@ -131,6 +141,7 @@ export function createIncidentTriageG41Gateway({
    const size=response.headers?.get?.('content-length');
    if(size!=null&&(!/^\d+$/.test(size)||Number(size)>limit))return fail('RESPONSE_TOO_LARGE');
    const parsed=await readBoundedResponseText(response,{limit,signal:ctl.signal,timedOut});
+   if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(!parsed.ok)return fail(parsed.code);
    let json;
    try{json=JSON.parse(parsed.text);}catch{return fail('BAD_SERVER_RESPONSE');}
@@ -138,11 +149,14 @@ export function createIncidentTriageG41Gateway({
    if(!page)return fail('INVALID_G41_PAGE');
    let after;
    try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+   if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!validSession(after,now())||!same(first,after))return fail('STALE_SESSION_RESPONSE');
    return Object.freeze({ok:true,page,status:200});
-  }catch{return fail('NETWORK_OR_TIMEOUT');}
-  finally{if(timer!==null)clearTimeout(timer);busy=false;}
+  }catch{return fail(started!==epoch?'STALE_SESSION_RESPONSE':'NETWORK_OR_TIMEOUT');}
+  finally{if(timer!==null)clearTimeout(timer);
+   if(started===epoch){busy=false;activeController=null;}
+  }
  }
- return Object.freeze({isConfigured:()=>Boolean(ready),fetchPage});
+ return Object.freeze({isConfigured:()=>Boolean(ready),fetchPage,cancelPending});
 }

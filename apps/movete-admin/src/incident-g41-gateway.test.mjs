@@ -131,3 +131,40 @@ test('GET siguiente usa cursor firmado por A con contexto de filtro',async()=>{
  assert.equal((await g.fetchPage({statusFilter:'OPEN',cursor:cur})).ok,true);
  assert.equal(url,'https://staging.example.invalid/v1/staging/admin/incidents/triage-queue?status=OPEN&cursor='+cur);
 });
+
+test('gateway G41 cancela el fetch viejo y permite GET de sesión nueva',async()=>{
+ let releaseOld,firstSignal,hits=0;
+ const hanging=new Promise(resolve=>{releaseOld=resolve;});
+ const g=createIncidentTriageG41Gateway({...config,
+  fetchImpl:async(_url,opts)=>{
+   hits++;
+   if(hits===1){firstSignal=opts.signal;return hanging;}
+   return response(data());
+  }
+ });
+ const old=g.fetchPage();
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(hits,1);
+ assert.equal((await g.fetchPage()).code,'TRIAGE_READ_IN_FLIGHT');
+ g.cancelPending();
+ assert.equal(firstSignal.aborted,true);
+ const current=await g.fetchPage();
+ assert.equal(current.ok,true);
+ assert.equal(hits,2);
+ releaseOld(response(data()));
+ assert.equal((await old).code,'STALE_SESSION_RESPONSE');
+ const subsequent=await g.fetchPage();
+ assert.equal(subsequent.ok,true);
+});
+test('G41 revocado mientras Auth espera no realiza GET tardío',async()=>{
+ let release,hits=0;
+ const waiting=new Promise(resolve=>{release=resolve;});
+ const g=createIncidentTriageG41Gateway({...config,
+  getSession:()=>waiting,
+  fetchImpl:async()=>{hits++;return response(data());}
+ });
+ const task=g.fetchPage();
+ g.cancelPending();release(actor());
+ assert.equal((await task).code,'STALE_SESSION_RESPONSE');
+ assert.equal(hits,0);
+});
