@@ -51,7 +51,9 @@ function PrivateChat({client,view,serviceId,serviceKind,
   try{
    const result=await client.openChat({serviceId,serviceKind,older,
     expectedConversationId:conversationId});
-   if(!result.ok)setFeedback('No se pudo verificar la conversación. Es posible que la asignación haya terminado o tu sesión haya cambiado.');
+   if(!result.ok)setFeedback(result.code==='INVALID_CHAT_PAGE'
+    ?'La conversación cambió o fue reasignada. Volvé a Mis conversaciones y actualizá la bandeja.'
+    :'No se pudo verificar la conversación. Es posible que la asignación haya terminado o tu sesión haya cambiado.');
   }finally{busy.current=false;}
  };
  const send=async(retry=false)=>{

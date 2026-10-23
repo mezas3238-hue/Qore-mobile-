@@ -1110,3 +1110,47 @@ test('inbox privada deja de verse al rotar JWT aun con el mismo titular',async()
  await api.refreshSession();
  assert.equal(api.snapshot().chatInbox.pageNumber,0);
 });
+
+test('revocación de chat purga notificaciones privadas e impide reaparición al reactivar',async()=>{
+ let enabled=true;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  chatGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>enabled,
+   readMessages:async()=>({ok:false,code:'QA'}),
+   sendMessage:async()=>({ok:false,code:'QA'})}
+ });
+ await api.refreshSession();
+ const hint={eventId:key,ownerId:a,serviceId:chatService,
+  serviceKind:'RIDE',kind:'CHAT_ACTIVITY',revision:1,
+  issuedAt:now-500,expiresAt:now+60000,unreadCount:3,
+  contentIncluded:false};
+ assert.equal(api.acceptChatPushHint(hint),true);
+ assert.equal(api.snapshot().chatHints.length,1);
+ enabled=false;
+ assert.equal(api.snapshot().chatHints.length,0);
+ enabled=true;
+ assert.equal(api.snapshot().chatHints.length,0);
+ assert.equal(api.acceptChatPushHint({...hint,revision:2,eventId:chatMessage}),true);
+ assert.equal(api.snapshot().chatHints.length,1);
+});
+test('hint rechazado durante revocación purga caché anterior aun sin snapshot',async()=>{
+ let enabled=true;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  chatGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>enabled,
+   readMessages:async()=>({ok:false,code:'QA'}),
+   sendMessage:async()=>({ok:false,code:'QA'})}
+ });
+ await api.refreshSession();
+ const hint={eventId:key,ownerId:a,serviceId:chatService,
+  serviceKind:'DELIVERY',kind:'CHAT_ACTIVITY',revision:1,
+  issuedAt:now-500,expiresAt:now+60000,unreadCount:2,
+  contentIncluded:false};
+ assert.equal(api.acceptChatPushHint(hint),true);
+ enabled=false;
+ assert.equal(api.acceptChatPushHint(hint),false);
+ enabled=true;
+ assert.equal(api.snapshot().chatHints.length,0);
+});

@@ -305,6 +305,10 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  }
  function snapshot(){
   const user=actor();
+  // Revocación de la certificación de chat invalida también hints
+  // previamente aceptados, no solo la conversación. No reanimar avisos.
+  const chatCertified=chatFlow.isConfigured();
+  if(!chatCertified)chatHintStore.clear();
   if(!user){
    clearPrivate();
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
@@ -330,7 +334,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
    commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot(),
    chat:chatFlow.snapshot(),chatInbox:chatInbox.snapshot(),
-   chatHints:chatFlow.isConfigured()?chatHintStore.snapshot(user.subject):Object.freeze([])
+   chatHints:chatCertified?chatHintStore.snapshot(user.subject):Object.freeze([])
   });
  }
  async function signOut(){
@@ -361,7 +365,9 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   // El hint Push no contiene texto del remitente ni concede acceso al hilo.
   acceptChatPushHint:dto=>{
    const user=actor();
-   if(!user||!chatFlow.isConfigured())return false;
+   if(!user||!chatFlow.isConfigured()){
+    chatHintStore.clear();return false;
+   }
    const result=chatHintStore.accept(dto,user.subject);
    if(result.ok===true)notify();
    return result.ok===true;
