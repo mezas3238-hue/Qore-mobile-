@@ -236,8 +236,14 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     clear();state.error=code;return fail(code);
    }
    const ack=result.data;
-   if(currentHeader.expiresAt<=now()||!validAck(ack,currentHeader,body,requestKey,now())){
+   if(!validAck(ack,currentHeader,body,requestKey,now())){
     clear();state.error='INVALID_CHAT_ACK';return fail('INVALID_CHAT_ACK');
+   }
+   if(currentHeader.expiresAt<=now()){
+    // ACK tardío: no afirmar entrega con permiso vencido. Preservar
+    // body y requestKey para reconciliar con el MISMO servidor/hilo.
+    state.error='CHAT_AUTHORIZATION_EXPIRED';
+    return fail('CHAT_AUTHORIZATION_EXPIRED');
    }
    const accepted=Object.freeze({messageId:ack.messageId,
     senderRole:ack.senderRole,body:ack.body,createdAt:ack.createdAt,

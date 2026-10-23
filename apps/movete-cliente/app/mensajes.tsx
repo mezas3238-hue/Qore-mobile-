@@ -60,7 +60,7 @@ function PrivateChat({client,view,serviceId,serviceKind}:{
    if(result.ok){
     setDraft('');setFeedback('Mensaje almacenado por el servidor. No confirma que el destinatario lo haya leído.');
    }else if(['CHAT_NETWORK_OR_TIMEOUT','RATE_LIMITED','SERVICE_UNAVAILABLE',
-      'PENDING_MESSAGE_RECONCILIATION'].includes(result.code??'')){
+      'PENDING_MESSAGE_RECONCILIATION','CHAT_AUTHORIZATION_EXPIRED'].includes(result.code??'')){
     setFeedback('La respuesta es incierta. No se generará otra clave para este mensaje. Reintentá la misma solicitud.');
    }else if(result.code==='INVALID_MESSAGE')
     setFeedback('Mensaje no permitido: evitá números telefónicos, correos, enlaces y caracteres de control.');

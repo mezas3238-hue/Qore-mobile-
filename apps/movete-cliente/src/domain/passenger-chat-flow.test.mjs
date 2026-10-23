@@ -392,3 +392,47 @@ test('colisión del mismo messageId con revisión/timestamp diferente no es ACK'
   assert.equal(flow.snapshot().messages.length,0);
  }
 });
+
+test('ACK tardío al vencer permiso conserva requestKey y exige reconciliación',async()=>{
+ let clock=now,attempts=0,reads=0;
+ const keys=[];
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async()=>{
+    reads++;
+    return {ok:true,data:{...page(),generatedAt:clock-1000,
+     expiresAt:clock+60000,messages:[]}};
+   },
+   sendMessage:async args=>{
+    attempts++;keys.push(args.requestKey);
+    if(attempts===1)clock+=60001;
+    return {ok:true,data:{...ack(),createdAt:clock-100}};
+   }
+  })
+ });
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_AUTHORIZATION_EXPIRED');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,true);
+ assert.equal((await flow.retryPending()).ok,true);
+ assert.deepEqual(keys,[key,key]);
+ assert.equal(reads,2);
+ assert.equal(flow.snapshot().messages.length,1);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
+test('ACK tardío con datos cruzados no conserva permiso ni mensaje privado',async()=>{
+ let clock=now;
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({sendMessage:async()=>{
+   clock+=60001;
+   return {ok:true,data:{...ack(),conversationId:id(99),
+    createdAt:clock-100}};
+  }})
+ });
+ await flow.open({serviceId,serviceKind:'RIDE'});
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'INVALID_CHAT_ACK');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
