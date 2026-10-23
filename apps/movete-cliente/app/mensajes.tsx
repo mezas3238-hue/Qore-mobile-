@@ -58,7 +58,7 @@ function PrivateChat({client,view,serviceId,serviceKind}:{
  };
  useEffect(()=>{setDraft('');setFeedback('');},[serviceId,serviceKind]);
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
-  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
+  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>Mensajes del servicio</Text>
    <Text style={styles.heroSub}>Comunicación privada con el conductor o repartidor asignado.</Text>
