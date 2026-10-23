@@ -23,7 +23,7 @@ test('G28 keeps other scopes fail-closed until real sources are certified',async
  const repo=createQoreBackofficeSqlReadRepository({rpc:async()=>{
   called++;return {data:{revision:0,items:[],hasMore:false},error:null};
  }});
- for(const scope of ['admin.kyc.read','admin.zones.read','admin.audit.read',
+ for(const scope of ['admin.zones.read','admin.audit.read',
   'owner.finance.read','owner.finance.write','unknown']){
   await assert.rejects(()=>repo({...args,scope}),/not yet independently certified/);
  }
@@ -56,4 +56,23 @@ test('G28 SQL errors and partial records never masquerade as empty history',asyn
 });
 test('G28 does not run with an absent or untrusted RPC adapter',()=>{
  assert.throws(()=>createQoreBackofficeSqlReadRepository({rpc:null}),/required/);
+});
+
+
+test('G29 only source-backed Admin KYC reads can reach private vehicle RPC',async()=>{
+ const calls=[];
+ const repo=createQoreBackofficeSqlReadRepository({rpc:async(name,params)=>{
+  calls.push({name,params});
+  return {data:{revision:1,items:[],hasMore:false},error:null};
+ }});
+ const kyc={...args,scope:'admin.kyc.read',after:null};
+ assert.deepEqual(await repo(kyc),{revision:1,items:[],hasMore:false});
+ await repo({...kyc,after:admin.replaceAll('-','')});
+ assert.equal(calls.length,2);
+ assert.deepEqual(calls[0],{name:'mobility_stage_g29_admin_kyc_page',
+  params:{_actor:admin,_anchor_ms:ms,_after:null,_limit:50}});
+ for(const after of ['f'.repeat(31),'a'.repeat(33),position,'bad']){
+  await assert.rejects(()=>repo({...kyc,after}),/Malformed/);
+ }
+ assert.equal(calls.length,2);
 });
