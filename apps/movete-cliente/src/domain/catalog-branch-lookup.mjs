@@ -9,3 +9,10 @@ export function prepareCatalogBranchLookup(input){
   return Object.freeze({ok:false,code:'INVALID_BRANCH'});
  return Object.freeze({ok:true,branchId:input.toLowerCase(),noNetwork:true});
 }
+
+/** Evita presentar precios de sucursal vieja mientras se edita otro código. */
+export function isSelectedCatalogBranchCurrent(input,currentBranchId){
+ const normalized=prepareCatalogBranchLookup(input);
+ return normalized.ok===true&&typeof currentBranchId==='string'
+  &&normalized.branchId===currentBranchId.toLowerCase();
+}

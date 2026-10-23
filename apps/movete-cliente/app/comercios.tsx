@@ -3,7 +3,7 @@ import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
-import {prepareCatalogBranchLookup} from '../src/domain/catalog-branch-lookup.mjs';
+import {prepareCatalogBranchLookup,isSelectedCatalogBranchCurrent} from '../src/domain/catalog-branch-lookup.mjs';
 const categories=[
  ['Supermercados','Sucursales, stock y precios confirmados por servidor.'],
  ['Restaurantes','Menú, preparación, entrega y cancelaciones.'],
@@ -53,7 +53,8 @@ function CertifiedCatalog({client,view}:{client:ClientExperience;view:ClientSnap
     'No se pudo verificar la sucursal o el catálogo. No se conservarán precios sin validación.');
   }finally{setLoading(false);}
  };
- const fresh=commerce.stage==='SERVER_CATALOG'&&!commerce.catalogLoading;
+ const fresh=commerce.stage==='SERVER_CATALOG'&&!commerce.catalogLoading
+  &&isSelectedCatalogBranchCurrent(branchInput,commerce.branchId);
  const summary=commerce.estimatedSubtotalPyg===null?'—'
   :commerce.estimatedSubtotalPyg.toLocaleString('es-PY')+' Gs.';
  const edit=(id:string,quantity:number)=>{
@@ -126,6 +127,7 @@ function ReadOnlyCatalogPager({client,view}:{client:ClientExperience;view:Client
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
  if(!pager.readReady)return null;
+ const matchingBranch=isSelectedCatalogBranchCurrent(branchInput,pager.branchId);
  const load=async(next=false,previous=false)=>{
   const input=(next||previous)?pager.branchId:branchInput;
   const validated=prepareCatalogBranchLookup(input??'');
@@ -146,7 +148,10 @@ function ReadOnlyCatalogPager({client,view}:{client:ClientExperience;view:Client
   {pager.error&&<Text accessibilityRole="alert" style={styles.text}>La página no cumple el contrato del servidor. No se muestran artículos antiguos.</Text>}
   {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
   {pager.loading&&<Text accessibilityLiveRegion="polite" style={styles.text}>Comprobando precios y stock. Se oculta la página anterior.</Text>}
-  {!pager.loading&&pager.pageNumber>0&&<>
+  {!pager.loading&&pager.pageNumber>0&&!matchingBranch&&<Text style={styles.text}>
+   La sucursal ingresada no coincide con la última consulta. Volvé a validar para ver precios vigentes.
+  </Text>}
+  {!pager.loading&&pager.pageNumber>0&&matchingBranch&&<>
    <Text style={styles.small}>Página {pager.pageNumber} · {pager.visibleItems.length} productos en esta página, no el total de la plataforma. Versión {pager.version}.</Text>
    {pager.visibleItems.filter(item=>item.active).map(item=><View key={item.itemId} style={styles.card}>
     <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>

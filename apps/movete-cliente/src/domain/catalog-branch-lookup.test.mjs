@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareCatalogBranchLookup} from './catalog-branch-lookup.mjs';
+import {prepareCatalogBranchLookup,isSelectedCatalogBranchCurrent} from './catalog-branch-lookup.mjs';
 const valid='123e4567-e89b-42d3-a456-426614174001';
 test('normaliza UUID autorizado sin copiar texto libre ni información personal',()=>{
  const r=prepareCatalogBranchLookup(valid.toUpperCase());
@@ -24,4 +24,14 @@ test('la selección solo autoriza un identificador, nunca garantiza cobertura o 
  assert.equal(Object.hasOwn(r,'stockUnits'),false);
  assert.equal(Object.hasOwn(r,'coveredByZone'),false);
  assert.equal(Object.hasOwn(r,'checkoutEnabled'),false);
+});
+
+test('precios de sucursal solo aparecen con selección UUID coincidente',()=>{
+ const other='123e4567-e89b-42d3-a456-426614174099';
+ assert.equal(isSelectedCatalogBranchCurrent(valid,valid),true);
+ assert.equal(isSelectedCatalogBranchCurrent(valid.toUpperCase(),valid),true);
+ assert.equal(isSelectedCatalogBranchCurrent(other,valid),false);
+ for(const candidate of ['','123','  '+valid,null,'correo@example.com'])
+  assert.equal(isSelectedCatalogBranchCurrent(candidate,valid),false);
+ assert.equal(isSelectedCatalogBranchCurrent(valid,null),false);
 });
