@@ -13,6 +13,7 @@ import {createIncidentG40Gateway} from './incident-g40-gateway.mjs';
 import {createIncidentReportFlow} from './incident-report-flow.mjs';
 import {createCommerceCatalogFlow} from './commerce-catalog-flow.mjs';
 import {createCommerceCatalogPager} from './commerce-catalog-pages.mjs';
+import {createG44BranchDirectory} from './g44-branch-directory.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -23,11 +24,11 @@ import {createCommerceCatalogPager} from './commerce-catalog-pages.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
- commerceCatalogPageGateway=null,now=()=>Date.now()}={}){
+ commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let commerceFlow,commercePager;
+ let commerceFlow,commercePager,branchDirectory;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
@@ -41,6 +42,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(incidentFlow)incidentFlow.clear();
   if(commerceFlow)commerceFlow.clear();
   if(commercePager)commercePager.clear();
+  if(branchDirectory)branchDirectory.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -95,6 +97,10 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  // OFF por defecto; el backend A todavía no ha publicado GET Buyer.
  commercePager=createCommerceCatalogPager({
   gateway:commerceCatalogPageGateway,getActor:async()=>actorSession(),now
+ });
+ // Directorio Buyer G44 inactivo sin contrato runtime real certificado por A.
+ branchDirectory=createG44BranchDirectory({
+  ...(g44BranchDirectoryOptions??{}),getActor:async()=>actorSession(),now
  });
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
   ...historyGatewayOptions,now,
@@ -271,7 +277,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
     incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
-    commercePager:commercePager.snapshot()});
+    commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -285,7 +291,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    historyConfigured:Boolean(historyGateway?.isConfigured()),
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
-   commercePager:commercePager.snapshot()
+   commercePager:commercePager.snapshot(),branchDirectory:branchDirectory.snapshot()
   });
  }
  async function signOut(){
@@ -303,6 +309,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   loadCommerceCatalog:async branchId=>{const p=commerceFlow.loadCatalog(branchId);notify();const r=await p;notify();return r;},
   loadCommercePage:async args=>{const p=commercePager.load(args);notify();const r=await p;notify();return r;},
   clearCommercePage:()=>{commercePager.clear();notify();},
+  loadBuyerBranches:async args=>{const p=branchDirectory.load(args);notify();const r=await p;notify();return r;},
+  clearBuyerBranches:()=>{branchDirectory.clear();notify();},
   setCommerceQuantity:(itemId,quantity)=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeQuantity(itemId,quantity);notify();return r;},
   selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
   previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},

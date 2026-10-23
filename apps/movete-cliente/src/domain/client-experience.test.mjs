@@ -813,3 +813,57 @@ test('rotación JWT durante navegación Buyer descarta página y no revive preci
  assert.equal(api.snapshot().commercePager.visibleItems.length,0);
  assert.equal(api.snapshot().commercePager.pageNumber,0);
 });
+
+test('G44 directorio no descubre sucursales por defecto ni envía pedidos',async()=>{
+ const {api}=fixture();await api.refreshSession();
+ assert.equal(api.snapshot().branchDirectory.readReady,false);
+ assert.equal((await api.loadBuyerBranches({municipality:'Asunción',
+  serviceKind:'AUTO_DELIVERY'})).code,'BRANCH_DIRECTORY_RUNTIME_NOT_CERTIFIED');
+ assert.equal(api.snapshot().branchDirectory.items.length,0);
+});
+test('G44 directorio QA solo lista sucursales, no habilita pagos',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080';
+ let args;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g44BranchDirectoryOptions:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,readBuyerBranches:async query=>{
+    args=query;return {ok:true,status:200,data:{
+     municipality:'Asunción',serviceKind:'AUTO_DELIVERY',nextCursor:null,
+     orderEnabled:false,productionEnabled:false,
+     items:[{branchId:branch,branchTag:'CENTRO',
+      merchantKind:'SUPERMARKET',municipality:'Asunción',
+      serviceKind:'AUTO_DELIVERY',eligibleByPolicy:false,orderEnabled:false}]
+    }};
+   }}
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadBuyerBranches({municipality:'Asunción',
+  serviceKind:'AUTO_DELIVERY'})).ok,true);
+ assert.equal(args.subject,a);
+ assert.equal(args.cursor,null);
+ assert.equal(api.snapshot().branchDirectory.items[0].branchId,branch);
+ assert.equal(api.snapshot().branchDirectory.ordersEnabled,false);
+ assert.equal(api.snapshot().branchDirectory.availabilityVerified,false);
+ assert.equal(api.snapshot().commerce.checkoutEnabled,false);
+ await api.signOut();
+ assert.equal(api.snapshot().branchDirectory.items.length,0);
+});
+test('G44 directorio nunca revive sucursales después de rotar JWT',async()=>{
+ let current=fakeSession(),release;
+ const pending=new Promise(resolve=>{release=resolve;});
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>current},
+  g44BranchDirectoryOptions:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,readBuyerBranches:async()=>pending}
+ });
+ await api.refreshSession();
+ const job=api.loadBuyerBranches({municipality:'Asunción',serviceKind:'MOTO_DELIVERY'});
+ await Promise.resolve();await Promise.resolve();
+ current={...current,token:'synthetic-different-jwt-on-same-account'};
+ await api.refreshSession();
+ release({ok:true,status:200,data:{municipality:'Asunción',serviceKind:'MOTO_DELIVERY',
+  items:[],nextCursor:null,orderEnabled:false,productionEnabled:false}});
+ assert.equal((await job).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(api.snapshot().branchDirectory.items.length,0);
+});

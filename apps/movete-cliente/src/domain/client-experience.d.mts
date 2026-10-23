@@ -27,6 +27,14 @@ export type ClientSnapshot={
   stage:string;stock:string;generation:number;
   catalogReadReady:boolean;catalogLoading:boolean;catalogError:string|null;
   checkoutEnabled:false;paymentEnabled:false;serverOrderReceipt:null};
+ branchDirectory:{readReady:boolean;loading:boolean;error:string|null;
+  municipality:string|null;serviceKind:string|null;pageNumber:number;
+  items:readonly {branchId:string;branchTag:string;merchantKind:string;
+   municipality:string;serviceKind:'AUTO_DELIVERY'|'MOTO_DELIVERY';
+   eligibleByPolicy:false;orderEnabled:false}[];
+  hasPrevious:boolean;hasNext:boolean;globalTotalKnown:false;
+  ordersEnabled:false;paymentsEnabled:false;availabilityVerified:false;
+  serverSnapshotConsistent:false};
  commercePager:{readReady:boolean;loading:boolean;
   branchId:string|null;version:string|null;pageNumber:number;
   visibleItems:readonly {itemId:string;itemTag:string;
@@ -54,6 +62,9 @@ export type ClientExperience={
  loadCommerceCatalog(branchId:string):Promise<ClientResult>;
  loadCommercePage(args:{branchId:string;next?:boolean;previous?:boolean}):Promise<ClientResult>;
  clearCommercePage():void;
+ loadBuyerBranches(args:{municipality:string;serviceKind:'AUTO_DELIVERY'|'MOTO_DELIVERY';
+  next?:boolean;previous?:boolean}):Promise<ClientResult>;
+ clearBuyerBranches():void;
  setCommerceQuantity(itemId:string,quantity:number):ClientResult;
  selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
  previewCommerceOrder(requestKey:string):ClientResult;
@@ -89,6 +100,13 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ g44BranchDirectoryOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  readBuyerBranches?:(context:{municipality:string;serviceKind:string;
+   cursor:string|null;subject:string;sessionRevision:number})=>Promise<{
+    ok:boolean;status?:number;code?:string;data?:unknown
+   }>;
+ }|null;
  commerceCatalogPageGateway?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   isConfigured?:()=>boolean;
