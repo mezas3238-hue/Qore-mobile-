@@ -5,6 +5,7 @@ import {createZoneOverviewStore} from './zone-overview.mjs';
 import {createIncidentQueueStore} from './incidents-overview.mjs';
 import {createAuditFeedStore} from './audit-feed.mjs';
 import {createAdminReadGateway} from './admin-read-gateway.mjs';
+import {createPageNavigator,readContinuation} from './page-cursor.mjs';
 
 /**
  * Composición web B11: ninguna sesión/cola real se crea por defecto.
@@ -18,10 +19,11 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const zones=createZoneOverviewStore({now});
  const incidents=createIncidentQueueStore({now});
  const audit=createAuditFeedStore({now});
+ const pages=createPageNavigator();
  let session;
  const listeners=new Set();
  const notify=()=>{for(const callback of listeners){try{callback();}catch{/* no filtrar secretos */}}};
- const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();};
+ const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
  const readGateway=readGatewayOptions?createAdminReadGateway({
   ...readGatewayOptions,
@@ -45,6 +47,10 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    zones:current.role==='admin'?zones.current(current.role):null,
    incidents:current.role==='admin'?incidents.current(current.role):null,
    audit:current.role==='admin'?audit.current(current.role):null,
+   pagination:Object.freeze({
+    kyc:pages.get('kyc'),zones:pages.get('zones'),
+    incidents:pages.get('incidents'),audit:pages.get('audit')
+   }),
    // La UI nunca habilita acciones por permisos locales.
    actionsEnabled:false
   });
@@ -80,7 +86,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   const accepted=audit.replace(dto,current.role);
   notify();return accepted;
  }
- async function syncFromServer(operation){
+ async function syncFromServer(operation,direction='refresh'){
   if(!Object.hasOwn(stores,operation))return fail('UNKNOWN_READ_OPERATION');
   const current=session.publicSession();
   if(!current)return fail('ADMIN_AUTH_REQUIRED');
@@ -91,11 +97,13 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    return fail('READ_CONTRACT_NOT_CERTIFIED');
   }
   if(reading.has(operation))return fail('READ_IN_FLIGHT');
+  const request=pages.request(operation,direction);
+  if(!request.ok)return fail(request.code);
   reading.add(operation);
   const tokenEpoch=session.revision();
   try{
    let result;
-   try{result=await readGateway.read(operation);}
+   try{result=await readGateway.read(operation,{cursor:request.cursor});}
    catch{result=fail('NETWORK_OR_TIMEOUT');}
    const latest=session.publicSession();
    if(!latest||latest.subject!==current.subject||latest.role!==current.role
@@ -104,13 +112,20 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
     return fail('STALE_SESSION_RESPONSE');
    }
    if(!result||result.ok!==true){
-    store.clear();notify();
+    store.clear();pages.clear(operation);notify();
     return fail(result?.code||'READ_UNAVAILABLE');
    }
    const accepted=operation==='finance'?store.replace(result.data,latest)
      :store.replace(result.data,latest.role);
+   const continuation=readContinuation(result.data);
+   const pageValid=operation==='finance'||(continuation.ok
+     &&pages.commit(operation,direction,request.cursor,continuation.nextCursor));
+   if(!accepted||!pageValid){
+    store.clear();pages.clear(operation);notify();
+    return fail('INVALID_READ_DTO');
+   }
    notify();
-   return accepted?Object.freeze({ok:true}):fail('INVALID_READ_DTO');
+   return Object.freeze({ok:true});
   }finally{reading.delete(operation);}
  }
  async function reviewVehicle(dto){

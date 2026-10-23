@@ -1,3 +1,4 @@
+import {isValidCursor} from './page-cursor.mjs';
 /**
  * Frontera de lectura de Admin Web — SOLO STAGING, bloqueada por defecto.
  * Rutas PROPUESTAS, todavía no contratadas/certificadas por Backend A.
@@ -47,8 +48,10 @@ export function createAdminReadGateway({
  function isConfigured(operation){
   return ready&&allowed.has(operation)&&Object.hasOwn(READ_CONTRACTS,operation);
  }
- async function read(operation){
+ async function read(operation,{cursor=null}={}){
   if(!isConfigured(operation))return fail('READ_CONTRACT_NOT_CERTIFIED');
+  if(cursor!==null&&!isValidCursor(cursor))return fail('INVALID_CURSOR');
+  if(operation==='finance'&&cursor!==null)return fail('INVALID_CURSOR');
   if(inFlight.has(operation))return fail('READ_IN_FLIGHT');
   inFlight.add(operation); // before await: no parallel duplicate GET
   let timeout=null;
@@ -61,7 +64,8 @@ export function createAdminReadGateway({
    const ctl=new AbortController();
    const ms=Number.isSafeInteger(timeoutMs)&&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
    timeout=setTimeout(()=>ctl.abort(),ms);
-   const result=await fetchImpl(host+definition.path,{
+   const query=cursor===null?'':'?cursor='+encodeURIComponent(cursor);
+   const result=await fetchImpl(host+definition.path+query,{
     method:'GET',redirect:'error',credentials:'omit',cache:'no-store',
     referrerPolicy:'no-referrer',
     headers:{Authorization:'Bearer '+first.token,Accept:'application/json'},

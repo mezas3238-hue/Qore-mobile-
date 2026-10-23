@@ -158,3 +158,15 @@ test('401 de relogin mismo token pero revision nueva no borra sesión activa',as
  assert.equal((await req).code,'STALE_SESSION_RESPONSE');
  assert.equal(invalidations,0);
 });
+
+test('paginación cursor segura sin tope de registros en la plataforma',async()=>{
+ const urls=[];
+ const gateway=createAdminReadGateway({...settings,fetchImpl:async url=>{
+  urls.push(url);return response();
+ }});
+ assert.equal((await gateway.read('kyc',{cursor:'cursor_10001'})).ok,true);
+ assert.equal(urls[0],'https://staging.example.invalid/v1/staging/admin/vehicle-review-queue?cursor=cursor_10001');
+ assert.equal((await gateway.read('kyc',{cursor:'hello&role=owner'})).code,'INVALID_CURSOR');
+ assert.equal((await gateway.read('finance',{cursor:'cursor_1'})).code,'INVALID_CURSOR');
+ assert.equal(urls.length,1);
+});

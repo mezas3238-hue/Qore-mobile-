@@ -364,3 +364,53 @@ test('403 tardío de request previo no mata sesión Admin nueva',async()=>{
  assert.equal((await old).code,'STALE_SESSION_RESPONSE');
  assert.equal(app.snapshot().authenticated,true);
 });
+
+test('paginación KYC 151 páginas: cada página se reemplaza, el universo no se limita a 100 registros',async()=>{
+ const ids=(n)=>'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0');
+ let hits=0;
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async(url)=>{
+   hits++;
+   const match=url.match(/cursor=page_(\d+)/);
+   const p=match?Number(match[1]):1;
+   const payload={...dto,items:[{...dto.items[0],vehicleId:ids(p)}],
+    nextCursor:p>=151?null:'page_'+(p+1)};
+   return mockReply(payload);
+  })
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('kyc','reset')).ok,true);
+ for(let i=2;i<=151;i++)assert.equal((await app.syncFromServer('kyc','next')).ok,true);
+ const snap=app.snapshot();
+ assert.equal(hits,151);
+ assert.equal(snap.pagination.kyc.pageNumber,151);
+ assert.equal(snap.pagination.kyc.hasNext,false);
+ assert.equal(snap.kyc.items.length,1);
+ assert.equal(snap.kyc.items[0].vehicleId,ids(151));
+ assert.equal((await app.syncFromServer('kyc','next')).code,'NO_ADDITIONAL_PAGE');
+ assert.equal((await app.syncFromServer('kyc','previous')).ok,true);
+ assert.equal(app.snapshot().pagination.kyc.pageNumber,150);
+});
+test('no se acepta cursor circular que podría reiterar la misma página',async()=>{
+ const app=createAdminExperience({now:()=>now,
+  authProvider:{readSession:async()=>auth()},
+  readGatewayOptions:readConfig(async()=>mockReply({...dto,nextCursor:'same'}))
+ });
+ await app.refreshSession();
+ assert.equal((await app.syncFromServer('kyc','reset')).ok,true);
+ assert.equal((await app.syncFromServer('kyc','next')).code,'INVALID_READ_DTO');
+ assert.equal(app.snapshot().kyc,null);
+ assert.equal(app.snapshot().pagination.kyc.hasNext,false);
+});
+test('logout borra cursores de distintas bandejas sin filtrar páginas previas',async()=>{
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>auth(),signOut:async()=>{}},
+  readGatewayOptions:readConfig(async()=>mockReply({...dto,nextCursor:'next_cursor'}))
+ });
+ await app.refreshSession();
+ await app.syncFromServer('kyc','reset');
+ assert.equal(app.snapshot().pagination.kyc.hasNext,true);
+ await app.logout();
+ assert.equal(app.snapshot().pagination.kyc.hasNext,false);
+});

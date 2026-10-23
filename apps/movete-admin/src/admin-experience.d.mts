@@ -2,6 +2,7 @@ export type AdminKycRecord={
  vehicleId:string;vehicleKind:'AUTO'|'MOTO_DELIVERY';applicationStatus:string;
  licenseStatus:string;insuranceStatus:string;inspectionStatus:string;reviewRevision:number;
 };
+export type PageState={pageNumber:number;hasNext:boolean;hasPrevious:boolean;nextCursor:string|null};
 export type AdminSnapshot={
  authenticated:boolean;
  account:{subject:string;role:'admin'|'owner';mfaVerified:true}|null;
@@ -24,6 +25,9 @@ export type AdminSnapshot={
   eventId:string;actorRole:string;operation:string;targetKind:string;
   outcome:string;occurredAt:number;revision:number;
  }[]}|null;
+ pagination:{
+  kyc:PageState;zones:PageState;incidents:PageState;audit:PageState;
+ };
  actionsEnabled:false;
 };
 export type AdminExperience={
@@ -37,7 +41,7 @@ export type AdminExperience={
  readIncidents:(data:unknown)=>boolean;
  readAudit:(data:unknown)=>boolean;
  isReadConfigured:(operation:string)=>boolean;
- syncFromServer:(operation:string)=>Promise<{ok:boolean;code?:string}>;
+ syncFromServer:(operation:string,direction?:'refresh'|'reset'|'next'|'previous')=>Promise<{ok:boolean;code?:string}>;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };
