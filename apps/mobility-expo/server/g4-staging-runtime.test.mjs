@@ -6,6 +6,7 @@ import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 const ref='staging1234567890abcd';
 const anonKey='sb_publishable_abcdefghijklmnopqrstuvwxyz';
 const serviceKey='sb_secret_abcdefghijklmnopqrstuvwxyz';
+const historyCursorSecrets={current:'qore-QA-independent-history-signing-key-only-2026'};
 const passenger='11111111-1111-4111-8111-111111111111';
 const driver='22222222-2222-4222-8222-222222222222';
 const stranger='33333333-3333-4333-8333-333333333333';
@@ -200,7 +201,7 @@ function mockSupabase(){
 }
 const prepare=(m,options={})=>prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
- projectRef:ref,anonKey,serviceKey,
+ projectRef:ref,anonKey,serviceKey,historyCursorSecrets,
  request:m.request,createClient:m.createClient,now:()=>now,...options
 });
 async function http(runtime,callback){
@@ -247,7 +248,13 @@ test('boot rejects LIVE, old backend, unsafe env and public/foreign server role'
   {liveTripsEnabled:'false'},{allowQa:false},
   {projectRef:'qdqrlgzlotnfdxzpacxs'},
   {anonKey:serviceKey},{serviceKey:anonKey},
-  {serviceKey:'sb_secret_bad'}
+  {serviceKey:'sb_secret_bad'},
+  {historyCursorSecrets:null},
+  {historyCursorSecrets:{current:serviceKey}},
+  {historyCursorSecrets:{current:anonKey}},
+  {historyCursorSecrets:{current:'too-short'}},
+  {historyCursorSecrets:{current:historyCursorSecrets.current,
+   previous:historyCursorSecrets.current}}
  ])await assert.rejects(prepare(m,options));
  assert.equal(m.state.rpcs.length,0);
 });

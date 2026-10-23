@@ -143,7 +143,7 @@ async function unavailablePricingContext(){
 }
 export async function prepareQoreG4StagingRuntime({
  environment,liveTripsEnabled,allowQa,
- projectRef,anonKey,serviceKey,
+ projectRef,anonKey,serviceKey,historyCursorSecrets,
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
  privateEvidenceAdapters=null,now=Date.now,
@@ -153,7 +153,13 @@ export async function prepareQoreG4StagingRuntime({
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
- if(anonKey===serviceKey||typeof createClient!=='function'||
+ if(anonKey===serviceKey||
+   !historyCursorSecrets||
+   historyCursorSecrets.current===serviceKey||
+   historyCursorSecrets.current===anonKey||
+   historyCursorSecrets.previous===serviceKey||
+   historyCursorSecrets.previous===anonKey||
+   typeof createClient!=='function'||
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
    typeof pricingContext!=='function'||
    !(privateEvidenceAdapters===null||
@@ -211,7 +217,7 @@ export async function prepareQoreG4StagingRuntime({
  // prevents exhaustive high-rate polling on the local QA loopback.
  const allowRequest=({userId})=>limit({userId,operation:'draft'});
  const riderHistory=createQoreRiderHistoryGateway({
-  projectRef:ref,verifyAccessToken:verified,cursorSecret:serviceKey,
+  projectRef:ref,verifyAccessToken:verified,cursorSecrets:historyCursorSecrets,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   loadOwnHistory:createQoreOwnHistoryRepository(admin),now
  });

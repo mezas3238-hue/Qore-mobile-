@@ -28,6 +28,11 @@ const session=await prepareQoreG4StagingRuntime({
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
+ // Supplied by a SERVER-ONLY secret manager; never from Expo public env.
+ historyCursorSecrets:{
+  current:process.env.QORE_HISTORY_CURSOR_SIGNING_KEY,
+  previous:process.env.QORE_HISTORY_CURSOR_PREVIOUS_KEY||undefined
+ },
  createClient,
 });
 await listenQoreRadarLoopback(session.server,port);

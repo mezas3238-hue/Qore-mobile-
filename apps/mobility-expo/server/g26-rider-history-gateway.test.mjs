@@ -13,7 +13,7 @@ const SECRET='synthetic-history-HMAC-private-signing-material-long';
 function fixture(override={}){
  const calls=[];
  const gateway=createQoreRiderHistoryGateway({
-  projectRef,now:()=>at,cursorSecret:SECRET,
+  projectRef,now:()=>at,cursorSecrets:{current:SECRET},
   verifyAccessToken:async()=>({id:owner,is_anonymous:false,
    email_confirmed_at:'2026-10-22T10:00:00Z'}),
   authorizePassenger:async id=>{calls.push({auth:id});return true;},
@@ -110,8 +110,33 @@ test('malformed or oversized pages fail closed, not partial or misleading empty 
 });
 test('G26.1 signing secret and server Auth adapters required before any request',()=>{
  assert.throws(()=>createQoreRiderHistoryGateway({
-  projectRef,cursorSecret:'too-short',
+  projectRef,cursorSecrets:{current:'too-short'},
   verifyAccessToken:async()=>{},authorizePassenger:async()=>{},
   allowRequest:()=>true,loadOwnHistory:async()=>{},now:()=>at
  }),/required/);
+});
+
+test('A03 dedicated key rotation verifies prior v1 cursors and re-signs with current key',async()=>{
+ const old='historical-private-history-signing-key-release-01';
+ const next='independent-private-history-signing-key-release-02';
+ const position={time:'2026-10-23T04:19:40.000000Z',id:serviceId,kind:'RIDE'};
+ const rows=Array.from({length:50},(_,i)=>({
+  serviceId:i===49?serviceId:
+   i.toString(16).padStart(8,'0')+'-3333-4333-8333-333333333333',
+  kind:'RIDE',status:'completed',createdAt:at-20000,revision:3
+ }));
+ const loadOwnHistory=async()=>({items:rows,nextPosition:position});
+ const make=cursorSecrets=>fixture({cursorSecrets,loadOwnHistory}).gateway;
+ const original=await make({current:old})(req);
+ assert.equal(original.status,200);
+ const oldCursor=original.body.nextCursor;
+ const hdr=c=>({...req,headers:{...req.headers,'x-qore-history-cursor':c}});
+ const rotated=await make({current:next,previous:old})(hdr(oldCursor));
+ assert.equal(rotated.status,200);
+ const newCursor=rotated.body.nextCursor;
+ assert.notEqual(newCursor,oldCursor);
+ assert.ok(newCursor.length<=200);
+ assert.equal((await make({current:next})(hdr(newCursor))).status,200);
+ assert.equal((await make({current:old})(hdr(newCursor))).status,400);
+ assert.equal((await make({current:next})(hdr(oldCursor))).status,400);
 });

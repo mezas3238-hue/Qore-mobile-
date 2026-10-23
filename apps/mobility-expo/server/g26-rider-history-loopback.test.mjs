@@ -10,7 +10,7 @@ const at=Date.parse('2026-10-23T03:00:00Z');
 const token='qa_history_test_bearer_very_long_abcdef1234567890';
 const history=createQoreRiderHistoryGateway({
  projectRef:'staging1234567890abcd',
- cursorSecret:'synthetic-HMAC-32-character-server-side-only-key',
+ cursorSecrets:{current:'synthetic-HMAC-32-character-server-side-only-key'},
  verifyAccessToken:async()=>({id:owner,is_anonymous:false,
   email_confirmed_at:'2026-10-23T02:00:00Z'}),
  authorizePassenger:async user=>user===owner,

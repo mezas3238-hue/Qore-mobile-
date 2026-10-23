@@ -71,7 +71,7 @@ const unavailable=async()=>({status:503,body:{error:'Synthetic adapter disabled'
 function createServer(rows,{clock=()=>at,queries=[]}={}){
  const history=createQoreRiderHistoryGateway({
   projectRef:'staging1234567890abcd',
-  cursorSecret:'synthetic-private-staging-HMAC-secret-not-used-outside-test',
+  cursorSecrets:{current:'synthetic-private-staging-HMAC-secret-not-used-outside-test'},
   verifyAccessToken:async bearer=>{
    const id=bearer===ownerBearer?owner:bearer===foreignBearer?stranger:null;
    if(!id)throw Error('Invalid JWT fixture');

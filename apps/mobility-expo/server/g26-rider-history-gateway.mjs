@@ -21,8 +21,20 @@ const bearerFrom=h=>{
  return typeof v==='string'&&v.length<8000?
   /^Bearer ([A-Za-z0-9._~-]{20,7900})$/.exec(v)?.[1]??null:null;
 };
-function cursorCodec(secret,projectRef){
- const mac=(data,userId)=>createHmac('sha256',secret)
+function cursorCodec(secrets,projectRef){
+ // A03: the cursor keyring must be independent from the service role key.
+ // Keep the public v1 cursor shape while allowing ONE previous key during
+ // a controlled two-release rotation. The server never logs key material.
+ if(!plain(secrets)||typeof secrets.current!=='string'||
+   Buffer.byteLength(secrets.current,'utf8')<32||
+   (secrets.previous!==undefined&&
+    (typeof secrets.previous!=='string'||
+     Buffer.byteLength(secrets.previous,'utf8')<32||
+     secrets.previous===secrets.current))||
+   Object.keys(secrets).some(k=>k!=='current'&&k!=='previous'))
+  throw Error('Dedicated history signing keyring required');
+ const keys=[secrets.current,...(secrets.previous?[secrets.previous]:[])];
+ const mac=(data,userId,key)=>createHmac('sha256',key)
   .update('qore-own-history-v1\0').update(projectRef)
   .update('\0').update(userId).update('\0').update(data).digest();
  return {
@@ -32,7 +44,7 @@ function cursorCodec(secret,projectRef){
     kindNames.indexOf(position.kind),at+lifetimeMs
    ])).toString('base64url');
    const base='v1.'+payload;
-   const result=base+'.'+mac(base,userId).toString('base64url');
+   const result=base+'.'+mac(base,userId,secrets.current).toString('base64url');
    if(result.length>200)throw Error('History cursor exceeds public DTO');
    return result;
   },
@@ -42,9 +54,13 @@ function cursorCodec(secret,projectRef){
     return null;
    const dot=value.lastIndexOf('.');
    const base=value.slice(0,dot),sig=Buffer.from(value.slice(dot+1),'base64url');
-   const expected=mac(base,userId);
-   if(sig.length!==expected.length||!timingSafeEqual(sig,expected))
-    return null;
+   // Every key is checked, without exposing which release verified it.
+   let valid=false;
+   for(const key of keys){
+    const expected=mac(base,userId,key);
+    if(sig.length===expected.length&&timingSafeEqual(sig,expected))valid=true;
+   }
+   if(!valid)return null;
    try{
     const fields=JSON.parse(Buffer.from(base.slice(3),'base64url').toString('utf8'));
     if(!Array.isArray(fields)||fields.length!==6||fields[0]!==1||
@@ -65,14 +81,14 @@ function cursorCodec(secret,projectRef){
 }
 export function createQoreRiderHistoryGateway({
  projectRef,verifyAccessToken,authorizePassenger,allowRequest,loadOwnHistory,
- cursorSecret,now=Date.now
+ cursorSecrets,now=Date.now
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,loadOwnHistory,now]
   .every(x=>typeof x==='function')||
-  typeof cursorSecret!=='string'||cursorSecret.length<32)
+  !plain(cursorSecrets))
   throw Error('Verified private history and signing adapters required');
- const codec=cursorCodec(cursorSecret,projectRef);
+ const codec=cursorCodec(cursorSecrets,projectRef);
  return async({method,path,headers,body})=>{
   if(method!=='GET'||path!==PATH)return respond(404,{error:'Not found'});
   if(body!==null&&body!==undefined)return respond(400,{error:'No GET body'});
