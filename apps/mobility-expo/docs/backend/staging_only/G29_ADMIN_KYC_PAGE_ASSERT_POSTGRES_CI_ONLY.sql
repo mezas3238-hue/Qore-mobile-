@@ -109,6 +109,50 @@ BEGIN
 END $pages$;
 RESET ROLE;
 
+-- G29.1 approved evidence alone never proves non-expired legal license.
+-- Use the genuine G17 immutable document decision RPC and G2 compliance.
+INSERT INTO public.user_roles(user_id,role)
+ VALUES('73737373-7373-4737-8737-737373737373','admin');
+SELECT public.mobility_stage_review_driver_document(
+ md5('G29_DOC')::uuid,
+ '73737373-7373-4737-8737-737373737373'::uuid,
+ true,'QA_APPROVED',md5('G29_APPROVED_REQUEST')::uuid);
+INSERT INTO public.mobility_driver_compliance
+ (driver_id,license_class,license_valid_through,license_verified_at,
+  license_verified_by,driver_review_status)
+VALUES
+ ('72727272-7272-4727-8727-727272727272'::uuid,'B',
+ '2020-01-01',pg_catalog.clock_timestamp(),
+ '73737373-7373-4737-8737-737373737373'::uuid,'approved');
+SET LOCAL ROLE service_role;
+DO $expiry$
+DECLARE res jsonb;first_item jsonb;
+BEGIN
+ res:=public.mobility_stage_g29_admin_kyc_page(
+  '71717171-7171-4717-8717-717171717171',
+  floor(extract(epoch FROM clock_timestamp())*1000)::bigint,NULL,50);
+ first_item:=res->'items'->0;
+ IF first_item->>'licenseStatus'<>'expired'
+ THEN RAISE EXCEPTION 'G29 accepted previously approved but expired license'; END IF;
+END $expiry$;
+RESET ROLE;
+UPDATE public.mobility_driver_compliance
+ SET license_valid_through='2099-12-31'
+ WHERE driver_id='72727272-7272-4727-8727-727272727272';
+SET LOCAL ROLE service_role;
+DO $valid_compliance$
+DECLARE res jsonb;
+BEGIN
+ res:=public.mobility_stage_g29_admin_kyc_page(
+  '71717171-7171-4717-8717-717171717171',
+  floor(extract(epoch FROM clock_timestamp())*1000)::bigint,NULL,50);
+ IF res->'items'->0->>'licenseStatus'<>'valid'
+ THEN RAISE EXCEPTION 'G29 rejected independently verified current license'; END IF;
+ IF res->'items'->0->>'insuranceStatus'<>'missing'
+ THEN RAISE EXCEPTION 'G29 invented insurance approval'; END IF;
+END $valid_compliance$;
+RESET ROLE;
+
 -- Suspension and mixed historical passenger assignment deny authorization.
 UPDATE public.mobility_stage_backoffice_roles
  SET status='suspended',revision=revision+1
