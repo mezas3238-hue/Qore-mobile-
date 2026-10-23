@@ -72,7 +72,7 @@ DECLARE
  request2 uuid:='45450000-0000-4545-8545-000000000202';
  request3 uuid:='45450000-0000-4545-8545-000000000203';
  cancel1 uuid:='45450000-0000-4545-8545-000000000301';
- iat bigint:=floor(pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint;
+ iat bigint:=floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint;
  version1 bigint;version2 bigint;version3 bigint;
  items jsonb:='[{"itemId":"45450000-0000-4545-8545-000000000040","quantity":1}]'::jsonb;
  a jsonb;b jsonb;c jsonb; d jsonb;
@@ -159,7 +159,7 @@ BEGIN
   PERFORM public.mobility_stage_g45_reserve_order_qa(
   '45450000-0000-4545-8545-000000000001',
   '45450000-0000-4545-8545-000000000101',
-  floor(pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint,
+  floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint,
   '45450000-0000-4545-8545-000000000401',
   '45450000-0000-4545-8545-000000000030',1,'AUTO','[]'::jsonb);
  EXCEPTION WHEN insufficient_privilege THEN forbidden:=true; END;
