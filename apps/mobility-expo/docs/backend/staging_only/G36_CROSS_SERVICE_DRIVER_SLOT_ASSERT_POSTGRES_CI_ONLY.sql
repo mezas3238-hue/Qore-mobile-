@@ -62,7 +62,8 @@ INSERT INTO public.mobility_stage_delivery_vehicle_clearance(
  reviewed_by='00000000-0000-4000-8000-000000000101',
  reviewed_at=clock_timestamp()-interval '5 minutes';
 
-SET LOCAL ROLE service_role;
+-- Test owner (disposable superuser) observes private slots directly.
+-- Concurrent service_role acceptance is separately tested with two sessions.
 DO $checks$
 DECLARE
  driver uuid:='00000000-0000-4000-8000-000000000181';
@@ -165,5 +166,4 @@ BEGIN
  THEN RAISE EXCEPTION 'G36 multiple active Driver reservations exist'; END IF;
  RAISE NOTICE 'G36 PASS: backfill, cross-service denial, direct write denial, idempotent receipt, terminal release and reassignment';
 END $checks$;
-RESET ROLE;
 ROLLBACK;
