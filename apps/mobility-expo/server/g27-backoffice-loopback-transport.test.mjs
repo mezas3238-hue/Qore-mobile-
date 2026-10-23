@@ -74,7 +74,7 @@ test('A05 localhost HTTP hard denies missing JWT, cookies, CORS and GET payloads
  assert.equal((await get(basePath+'?ownerId='+actor,
   {authorization:'Bearer '+token})).status,400);
  assert.equal((await get(basePath+'?cursor='+requestKey,
-  {authorization:'Bearer '+token})).status,404);
+  {authorization:'Bearer '+token})).status,400);
  assert.equal((await fetch(origin+basePath,{method:'POST',headers:{
   authorization:'Bearer '+token}})).status,405);
 });
