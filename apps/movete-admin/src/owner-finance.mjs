@@ -6,6 +6,7 @@
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const integer=x=>Number.isSafeInteger(x)&&x>=0&&x<=1_000_000_000_000;
+const signed=x=>Number.isSafeInteger(x)&&Math.abs(x)<=1_000_000_000_000;
 const own=(o,keys)=>o!==null&&typeof o==='object'&&!Array.isArray(o)
  &&Object.keys(o).every(k=>keys.includes(k))&&keys.every(k=>Object.hasOwn(o,k));
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -35,7 +36,7 @@ export function projectOwnerFinance(payload,{role,subject,now=Date.now()}={}){
   ||!own(payload.totals,OWNER_TOTAL_FIELDS))return null;
  const from=dateValue(payload.period.from),to=dateValue(payload.period.to);
  if(from===null||to===null||from>to||to-from>92*86400000)return null;
- if(!OWNER_TOTAL_FIELDS.every(f=>integer(payload.totals[f])))return null;
+ if(!OWNER_TOTAL_FIELDS.every(f=>f==='netPlatformGs'?signed(payload.totals[f]):integer(payload.totals[f])))return null;
  const totals=Object.freeze({...payload.totals});
  return Object.freeze({
   period:Object.freeze({...payload.period}),currency:'PYG',
