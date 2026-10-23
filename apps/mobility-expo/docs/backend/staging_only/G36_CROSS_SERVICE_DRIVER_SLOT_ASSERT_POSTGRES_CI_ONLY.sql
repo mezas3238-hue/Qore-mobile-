@@ -44,6 +44,26 @@ INSERT INTO auth.users(id) VALUES
  ('f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1'),
  ('f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2')
 ON CONFLICT(id) DO NOTHING;
+-- AUTO_RIDE and DELIVERY IDs are drawn from independent UUID namespaces.
+-- Different Drivers may coincidentally have the same assignment_id in two
+-- different services: that must not create a false global collision.
+INSERT INTO public.mobility_stage_g36_driver_slots(
+ driver_id,assignment_kind,assignment_id
+) VALUES
+ ('f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1','AUTO_RIDE',
+  'fcfcfcfc-fcfc-4cfc-8cfc-fcfcfcfcfcfc'),
+ ('f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2','DELIVERY',
+  'fcfcfcfc-fcfc-4cfc-8cfc-fcfcfcfcfcfc');
+DO $independent_ids$
+BEGIN
+ IF (SELECT count(*) FROM public.mobility_stage_g36_driver_slots
+    WHERE assignment_id='fcfcfcfc-fcfc-4cfc-8cfc-fcfcfcfcfcfc')<>2
+ THEN RAISE EXCEPTION 'G36 incorrectly made independently typed IDs globally unique'; END IF;
+END $independent_ids$;
+DELETE FROM public.mobility_stage_g36_driver_slots
+ WHERE driver_id IN(
+ 'f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1',
+ 'f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2');
 -- Car 184 is independently authorized for AUTO ride in G20; cargo requires
 -- separately reviewed G5 insurance, never inherited from passenger insurance.
 INSERT INTO public.mobility_stage_delivery_vehicle_clearance(
