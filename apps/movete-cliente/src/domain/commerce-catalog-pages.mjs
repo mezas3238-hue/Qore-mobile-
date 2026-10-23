@@ -65,13 +65,16 @@ export function createCommerceCatalogPager({gateway=null,getActor=null,
    clear();return fail('CURSOR_REPEATED');
   }
   if(typeof getActor!=='function')return fail('AUTH_REQUIRED');
-  let before;
-  try{before=await getActor();}catch{before=null;}
-  if(!actorOk(before))return fail('AUTH_REQUIRED');
+  // Claim the request lock before awaiting an identity provider. Otherwise
+  // two rapid taps can request different branches during the same auth read.
   const generation=++epoch;
-  if(!next&&!previous)state=blank();
   pending=true;
   try{
+   let before;
+   try{before=await getActor();}catch{before=null;}
+   if(generation!==epoch)return fail('STALE_RESPONSE_IGNORED');
+   if(!actorOk(before)){clear();return fail('AUTH_REQUIRED');}
+   if(!next&&!previous)state=blank();
    let result;
    try{result=await gateway.readCatalogPage(branchId,{
     cursor,subject:before.subject,sessionRevision:before.sessionRevision

@@ -119,3 +119,39 @@ test('cursor repetido o inválido no perpetúa paginación',async()=>{
  assert.equal((await y.load({branchId:branch,next:true})).code,'CURSOR_REPEATED');
  assert.equal(y.snapshot().visibleItems.length,0);
 });
+
+test('dos taps mientras getActor no resuelve no lanzan dos lecturas',async()=>{
+ let release,hits=0;
+ const paused=new Promise(resolve=>release=resolve);
+ const x=createCommerceCatalogPager({
+  now:()=>time,getActor:()=>paused,
+  gateway:gw(async()=>{hits++;return {ok:true,data:page(1)};})
+ });
+ const first=x.load({branchId:branch});
+ assert.equal((await x.load({branchId:uuid(9)})).code,'CATALOG_PAGE_IN_FLIGHT');
+ release(actor());
+ assert.equal((await first).ok,true);
+ assert.equal(hits,1);
+ assert.equal(x.snapshot().branchId,branch);
+});
+test('logout durante validación de identidad no recupera una página privada',async()=>{
+ let release,hits=0;
+ const paused=new Promise(resolve=>release=resolve);
+ const x=createCommerceCatalogPager({
+  now:()=>time,getActor:()=>paused,
+  gateway:gw(async()=>{hits++;return {ok:true,data:page(1)};})
+ });
+ const req=x.load({branchId:branch});
+ x.clear();release(actor());
+ assert.equal((await req).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(hits,0);
+ assert.equal(x.snapshot().visibleItems.length,0);
+});
+test('autenticación rechazada al cambiar cuenta purga catálogo anterior',async()=>{
+ let identity=actor();
+ const x=make(gw(async()=>({ok:true,data:page(1)})),async()=>identity);
+ await x.load({branchId:branch});
+ identity={role:'driver',subject:uuid(2),sessionRevision:5};
+ assert.equal((await x.load({branchId:branch})).code,'AUTH_REQUIRED');
+ assert.equal(x.snapshot().visibleItems.length,0);
+});
