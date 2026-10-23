@@ -2,12 +2,13 @@ import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
-import type {AdminKycRecord} from './admin-experience.mjs';
+import type {AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import './styles.css';
 
-type Page='resumen'|'kyc'|'zonas'|'incidentes'|'auditoria';
+type Page='resumen'|'propietario'|'kyc'|'zonas'|'incidentes'|'auditoria';
 const sections:{id:Page;label:string;hint:string}[]=[
  {id:'resumen',label:'Resumen',hint:'Indicadores operativos'},
+ {id:'propietario',label:'Propietario',hint:'Ingresos, comisiones y control estratégico'},
  {id:'kyc',label:'Documentos y KYC',hint:'Revisión por responsable'},
  {id:'zonas',label:'Zonas y cobertura',hint:'Habilitaciones geográficas'},
  {id:'incidentes',label:'Seguridad',hint:'Incidentes y suspensiones'},
@@ -20,6 +21,7 @@ const cards=[
  ['Alertas de seguridad','Sin conexión','Requiere bandeja privada']
 ] as const;
 const panels:Record<Exclude<Page,'resumen'>,{title:string;description:string;empty:string;requirements:string[]}>={
+ propietario:{title:'Finanzas propietario',description:'Cifras exclusivamente del libro financiero conciliado',empty:'Sin datos conectados',requirements:['Rol owner + MFA del servidor','Ledger conciliado','Permisos y auditoría']},
  kyc:{
   title:'Revisión documental de conductores y vehículos',
   description:'Documentación legal y seguros sujetos a verificación. No se aprueba automáticamente ningún conductor.',
@@ -113,6 +115,40 @@ function AuthorizedQueue({items}:{items:readonly AdminKycRecord[]}){
   <p className="training-disclaimer">Toda aprobación o rechazo requiere endpoint autorizado y confirmación posterior del servidor. No se muestran archivos ni enlaces de evidencia.</p>
  </Panel>;
 }
+type OwnerFinance=NonNullable<AdminSnapshot['finance']>;
+function OwnerPanel({finance,authorized}:{finance:OwnerFinance|null;authorized:boolean}){
+ const amount=(x:number)=>new Intl.NumberFormat('es-PY',{maximumFractionDigits:0}).format(x)+' Gs.';
+ const metrics:{key:keyof OwnerFinance['totals'];name:string;hint:string}[]=[
+  {key:'grossCollectedGs',name:'Cobros brutos',hint:'Importes registrados'},
+  {key:'platformCommissionGs',name:'Comisiones plataforma',hint:'Valor declarado por servidor'},
+  {key:'driverPayoutGs',name:'Liquidaciones conductores',hint:'No son utilidades de la empresa'},
+  {key:'refundsGs',name:'Reembolsos',hint:'Importes devueltos'},
+  {key:'processingFeesGs',name:'Costos de procesamiento',hint:'Costos del ledger'},
+  {key:'netPlatformGs',name:'Neto de plataforma',hint:'Neto conciliado, no utilidad fiscal'}
+ ];
+ return <div className="owner-layout">
+  <Panel>
+   <div className="section-head"><div><h2>Control financiero del propietario</h2>
+    <p>Información agregada y conciliada por el servidor, nunca calculada desde viajes ficticios.</p></div>
+    <span className="muted-tag">{finance?'CONCILIADO':'NO CONECTADO'}</span></div>
+   {!authorized?<p className="owner-warning">Acceso reservado al rol propietario con MFA autorizado por el backend. Ningún importe está disponible.</p>
+    :!finance?<p className="owner-warning">No hay cifras financieras verificadas y vigentes de esta cuenta. No asumimos saldo cero.</p>
+    :<p className="owner-period">Período {finance.period.from} — {finance.period.to} · Ledger {finance.ledgerRevision} · PYG</p>}
+   <div className="owner-metrics">{metrics.map(m=><div className="owner-kpi" key={m.key}>
+    <small>{m.name}</small><strong>{finance?amount(finance.totals[m.key]):'—'}</strong>
+    <span>{m.hint}</span></div>)}</div>
+   <div className="owner-counts">
+    <span>Viajes: <strong>{finance?.totals.completedRides??'—'}</strong></span>
+    <span>Envíos: <strong>{finance?.totals.completedDeliveries??'—'}</strong></span>
+    <span>Pedidos: <strong>{finance?.totals.completedMerchantOrders??'—'}</strong></span>
+   </div>
+   <p className="training-disclaimer">Un guion indica dato no verificado, no cero. No se accede a cuentas bancarias ni información personal de conductores.</p>
+  </Panel>
+  <Panel><h2>Control estratégico</h2>
+   <p>Las tarifas, comisiones, zonas y liquidaciones necesitan autorización de servidor, revisión y bitácora. Esta interfaz no habilita modificaciones.</p>
+   <div className="empty-chip">SOLO LECTURA · NO LIVE</div></Panel>
+ </div>;
+}
 function App(){
  const {view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
@@ -137,7 +173,7 @@ function App(){
    </header>
    <div className="container">
     <div className="intro"><div><p className="overline">MOVETE FÁCIL · ADMINISTRACIÓN</p>
-     <h1>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión Admin verificada por proveedor de QA':'Sin autenticación administrativa activa'}</p></div>
+     <h1>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión de QA por proveedor (sin backend certificado)':'Sin autenticación administrativa activa'}</p></div>
      <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
      <span><strong>Modo demostración técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
@@ -154,7 +190,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='kyc'?(adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='kyc'?(adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>
