@@ -1,3 +1,4 @@
+import {utf8ByteLength} from './response-bytes.mjs';
 /**
  * Cliente B — cancelación propia STAGING, contrato OpenAPI G11 del Arquitecto A.
  * Una cancelación confirmada NO confirma reembolso, comisión ni saldo:
@@ -50,8 +51,11 @@ export function createRideCancellationGateway({
    if(expectedSessionRevision!==null&&before.sessionRevision!==expectedSessionRevision)
     return fail('STALE_SESSION_RESPONSE');
    const ctl=new AbortController();
-   timeout=setTimeout(()=>ctl.abort(),Number.isSafeInteger(timeoutMs)
-    &&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000);
+   const ms=Number.isSafeInteger(timeoutMs)
+    &&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
+   const deadline=now()+ms;
+   timeout=setTimeout(()=>ctl.abort(),ms);
+   const timedOut=()=>ctl.signal.aborted||now()>=deadline;
    const result=await fetchImpl(base+'/v1/staging/rider/trips/'+encodeURIComponent(tripId)+'/cancel',{
     method:'POST',redirect:'error',credentials:'omit',cache:'no-store',
     referrerPolicy:'no-referrer',headers:{
@@ -59,6 +63,8 @@ export function createRideCancellationGateway({
      Accept:'application/json'
     },body:JSON.stringify({requestKey}),signal:ctl.signal
    });
+   // No interpretar ACK ni 401/403 tardíos como confirmación de cancelación.
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!result||result.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(result.status===401||result.status===403){
     let after;
@@ -79,12 +85,15 @@ export function createRideCancellationGateway({
     return fail('BAD_SERVER_RESPONSE');
    if(typeof result.text!=='function')return fail('BAD_SERVER_RESPONSE');
    const body=await result.text();
-   if(typeof body!=='string'||body.length>8192)return fail('BAD_SERVER_RESPONSE');
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
+   if(typeof body!=='string'||body.length>8192||utf8ByteLength(body)>8192)
+    return fail('BAD_SERVER_RESPONSE');
    let json;
    try{json=JSON.parse(body);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!receipt(json,tripId))return fail('INVALID_CANCEL_RECEIPT');
    let after;
    try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!validAuth(after,now())||!same(before,after))return fail('STALE_SESSION_RESPONSE');
    return Object.freeze({ok:true,status:200,refreshRequired:true,eventId:json.eventId});
   }catch{return fail('NETWORK_OR_TIMEOUT');}

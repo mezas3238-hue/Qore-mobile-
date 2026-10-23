@@ -189,3 +189,27 @@ test('conflicto 409 de envío exige conciliación, no una segunda clave',async()
  const gw=make(async()=>({ok:false,status:409,redirected:false}));
  assert.equal((await gw.send('deliveryRequest',{body:request})).code,'CONFLICT_RECONCILE');
 });
+
+test('gateway general ignora ACK 201 posterior al deadline del request',async()=>{
+ let tick=Date.now();
+ const g=make(async()=>{tick+=1001;return success;},{now:()=>tick,timeoutMs:1000});
+ assert.equal((await g.send('rideRequest',{body})).code,'NETWORK_OR_TIMEOUT');
+});
+test('gateway 401 tardío no invalida JWT del nuevo contexto',async()=>{
+ let tick=Date.now(),invalid=0;
+ const g=make(async()=>{tick+=1001;return {status:401,ok:false,redirected:false};},
+  {now:()=>tick,timeoutMs:1000,onSessionInvalid:()=>invalid++});
+ assert.equal((await g.send('rideRequest',{body})).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(invalid,0);
+});
+test('respuesta con body JSON tardío nunca confirma una solicitud',async()=>{
+ let tick=Date.now();
+ const g=make(async()=>({...success,text:async()=>{
+  tick+=1001;return JSON.stringify({tripId:key});}}),{now:()=>tick,timeoutMs:1000});
+ assert.equal((await g.send('rideRequest',{body})).code,'NETWORK_OR_TIMEOUT');
+});
+test('gateway general rechaza cuerpo Unicode mayor al máximo en bytes reales',async()=>{
+ const g=make(async()=>response({tripId:key,unexpected:'á'.repeat(600)}),
+  {maxBytes:1024});
+ assert.equal((await g.send('rideRequest',{body})).code,'RESPONSE_TOO_LARGE');
+});

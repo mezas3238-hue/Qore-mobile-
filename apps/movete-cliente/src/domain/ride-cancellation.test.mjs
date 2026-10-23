@@ -153,3 +153,46 @@ test('409 exige lectura autoritativa y bloquea nueva clave para el mismo viaje',
  assert.equal((await c.submit()).code,'CONFLICT_RELOAD_TRIP');
  assert.equal(c.prepare({tripId:trip,requestKey:event,subject:a}).code,'RELOAD_TRIP_BEFORE_NEW_CANCEL');
 });
+
+test('cancelación que retorna 200 tras plazo no confirma evento ni recibo',async()=>{
+ let tick=t;
+ const g=createRideCancellationGateway({...opts,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>{tick+=1001;return success();}});
+ assert.equal((await g.cancel(trip,key)).code,'NETWORK_OR_TIMEOUT');
+});
+test('cancelación 401 tardía no revoca identidad vigente',async()=>{
+ let tick=t,invalid=0;
+ const g=createRideCancellationGateway({...opts,now:()=>tick,timeoutMs:1000,
+  onSessionInvalid:()=>invalid++,
+  fetchImpl:async()=>{tick+=1001;return {status:401,ok:false,redirected:false};}});
+ assert.equal((await g.cancel(trip,key)).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(invalid,0);
+});
+test('cancelación con body tardío no se confirma',async()=>{
+ let tick=t;
+ const g=createRideCancellationGateway({...opts,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async()=>({...success(),text:async()=>{
+   tick+=1001;return JSON.stringify(payload);}})});
+ assert.equal((await g.cancel(trip,key)).code,'NETWORK_OR_TIMEOUT');
+});
+test('respuesta de cancelación Unicode > 8KB falla cerrada',async()=>{
+ const g=createRideCancellationGateway({...opts,fetchImpl:async()=>({
+  ...success(),text:async()=>JSON.stringify({...payload,extra:'á'.repeat(4300)})
+ })});
+ assert.equal((await g.cancel(trip,key)).code,'BAD_SERVER_RESPONSE');
+});
+test('el controlador conserva la misma clave en un timeout del gateway real',async()=>{
+ let tick=t,attempt=0;const seen=[];
+ const real=createRideCancellationGateway({...opts,now:()=>tick,timeoutMs:1000,
+  fetchImpl:async(_url,req)=>{
+   attempt++;seen.push(JSON.parse(req.body).requestKey);
+   if(attempt===1){tick+=1001;return success();}
+   return success();
+  }});
+ const c=createRideCancellationController({gateway:real,getSession:async()=>session()});
+ assert.equal(c.prepare({tripId:trip,requestKey:key,subject:a}).ok,true);
+ assert.equal((await c.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(c.snapshot().phase,'retryable');
+ assert.equal((await c.retry()).ok,true);
+ assert.deepEqual(seen,[key,key]);
+});

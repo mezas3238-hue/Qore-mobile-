@@ -1,3 +1,4 @@
+import {utf8ByteLength} from './response-bytes.mjs';
 /**
  * Movete Fácil CLIENTE: boundary HTTP para QA. No LIVE y no token almacenado.
  * JWT/roles/propiedad son comprobados por servidor, no por este módulo.
@@ -113,7 +114,9 @@ export function createClientGateway({
     return fail('STALE_SESSION_RESPONSE');
    const url=actual+CLIENT_ENDPOINTS[op].replace(/\{\w+\}/g,()=>encodeURIComponent(id??''));
    const ctl=new AbortController();
+   const deadline=now()+timeout;
    timer=setTimeout(()=>ctl.abort(),timeout);
+   const timedOut=()=>ctl.signal.aborted||now()>=deadline;
    const reply=await fetchImpl(url,{
     method:isRead?'GET':'POST',redirect:'error',credentials:'omit',cache:'no-store',
     referrerPolicy:'no-referrer',
@@ -121,6 +124,7 @@ export function createClientGateway({
       ...(!isRead?{'Content-Type':'application/json'}:{})},
     ...(!isRead?{body:JSON.stringify(body)}:{}),signal:ctl.signal
    });
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!reply||reply.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(reply.status===401||reply.status===403){
     const after=await session();
@@ -144,11 +148,14 @@ export function createClientGateway({
     return fail('RESPONSE_TOO_LARGE');
    if(typeof reply.text!=='function')return fail('BAD_SERVER_RESPONSE');
    const raw=await reply.text();
-   if(typeof raw!=='string'||raw.length>limit)return fail('RESPONSE_TOO_LARGE');
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
+   if(typeof raw!=='string'||raw.length>limit||utf8ByteLength(raw)>limit)
+    return fail('RESPONSE_TOO_LARGE');
    let payload;
    try{payload=JSON.parse(raw);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!object(payload))return fail('BAD_SERVER_RESPONSE');
    const after=await session();
+   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
    if(!validAuth(after,now())||!sameAuth(before,after))
     return fail('STALE_SESSION_RESPONSE');
    return accepted(payload,expected);
