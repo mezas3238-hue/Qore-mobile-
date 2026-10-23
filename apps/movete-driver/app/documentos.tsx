@@ -2,11 +2,22 @@ import React,{useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {validateDriverDraft} from '../src/domain/capabilities.mjs';
+import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 export default function DriverDocuments(){
  const [fullName,setFullName]=useState('');
  const [plate,setPlate]=useState('');
  const [kind,setKind]=useState<'AUTO'|'MOTO'>('AUTO');
  const [result,setResult]=useState('');
+ const {state,refresh}=useDriverWorkspace();
+ const kindLabels:Record<string,string>={
+  licencia:'Licencia de conducir',identidad_frente:'Identidad — frente',
+  identidad_dorso:'Identidad — dorso',cedula_verde:'Cédula verde',
+  seguro:'Seguro',inspeccion:'Inspección',habilitacion:'Habilitación'
+ };
+ const statusLabels:Record<string,string>={
+  pending:'Pendiente de revisión',approved:'Aprobado por revisión administrativa',
+  rejected:'Rechazado — requiere revisión de documentación'
+ };
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Documentación del conductor</Text>
@@ -32,9 +43,23 @@ export default function DriverDocuments(){
    {result!==''&&<Text accessibilityRole="alert" style={[styles.text,{color:palette.teal}]}>{result}</Text>}
   </Panel>
   <Panel>
-   <Text style={styles.heading}>Revisión administrativa</Text>
-   <Text style={styles.text}>Pendiente de conexión a la identidad verificada, al almacenamiento privado de licencias y al panel de aprobación.</Text>
-   <Text style={styles.small}>La autorización de motos para paquetes no habilita automáticamente viajes con pasajeros.</Text>
+   <Text style={styles.heading}>Mi documentación privada</Text>
+   {state.phase==='connected'?<>
+    <Text style={styles.text}>Último estado del servidor STAGING. No se muestran archivos ni identificaciones personales.</Text>
+    {state.documents.length===0?
+     <Text style={styles.small}>Aún no hay documentación registrada y comprobada para esta cuenta de prueba.</Text>:
+     state.documents.map(doc=>
+      <View key={doc.kind} style={{gap:4}}>
+       <Text style={styles.text}>{kindLabels[doc.kind]??'Documento'}: {statusLabels[doc.status]??'Sin verificar'}</Text>
+      </View>
+     )
+    }
+    <Text style={styles.small}>Licencia actual revisada: {state.currentLicenseApproved?'Sí':'No'}. Se verifican por separado vehículo, vencimientos, seguro y autorizaciones; la aprobación documental no permite operar.</Text>
+   </>:<Text style={styles.text}>No se ha confirmado una sesión Driver de STAGING. Por privacidad, no se muestran estados previos ni documentos locales. Estado: {state.phase}.</Text>}
+   <Action label="Actualizar estado privado" secondary
+    disabled={state.phase==='not-configured'||state.phase==='loading'}
+    onPress={()=>{void refresh();}}/>
+   <Text style={styles.small}>La carga de archivos reales está bloqueada hasta disponer de Storage privado y escáner autorizados. La autorización de motos para paquetes no habilita viajes con pasajeros.</Text>
   </Panel>
  </ScrollView>;
 }
