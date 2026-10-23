@@ -143,3 +143,12 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - [Issue #9](https://github.com/mezas3238-hue/Qore-mobile-/issues/9) ampliado: A debe proponer/certificar un **endpoint nuevo solo owner** para lectura de finanzas conciliadas, JWT+MFA verificados en servidor, 403 para todos los demás. **No existe contrato ni endpoint certificado** por el solo hecho de solicitarlo.
 - CI sobre commit UI `1fb2e232`: ownership SUCCESS (#39887088244), two-app isolation SUCCESS (#39887088331); CI sobre `9350308` igualmente SUCCESS (#39887573946, #39887574089). Estos checks no compilan ni ejecutan el código Admin Web: **Admin npm check/build sigue pendiente de un workflow que debe agregar A en su carpeta .github**.
 - Propiedad de archivos preservada: únicamente `apps/movete-cliente/**`, `apps/movete-admin/**`, `docs/architect-b/**`. PR #8 DRAFT, sin merge/LIVE o pagos reales.
+
+## Sexta sesión — carreras de sesión, zonas y bandeja de incidentes (22-10-2026)
+- `4ab0b543`: Auth Cliente y Admin ignoran `readSession()` tardíos si ocurre logout/cambio de cuenta/refresh más nuevo. Admin descarta decisiones KYC tras re-login aun cuando el sujeto sea el mismo. **CI Cliente y aislamiento SUCCESS #39890156655**; Admin tests independientes siguen pendientes.
+- `0e5d2892`: cambio de roles en Admin Owner↔Admin limpia el estado privado; integración `zone-overview` con vistas de solo lectura, sin interpretar cobertura como disponibilidad. **CI aislamiento SUCCESS #39890466173**.
+- `3e304c78`: recuentos de vehículos online se retiran al pasar 60 segundos, incluso sin nuevas respuestas de red.
+- `3375ea31`: cola de incidentes de lectura sin PII, con roles, severidades, estado y TTL; ninguna suspensión/SOS operativa.
+- Handoff completo y contratos propuestos para A: [ADMIN_ZONAS_INCIDENTES_SEGURIDAD_2026-10-22.md](./ADMIN_ZONAS_INCIDENTES_SEGURIDAD_2026-10-22.md).
+- **CI Admin independiente no certificado.** Los checks de propiedad/isolation son del monorepo y de Cliente/Driver; no prueban `npm run check` / `npm run build` de Admin. A debe añadir el job de `.github`, ver issue #9.
+- PR #8 sigue DRAFT sin merge, sin despliegue, sin API real, sin entrada a documentos sensibles ni operaciones económicas.
