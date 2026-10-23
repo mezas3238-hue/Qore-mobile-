@@ -19,6 +19,10 @@ BEGIN
  JOIN public.mobility_stage_auto_demo_trips t ON t.id=o.trip_id
  JOIN public.mobility_stage_auto_demo_push_outbox p ON p.offer_id=o.id
  WHERE o.driver_id=_driver_id AND p.driver_id=_driver_id
+   AND EXISTS(SELECT 1 FROM public.user_roles r
+      WHERE r.user_id=o.driver_id AND r.role='driver'::public.app_role)
+   AND (SELECT count(*) FROM public.user_roles r
+      WHERE r.user_id=o.driver_id)=1
    AND o.status='offered' AND t.status='searching'
    AND t.service IN ('economico','confort','xl')
    AND t.passenger_id<>_driver_id
