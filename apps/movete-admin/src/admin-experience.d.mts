@@ -21,7 +21,7 @@ export type AdminSnapshot={
   incidentId:string;category:string;severity:string;status:string;
   createdAt:number;revision:number;
  }[]}|null;
- globalTriage:{contractReady:boolean;loading:boolean;pageNumber:number;hasNext:boolean;
+ globalTriage:{contractReady:boolean;loading:boolean;pageNumber:number;hasNext:boolean;hasPrevious:boolean;
   severityFilter:string|null;statusFilter:string|null;error:string|null;
   globalTotalKnown:false;emergencyDispatchEnabled:false;
   page:{scope:'SERVER_FILTERED_PAGE_ONLY';expiresAt:number;nextCursor:string|null;
@@ -51,8 +51,8 @@ export type AdminExperience={
  readAudit:(data:unknown)=>boolean;
  isReadConfigured:(operation:string)=>boolean;
  syncFromServer:(operation:string,direction?:'refresh'|'reset'|'next'|'previous')=>Promise<{ok:boolean;code?:string}>;
- loadGlobalIncidentTriage:(args?:{severityFilter?:string|null;statusFilter?:string|null;next?:boolean})=>
-  Promise<{ok:boolean;code?:string;pageNumber?:number;hasNext?:boolean}>;
+ loadGlobalIncidentTriage:(args?:{severityFilter?:string|null;statusFilter?:string|null;next?:boolean;previous?:boolean})=>
+  Promise<{ok:boolean;code?:string;pageNumber?:number;hasNext?:boolean;hasPrevious?:boolean}>;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };

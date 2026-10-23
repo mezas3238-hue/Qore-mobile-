@@ -227,6 +227,10 @@ function GlobalTriagePanel({client,state}:{client:AdminExperience;state:AdminSna
    <button type="button" disabled={queue.loading} onClick={()=>void client.loadGlobalIncidentTriage({
     severityFilter:selectedSeverity,statusFilter:selectedStatus
    })}>{queue.loading?'Consultando…':'Consultar filtro global'}</button>
+   <button type="button" disabled={queue.loading||!matching||!queue.hasPrevious}
+    onClick={()=>void client.loadGlobalIncidentTriage({
+     severityFilter:selectedSeverity,statusFilter:selectedStatus,previous:true
+    })}>Página anterior filtrada</button>
    <button type="button" disabled={queue.loading||!matching||!queue.hasNext}
     onClick={()=>void client.loadGlobalIncidentTriage({
      severityFilter:selectedSeverity,statusFilter:selectedStatus,next:true

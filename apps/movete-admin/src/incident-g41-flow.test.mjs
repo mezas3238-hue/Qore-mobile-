@@ -89,3 +89,67 @@ test('un error de red no hace pasar cola vacía por cero incidentes',async()=>{
  assert.equal(flow.snapshot().page,null);
  assert.equal(flow.snapshot().globalTotalKnown,false);
 });
+
+test('atrás reconsulta al servidor con las anclas y no guarda filas de página antigua',async()=>{
+ const c1='C'.repeat(44),c2='D'.repeat(44),visited=[];
+ const flow=config(async ({cursor,...filters})=>{
+  visited.push(cursor);
+  return {ok:true,page:page(cursor===null?c1:cursor===c1?c2:null,filters)};
+ });
+ await flow.load();await flow.load({next:true});await flow.load({next:true});
+ assert.equal(flow.snapshot().pageNumber,3);
+ assert.equal((await flow.load({previous:true})).ok,true);
+ assert.equal(flow.snapshot().pageNumber,2);
+ assert.equal((await flow.load({previous:true})).ok,true);
+ assert.equal(flow.snapshot().pageNumber,1);
+ assert.equal(flow.snapshot().hasPrevious,false);
+ assert.deepEqual(visited,[null,c1,c2,c1,null]);
+});
+test('retroceder y avanzar rehace GET del cursor en vez de recuperar cache antigua',async()=>{
+ const c1='a'.repeat(44),c2='b'.repeat(44),requests=[];
+ const flow=config(async ({cursor,...filters})=>{
+  requests.push(cursor);return {ok:true,page:page(cursor===null?c1:cursor===c1?c2:null,filters)};
+ });
+ await flow.load();await flow.load({next:true});await flow.load({next:true});
+ await flow.load({previous:true});
+ assert.equal((await flow.load({next:true})).ok,true);
+ assert.deepEqual(requests,[null,c1,c2,c1,c2]);
+ assert.equal(flow.snapshot().pageNumber,3);
+});
+test('ancla anterior no es reutilizable con filtro ajeno ni en página 1',async()=>{
+ const c1='e'.repeat(44),visited=[];
+ const flow=config(async ({cursor,...filters})=>{
+  visited.push(cursor);return {ok:true,page:page(cursor===null?c1:null,filters)};
+ });
+ await flow.load();await flow.load({next:true});
+ assert.equal((await flow.load({severityFilter:'HIGH',previous:true})).code,
+  'NO_PREVIOUS_PAGE_FOR_FILTER');
+ assert.equal(visited.length,2);
+ assert.equal((await flow.load({next:true,previous:true})).code,'INVALID_FILTER');
+ await flow.load();
+ assert.equal((await flow.load({previous:true})).code,'NO_PREVIOUS_PAGE_FOR_FILTER');
+});
+test('sin límite global artificial: 120 páginas navegables con backend paginado',async()=>{
+ const cursor=n=>'P'+String(n).padStart(43,'0');
+ const flow=config(async ({cursor:anchor,...filters})=>{
+  const current=anchor===null?1:Number(anchor.slice(1))+1;
+  return {ok:true,page:page(current<120?cursor(current):null,filters)};
+ });
+ assert.equal((await flow.load()).ok,true);
+ for(let i=1;i<120;i++)assert.equal((await flow.load({next:true})).ok,true);
+ assert.equal(flow.snapshot().pageNumber,120);
+ assert.equal(flow.snapshot().hasNext,false);
+ assert.equal(flow.snapshot().globalTotalKnown,false);
+ assert.equal((await flow.load({previous:true})).ok,true);
+ assert.equal(flow.snapshot().pageNumber,119);
+});
+test('MFA revocada mientras lee bloquea respuesta anterior',async()=>{
+ let active=actor(),release;
+ const pending=new Promise(done=>release=done);
+ const flow=createGlobalTriageFlow({now:()=>t,getActor:async()=>active,
+  gateway:{isConfigured:()=>true,fetchPage:()=>pending}});
+ const request=flow.load();await Promise.resolve();await Promise.resolve();
+ active={...active,mfaVerified:false};release({ok:true,page:page()});
+ assert.equal((await request).code,'STALE_SESSION_RESPONSE');
+ assert.equal(flow.snapshot().page,null);
+});
