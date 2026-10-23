@@ -153,7 +153,8 @@ test('G42 refuses absent/expired/revoked provider session or SQL authority',asyn
 test('G42 never trusts signed MFA or Admin role; requires separate fresh provider evidence',async()=>{
  const ok=setup();
  const user=await ok.adapters.verifyAccessToken(bearer);
- assert.deepEqual(user,{id:sub,sessionId,expiresAtMs:(nowSec+600)*1000,
+ assert.deepEqual(user,{id:sub,sessionId,tokenIatMs:(nowSec-60)*1000,
+  expiresAtMs:(nowSec+600)*1000,
   is_anonymous:false,email_confirmed_at:'2026-10-20T00:00:00Z'});
  assert.equal(await ok.adapters.verifySessionNotRevoked({userId:sub,sessionId,at}),true);
  const mfa=await ok.adapters.verifyBackofficeMfa({
