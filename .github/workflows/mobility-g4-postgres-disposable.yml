@@ -17,6 +17,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G27_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G28_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G29_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G30_*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
       - 'apps/mobility-expo/server/g18-*'
@@ -198,3 +199,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G29_ADMIN_KYC_PAGE_POSTGRES_CI_ONLY.sql
       - name: G29 verify 121 KYC rows, documentary truth, MOTO exclusion and role isolation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G29_ADMIN_KYC_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G30 install privileged read projection of actual Admin source-audit events
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G30_ADMIN_AUDIT_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G30 traverse 123 actual stored event rows in three pages and deny forged actor
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G30_ADMIN_AUDIT_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
