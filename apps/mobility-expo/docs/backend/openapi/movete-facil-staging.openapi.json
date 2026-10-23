@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g47",
+    "version": "1.0.0-g48",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G47 private synthetic Driver KYC evidence leases and auditing; ZERO signed URLs or live Storage integration"
+    "x-qore-contract-extension": "G48 local-only delegated DB read proofs via NOLOGIN least-privilege role; no real Auth mint, HTTPS or LIVE"
   },
   "servers": [
     {
@@ -2264,6 +2264,191 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DriverEvidenceProbeReceiptG47"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/documents/status-g48": {
+      "get": {
+        "operationId": "readDriverStatusG48Qa",
+        "tags": [
+          "driver",
+          "kyc"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-owner-attestation-synthetic-only": true,
+        "description": "NOT AN HTTP ROUTE. Server-provisioned one-use proof minted ONLY by PG disposable owner; NEVER accept an actor id from the caller. No scans or signed URLs.",
+        "responses": {
+          "200": {
+            "description": "Synthetic private Driver status; no paths, hashes or bytes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverStatusReceiptG48"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/evidence/probe-g48": {
+      "post": {
+        "operationId": "probeScopedDriverEvidenceG48Qa",
+        "tags": [
+          "driver",
+          "kyc"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-owner-attestation-synthetic-only": true,
+        "description": "NOT AN HTTP ROUTE. Proof bound to signed Driver session and G47 lease; metadata only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverEvidenceProbeRequestG48"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Synthetic lease status; no Storage connection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverEvidenceProbeReceiptG47"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/buyer/branches/{branchId}/catalog-g48": {
+      "get": {
+        "operationId": "readScopedBuyerCatalogG48Qa",
+        "tags": [
+          "buyer",
+          "commerce"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-owner-attestation-synthetic-only": true,
+        "description": "NOT AN HTTP ROUTE. One-use proof bound to Buyer and branch with G42 session lock and G44 version. Page size 100 is NOT a total catalog limit. No checkout.",
+        "parameters": [
+          {
+            "name": "branchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          },
+          {
+            "name": "expectedRevision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synthetic server-priced branch catalog; no real commercial eligibility",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyerCatalogPageG48"
                 }
               }
             }
@@ -5235,6 +5420,157 @@
             "const": false
           }
         }
+      },
+      "DriverStatusEntryG48": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "status",
+          "submittedAt",
+          "reviewedAt"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "licencia",
+              "identidad_frente",
+              "identidad_dorso",
+              "cedula_verde",
+              "seguro",
+              "inspeccion",
+              "habilitacion"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reviewedAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "DriverStatusReceiptG48": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "source",
+          "documentBytesAvailable",
+          "signedUrlAvailable",
+          "productionEnabled"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 7,
+            "items": {
+              "$ref": "#/components/schemas/DriverStatusEntryG48"
+            }
+          },
+          "source": {
+            "type": "string",
+            "const": "QA_G48_DRIVER_STATUS_ONLY"
+          },
+          "documentBytesAvailable": {
+            "type": "boolean",
+            "const": false
+          },
+          "signedUrlAvailable": {
+            "type": "boolean",
+            "const": false
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "BuyerCatalogPageG48": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "branchId",
+          "version",
+          "expiresAt",
+          "hasMore",
+          "items",
+          "orderEnabled",
+          "eligibleByPolicy",
+          "source",
+          "productionEnabled"
+        ],
+        "properties": {
+          "branchId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BuyerCatalogItemG44"
+            }
+          },
+          "orderEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "eligibleByPolicy": {
+            "type": "boolean",
+            "const": false
+          },
+          "source": {
+            "type": "string",
+            "const": "QA_G48_SCOPED_CATALOG_ONLY"
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "DriverEvidenceProbeRequestG48": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseId"
+        ],
+        "properties": {
+          "leaseId": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        }
       }
     }
   },
@@ -5242,5 +5578,8 @@
   "x-qore-merchant-runtime-ready": false,
   "x-qore-g46-database-privilege-lockdown-ci-only": true,
   "x-qore-driver-evidence-storage-connected": false,
-  "x-qore-driver-evidence-signed-url-enabled": false
+  "x-qore-driver-evidence-signed-url-enabled": false,
+  "x-qore-g48-gateway-role-login-enabled": false,
+  "x-qore-g48-runtime-wired": false,
+  "x-qore-g48-provider-to-db-proof-wired": false
 }
