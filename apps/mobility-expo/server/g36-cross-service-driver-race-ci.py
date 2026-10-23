@@ -32,6 +32,8 @@ CARGO_REQ_2="b6360000-0000-4636-8636-000000000013"
 AUTO_OFFER_KEY_2="b6360000-0000-4636-8636-000000000014"
 CARGO_OFFER_KEY_2="b6360000-0000-4636-8636-000000000015"
 CANCEL_KEY_2="b6360000-0000-4636-8636-000000000016"
+AUTO_ACCEPT_KEY_2="b6360000-0000-4636-8636-000000000017"
+CARGO_ACCEPT_KEY_2="b6360000-0000-4636-8636-000000000018"
 def conn():
     return psycopg.connect(connect_timeout=15)
 
@@ -85,7 +87,7 @@ def prepare():
             assert c.fetchone()[0] == 0, "Previous AUTO slot did not release"
     return trip,delivery,offer_auto,offer_cargo
 
-def attempt(kind,job,barrier,delay_auto=0):
+def attempt(kind,job,barrier,delay_auto=0,decision_key=None):
     with conn() as db:
         with db.cursor() as c:
             c.execute("SET LOCAL ROLE service_role")
@@ -96,11 +98,11 @@ def attempt(kind,job,barrier,delay_auto=0):
                 if kind=="AUTO_RIDE":
                     c.execute("""SELECT public.mobility_stage_auto_demo_accept_offer(
                       %s::uuid,%s::uuid,%s::uuid)""",
-                      (job,DRIVER,AUTO_ACCEPT_KEY))
+                      (job,DRIVER,decision_key or AUTO_ACCEPT_KEY))
                 else:
                     c.execute("""SELECT public.mobility_stage_delivery_accept_offer(
                       %s::uuid,%s::uuid,%s::uuid)""",
-                      (job,DRIVER,CARGO_ACCEPT_KEY))
+                      (job,DRIVER,decision_key or CARGO_ACCEPT_KEY))
                 receipt=c.fetchone()[0]
                 db.commit()
                 return kind,"success",str(receipt)
@@ -178,8 +180,8 @@ if __name__=="__main__":
     next_trip,next_delivery,offer_a,offer_d=reverse
     barrier2=Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as ex:
-        future_auto=ex.submit(attempt,"AUTO_RIDE",offer_a,barrier2,.20)
-        future_cargo=ex.submit(attempt,"DELIVERY",offer_d,barrier2)
+        future_auto=ex.submit(attempt,"AUTO_RIDE",offer_a,barrier2,.20,AUTO_ACCEPT_KEY_2)
+        future_cargo=ex.submit(attempt,"DELIVERY",offer_d,barrier2,0,CARGO_ACCEPT_KEY_2)
         opposite=[future_auto.result(timeout=35),future_cargo.result(timeout=35)]
     verify(next_trip,next_delivery,opposite)
     assert [x[0] for x in opposite if x[1]=="success"]==["DELIVERY"],opposite
