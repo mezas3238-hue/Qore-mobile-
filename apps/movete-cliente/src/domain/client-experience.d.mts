@@ -13,6 +13,7 @@ export type ClientSnapshot={
   subjectKind:string;expiresAt:number;fareVersion:string;formattedAmount:string}|null;
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
  cancellation:{phase:string;tripId:string|null;requestKey:string|null;contractReady:boolean};
+ fareRequest:{phase:string;tripId:string|null;requestKey:string|null;error:string|null;contractReady:boolean};
  history:{ownerId:string;nextCursor:string|null;
   items:readonly {serviceId:string;kind:string;status:string;createdAt:number;revision:number}[]}|null;
 };
@@ -26,6 +27,9 @@ export type ClientExperience={
  prepareRide(body:unknown):ClientResult;
  prepareDelivery(body:unknown):ClientResult;
  prepareFare(body:unknown):ClientResult;
+ prepareServerFare(args:{tripId:string;requestKey:string}):ClientResult;
+ submitServerFare():Promise<ClientResult>;
+ retryServerFare():Promise<ClientResult>;
  prepareSimulatedPayment(body:unknown):ClientResult;
  submit():Promise<ClientResult>;
  retry():Promise<ClientResult>;
@@ -47,6 +51,10 @@ export declare function createClientExperience(options?:{
   enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
   timeoutMs?:number;
+ }|null;
+ fareGatewayOptions?:{
+  enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;timeoutMs?:number;
  }|null;
  statusGatewayOptions?:{
   enabled?:boolean;contractCertified?:boolean;origin?:string;pinnedOrigin?:string;

@@ -4,6 +4,8 @@ import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
 import {createClientHistoryGateway} from './client-history-gateway.mjs';
 import {createRiderStatusGateway} from './ride-status-gateway.mjs';
+import {createFareQuoteGateway} from './fare-quote-gateway.mjs';
+import {createFareQuoteFlow} from './fare-quote-flow.mjs';
 import {createRideCancellationGateway,createRideCancellationController} from './ride-cancellation.mjs';
 import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
@@ -16,11 +18,11 @@ import {createRiderStatusStore} from './rider-status.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,now=()=>Date.now()}={}){
+export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let mutations,tracking,cancellation;
+ let mutations,tracking,cancellation,fareFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
  const observers=new Set();
@@ -29,6 +31,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(mutations)mutations.clear();
   if(tracking)tracking.stop();
   if(cancellation)cancellation.clear();
+  if(fareFlow)fareFlow.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -60,6 +63,23 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
 
+ const fareGateway=fareGatewayOptions?createFareQuoteGateway({
+  ...fareGatewayOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway();
+   const visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ fareFlow=createFareQuoteFlow({gateway:fareGateway,getActor:async()=>actor(),
+  onAccept:(dto,subject,id)=>{
+   const user=actor();
+   return Boolean(user&&user.subject===subject&&tracking.snapshot().tripId===id
+    &&quote.show(dto,subject));
+  }
+ });
  const statusGateway=statusGatewayOptions?createRiderStatusGateway({
   ...statusGatewayOptions,now,
   getSession:()=>{
@@ -91,7 +111,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(!user)return fail('AUTH_REQUIRED');
   const oldTrip=tracking.snapshot().tripId;
   const result=tracking.begin(tripId,user.subject);
-  if(result.ok&&oldTrip!==tripId)cancellation.clear();
+  if(result.ok&&oldTrip!==tripId){cancellation.clear();fareFlow.clear();quote.clear();}
   return result;
  }
  async function syncTracking(){
@@ -106,6 +126,16 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(active.tripId!==tripId||!['searching','assigned','arriving'].includes(active.state))
    return fail('CANCEL_REQUIRES_ACTIVE_RIDE');
   return cancellation.prepare({tripId,requestKey,subject:user.subject});
+ }
+ function prepareServerFare({tripId,requestKey}={}){
+  const user=actor();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(!fareGateway?.isConfigured())return fail('FARE_CONTRACT_PENDING');
+  const tracked=tracking.snapshot();
+  if(tracked.tripId!==tripId||!tracked.subscriptionActive||tracked.revision<1
+   ||!['searching','assigned','arriving'].includes(tracked.state))
+   return fail('FARE_REQUIRES_SERVER_TRIP');
+  return fareFlow.prepare({tripId,requestKey,subject:user.subject});
  }
  function acceptQuote(dto){
   const user=actor();
@@ -177,7 +207,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     tracking:tracking.snapshot(),quote:null,history:null,
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
-    cancellation:cancellation.snapshot()});
+    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -188,7 +218,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    history:history.current(user.subject),
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
-   cancellation:cancellation.snapshot()
+   cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot()
   });
  }
  async function signOut(){
@@ -206,6 +236,9 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
   prepareFare:body=>{const result=prepare('fareQuote',body);notify();return result;},
+  prepareServerFare:args=>{const result=prepareServerFare(args);notify();return result;},
+  submitServerFare:async()=>{const result=await fareFlow.submit();notify();return result;},
+  retryServerFare:async()=>{const result=await fareFlow.retry();notify();return result;},
   prepareSimulatedPayment:body=>{const result=prepare('paymentAuthorize',body);notify();return result;},
   submit:async()=>{const result=await mutations.submit();notify();return result;},
   retry:async()=>{const result=await mutations.retry();notify();return result;},
