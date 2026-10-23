@@ -12,6 +12,7 @@ import {createRiderStatusStore} from './rider-status.mjs';
 import {createIncidentG40Gateway} from './incident-g40-gateway.mjs';
 import {createIncidentReportFlow} from './incident-report-flow.mjs';
 import {createCommerceCatalogFlow} from './commerce-catalog-flow.mjs';
+import {createCommerceCatalogPager} from './commerce-catalog-pages.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -21,11 +22,12 @@ import {createCommerceCatalogFlow} from './commerce-catalog-flow.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,now=()=>Date.now()}={}){
+export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ commerceCatalogPageGateway=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
- let commerceFlow;
+ let commerceFlow,commercePager;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
@@ -38,6 +40,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(fareFlow)fareFlow.clear();
   if(incidentFlow)incidentFlow.clear();
   if(commerceFlow)commerceFlow.clear();
+  if(commercePager)commercePager.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -87,6 +90,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  // Solo una implementación certificada inyectada habilitará este flujo.
  commerceFlow=createCommerceCatalogFlow({
   gateway:commerceCatalogGateway,getActor:async()=>actorSession(),now
+ });
+ // Paginación de descubrimiento SOLO LECTURA, independiente del carrito.
+ // OFF por defecto; el backend A todavía no ha publicado GET Buyer.
+ commercePager=createCommerceCatalogPager({
+  gateway:commerceCatalogPageGateway,getActor:async()=>actorSession(),now
  });
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
   ...historyGatewayOptions,now,
@@ -262,7 +270,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
-    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot()});
+    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
+    commercePager:commercePager.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -275,7 +284,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
-   incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot()
+   incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
+   commercePager:commercePager.snapshot()
   });
  }
  async function signOut(){
@@ -291,6 +301,8 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   signOut:async()=>{const result=await signOut();notify();return result;},
   clear:()=>{session.clear();clearPrivate();notify();},
   loadCommerceCatalog:async branchId=>{const p=commerceFlow.loadCatalog(branchId);notify();const r=await p;notify();return r;},
+  loadCommercePage:async args=>{const p=commercePager.load(args);notify();const r=await p;notify();return r;},
+  clearCommercePage:()=>{commercePager.clear();notify();},
   setCommerceQuantity:(itemId,quantity)=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeQuantity(itemId,quantity);notify();return r;},
   selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
   previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},

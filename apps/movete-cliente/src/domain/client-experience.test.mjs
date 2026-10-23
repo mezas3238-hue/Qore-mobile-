@@ -748,3 +748,68 @@ test('JWT nuevo de la misma cuenta elimina catálogo y cantidades del cliente',a
  assert.equal(api.snapshot().commerce.items.length,0);
  assert.equal(api.snapshot().commerce.catalogItems.length,0);
 });
+
+test('exploración Buyer no se habilita solo por montar Cliente; evita red y pedidos',async()=>{
+ const f=fixture();
+ await f.api.refreshSession();
+ assert.equal(f.api.snapshot().commercePager.readReady,false);
+ assert.equal((await f.api.loadCommercePage({branchId:trip})).code,
+  'CATALOG_PAGING_NOT_CERTIFIED');
+ assert.equal(f.api.snapshot().commercePager.visibleItems.length,0);
+ assert.equal(f.api.snapshot().commercePager.ordersEnabled,false);
+});
+test('exploración Buyer recorre páginas sin llenar carrito ni permitir pagos',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080';
+ const cursor=n=>'C'+String(n).padStart(43,'0');
+ const calls=[];
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  commerceCatalogPageGateway:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>true,
+   readCatalogPage:async(_,context)=>{
+    calls.push(context);
+    const n=context.cursor?Number(context.cursor.slice(1))+1:1;
+    return {ok:true,data:{branchId:branch,version:'v1',expiresAt:now+60000,
+     items:[{itemId:'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0'),
+      itemTag:'ITEM_'+n,itemClass:'GENERAL',active:true,unitPricePyg:1250,stockUnits:6}],
+     nextCursor:n<4?cursor(n):null}};
+   }
+  }
+ });
+ await api.refreshSession();
+ assert.equal(api.snapshot().commercePager.readReady,true);
+ assert.equal((await api.loadCommercePage({branchId:branch})).ok,true);
+ for(let i=1;i<4;i++)
+  assert.equal((await api.loadCommercePage({branchId:branch,next:true})).ok,true);
+ assert.equal(api.snapshot().commercePager.pageNumber,4);
+ assert.equal(api.snapshot().commercePager.visibleItems.length,1);
+ assert.equal(api.snapshot().commercePager.globalTotalKnown,false);
+ assert.equal(api.snapshot().commercePager.ordersEnabled,false);
+ assert.equal(api.snapshot().commerce.items.length,0);
+ assert.equal(api.snapshot().commerce.estimatedSubtotalPyg,null);
+ assert.deepEqual(calls.map(c=>c.cursor),[null,cursor(1),cursor(2),cursor(3)]);
+ await api.signOut();
+ assert.equal(api.snapshot().commercePager.visibleItems.length,0);
+ assert.equal(api.snapshot().commercePager.pageNumber,0);
+});
+test('rotación JWT durante navegación Buyer descarta página y no revive precios',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080';
+ let current=fakeSession(),release;
+ const pending=new Promise(resolve=>{release=resolve;});
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>current},
+  commerceCatalogPageGateway:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,isConfigured:()=>true,readCatalogPage:()=>pending}
+ });
+ await api.refreshSession();
+ const task=api.loadCommercePage({branchId:branch});
+ await Promise.resolve();await Promise.resolve();
+ current={...current,token:'new-rotated-passenger-jwt-synthetic'};
+ await api.refreshSession();
+ release({ok:true,data:{branchId:branch,version:'v1',expiresAt:now+60000,
+  items:[],nextCursor:null}});
+ assert.equal((await task).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(api.snapshot().commercePager.visibleItems.length,0);
+ assert.equal(api.snapshot().commercePager.pageNumber,0);
+});

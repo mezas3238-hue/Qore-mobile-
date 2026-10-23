@@ -23,6 +23,8 @@ export default function Commerce(){
   </Panel>}
   {view.authenticated&&view.commerce.catalogReadReady&&
    <CertifiedCatalog key={view.privateViewRevision} client={client} view={view}/>}
+  {view.authenticated&&view.commercePager.readReady&&
+   <ReadOnlyCatalogPager key={'pager-'+view.privateViewRevision} client={client} view={view}/>}
   {categories.map(([title,description])=><Panel key={title}>
    <Text accessibilityRole="header" style={styles.heading}>{title}</Text><Text style={styles.text}>{description}</Text>
    <Text style={styles.small}>Se habilitará únicamente con sucursal, cobertura y catálogo vigentes del servidor.</Text>
@@ -113,5 +115,50 @@ function CertifiedCatalog({client,view}:{client:ClientExperience;view:ClientSnap
   <Action label="Finalizar compra — pendiente del servidor"
    disabled hint="La confirmación y el pago requieren catálogo, stock y PSP certificados"
    onPress={()=>{}}/>
+ </Panel>;
+}
+
+/** Lectura de catálogo de múltiples páginas, sin alimentar carrito ni pagos.
+ * Solo aparece con una API Buyer previamente auditada por A.
+ */
+function ReadOnlyCatalogPager({client,view}:{client:ClientExperience;view:ClientSnapshot}){
+ const pager=view.commercePager;
+ const [branchInput,setBranchInput]=useState('');
+ const [message,setMessage]=useState('');
+ if(!pager.readReady)return null;
+ const load=async(next=false,previous=false)=>{
+  const input=(next||previous)?pager.branchId:branchInput;
+  const validated=prepareCatalogBranchLookup(input??'');
+  if(!validated.ok){setMessage('Ingresá un identificador válido de sucursal.');return;}
+  setMessage('');
+  const result=await client.loadCommercePage({branchId:validated.branchId,next,previous});
+  if(!result.ok)setMessage('No se pudo validar esta página del catálogo. Actualizá desde el inicio.');
+ };
+ return <Panel>
+  <Text accessibilityRole="header" style={styles.heading}>Explorar catálogo paginado · solo lectura</Text>
+  <Text style={styles.small}>Esta exploración no agrega artículos al carrito, no reserva stock ni confirma pedidos. Las cantidades totales de la plataforma son desconocidas.</Text>
+  <TextInput style={styles.field} value={branchInput}
+   onChangeText={v=>{setBranchInput(v);setMessage('');}}
+   editable={!pager.loading} maxLength={36} autoCapitalize="none" autoCorrect={false}
+   placeholder="Identificador de sucursal" accessibilityLabel="Sucursal de catálogo paginado"/>
+  <Action label={pager.loading?'Consultando página…':'Explorar sucursal'}
+   busy={pager.loading} disabled={pager.loading} onPress={()=>void load()}/>
+  {pager.error&&<Text accessibilityRole="alert" style={styles.text}>La página no cumple el contrato del servidor. No se muestran artículos antiguos.</Text>}
+  {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
+  {pager.loading&&<Text accessibilityLiveRegion="polite" style={styles.text}>Comprobando precios y stock. Se oculta la página anterior.</Text>}
+  {!pager.loading&&pager.pageNumber>0&&<>
+   <Text style={styles.small}>Página {pager.pageNumber} · {pager.visibleItems.length} productos en esta página, no el total de la plataforma. Versión {pager.version}.</Text>
+   {pager.visibleItems.filter(item=>item.active).map(item=><View key={item.itemId} style={styles.card}>
+    <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>
+    <Text style={styles.text}>{item.itemClass==='PHARMACY_OTC'?'Artículo de farmacia sin receta':'Artículo general'} · {item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock reportado: {item.stockUnits}</Text>
+    <Text style={styles.small}>Solo consulta. El precio final y la compra requieren una transacción de servidor.</Text>
+   </View>)}
+   <Action label="Página anterior" secondary disabled={!pager.hasPrevious}
+    onPress={()=>void load(false,true)}/>
+   <Action label="Página siguiente" secondary disabled={!pager.hasNext}
+    onPress={()=>void load(true,false)}/>
+   <Action label="Cerrar exploración" secondary onPress={()=>{client.clearCommercePage();setMessage('');}}/>
+  </>}
+  <Text style={styles.small}>No hay límite global de registros de catálogo en el navegador; cada solicitud recibe solo una página. La compra multi-página necesita contrato atómico de A.</Text>
  </Panel>;
 }

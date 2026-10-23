@@ -27,6 +27,14 @@ export type ClientSnapshot={
   stage:string;stock:string;generation:number;
   catalogReadReady:boolean;catalogLoading:boolean;catalogError:string|null;
   checkoutEnabled:false;paymentEnabled:false;serverOrderReceipt:null};
+ commercePager:{readReady:boolean;loading:boolean;
+  branchId:string|null;version:string|null;pageNumber:number;
+  visibleItems:readonly {itemId:string;itemTag:string;
+   itemClass:'GENERAL'|'PHARMACY_OTC';active:boolean;
+   unitPricePyg:number;stockUnits:number}[];
+  expiresAt:number|null;hasPrevious:boolean;hasNext:boolean;
+  globalTotalKnown:false;ordersEnabled:false;paymentsEnabled:false;
+  error:string|null};
  incidentReport:{phase:string;requestKey:string|null;statusFresh:boolean;
   receipt:{incidentId:string;receiptId:string;state:string;revision:number;
    createdAt:string;observedAt:string;receiptStatus:'RECEIVED_IN_QA_DATABASE_ONLY'}|null;
@@ -44,6 +52,8 @@ export type ClientExperience={
  signOut():Promise<ClientResult>;
  clear():void;
  loadCommerceCatalog(branchId:string):Promise<ClientResult>;
+ loadCommercePage(args:{branchId:string;next?:boolean;previous?:boolean}):Promise<ClientResult>;
+ clearCommercePage():void;
  setCommerceQuantity(itemId:string,quantity:number):ClientResult;
  selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
  previewCommerceOrder(requestKey:string):ClientResult;
@@ -79,6 +89,13 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ commerceCatalogPageGateway?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  isConfigured?:()=>boolean;
+  readCatalogPage?:(branchId:string,context:{cursor:string|null;subject:string;sessionRevision:number})=>Promise<{
+   ok:boolean;code?:string;data?:unknown
+  }>;
+ }|null;
  commerceCatalogGateway?:{
   enabled?:boolean;stagingRuntimeVerified?:boolean;contractCertified?:boolean;
   isConfigured?:()=>boolean;
