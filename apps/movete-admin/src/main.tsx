@@ -190,7 +190,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='kyc'?(adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail"><div className="section-head"><div><h2>{panels[page].title}</h2><p>{panels[page].description}</p></div>
         <span className="muted-tag">SIN API</span></div>
        <div className="empty"><div className="empty-symbol">○</div><h3>Sin datos conectados</h3>
         <p>{panels[page].empty}</p></div>
