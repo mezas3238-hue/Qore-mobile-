@@ -257,3 +257,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_1_TRUSTED_OFFER_ACCEPTANCE_FENCE_POSTGRES_CI_ONLY.sql
       - name: G38.1 deny untrusted AUTO and DELIVERY private accept without certification
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_1_TRUSTED_OFFER_ACCEPTANCE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G38.2 forged proof and fresh synthetic GPS must never unlock legal zone dispatch
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_2_FORGED_PROOF_SIGNAL_ASSERT_POSTGRES_CI_ONLY.sql
