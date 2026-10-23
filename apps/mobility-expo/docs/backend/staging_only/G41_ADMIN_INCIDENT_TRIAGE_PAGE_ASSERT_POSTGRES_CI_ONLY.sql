@@ -70,7 +70,7 @@ BEGIN
    IF pg_catalog.jsonb_array_length(page->'items')>50
     THEN RAISE EXCEPTION 'G41 exceeded per-page limit'; END IF;
    FOR record IN SELECT value FROM pg_catalog.jsonb_array_elements(page->'items') LOOP
-    IF pg_catalog.jsonb_object_length(record)<>6
+    IF (SELECT count(*) FROM pg_catalog.jsonb_object_keys(record))<>6
      OR (sever IS NOT NULL AND record->>'severity'<>sever)
      OR (state IS NOT NULL AND record->>'status'<>state)
     THEN RAISE EXCEPTION 'G41 leaks row outside server filter'; END IF;
