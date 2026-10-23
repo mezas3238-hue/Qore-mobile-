@@ -1,4 +1,4 @@
-import {utf8ByteLength} from './response-bytes.mjs';
+import {readBoundedResponseText} from './bounded-http-response.mjs';
 /**
  * CLIENTE: paginación de historial solo lectura.
  * GET /v1/staging/rider/history consta en OpenAPI STAGING de A:
@@ -79,11 +79,11 @@ export function createClientHistoryGateway({
    const length=res.headers?.get?.('content-length');
    if(length!==null&&length!==undefined&&(!/^\d+$/.test(length)||Number(length)>limit))
     return fail('RESPONSE_TOO_LARGE');
-   if(typeof res.text!=='function')return fail('BAD_SERVER_RESPONSE');
-   const text=await res.text();
-   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
-   if(typeof text!=='string'||text.length>limit
-    ||utf8ByteLength(text)>limit)return fail('RESPONSE_TOO_LARGE');
+   const bodyResult=await readBoundedResponseText(res,{
+    limit,signal:controller.signal,timedOut
+   });
+   if(!bodyResult.ok)return fail(bodyResult.code);
+   const text=bodyResult.text;
    let data;
    try{data=JSON.parse(text);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!data||typeof data!=='object'||Array.isArray(data))return fail('BAD_SERVER_RESPONSE');

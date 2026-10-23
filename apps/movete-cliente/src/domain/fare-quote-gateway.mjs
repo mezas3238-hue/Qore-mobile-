@@ -1,4 +1,4 @@
-import {utf8ByteLength} from './response-bytes.mjs';
+import {readBoundedResponseText} from './bounded-http-response.mjs';
 /** G24: servidor determina precio en Gs, sin dinero ni GPS del móvil. */
 const ID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const uuid=x=>typeof x==='string'&&ID.test(x);
@@ -80,11 +80,11 @@ export function createFareQuoteGateway({enabled=false,contractCertified=false,or
    const length=r.headers?.get?.('content-length');
    if(length!=null&&(!/^\d+$/.test(length)||Number(length)>32768))
     return fail('RESPONSE_TOO_LARGE');
-   if(typeof r.text!=='function')return fail('BAD_SERVER_RESPONSE');
-   const body=await r.text();
-   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
-   if(typeof body!=='string'||body.length>32768||utf8ByteLength(body)>32768)
-    return fail('RESPONSE_TOO_LARGE');
+   const bodyResult=await readBoundedResponseText(r,{
+    limit:32768,signal:ctl.signal,timedOut
+   });
+   if(!bodyResult.ok)return fail(bodyResult.code);
+   const body=bodyResult.text;
    let data;
    try{data=JSON.parse(body);}catch{return fail('BAD_SERVER_RESPONSE');}
    let after;

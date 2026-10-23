@@ -1,4 +1,4 @@
-import {utf8ByteLength} from './response-bytes.mjs';
+import {readBoundedResponseText} from './bounded-http-response.mjs';
 /**
  * Cliente B — cancelación propia STAGING, contrato OpenAPI G11 del Arquitecto A.
  * Una cancelación confirmada NO confirma reembolso, comisión ni saldo:
@@ -83,11 +83,12 @@ export function createRideCancellationGateway({
    const length=result.headers?.get?.('content-length');
    if(length!==null&&length!==undefined&&(!/^\d+$/.test(length)||Number(length)>8192))
     return fail('BAD_SERVER_RESPONSE');
-   if(typeof result.text!=='function')return fail('BAD_SERVER_RESPONSE');
-   const body=await result.text();
-   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
-   if(typeof body!=='string'||body.length>8192||utf8ByteLength(body)>8192)
-    return fail('BAD_SERVER_RESPONSE');
+   const bodyResult=await readBoundedResponseText(result,{
+    limit:8192,signal:ctl.signal,timedOut
+   });
+   if(!bodyResult.ok)return fail(bodyResult.code==='RESPONSE_TOO_LARGE'
+    ?'BAD_SERVER_RESPONSE':bodyResult.code);
+   const body=bodyResult.text;
    let json;
    try{json=JSON.parse(body);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!receipt(json,tripId))return fail('INVALID_CANCEL_RECEIPT');

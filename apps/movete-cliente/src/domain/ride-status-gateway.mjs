@@ -1,4 +1,4 @@
-import {utf8ByteLength} from './response-bytes.mjs';
+import {readBoundedResponseText} from './bounded-http-response.mjs';
 /**
  * Pasajero: GET de estado de viaje propio según OpenAPI RiderStatusV1 (G11).
  * JWT/RLS y propiedad se verifican solo en servidor A. Bloqueado por defecto.
@@ -132,11 +132,11 @@ export function createRiderStatusGateway({
    const limit=int(maxBytes,1024,262144)?maxBytes:32768;
    const len=response.headers?.get?.('content-length');
    if(len!=null&&(!/^\d+$/.test(len)||Number(len)>limit))return fail('RESPONSE_TOO_LARGE');
-   if(typeof response.text!=='function')return fail('BAD_SERVER_RESPONSE');
-   const body=await response.text();
-   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
-   if(typeof body!=='string'||body.length>limit||utf8ByteLength(body)>limit)
-    return fail('RESPONSE_TOO_LARGE');
+   const bodyResult=await readBoundedResponseText(response,{
+    limit,signal:ctl.signal,timedOut
+   });
+   if(!bodyResult.ok)return fail(bodyResult.code);
+   const body=bodyResult.text;
    let data;
    try{data=JSON.parse(body);}catch{return fail('BAD_SERVER_RESPONSE');}
    let after;

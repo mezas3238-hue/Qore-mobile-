@@ -1,4 +1,4 @@
-import {utf8ByteLength} from './response-bytes.mjs';
+import {readBoundedResponseText} from './bounded-http-response.mjs';
 /**
  * Movete Fácil CLIENTE: boundary HTTP para QA. No LIVE y no token almacenado.
  * JWT/roles/propiedad son comprobados por servidor, no por este módulo.
@@ -146,11 +146,11 @@ export function createClientGateway({
    const length=reply.headers?.get?.('content-length');
    if(length!=null&&(!/^\d+$/.test(length)||Number(length)>limit))
     return fail('RESPONSE_TOO_LARGE');
-   if(typeof reply.text!=='function')return fail('BAD_SERVER_RESPONSE');
-   const raw=await reply.text();
-   if(timedOut())return fail('NETWORK_OR_TIMEOUT');
-   if(typeof raw!=='string'||raw.length>limit||utf8ByteLength(raw)>limit)
-    return fail('RESPONSE_TOO_LARGE');
+   const bodyResult=await readBoundedResponseText(reply,{
+    limit,signal:ctl.signal,timedOut
+   });
+   if(!bodyResult.ok)return fail(bodyResult.code);
+   const raw=bodyResult.text;
    let payload;
    try{payload=JSON.parse(raw);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(!object(payload))return fail('BAD_SERVER_RESPONSE');
