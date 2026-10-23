@@ -319,3 +319,17 @@ El commit B27 quedó certificado en GitHub como `f969a526d0bd`: ownership #39965
 - Evidencia: `docs/architect-b/DELIVERY_STATUS_REAL_CONTRACT_AUDIT_2026-10-23.md`.
 
 La siguiente prioridad independiente pasa a **B-06: historial con memoria acotada y navegación por ventanas**, sin confundir el límite de memoria del dispositivo con un límite global del historial del servidor.
+
+## B29 — B-06 historial escalable completado
+
+- `history-feed.mjs` conserva una ventana móvil de 500 elementos por defecto, configurable hasta 5.000 para pruebas/control de integración.
+- Cargar páginas antiguas ya no hace crecer indefinidamente el mapa del móvil: desplaza los registros recientes ya recorridos y conserva el cursor siguiente del servidor.
+- El snapshot informa tamaño máximo, filas leídas, registros liberados y si existen datos recientes fuera de la ventana.
+- `historial.tsx` avisa al usuario cuando la ventana se desplazó y ofrece volver a los servicios más recientes mediante reset seguro.
+- Logout, cambio de cuenta, expiración y DTO inválido limpian ventana y métricas privadas.
+- Prueba de estrés: 100.000 servicios/2.000 páginas, máximo 500 en memoria, recorrido completo sin tope global. QA local: **212/212 tests Cliente**, TypeScript y Expo web export SUCCESS.
+- Evidencia: `docs/architect-b/HISTORY_WINDOWED_MEMORY_2026-10-23.md`.
+
+Límite restante: el contrato actual solo ofrece cursor hacia páginas antiguas. La navegación reversa granular requiere que A certifique cursor anterior o semántica bidireccional; B no lo inventa. La UI sí puede volver de forma segura al inicio reciente.
+
+La siguiente prioridad independiente pasa a **B-07: accesibilidad real de pantallas Cliente**, con foco, lector, fuentes grandes, teclado y alertas, sin depender de datos ficticios.

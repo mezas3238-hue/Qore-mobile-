@@ -252,3 +252,11 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - No hay DTO certificable para `ownerId`, `deliveryId`, revisión monotónica, estado, asignación persistida, prueba de entrega, frescura de ubicación o flags de operación. B no crea un gateway ni representa esos datos como autoritativos.
 - Dependencia para A: response estricta y versionada, autorización JWT por participante, estados/transiciones definidos, política de GPS/frescura, proof metadata segura y errores 401/403/404/409/410/429/503.
 - Evidencia: [DELIVERY_STATUS_REAL_CONTRACT_AUDIT_2026-10-23.md](./DELIVERY_STATUS_REAL_CONTRACT_AUDIT_2026-10-23.md).
+
+## B29 — B-06 historial con memoria acotada (23-10-2026)
+- El store Cliente mantiene por defecto una ventana máxima de 500 servicios; el historial global continúa paginado en el servidor y no se presenta como truncado.
+- Al avanzar hacia páginas antiguas se liberan los registros recientes ya recorridos, se exponen `evictedCount`/`rowsRead` y la UI permite volver a los servicios más recientes mediante consulta desde el inicio.
+- Logout, expiración o cambio de cuenta siguen borrando toda la ventana y sus contadores; no hay persistencia entre identidades.
+- Estrés unitario: **100.000 servicios** en 2.000 páginas de 50, ventana final de 500 y 99.500 registros liberados, sin imponer tope al recorrido.
+- QA local: **212/212 Cliente PASS**, TypeScript y Expo web export SUCCESS. Falta registrar SHA y GitHub Actions del cierre.
+- Evidencia: [HISTORY_WINDOWED_MEMORY_2026-10-23.md](./HISTORY_WINDOWED_MEMORY_2026-10-23.md).

@@ -31,20 +31,38 @@ export function projectClientHistory(raw,{subject,now=Date.now()}={}){
  return Object.freeze({ownerId:subject,expiresAt:raw.expiresAt,
   nextCursor:raw.nextCursor,items:Object.freeze(out)});
 }
-export function createClientHistoryStore({now=()=>Date.now()}={}){
- // Cursor por página; el mapa admite tantas páginas como existan, NO un máximo de usuarios.
+export function createClientHistoryStore({now=()=>Date.now(),maxItems=500}={}){
+ // El historial global vive en servidor. El móvil conserva solo una ventana
+ // para evitar crecimiento lineal de memoria al recorrer años de servicios.
+ const limit=Number.isSafeInteger(maxItems)&&maxItems>=50&&maxItems<=5000?maxItems:500;
  let owner=null,entries=new Map(),expiry=null,nextCursor=null,cachedItems=null;
- function clear(){owner=null;entries.clear();expiry=null;nextCursor=null;cachedItems=null;}
+ let evictedCount=0,rowsRead=0;
+ function clear(){
+  owner=null;entries.clear();expiry=null;nextCursor=null;cachedItems=null;
+  evictedCount=0;rowsRead=0;
+ }
+ function trimToWindow(){
+  if(entries.size<=limit)return;
+  const sorted=[...entries.entries()].sort(([,a],[,b])=>
+   b.createdAt-a.createdAt||a.serviceId.localeCompare(b.serviceId)||a.kind.localeCompare(b.kind));
+  const overflow=sorted.length-limit;
+  // Las páginas siguientes son más antiguas. Se desplazan los registros más
+  // recientes ya vistos y se conserva la ventana que el usuario está recorriendo.
+  for(const [key] of sorted.slice(0,overflow))entries.delete(key);
+  evictedCount+=overflow;
+ }
  function consume(raw,subject,{append=false}={}){
   const page=projectClientHistory(raw,{subject,now:now()});
   if(!page){clear();return false;}
   if(owner!==null&&owner!==subject){clear();return false;}
-  if(!append){entries.clear();}
+  if(!append){entries.clear();evictedCount=0;rowsRead=0;}
+  rowsRead+=page.items.length;
   for(const item of page.items){
    const key=item.kind+':'+item.serviceId;
    const prior=entries.get(key);
    if(!prior||item.revision>prior.revision)entries.set(key,item);
   }
+  trimToWindow();
   owner=subject;expiry=page.expiresAt;nextCursor=page.nextCursor;cachedItems=null;
   return true;
  }
@@ -52,7 +70,9 @@ export function createClientHistoryStore({now=()=>Date.now()}={}){
   if(!uuid(subject)||owner!==subject||expiry===null||expiry<=now()){clear();return null;}
   if(cachedItems===null)cachedItems=Object.freeze([...entries.values()]
     .sort((a,b)=>b.createdAt-a.createdAt||a.serviceId.localeCompare(b.serviceId)||a.kind.localeCompare(b.kind)));
-  return Object.freeze({ownerId:owner,items:cachedItems,nextCursor});
+  return Object.freeze({ownerId:owner,items:cachedItems,nextCursor,
+   window:Object.freeze({maxItems:limit,evictedCount,rowsRead,
+    hasEvictedNewer:evictedCount>0})});
  }
  return Object.freeze({consume,current,clear});
 }

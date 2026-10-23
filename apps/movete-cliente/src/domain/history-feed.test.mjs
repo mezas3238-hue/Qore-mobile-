@@ -44,7 +44,7 @@ test('cambio de cuenta no conserva historial previo',()=>{
 });
 
 test('50 registros por página no limita el historial total: 5.000 servicios de 100 páginas',()=>{
- const store=createClientHistoryStore({now:()=>1100});
+ const store=createClientHistoryStore({now:()=>1100,maxItems:5000});
  const record=n=>({serviceId:'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0'),
   kind:'RIDE',status:'completed',createdAt:500,revision:1});
  for(let pageNo=1;pageNo<=100;pageNo++){
@@ -55,6 +55,28 @@ test('50 registros por página no limita el historial total: 5.000 servicios de 
  assert.equal(store.current(owner).items.length,5000);
  assert.equal(store.current(owner).nextCursor,null);
  assert.equal(store.current(owner).items[4999].serviceId.length,36);
+ assert.equal(store.current(owner).window.rowsRead,5000);
+ assert.equal(store.current(owner).window.evictedCount,0);
+});
+
+test('100.000 servicios se recorren con ventana acotada sin imponer límite global',()=>{
+ const store=createClientHistoryStore({now:()=>1100,maxItems:500});
+ const record=n=>({serviceId:'123e4567-e89b-42d3-a456-'+String(n).padStart(12,'0'),
+  kind:'RIDE',status:'completed',createdAt:500,revision:1});
+ for(let pageNo=1;pageNo<=2000;pageNo++){
+  const items=Array.from({length:50},(_,i)=>record((pageNo-1)*50+i+1));
+  const payload={...page,items,nextCursor:pageNo<2000?signed('window_'+(pageNo+1)):null};
+  assert.equal(store.consume(payload,owner,{append:pageNo!==1}),true);
+ }
+ const view=store.current(owner);
+ assert.equal(view.items.length,500);
+ assert.equal(view.window.maxItems,500);
+ assert.equal(view.window.rowsRead,100000);
+ assert.equal(view.window.evictedCount,99500);
+ assert.equal(view.window.hasEvictedNewer,true);
+ assert.equal(view.items[0].serviceId,'123e4567-e89b-42d3-a456-000000099501');
+ assert.equal(view.items[499].serviceId,'123e4567-e89b-42d3-a456-000000100000');
+ assert.equal(view.nextCursor,null);
 });
 test('cursor de historial no admite rutas, parámetros, tokens ni valor inválido',()=>{
  for(const cursor of ['../../admin','hello?role=owner','a+b','token@example.org','','x'.repeat(201)]){

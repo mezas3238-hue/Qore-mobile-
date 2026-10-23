@@ -46,12 +46,18 @@ export default function ClientHistory(){
   initialNumToRender={12}
   maxToRenderPerBatch={18}
   windowSize={7}
-  ListHeaderComponent={
+  ListHeaderComponent={<>
    <View style={styles.hero}>
     <Text style={styles.heroText}>Mi historial</Text>
     <Text style={styles.heroSub}>Servicios propios, sin límite global de registros. La lista se muestra en partes para cuidar la memoria.</Text>
    </View>
-  }
+   {view.history?.window.hasEvictedNewer&&<Panel>
+    <Text style={styles.heading}>Ventana de memoria activa</Text>
+    <Text style={styles.text}>Se liberaron {view.history.window.evictedCount.toLocaleString('es-PY')} servicios recientes ya recorridos para mantener estable el dispositivo. El historial completo continúa en el servidor.</Text>
+    <Action label="Volver a los servicios más recientes" secondary
+     disabled={view.historyLoading} onPress={resetHistory}/>
+   </Panel>}
+  </>}
   ListEmptyComponent={<Panel>
     <Text style={styles.heading}>Todavía no hay servicios consultados</Text>
     <Text style={styles.text}>No hay historial autorizado conectado a esta sesión. No mostramos viajes, envíos ni recibos de otras cuentas.</Text>

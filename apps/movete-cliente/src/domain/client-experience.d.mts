@@ -17,6 +17,7 @@ export type ClientSnapshot={
  cancellation:{phase:string;tripId:string|null;requestKey:string|null;contractReady:boolean};
  fareRequest:{phase:string;tripId:string|null;requestKey:string|null;error:string|null;contractReady:boolean};
  history:{ownerId:string;nextCursor:string|null;
+  window:{maxItems:number;evictedCount:number;rowsRead:number;hasEvictedNewer:boolean};
   items:readonly {serviceId:string;kind:string;status:string;createdAt:number;revision:number}[]}|null;
 };
 export type ClientResult={ok:boolean;code?:string;status?:number;requestKey?:string;
