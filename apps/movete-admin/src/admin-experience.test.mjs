@@ -346,3 +346,21 @@ test('dos consultas simultáneas al mismo endpoint no crean doble llamada',async
  unblock(mockReply(zone));
  assert.equal((await first).ok,true);
 });
+
+test('403 tardío de request previo no mata sesión Admin nueva',async()=>{
+ let current=auth(),release;
+ const pending=new Promise(resolve=>release=resolve);
+ const app=createAdminExperience({
+  now:()=>now,authProvider:{readSession:async()=>current,signOut:async()=>{}},
+  readGatewayOptions:readConfig(async()=>pending)
+ });
+ await app.refreshSession();
+ const old=app.syncFromServer('zones');
+ await Promise.resolve();await Promise.resolve();
+ await app.logout();
+ current=auth();
+ await app.refreshSession();
+ release({status:403,ok:false,redirected:false});
+ assert.equal((await old).code,'STALE_SESSION_RESPONSE');
+ assert.equal(app.snapshot().authenticated,true);
+});

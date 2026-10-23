@@ -36,6 +36,7 @@ export type AdminExperience={
  readZones:(data:unknown)=>boolean;
  readIncidents:(data:unknown)=>boolean;
  readAudit:(data:unknown)=>boolean;
+ isReadConfigured:(operation:string)=>boolean;
  syncFromServer:(operation:string)=>Promise<{ok:boolean;code?:string}>;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;

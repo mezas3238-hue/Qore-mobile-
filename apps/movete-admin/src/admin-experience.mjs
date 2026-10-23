@@ -26,7 +26,10 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const readGateway=readGatewayOptions?createAdminReadGateway({
   ...readGatewayOptions,
   now,
-  getSession:()=>session.getSessionForGateway(),
+  getSession:()=>{
+   const value=session.getSessionForGateway();
+   return value?{...value,subject:session.publicSession()?.subject,authRevision:session.revision()}:null;
+  },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
  const stores=Object.freeze({kyc:queue,finance,zones,incidents,audit});
@@ -144,6 +147,8 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   refreshSession:async()=>{const result=await session.refresh();notify();return result;},
   logout:async()=>{clearPrivate();const result=await session.logout();notify();return result;},
   clear:()=>{session.clear();notify();},
-  readKyc,readFinance,readZones,readIncidents,readAudit,syncFromServer,reviewVehicle,snapshot
+  readKyc,readFinance,readZones,readIncidents,readAudit,
+  isReadConfigured:operation=>Boolean(readGateway?.isConfigured(operation)),
+  syncFromServer,reviewVehicle,snapshot
  });
 }

@@ -69,6 +69,15 @@ export function createAdminReadGateway({
    });
    if(!result||result.redirected===true)return fail('UNTRUSTED_REDIRECT');
    if(result.status===401||result.status===403){
+    // No revocar sesión nueva por el 401/403 de una petición vieja.
+    let latest;
+    try{latest=await getSession();}
+    catch{return fail('STALE_SESSION_RESPONSE');}
+    if(!validActor(latest,definition.role,now())
+     ||latest.subject!==first.subject||latest.token!==first.token
+     ||latest.expiresAt!==first.expiresAt
+     ||latest.authRevision!==first.authRevision)
+     return fail('STALE_SESSION_RESPONSE');
     onSessionInvalid();
     return fail(result.status===401?'AUTH_REQUIRED':'FORBIDDEN',result.status);
    }
@@ -95,7 +104,8 @@ export function createAdminReadGateway({
    catch{return fail('STALE_SESSION_RESPONSE');}
    if(!validActor(latest,definition.role,now())
     ||first.subject!==latest.subject||first.token!==latest.token
-    ||first.expiresAt!==latest.expiresAt)return fail('STALE_SESSION_RESPONSE');
+    ||first.expiresAt!==latest.expiresAt
+    ||first.authRevision!==latest.authRevision)return fail('STALE_SESSION_RESPONSE');
    return Object.freeze({ok:true,data:json,status:200});
   }catch{return fail('NETWORK_OR_TIMEOUT');}
   finally{

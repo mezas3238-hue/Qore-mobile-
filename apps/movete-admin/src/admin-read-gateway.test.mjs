@@ -131,3 +131,30 @@ test('fallo de red o 503 no muestra respuesta certificada',async()=>{
  const busy=createAdminReadGateway({...settings,fetchImpl:async()=>({ok:false,status:503})});
  assert.equal((await busy.read('kyc')).code,'SERVICE_UNAVAILABLE');
 });
+
+test('401 de una sesión reemplazada no invalida la nueva sesión',async()=>{
+ let active=session(),release;
+ const pending=new Promise(resolve=>release=resolve);
+ let invalidations=0;
+ const gateway=createAdminReadGateway({...settings,getSession:async()=>active,
+  onSessionInvalid:()=>invalidations++,fetchImpl:async()=>pending});
+ const req=gateway.read('zones');
+ await Promise.resolve();await Promise.resolve();
+ active={...active,token:'fresh-new-token-1234567'};
+ release({status:401,ok:false,redirected:false});
+ assert.equal((await req).code,'STALE_SESSION_RESPONSE');
+ assert.equal(invalidations,0);
+});
+test('401 de relogin mismo token pero revision nueva no borra sesión activa',async()=>{
+ let active={...session(),authRevision:11},release;
+ const pending=new Promise(resolve=>release=resolve);
+ let invalidations=0;
+ const gateway=createAdminReadGateway({...settings,getSession:async()=>active,
+  onSessionInvalid:()=>invalidations++,fetchImpl:async()=>pending});
+ const req=gateway.read('zones');
+ await Promise.resolve();await Promise.resolve();
+ active={...active,authRevision:13};
+ release({status:401,ok:false,redirected:false});
+ assert.equal((await req).code,'STALE_SESSION_RESPONSE');
+ assert.equal(invalidations,0);
+});
