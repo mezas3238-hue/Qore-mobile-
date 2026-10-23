@@ -7,6 +7,7 @@ const transport=readFileSync(new URL('./g4-loopback-http-transport.mjs',import.m
 const runtimePaths=[
  '/v1/staging/rider/trips/request','/v1/staging/rider/trips/{tripId}/status',
  '/v1/staging/driver/inbox',
+ '/v1/staging/driver/enrollment',
  '/v1/staging/driver/documents',
  '/v1/staging/driver/documents/observe',
  '/v1/staging/admin/driver-documents/review',
