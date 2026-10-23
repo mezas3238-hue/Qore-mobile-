@@ -5,6 +5,7 @@ const owner='123e4567-e89b-42d3-a456-426614174000';
 const now=1800000000000;
 const valid=()=>({subject:owner,role:'passenger',token:'synthetic-passenger-token-12345',
  expiresAt:now+90000,authRevision:2});
+const signed=payload=>'v1.'+payload+'.'+'s'.repeat(43);
 const result=(body={scope:'test'})=>({ok:true,status:200,redirected:false,
  headers:{get:k=>k==='content-type'?'application/json':null},
  text:async()=>JSON.stringify(body)});
