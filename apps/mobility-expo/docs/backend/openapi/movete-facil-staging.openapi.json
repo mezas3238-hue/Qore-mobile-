@@ -654,12 +654,40 @@
         },
         "responses": {
           "201": {
-            "$ref": "#/components/responses/Success"
+            "description": "STAGING server-verified fare response. LIVE payments disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerPricedQuoteV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
           },
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "summary": "Authoritative server-priced simulated fare quote for Cliente",
+        "description": "JWT-derived ownerId; does not accept price, commission, GPS or route evidence from mobile. Auto passenger rides only; MOTO cargo delivery permitted by separate category and eligibility policy. 201 response is NOT approval of fare for commercial LIVE.",
+        "x-qore-client-contract-version": "server-priced-quote-v1"
       }
     },
     "/v1/staging/payments/authorize": {
@@ -2671,6 +2699,145 @@
           "deliveryConfirmed": {
             "type": "boolean",
             "const": false
+          }
+        }
+      },
+      "ServerPricedQuoteV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Client-safe response derived only from JWT passenger + authoritative G7 quote and verified route evidence; STAGING only",
+        "required": [
+          "mode",
+          "livePaymentsEnabled",
+          "serverPriced",
+          "ownerId",
+          "quoteId",
+          "amountGs",
+          "fareMode",
+          "subjectKind",
+          "subjectId",
+          "expiresAt",
+          "fareVersion",
+          "routingVerified",
+          "quote"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "livePaymentsEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "serverPriced": {
+            "type": "boolean",
+            "const": true
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quoteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amountGs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "fareMode": {
+            "type": "string",
+            "enum": [
+              "AUTO",
+              "MOTO",
+              "DELIVERY",
+              "MERCHANT_DELIVERY"
+            ]
+          },
+          "subjectKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "fareVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^[a-zA-Z0-9._-]{1,48}$"
+          },
+          "routingVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "quote": {
+            "$ref": "#/components/schemas/ServerPricedQuoteReceipt"
+          }
+        }
+      },
+      "ServerPricedQuoteReceipt": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Legacy G7 server-owned quote. Validate on server, do not let Cliente set price or commission.",
+        "required": [
+          "id",
+          "mode",
+          "subjectKind",
+          "subjectId",
+          "ruleVersion",
+          "totalPyg",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "AUTO",
+              "MOTO",
+              "DELIVERY",
+              "MERCHANT_DELIVERY"
+            ]
+          },
+          "subjectKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ruleVersion": {
+            "type": "string"
+          },
+          "totalPyg": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }
