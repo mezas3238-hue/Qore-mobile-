@@ -2,7 +2,7 @@
 
 **Fecha:** 23 de octubre de 2026  
 **Ámbito:** Arquitecto B; aplicación Cliente.  
-**Estado:** implementación y QA local completas; pendiente cierre GitHub.
+**Estado:** implementación, QA local y GitHub Actions completas.
 
 ## Problema
 
@@ -36,6 +36,8 @@ La nueva prueba consume 100.000 servicios sintéticos válidos en 2.000 páginas
 La primera ejecución del test falló porque el fixture generaba `createdAt` posteriores al reloj de validación. Se corrigió el dataset; no se relajó el control temporal.
 
 Resultado final local: **212/212 tests Cliente PASS**, TypeScript SUCCESS y Expo web export SUCCESS.
+
+**Cierre GitHub:** commit `b1b4ad94365832d9b2b0cc34ee520989b2aa25e1`; ownership #39966255875, Admin #39966255923 y aislamiento #39966256833, todos SUCCESS.
 
 ## Límite contractual
 

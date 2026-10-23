@@ -258,5 +258,6 @@ Reglas constantes: **solo Cliente, Admin y docs/architect-b; PR #8 DRAFT; no mer
 - Al avanzar hacia páginas antiguas se liberan los registros recientes ya recorridos, se exponen `evictedCount`/`rowsRead` y la UI permite volver a los servicios más recientes mediante consulta desde el inicio.
 - Logout, expiración o cambio de cuenta siguen borrando toda la ventana y sus contadores; no hay persistencia entre identidades.
 - Estrés unitario: **100.000 servicios** en 2.000 páginas de 50, ventana final de 500 y 99.500 registros liberados, sin imponer tope al recorrido.
-- QA local: **212/212 Cliente PASS**, TypeScript y Expo web export SUCCESS. Falta registrar SHA y GitHub Actions del cierre.
+- QA local: **212/212 Cliente PASS**, TypeScript y Expo web export SUCCESS.
+- Cierre GitHub B29: `b1b4ad94365832d9b2b0cc34ee520989b2aa25e1`; ownership #39966255875, Admin #39966255923 y aislamiento #39966256833, todos SUCCESS.
 - Evidencia: [HISTORY_WINDOWED_MEMORY_2026-10-23.md](./HISTORY_WINDOWED_MEMORY_2026-10-23.md).

@@ -330,6 +330,8 @@ La siguiente prioridad independiente pasa a **B-06: historial con memoria acotad
 - Prueba de estrés: 100.000 servicios/2.000 páginas, máximo 500 en memoria, recorrido completo sin tope global. QA local: **212/212 tests Cliente**, TypeScript y Expo web export SUCCESS.
 - Evidencia: `docs/architect-b/HISTORY_WINDOWED_MEMORY_2026-10-23.md`.
 
+El commit B29 quedó certificado en GitHub como `b1b4ad943658`: ownership #39966255875, Admin #39966255923 y two-app isolation #39966256833, todos SUCCESS.
+
 Límite restante: el contrato actual solo ofrece cursor hacia páginas antiguas. La navegación reversa granular requiere que A certifique cursor anterior o semántica bidireccional; B no lo inventa. La UI sí puede volver de forma segura al inicio reciente.
 
 La siguiente prioridad independiente pasa a **B-07: accesibilidad real de pantallas Cliente**, con foco, lector, fuentes grandes, teclado y alertas, sin depender de datos ficticios.
