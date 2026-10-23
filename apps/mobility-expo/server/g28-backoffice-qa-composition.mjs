@@ -2,8 +2,9 @@
  * G28.1 A05.3 — explicit, fail-closed backoffice QA composition.
  * This never starts a network listener and can only create 127.0.0.1 test
  * transport. It requires trusted injected Auth, provider MFA and rate limit.
- * Admin incidents G28, AUTO KYC G29 and partial audit G30 use private disposable SQL RPCs;
- * all other Admin/Owner read scopes return unavailable.
+ * Admin incidents G28, AUTO KYC G29, partial audit G30 and
+ * zonal coverage/observations G31 use private disposable SQL RPCs;
+ * Owner finance remains unavailable; never infer actual vehicle availability.
  */
 import {createQoreBackofficeRoleAuthority} from './g27-backoffice-role-authority.mjs';
 import {createQoreBackofficeReadGateway} from './g27-backoffice-read-gateway.mjs';
@@ -30,7 +31,7 @@ export function prepareQoreG28BackofficeQa({
  const server=createQoreBackofficeLoopbackTransport({readHandler});
  return Object.freeze({
   server,readHandler,
-  allowedQaReadScopes:Object.freeze(['admin.incidents.read','admin.kyc.read','admin.audit.read']),
+  allowedQaReadScopes:Object.freeze(['admin.incidents.read','admin.kyc.read','admin.audit.read','admin.zones.read']),
   commercialOperationsEnabled:false,
   remoteListeningEnabled:false
  });
