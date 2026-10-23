@@ -20,6 +20,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G30_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G31_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G32_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G33_*'
       - 'apps/mobility-expo/server/g32-*'
       - 'apps/mobility-expo/server/g26-*'
       - 'apps/mobility-expo/server/g20-*'
@@ -218,3 +219,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_SIGNAL_QUARANTINE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G32.2 two PostgreSQL sessions race same Driver sequence and concurrent consent revocation
         run: python3 apps/mobility-expo/server/g32-driver-telemetry-concurrency-ci.py
+      - name: G33 install private read-only QA diagnostics of quarantined Driver signals
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G33_QUARANTINED_ZONE_DIAGNOSTICS_POSTGRES_CI_ONLY.sql
+      - name: G33 validate busy trip, busy delivery, consent withdrawal, cross-zone latest and no G31 publication
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G33_QUARANTINED_ZONE_DIAGNOSTICS_ASSERT_POSTGRES_CI_ONLY.sql
