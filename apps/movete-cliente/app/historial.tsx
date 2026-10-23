@@ -37,6 +37,10 @@ export default function ClientHistory(){
     {view.historyLoadError&&<Text accessibilityRole="alert" style={styles.small}>
       No se pudo validar el historial: {view.historyLoadError}
     </Text>}
+    {view.historyLoadError&&view.historyConfigured&&view.authenticated&&
+      <Action label="Reiniciar consulta desde la primera página"
+       disabled={view.historyLoading}
+       onPress={()=>{void client.loadHistoryPage({reset:true});}}/>}
     {view.history?.nextCursor
       ?<Action label={view.historyLoading?'Consultando…':'Cargar más servicios'}
         disabled={!view.historyConfigured||view.historyLoading}

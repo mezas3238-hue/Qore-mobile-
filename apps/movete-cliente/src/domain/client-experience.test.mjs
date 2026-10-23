@@ -235,3 +235,23 @@ test('cursor circular no repite páginas ni hace solicitudes ilimitadas',async()
  assert.equal((await api.loadHistoryPage()).code,'CURSOR_REPEATED');
  assert.equal(n,2);
 });
+
+test('cursor vencido permite reiniciar manualmente desde primera página sin mezclar registros',async()=>{
+ let n=0;
+ const requests=[];
+ const api=createClientExperience({now:()=>now,authProvider:{readSession:async()=>fakeSession()},
+  historyGatewayOptions:historyOptions(async (url,req)=>{
+   requests.push(req.headers['X-Qore-History-Cursor']??null);
+   n++;
+   if(n===2)return {ok:false,status:400,redirected:false};
+   return historyResp({...fakeHistory(),nextCursor:n===1?signedCursor('page_2'):null});
+  })
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadHistoryPage({reset:true})).ok,true);
+ assert.equal((await api.loadHistoryPage()).code,'INVALID_OR_EXPIRED_CURSOR');
+ assert.equal(api.snapshot().historyLoadError,'INVALID_OR_EXPIRED_CURSOR');
+ assert.equal((await api.loadHistoryPage({reset:true})).ok,true);
+ assert.deepEqual(requests,[null,signedCursor('page_2'),null]);
+ assert.equal(api.snapshot().historyLoadError,null);
+});

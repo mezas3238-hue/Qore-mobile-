@@ -62,6 +62,7 @@ export function createClientHistoryGateway({
     onSessionInvalid();
     return fail(res.status===401?'AUTH_REQUIRED':'FORBIDDEN',res.status);
    }
+   if(res.status===400)return fail('INVALID_OR_EXPIRED_CURSOR',400);
    if(res.status===429)return fail('RATE_LIMITED',429);
    if(res.status===503)return fail('SERVICE_UNAVAILABLE',503);
    if(res.status!==200||res.ok!==true)return fail('SERVER_DENIED',res.status);

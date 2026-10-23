@@ -106,3 +106,9 @@ test('red, 429, 503 y respuestas no JSON cierran sin inventar datos',async()=>{
  const dead=createClientHistoryGateway({...configured,fetchImpl:async()=>{throw Error('offline');}});
  assert.equal((await dead.fetchPage()).code,'NETWORK_OR_TIMEOUT');
 });
+
+test('cursor rechazado o vencido en servidor retorna error explícito sin datos',async()=>{
+ const gateway=createClientHistoryGateway({...configured,
+  fetchImpl:async()=>({ok:false,status:400,redirected:false})});
+ assert.equal((await gateway.fetchPage(signed('page_5'))).code,'INVALID_OR_EXPIRED_CURSOR');
+});
