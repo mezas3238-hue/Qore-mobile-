@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
-import type {AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
+import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
 import type {IncidentPageFilter,IncidentPageOrder} from './incident-page-triage.mjs';
@@ -175,6 +175,81 @@ function ZoneReadOnly({zones,allowed}:{
       <small>Vehículos en línea reportados</small></div>
     </div>)}</div>}
   <p className="training-disclaimer">Estos datos son solo una vista del servidor. No estiman aceptación, tiempos de espera ni capacidad de despacho; no habilitan rutas, motos de pasajeros ni zonas nuevas.</p>
+ </Panel>;
+}
+
+
+/** G41 se muestra únicamente si el runtime autorizado está CERTIFICADO.
+ * No declara total global de casos ni envío SOS. A05 continúa independiente.
+ */
+function GlobalTriagePanel({client,state}:{client:AdminExperience;state:AdminSnapshot}){
+ const [severity,setSeverity]=useState('');
+ const [status,setStatus]=useState('');
+ const queue=state.globalTriage;
+ if(!queue?.contractReady)return null;
+ const selectedSeverity=severity||null,selectedStatus=status||null;
+ const matching=queue.page?.severityFilter===selectedSeverity
+  &&queue.page?.statusFilter===selectedStatus;
+ const page=matching?queue.page:null;
+ const labels:Record<string,string>={
+  CRITICAL:'Crítica',HIGH:'Alta',MEDIUM:'Media',LOW:'Baja'
+ };
+ return <Panel className="detail">
+  <div className="section-head"><div>
+   <h2>Triaje global del servidor · solo STAGING</h2>
+   <p>Filtros aplicados antes de paginar por el backend autorizado. Sin datos personales, sin acciones sobre cuentas ni despacho de emergencias.</p>
+  </div><span className="muted-tag">G41 · LECTURA QA</span></div>
+  <p className="kyc-notice" role="note">
+   El servidor filtra globalmente, pero esta pantalla solo cuenta las filas de <strong>la página consultada</strong>. No se dispone de total global ni snapshot consistente.
+  </p>
+  <div className="kyc-filters">
+   <label htmlFor="global-incident-severity">Gravedad — filtro en servidor</label>
+   <select id="global-incident-severity" value={severity}
+    onChange={event=>setSeverity(event.target.value)}>
+    <option value="">Todas las gravedades</option>
+    <option value="CRITICAL">Crítica</option>
+    <option value="HIGH">Alta</option>
+    <option value="MEDIUM">Media</option>
+    <option value="LOW">Baja</option>
+   </select>
+   <label htmlFor="global-incident-status">Estado — filtro en servidor</label>
+   <select id="global-incident-status" value={status}
+    onChange={event=>setStatus(event.target.value)}>
+    <option value="">Todos los estados</option>
+    <option value="OPEN">Abierto</option>
+    <option value="TRIAGED">Clasificado</option>
+    <option value="INVESTIGATING">Investigando</option>
+    <option value="RESOLVED">Resuelto</option>
+    <option value="CLOSED">Cerrado</option>
+   </select>
+  </div>
+  <div className="refresh-actions">
+   <button type="button" disabled={queue.loading} onClick={()=>void client.loadGlobalIncidentTriage({
+    severityFilter:selectedSeverity,statusFilter:selectedStatus
+   })}>{queue.loading?'Consultando…':'Consultar filtro global'}</button>
+   <button type="button" disabled={queue.loading||!matching||!queue.hasNext}
+    onClick={()=>void client.loadGlobalIncidentTriage({
+     severityFilter:selectedSeverity,statusFilter:selectedStatus,next:true
+    })}>Siguiente página filtrada</button>
+  </div>
+  {queue.error&&<p role="alert" className="owner-warning">
+   La consulta G41 no pudo validarse ({queue.error}). No se presentan datos no confirmados.
+  </p>}
+  {page?<div aria-live="polite">
+   <p>Resultado filtrado por servidor: página {queue.pageNumber}. {page.items.length} casos en esta página; total de plataforma desconocido.</p>
+   {page.items.length===0?<div className="empty"><h3>Sin coincidencias en esta página</h3>
+    <p>No demuestra que existan cero casos en otras páginas.</p></div>
+   :<div className="zone-rows">{page.items.map(item=>
+    <div className="zone-row" key={item.incidentId}>
+     <div><strong>{item.category} · {labels[item.severity]??'Sin nivel'}</strong>
+      <small>Estado de servidor: {item.status}</small>
+      <small>Fecha: {new Date(item.createdAt).toLocaleString('es-PY')}</small>
+     </div><div className="zone-count">#{item.revision}<small>Revisión de servidor</small></div>
+    </div>)}</div>}
+  </div>:<p className="training-disclaimer">
+   Consultá el filtro seleccionado para obtener una página vigente. La información anterior nunca se presenta como resultado de filtros nuevos.
+  </p>}
+  <p className="training-disclaimer">G41 no confirma atención, SOS, emergencias, ni habilita suspensiones. La autorización es exclusiva del backend.</p>
  </Panel>;
 }
 
@@ -352,7 +427,10 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail">
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+   <GlobalTriagePanel client={client} state={adminState}/>
+   <IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>
+  </>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail">
        <h2>Sección no disponible</h2>
        <p>Esta vista no tiene contrato autorizado. No hay acciones operativas ni datos reales.</p>
        <div className="empty-chip">QA · SIN API</div>

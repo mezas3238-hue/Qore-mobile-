@@ -58,7 +58,9 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   const user=session.publicSession();
   if(!user)return fail('ADMIN_AUTH_REQUIRED');
   if(user.role!=='admin')return fail('FORBIDDEN');
-  const result=await globalTriage.load(options);
+  const pending=globalTriage.load(options);
+  notify();
+  const result=await pending;
   notify();return result;
  }
 
