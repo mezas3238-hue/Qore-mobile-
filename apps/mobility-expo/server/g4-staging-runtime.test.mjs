@@ -174,7 +174,7 @@ function mockSupabase(){
       subject_kind:params._subject_kind,subject_id:params._subject_id,
       subtotal_pyg:12000,tolls_pyg:1000,total_pyg:13000,commission_bps:1000,
       commission_pyg:1200,provider_pyg:11800,
-      expires_at:'2026-10-22T12:05:00Z',
+      expires_at:new Date(now+5*60_000).toISOString(),
       mobility_stage_fare_rules:{rule_key:'auto-staging-v1'}};
      return {data:fareQuote,error:null};
     }
