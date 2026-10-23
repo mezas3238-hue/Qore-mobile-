@@ -7,7 +7,7 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 import {HISTORY_PAGE_SIZE} from './g26-rider-history-repository.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PATH='/v1/staging/rider/history';
 const kindNames=['RIDE','DELIVERY','MERCHANT_ORDER'];
 const kinds=new Set(kindNames);
