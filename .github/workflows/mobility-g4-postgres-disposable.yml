@@ -167,3 +167,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_INDEXES_POSTGRES_CI_ONLY.sql
       - name: G26 real PostgreSQL history 1200 rows, 24 pages and authenticated RLS
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_UNBOUNDED_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G26.3 scale history beyond 30,000 real PostgreSQL rows with full keyset traversal
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_LARGE_VOLUME_POSTGRES_CI_ONLY.sql
