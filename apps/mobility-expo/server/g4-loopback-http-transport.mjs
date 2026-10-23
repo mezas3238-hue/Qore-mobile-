@@ -35,6 +35,7 @@ const merchantOnboardingRoute=/^\/v1\/staging\/merchant\/onboarding\/request$/;
 const merchantReviewRoute=/^\/v1\/staging\/admin\/merchants\/[0-9a-f-]{36}\/review$/i;
 const merchantBranchWriteRoute=/^\/v1\/staging\/merchant\/branches\/upsert$/;
 const merchantCatalogWriteRoute=/^\/v1\/staging\/merchant\/catalog\/upsert$/;
+const driverEnrollmentRoute=/^\/v1\/staging\/driver\/enrollment$/;
 const driverDocumentReadRoute=/^\/v1\/staging\/driver\/documents$/;
 const driverDocumentObserveRoute=/^\/v1\/staging\/driver\/documents\/observe$/;
 const adminDocumentReviewRoute=/^\/v1\/staging\/admin\/driver-documents\/review$/;
@@ -62,7 +63,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- courierPollHandler,driverInboxHandler,driverDocumentHandler,
+ courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
 }){
  if(typeof riderHandler!=='function'||typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||typeof deliveryHandler!=='function'||
@@ -71,7 +72,8 @@ export function createQoreRadarLoopbackTransport({
    typeof deliveryOfferHandler!=='function'||
    (courierPollHandler!==undefined&&typeof courierPollHandler!=='function')||
    (driverInboxHandler!==undefined&&typeof driverInboxHandler!=='function')||
-   (driverDocumentHandler!==undefined&&typeof driverDocumentHandler!=='function'))
+   (driverDocumentHandler!==undefined&&typeof driverDocumentHandler!=='function')||
+   (driverEnrollmentHandler!==undefined&&typeof driverEnrollmentHandler!=='function'))
   throw new Error('All G4/G5/G6/G7/G8/G9/G10 authenticated gateways required');
  const server=createServer(async(req,res)=>{
   // No middleware, cookies, CORS, public preflight, or unrestricted proxying.
@@ -104,6 +106,7 @@ export function createQoreRadarLoopbackTransport({
   const merchantManagementPost=req.method==='POST'&&
    (merchantOnboardingRoute.test(path)||merchantReviewRoute.test(path)||
     merchantBranchWriteRoute.test(path)||merchantCatalogWriteRoute.test(path));
+  const driverEnrollmentPost=req.method==='POST'&&driverEnrollmentRoute.test(path);
   const driverDocumentGet=req.method==='GET'&&driverDocumentReadRoute.test(path);
   const driverDocumentPost=req.method==='POST'&&
    (driverDocumentObserveRoute.test(path)||adminDocumentReviewRoute.test(path));
@@ -115,7 +118,7 @@ export function createQoreRadarLoopbackTransport({
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
-    !driverDocumentGet&&!driverDocumentPost){
+    !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost){
    send(res,404,{error:'Not found'});return;
   }
   if(req.headers.origin||req.headers.cookie){
@@ -130,7 +133,7 @@ export function createQoreRadarLoopbackTransport({
   }
   let body;
   if(offerPost||tripPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost||driverDocumentPost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -155,6 +158,7 @@ export function createQoreRadarLoopbackTransport({
     (financeGet||financePost)?financeHandler:
     (safetyGet||safetyPost)?safetyHandler:
     merchantManagementPost?merchantManagementHandler:
+    driverEnrollmentPost?(driverEnrollmentHandler??(()=>({status:503,body:{error:'Driver enrollment not configured'}}))):
     (driverDocumentGet||driverDocumentPost)?
      (driverDocumentHandler??(()=>({status:503,body:{error:'Private Driver documents not configured'}}))):
     driverInboxGet?(driverInboxHandler??(()=>({status:503,body:{error:'Driver inbox not configured'}}))):
