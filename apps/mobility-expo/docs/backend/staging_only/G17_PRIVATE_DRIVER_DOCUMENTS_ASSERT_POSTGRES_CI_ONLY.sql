@@ -26,6 +26,15 @@ BEGIN
  OR has_table_privilege('service_role',
     'public.mobility_stage_driver_document_reviews','DELETE')
  THEN RAISE EXCEPTION 'G17 review audit is writable after initial append'; END IF;
+ IF has_column_privilege('service_role',
+  'public.mobility_stage_driver_documents','object_key','UPDATE')
+ OR has_column_privilege('service_role',
+  'public.mobility_stage_driver_documents','driver_id','UPDATE')
+ OR has_column_privilege('service_role',
+  'public.mobility_stage_driver_documents','sha256_hex','UPDATE')
+ OR NOT has_column_privilege('service_role',
+  'public.mobility_stage_driver_documents','status','UPDATE')
+ THEN RAISE EXCEPTION 'G17 document evidence immutable column privileges broken'; END IF;
  IF NOT has_function_privilege('service_role',
   'public.mobility_stage_register_driver_document(uuid,uuid,public.mobility_stage_driver_document_kind,text,text,integer,text)','EXECUTE')
  THEN RAISE EXCEPTION 'G17 service role cannot record private evidence'; END IF;
@@ -63,6 +72,16 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.mobility_stage_driver_document_reviews)
  THEN RAISE EXCEPTION 'G17 unreviewed upload created fake admin audit'; END IF;
 
+ -- Unapproved evidence types have no G1 private Storage upload policy.
+ BEGIN
+  PERFORM public.mobility_stage_register_driver_document(
+   v_driver,'00000000-0000-4000-8000-000000000197','identidad_frente',
+   v_driver::text||'/identidad_frente-abcdefghijklmnop.jpg',
+   'image/jpeg',8500,repeat('a',64));
+  RAISE EXCEPTION 'BUG: unsupported Storage category accepted';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM='BUG: unsupported Storage category accepted' THEN RAISE; END IF;
+ END;
  -- Driver mismatch and key tampering must always fail; test independent
  -- savepoint subtransactions so the rest of CI can continue.
  BEGIN
