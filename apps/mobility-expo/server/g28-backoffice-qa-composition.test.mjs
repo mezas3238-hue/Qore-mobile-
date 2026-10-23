@@ -6,6 +6,12 @@ const at=Date.parse('2026-10-23T12:00:00Z');
 const id='11111111-1111-4111-8111-111111111111';
 const key='Synthetic QA backoffice cursor secret with at least 32 bytes';
 const token='syntheticJwtBearer12345678901234567890';
+const zonePage={revision:1,items:[{
+ zoneId:'66666666-6666-4666-8666-666666666666',
+ municipality:'Asuncion',serviceKind:'AUTO_RIDE',
+ coverageStatus:'ACTIVE',eligibleByPolicy:false,
+ onDutyVehicles:0,availabilityObservedAt:0
+}],hasMore:false};
 const auditPage={revision:1,items:[{
  eventId:'55555555-5555-4555-8555-555555555555',
  actorRole:'admin',operation:'INCIDENT_TRIAGE',targetKind:'INCIDENT',
@@ -37,13 +43,15 @@ function opts(){
    if(name==='mobility_stage_g27_backoffice_role_of')
     return {data:args._user===id?'admin':null,error:null};
    if(name==='mobility_stage_g27_backoffice_has_scope')
-    return {data:['admin.incidents.read','admin.kyc.read','admin.audit.read'].includes(args._scope)&&args._user===id,error:null};
+    return {data:['admin.incidents.read','admin.kyc.read','admin.audit.read','admin.zones.read'].includes(args._scope)&&args._user===id,error:null};
    if(name==='mobility_stage_g28_admin_incident_page')
     return {data:page,error:null};
    if(name==='mobility_stage_g29_admin_kyc_page')
     return {data:kycPage,error:null};
    if(name==='mobility_stage_g30_admin_audit_page')
     return {data:auditPage,error:null};
+   if(name==='mobility_stage_g31_admin_zone_page')
+    return {data:zonePage,error:null};
    return {error:{code:'unknown'}};
   }
  };
@@ -53,7 +61,7 @@ test('G28.1 QA composition stays unbound, connects verified session and SQL, den
  assert.equal(runtime.server.listening,false);
  assert.equal(runtime.remoteListeningEnabled,false);
  assert.equal(runtime.commercialOperationsEnabled,false);
- assert.deepEqual(runtime.allowedQaReadScopes,['admin.incidents.read','admin.kyc.read','admin.audit.read']);
+ assert.deepEqual(runtime.allowedQaReadScopes,['admin.incidents.read','admin.kyc.read','admin.audit.read','admin.zones.read']);
  assert.throws(()=>runtime.server.listen(0,'0.0.0.0'),/127\.0\.0\.1/);
  const base=await listenQoreBackofficeLoopback(runtime.server);
  t.after(async()=>new Promise(resolve=>runtime.server.close(resolve)));
@@ -73,10 +81,19 @@ test('G28.1 QA composition stays unbound, connects verified session and SQL, den
  assert.equal(auditDto.scope,'admin.audit.read');
  assert.deepEqual(auditDto.items,auditPage.items);
  assert.doesNotMatch(JSON.stringify(auditDto),/reason_code|reporter_id|documentUrl/);
+ const zones=await fetch(base+'/v1/staging/admin/zones/overview',{headers});
+ assert.equal(zones.status,200);
+ const zonesDto=await zones.json();
+ assert.equal(zonesDto.scope,'admin.zones.read');
+ assert.deepEqual(zonesDto.items,zonePage.items);
+ assert.equal(zonesDto.items[0].eligibleByPolicy,false);
+ assert.equal(zonesDto.items[0].availabilityObservedAt,0);
  const owner=await fetch(base+'/v1/staging/owner/finance/summary',{headers});
  assert.equal(owner.status,403);
- const notLoaded=await fetch(base+'/v1/staging/admin/zones/overview',{headers});
- assert.equal(notLoaded.status,403);
+ const noBody=await fetch(base+'/v1/staging/admin/zones/overview',{
+  method:'POST',headers
+ });
+ assert.equal(noBody.status,405);
 });
 test('G28.1 constructor denies LIVE and missing trusted JWT/MFA/SQL sources',()=>{
  for(const patch of [
