@@ -177,6 +177,19 @@ BEGIN
  RETURN true;
 END $fn$;
 
+CREATE FUNCTION public.mobility_stage_g48_ci_assert_revoked(_ticket uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=''
+AS $fn$
+DECLARE denied boolean:=false;
+BEGIN
+ BEGIN
+  PERFORM public.mobility_stage_g48_driver_status_qa(_ticket);
+ EXCEPTION WHEN SQLSTATE 'G4801' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G48 revoked session used previously minted capability'; END IF;
+ RETURN true;
+END $fn$;
+-- `CREATE FUNCTION` above needs DDL OWNER, not the delegated role, so the
+-- temporary QA helper is defined before role handoff in final CI step.
 -- DB OWNER in disposable QA alone can mint; gateway never takes actor params.
 SELECT (public.mobility_stage_g48_mint_owner_attested_qa(
  '00000000-0000-4000-8000-000000000181',
@@ -230,18 +243,6 @@ BEGIN
  RAISE NOTICE 'G48 PASS: one-time capabilities, server catalog PYG and immutable audit';
 END $final$;
 SET LOCAL ROLE mobility_g48_gateway_ci;
-CREATE FUNCTION public.mobility_stage_g48_ci_assert_revoked(_ticket uuid)
-RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=''
-AS $fn$
-DECLARE denied boolean:=false;
-BEGIN
- BEGIN
-  PERFORM public.mobility_stage_g48_driver_status_qa(_ticket);
- EXCEPTION WHEN SQLSTATE 'G4801' THEN denied:=true; END;
- IF NOT denied THEN RAISE EXCEPTION 'G48 revoked session used previously minted capability'; END IF;
- RETURN true;
-END $fn$;
--- `CREATE FUNCTION` above needs DDL OWNER, not the delegated role, so the
--- temporary QA helper is defined before role handoff in final CI step.
+SELECT public.mobility_stage_g48_ci_assert_revoked(:'wrong_ticket'::uuid);
 RESET ROLE;
 ROLLBACK;
