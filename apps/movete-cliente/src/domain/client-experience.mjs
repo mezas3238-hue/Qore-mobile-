@@ -11,6 +11,7 @@ import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
 import {createIncidentG40Gateway} from './incident-g40-gateway.mjs';
 import {createIncidentReportFlow} from './incident-report-flow.mjs';
+import {createCommerceCatalogFlow} from './commerce-catalog-flow.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -20,10 +21,11 @@ import {createIncidentReportFlow} from './incident-report-flow.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,now=()=>Date.now()}={}){
+export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
+ let commerceFlow;
  let mutations,tracking,cancellation,fareFlow,incidentFlow;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
@@ -35,6 +37,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   if(cancellation)cancellation.clear();
   if(fareFlow)fareFlow.clear();
   if(incidentFlow)incidentFlow.clear();
+  if(commerceFlow)commerceFlow.clear();
   quote.clear();
   history.clear();
   historyLoading=false;historyLoadError=null;seenCursors.clear();
@@ -80,6 +83,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    sessionRevision:session.privacyRevision()});
  }
 
+ // El contrato de lectura del comprador aún NO existe en OpenAPI A G41.
+ // Solo una implementación certificada inyectada habilitará este flujo.
+ commerceFlow=createCommerceCatalogFlow({
+  gateway:commerceCatalogGateway,getActor:async()=>actorSession(),now
+ });
  const historyGateway=historyGatewayOptions?createClientHistoryGateway({
   ...historyGatewayOptions,now,
   getSession:()=>{
@@ -254,7 +262,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
-    incidentReport:incidentFlow.snapshot()});
+    incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot()});
   }
   return Object.freeze({
    authenticated:true,
@@ -267,7 +275,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
-   incidentReport:incidentFlow.snapshot()
+   incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot()
   });
  }
  async function signOut(){
@@ -282,6 +290,11 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   refreshSession:async()=>{const result=await session.refresh();notify();return result;},
   signOut:async()=>{const result=await signOut();notify();return result;},
   clear:()=>{session.clear();clearPrivate();notify();},
+  loadCommerceCatalog:async branchId=>{const p=commerceFlow.loadCatalog(branchId);notify();const r=await p;notify();return r;},
+  setCommerceQuantity:(itemId,quantity)=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeQuantity(itemId,quantity);notify();return r;},
+  selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
+  previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},
+  clearCommerce:()=>{commerceFlow.clear();notify();},
   prepareIncidentReport:request=>{const result=prepareIncidentReport(request);notify();return result;},
   discardIncidentReport:()=>{const result=incidentFlow.discard();notify();return result;},
   submitIncidentReport:async()=>{const result=await incidentFlow.submit();notify();return result;},

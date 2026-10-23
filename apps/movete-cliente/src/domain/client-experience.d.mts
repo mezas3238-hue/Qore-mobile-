@@ -16,6 +16,17 @@ export type ClientSnapshot={
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
  cancellation:{phase:string;tripId:string|null;requestKey:string|null;contractReady:boolean};
  fareRequest:{phase:string;tripId:string|null;requestKey:string|null;error:string|null;contractReady:boolean};
+ commerce:{branchId:string|null;vehicleKind:'AUTO'|'MOTO';
+  catalogVersion:string|null;catalogExpiresAt:number|null;
+  catalogItems:readonly {itemId:string;itemTag:string;
+   itemClass:'GENERAL'|'PHARMACY_OTC';active:boolean;
+   unitPricePyg:number;stockUnits:number}[];
+  items:readonly {itemId:string;itemTag:string|null;quantity:number;
+   unitPricePyg:number|null;lineSubtotalPyg:number|null}[];
+  estimatedSubtotalPyg:number|null;finalTotalPyg:null;
+  stage:string;stock:string;generation:number;
+  catalogReadReady:boolean;catalogLoading:boolean;catalogError:string|null;
+  checkoutEnabled:false;paymentEnabled:false;serverOrderReceipt:null};
  incidentReport:{phase:string;requestKey:string|null;statusFresh:boolean;
   receipt:{incidentId:string;receiptId:string;state:string;revision:number;
    createdAt:string;observedAt:string;receiptStatus:'RECEIVED_IN_QA_DATABASE_ONLY'}|null;
@@ -32,6 +43,11 @@ export type ClientExperience={
  refreshSession():Promise<ClientResult>;
  signOut():Promise<ClientResult>;
  clear():void;
+ loadCommerceCatalog(branchId:string):Promise<ClientResult>;
+ setCommerceQuantity(itemId:string,quantity:number):ClientResult;
+ selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
+ previewCommerceOrder(requestKey:string):ClientResult;
+ clearCommerce():void;
  prepareIncidentReport(request:{requestKey:string;subjectKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';
   subjectId:string;category:'SAFETY'|'LOSS'|'DISPUTE'|'FRAUD'|'QUALITY';
   severity:'LOW'|'MEDIUM'|'HIGH'}):ClientResult;
@@ -63,6 +79,13 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ commerceCatalogGateway?:{
+  enabled?:boolean;stagingRuntimeVerified?:boolean;contractCertified?:boolean;
+  isConfigured?:()=>boolean;
+  readCatalog?:(branchId:string,actor:{subject:string;sessionRevision:number})=>Promise<{
+   ok:boolean;code?:string;data?:unknown
+  }>;
+ }|null;
  incidentGatewayOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   origin?:string;pinnedOrigin?:string;

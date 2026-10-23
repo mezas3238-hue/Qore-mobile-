@@ -698,3 +698,53 @@ test('runtime G40 reintenta con misma clave y no borra estado ambiguo',async()=>
  assert.equal((await api.retryIncidentReport()).ok,true);
  assert.deepEqual(keys,[key,key]);
 });
+
+test('comercio del Cliente sin contrato Buyer: ni catálogo ni orden real',async()=>{
+ const {api}=fixture();await api.refreshSession();
+ assert.equal(api.snapshot().commerce.catalogReadReady,false);
+ assert.equal((await api.loadCommerceCatalog(trip)).code,'CATALOG_READ_NOT_CERTIFIED');
+ assert.equal(api.setCommerceQuantity(trip,1).code,'CATALOG_READ_NOT_CERTIFIED');
+ assert.equal(api.previewCommerceOrder(key).code,'CATALOG_READ_NOT_CERTIFIED');
+ assert.equal(api.snapshot().commerce.checkoutEnabled,false);
+});
+test('comercio sintético conserva subtotal de catálogo sin convertirlo en pago',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080';
+ const item='123e4567-e89b-42d3-a456-426614174081';
+ const data={branchId:branch,version:'qa-v1',expiresAt:now+60000,
+  items:[{itemId:item,itemTag:'ARROZ_1KG',itemClass:'GENERAL',
+   active:true,unitPricePyg:8750,stockUnits:8}]};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  commerceCatalogGateway:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,isConfigured:()=>true,
+   readCatalog:async()=>({ok:true,data})}
+ });
+ await api.refreshSession();
+ assert.equal((await api.loadCommerceCatalog(branch)).ok,true);
+ assert.equal(api.snapshot().commerce.catalogItems[0].itemTag,'ARROZ_1KG');
+ assert.equal(api.setCommerceQuantity(item,3).ok,true);
+ assert.equal(api.snapshot().commerce.estimatedSubtotalPyg,26250);
+ assert.equal(api.snapshot().commerce.finalTotalPyg,null);
+ assert.equal(api.previewCommerceOrder(key).submissionAllowed,false);
+ await api.signOut();
+ assert.equal(api.snapshot().commerce.catalogItems.length,0);
+ assert.equal(api.snapshot().commerce.items.length,0);
+});
+test('JWT nuevo de la misma cuenta elimina catálogo y cantidades del cliente',async()=>{
+ const branch='123e4567-e89b-42d3-a456-426614174080',item='123e4567-e89b-42d3-a456-426614174081';
+ let active=fakeSession();
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>active},
+  commerceCatalogGateway:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   isConfigured:()=>true,readCatalog:async()=>({ok:true,data:{
+    branchId:branch,version:'qa-v1',expiresAt:now+60000,
+    items:[{itemId:item,itemTag:'JABON',itemClass:'GENERAL',active:true,
+     unitPricePyg:2500,stockUnits:2}]}})}
+ });
+ await api.refreshSession();await api.loadCommerceCatalog(branch);
+ api.setCommerceQuantity(item,1);
+ active={...active,token:'synthetic-jwt-rotated-for-commerce'};
+ await api.refreshSession();
+ assert.equal(api.snapshot().commerce.items.length,0);
+ assert.equal(api.snapshot().commerce.catalogItems.length,0);
+});

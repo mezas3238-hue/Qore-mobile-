@@ -132,6 +132,9 @@ export function createCommerceDraftCart({now=()=>Date.now()}={}){
     items:Object.freeze([...items].map(([itemId,quantity])=>Object.freeze({itemId,quantity})))}),
    precondition:Object.freeze({branchId,catalogVersion:catalog.version})});
  }
- return Object.freeze({clear,snapshot,selectBranch,acceptCatalog,selectVehicle,
+ const currentCatalog=()=>Object.freeze(
+  catalog&&catalog.expiresAt>now()?catalog.items:[]
+ );
+ return Object.freeze({clear,snapshot,currentCatalog,selectBranch,acceptCatalog,selectVehicle,
   setQuantity,previewRequest});
 }
