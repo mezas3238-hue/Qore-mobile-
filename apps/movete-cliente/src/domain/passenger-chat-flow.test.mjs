@@ -857,3 +857,56 @@ test('R22 admite páginas válidas con tiempo decreciente o igual, sin límite g
   row(1).messageId,row(2).messageId,row(3).messageId,row(4).messageId
  ]);
 });
+
+
+// R29 — el cliente envía la referencia autorizada al transporte G52.
+test('R29 envía el hilo esperado al GET de página anterior, sin confiar solo en DTO',async()=>{
+ const requests=[],next='w'.repeat(44);
+ const flow=make(flags({readMessages:async options=>{
+  requests.push(options);
+  return {ok:true,data:requests.length===1?page('RIDE',next):
+   {...page(),messages:[{...row(2),createdAt:now-2000}]}};
+ }}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(requests[0].expectedConversationId,null);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).ok,true);
+ assert.equal(requests[1].expectedConversationId,conversationId);
+ assert.equal(requests[1].cursor,next);
+});
+test('R29 ruta de bandeja fija conversationId desde primera lectura',async()=>{
+ const expected=id(80),requests=[];
+ const flow=make(flags({readMessages:async options=>{
+  requests.push(options);return {ok:true,data:{...page(),conversationId:expected}};
+ }}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:expected})).ok,true);
+ assert.equal(requests.length,1);
+ assert.equal(requests[0].expectedConversationId,expected);
+ assert.equal(flow.snapshot().conversationId,expected);
+});
+test('R29 revalidación de ACK ambiguo no permite seleccionar hilo nuevo',async()=>{
+ let time=now,reads=0,sends=0;
+ const requests=[];
+ const flow=createPassengerChatFlow({
+  now:()=>time,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async options=>{
+    requests.push(options);reads++;
+    return {ok:true,data:{...page(),generatedAt:time-1000,
+     expiresAt:time+60000}};
+   },
+   sendMessage:async()=>{
+    sends++;return sends===1?{ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'}:
+     {ok:true,data:{...ack(),createdAt:time-100}};
+   }
+  })
+ });
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ time+=60001;
+ assert.equal((await flow.retryPending()).ok,true);
+ assert.equal(reads,2);
+ assert.equal(requests[1].expectedConversationId,conversationId);
+ assert.equal(sends,2);
+});
