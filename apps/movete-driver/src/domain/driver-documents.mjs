@@ -9,20 +9,18 @@ const KINDS=new Set(['licencia','identidad_frente','identidad_dorso',
  'cedula_verde','seguro','inspeccion','habilitacion']);
 const STATES=new Set(['pending','approved','rejected']);
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
 export async function readDriverDocumentStatuses({
- apiOrigin,accessToken,request=fetch
+ apiOrigin,accessToken,approvedStagingHost=null,allowedByOwner=false,
+ request=fetch
 }={}){
  if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||
     !BEARER.test(accessToken)||typeof request!=='function')
   throw Error('Driver document session missing');
- let origin;
- try{origin=new URL(apiOrigin);}catch{throw Error('Invalid Driver QA origin');}
- if(origin.protocol!=='http:'||origin.hostname!=='127.0.0.1'||!origin.port||
-    origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)
-  throw Error('Driver documents require isolated localhost QA');
+ const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,allowedByOwner});
  let response;
  try{
-  response=await request(origin.origin+'/v1/staging/driver/documents',{
+  response=await request(origin+'/v1/staging/driver/documents',{
    method:'GET',cache:'no-store',credentials:'omit',
    headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
   });
