@@ -65,6 +65,8 @@ export async function submitPrivateDriverEvidence({
   if(capture===null)return Object.freeze({kind,phase:'cancelled',
    accountApproved:false,driverEligible:false,qaOnly:true,
    productionEnabled:false});
+  // Even rejected camera data must be wiped before leaving this function.
+  if(capture?.bytes instanceof Uint8Array)bytes=capture.bytes;
   if(!exact(capture,['bytes','mimeType','source'])||
     !['camera','library'].includes(capture.source)||
     (kind==='rostro_selfie'&&capture.source!=='camera')||
