@@ -4,8 +4,8 @@ export type DeliveryUiResult=Readonly<{ok:false;code:string}>|
   requestSent:false;courierAssigned:false;paymentCaptured:false;
   serverPriceVerified:false}>;
 export declare function projectDeliveryDraftUi(options?:{
- phase?:'idle'|'ready'|'in_flight'|'retryable'|'acknowledged'|'failed';
- operation?:'rideRequest'|'deliveryRequest'|'fareQuote'|'paymentAuthorize'|null;
+ // Accept untrusted public snapshot strings; the runtime strictly validates them.
+ phase?:string;operation?:string|null;
  authenticated?:boolean;validated?:boolean;restricted?:boolean;
  vehicleKind?:'MOTO'|'AUTO';
 }):DeliveryUiResult;
