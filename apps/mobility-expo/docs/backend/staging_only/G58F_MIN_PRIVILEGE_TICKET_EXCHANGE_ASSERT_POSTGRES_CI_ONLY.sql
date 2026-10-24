@@ -19,9 +19,9 @@ BEGIN
   IF pg_catalog.has_schema_privilege(role_name,'public','CREATE')
   THEN RAISE EXCEPTION 'G58F role retained schema CREATE %',role_name; END IF;
  END LOOP;
- SELECT p.prosecdef, p.proowner::pg_catalog.regrole::text AS owner,
-   p.proconfig AS config INTO p
- FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure(f);
+ SELECT proc.prosecdef, proc.proowner::pg_catalog.regrole::text AS owner,
+   proc.proconfig AS config INTO p
+ FROM pg_catalog.pg_proc proc WHERE proc.oid=to_regprocedure(f);
  IF NOT p.prosecdef OR p.owner<>'mobility_g58f_definer_ci'
  OR NOT ('search_path='=ANY(p.config))
  THEN RAISE EXCEPTION 'G58F exchange has unsafe owner/search_path/definer'; END IF;
