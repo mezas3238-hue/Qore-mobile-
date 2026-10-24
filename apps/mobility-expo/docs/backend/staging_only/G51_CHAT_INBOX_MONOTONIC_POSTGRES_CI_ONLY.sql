@@ -21,6 +21,13 @@ CREATE TABLE public.mobility_stage_g51_chat_reads(
  through_seq bigint NOT NULL CHECK(through_seq>=0),
  PRIMARY KEY(conversation_id,actor_id)
 );
+CREATE TABLE public.mobility_stage_g51_inbox_revisions(
+ passenger_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE RESTRICT,
+ revision bigint NOT NULL CHECK(revision>=1)
+);
+ALTER TABLE public.mobility_stage_g51_inbox_revisions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.mobility_stage_g51_inbox_revisions
+ FROM PUBLIC,anon,authenticated,service_role,mobility_g48_gateway_ci;
 CREATE INDEX mobility_stage_g51_unread_lookup ON
  public.mobility_stage_g50_chat_messages(conversation_id,sender_id,seq);
 ALTER TABLE public.mobility_stage_g51_chat_activity ENABLE ROW LEVEL SECURITY;
@@ -33,7 +40,7 @@ REVOKE ALL ON public.mobility_stage_g51_chat_activity,
 CREATE FUNCTION public.mobility_stage_g51_log_activity() RETURNS trigger
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=''
 AS $fn$
-DECLARE cid uuid;
+DECLARE cid uuid; passenger uuid;
 BEGIN
  IF TG_TABLE_SCHEMA<>'public' OR TG_TABLE_NAME NOT IN(
   'mobility_stage_g50_chat_messages','mobility_stage_g50_chat_threads',
@@ -42,6 +49,13 @@ BEGIN
  cid:=NEW.conversation_id;
  INSERT INTO public.mobility_stage_g51_chat_activity(conversation_id)
  VALUES(cid);
+ SELECT t.passenger_id INTO passenger
+ FROM public.mobility_stage_g50_chat_threads t WHERE t.conversation_id=cid;
+ IF passenger IS NULL
+ THEN RAISE EXCEPTION 'G51 missing thread owner' USING ERRCODE='G5108'; END IF;
+ INSERT INTO public.mobility_stage_g51_inbox_revisions(passenger_id,revision)
+ VALUES(passenger,1) ON CONFLICT(passenger_id) DO UPDATE
+ SET revision=public.mobility_stage_g51_inbox_revisions.revision+1;
  RETURN NEW;
 END $fn$;
 CREATE TRIGGER g51_thread_activity AFTER INSERT OR UPDATE OF state
@@ -56,6 +70,12 @@ CREATE TRIGGER g51_read_activity AFTER INSERT OR UPDATE OF through_seq
 -- Existing threads from earlier QA migrations gain an activity marker.
 INSERT INTO public.mobility_stage_g51_chat_activity(conversation_id)
  SELECT conversation_id FROM public.mobility_stage_g50_chat_threads;
+INSERT INTO public.mobility_stage_g51_inbox_revisions(passenger_id,revision)
+ SELECT t.passenger_id,GREATEST(count(*)::bigint,1)
+ FROM public.mobility_stage_g51_chat_activity a
+ JOIN public.mobility_stage_g50_chat_threads t
+  ON t.conversation_id=a.conversation_id
+ GROUP BY t.passenger_id;
 
 -- Owner-only QA read receipt. A malicious last_seen can never jump past a
 -- committed message or force the recipient to mark messages for someone else.
@@ -107,13 +127,11 @@ BEGIN
  NOT EXISTS(SELECT 1 FROM public.user_roles
    WHERE user_id=_actor AND role='passenger'::public.app_role)
  THEN RAISE EXCEPTION 'G51 Passenger-only inbox' USING ERRCODE='G5103'; END IF;
- -- Compute per-owner high-water mark INCLUDING closed threads.
- -- Never disclose or invalidate cursors due to another customer's traffic.
- SELECT GREATEST(COALESCE(max(a.event_seq),0),1) INTO revision
- FROM public.mobility_stage_g51_chat_activity a
- JOIN public.mobility_stage_g50_chat_threads t
-  ON t.conversation_id=a.conversation_id
- WHERE t.passenger_id=_actor;
+ -- Constant-time per-passenger revision; unrelated users never affect
+ -- either this revision or the numeric item DTO (no global event sequence).
+ SELECT COALESCE((SELECT r.revision
+   FROM public.mobility_stage_g51_inbox_revisions r
+   WHERE r.passenger_id=_actor),1) INTO revision;
  IF _expected_revision IS NOT NULL AND _expected_revision<>revision
  THEN RAISE EXCEPTION 'G51 inbox changed since cursor' USING ERRCODE='G5109'; END IF;
  at_ms:=floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint;
@@ -157,7 +175,7 @@ BEGIN
    'conversationId',conversation_id,'serviceId',service_id,
    'serviceKind',service_kind,'state','ACTIVE',
    'assignmentVerified',true,'counterpartRole','driver',
-   'revision',activity_seq,'unreadCount',unread_count,
+   'revision',revision,'unreadCount',unread_count,
    'updatedAt',updated_ms,'canSend',true)
    ORDER BY updated_ms DESC,conversation_id DESC),'[]'::jsonb),
   (SELECT count(*) FROM filtered),
