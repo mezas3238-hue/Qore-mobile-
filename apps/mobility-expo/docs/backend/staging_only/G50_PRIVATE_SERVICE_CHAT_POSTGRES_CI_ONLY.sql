@@ -171,10 +171,13 @@ DECLARE thread public.mobility_stage_g50_chat_threads%ROWTYPE;
  message public.mobility_stage_g50_chat_messages%ROWTYPE;
 BEGIN
  IF _request IS NULL OR _body IS NULL OR char_length(_body) NOT BETWEEN 1 AND 500
- OR octet_length(_body)>2000 OR btrim(_body)='' OR
+ OR octet_length(_body)>2000 OR btrim(_body)='' OR btrim(_body)<>_body OR
+ pg_catalog.strpos(_body,'<')>0 OR pg_catalog.strpos(_body,'>')>0 OR
  _body ~ '[[:cntrl:]]' OR
  _body ~* '(https?://|www\.|[[:alnum:]_.+%-]+@[[:alnum:].-]+\.[[:alpha:]]{2,})' OR
  _body ~ '([0-9][[:space:]().-]*){7,}' OR
+ EXISTS(SELECT 1 FROM pg_catalog.generate_series(8206,8207) AS code
+  WHERE pg_catalog.strpos(_body,pg_catalog.chr(code))>0) OR
  EXISTS(SELECT 1 FROM pg_catalog.generate_series(8234,8238) AS code
   WHERE pg_catalog.strpos(_body,pg_catalog.chr(code))>0) OR
  EXISTS(SELECT 1 FROM pg_catalog.generate_series(8294,8297) AS code
