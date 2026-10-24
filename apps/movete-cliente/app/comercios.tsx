@@ -344,8 +344,11 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
  const [message,setMessage]=useState('');
  const [readFence]=useState(()=>createCommerceUiReadFence());
  useEffect(()=>()=>{readFence.dispose();},[readFence]);
+ const verifiedNow=useCommerceExpiryClock(directory.expiresAt);
+ const directoryFresh=isCommercePageFresh(directory.expiresAt,verifiedNow);
  const sameQuery=directory.municipality===municipality&&directory.serviceKind===service;
- const matchingCategory=!directory.loading&&directory.pageNumber>0&&sameQuery
+ const matchingCategory=!directory.loading&&directoryFresh
+  &&directory.pageNumber>0&&sameQuery
   ?filterVerifiedBranchPage(directory.items,{vertical:selectedVertical,verified:true}):null;
  const visibleBranches=matchingCategory?.ok?matchingCategory.items:[];
  const browse=async(next=false,previous=false)=>{
@@ -384,7 +387,12 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
    La página no pudo validarse; no se presentan resultados antiguos.
   </Text>}
   {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
-  {!directory.loading&&directory.pageNumber>0&&sameQuery&&<>
+  {!directory.loading&&directory.pageNumber>0&&sameQuery&&!directoryFresh&&
+   <Text accessibilityRole="alert" style={styles.text}>
+    Esta lista de sucursales caducó. Actualizá el municipio para volver a consultarla.
+    No se permite elegir sucursales desde una página vencida.
+   </Text>}
+  {!directory.loading&&directory.pageNumber>0&&sameQuery&&directoryFresh&&<>
    <Text style={styles.small}>Página {directory.pageNumber} · {directory.items.length} sucursales en esta página. Total global desconocido.</Text>
    <Text style={styles.small}>Categoría: {selectCommerceVertical(selectedVertical)?.label}. El filtro aplica solo a esta página: una lista vacía no implica ausencia de comercios en la zona.</Text>
    {visibleBranches.length===0&&matchingCategory?.ok&&<Text style={styles.small}>
@@ -395,14 +403,23 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
     <Text style={styles.text}>{item.merchantKind} · {item.municipality}</Text>
     <Text style={styles.small}>Solo descubrimiento. Esta sucursal no está autorizada a recibir pedidos desde esta pantalla.</Text>
     <Action label={'Elegir sucursal '+item.branchTag.replaceAll('_',' ')}
-     secondary onPress={()=>{onSelect(item.branchId);
-      setMessage('Sucursal elegida. Consultá el catálogo para obtener precios y stock verificados.');}}/>
+     secondary disabled={!directoryFresh||directory.loading||readFence.isBusy()}
+     onPress={()=>{
+      // El control de servidor G44 valida cada GET; esta barrera local
+      // rechaza toques en una fila caducada incluso antes del re-render.
+      if(!isCommercePageFresh(directory.expiresAt,Date.now())){
+       setMessage('La lista caducó. Consultá de nuevo las sucursales.');
+       return;
+      }
+      onSelect(item.branchId);
+      setMessage('Sucursal elegida. Consultá el catálogo para obtener precios y stock verificados.');
+     }}/> 
    </View>)}
    <Action label="Sucursales anteriores" secondary
-    disabled={!directory.hasPrevious||directory.loading||readFence.isBusy()}
+    disabled={!directoryFresh||!directory.hasPrevious||directory.loading||readFence.isBusy()}
     onPress={()=>void browse(false,true)}/>
    <Action label="Siguientes sucursales" secondary
-    disabled={!directory.hasNext||directory.loading||readFence.isBusy()}
+    disabled={!directoryFresh||!directory.hasNext||directory.loading||readFence.isBusy()}
     onPress={()=>void browse(true,false)}/>
    <Action label="Cerrar búsqueda de sucursales" secondary
     disabled={directory.loading||readFence.isBusy()}
