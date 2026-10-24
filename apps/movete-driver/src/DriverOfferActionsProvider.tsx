@@ -53,7 +53,7 @@ export function DriverOfferActionsProvider({
   return ()=>{active=false;epoch++;stop?.();unsubscribe();controller.clear();};
  },[controller,authAdapter]);
  useEffect(()=>{
-  if(!controller||!authAdapter)return;
+  if(!controller||!authAdapter||state.phase!=='ready')return;
   if(workspace.phase==='connected'){
    controller.setOffers(workspace.offers,
     {currentLicenseApproved:workspace.currentLicenseApproved});
@@ -61,7 +61,7 @@ export function DriverOfferActionsProvider({
    // A stale inbox must not remain actionable during offline, refresh or logout.
    controller.setOffers([],{currentLicenseApproved:false});
   }
- },[controller,authAdapter,workspace]);
+ },[controller,authAdapter,workspace,state.phase]);
  const context=useMemo<ContextValue>(()=>({
   state,enabled:!!controller&&!!authAdapter,
   decide:async(offerId,action)=>{
