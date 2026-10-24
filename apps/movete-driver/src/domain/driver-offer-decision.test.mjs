@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decidePrivateDriverOffer,DRIVER_OFFER_DECISIONS_LIVE_ENABLED}
+import {decidePrivateDriverOffer,reconcilePrivateDriverOffer,
+ DRIVER_OFFER_DECISIONS_LIVE_ENABLED}
  from './driver-offer-decision.mjs';
 const token='a'.repeat(60),origin='http://127.0.0.1:4141';
 const offer='11111111-1111-4111-8111-111111111111';
@@ -83,4 +84,53 @@ test('Driver retry retains the SAME caller-generated decision key',async()=>{
  const out=await decidePrivateDriverOffer(params);
  assert.equal(out.receiptId,event);
  assert.deepEqual(bodies,[{offerId:offer,requestKey:key},{offerId:offer,requestKey:key}]);
+});
+
+test('G64 Driver recovery uses separate read-only action with exact original ID and key',async()=>{
+ const good={mode:'STAGING_DEMO_ONLY',state:'COMMITTED',
+  kind:'AUTO_RIDE',action:'accept',offerId:offer,requestKey:key,
+  outcome:'accepted',receiptId:event,serverPersisted:true,
+  liveEnabled:false,pushDelivered:false,qaOnly:true,
+  productionEnabled:false,retrySafe:false};
+ const m=fake(good);
+ const result=await reconcilePrivateDriverOffer({
+  apiOrigin:origin,accessToken:token,kind:'AUTO_RIDE',
+  offerId:offer,requestKey:key,action:'accept',request:m.request
+ });
+ assert.equal(m.seen.url,origin+'/v1/staging/driver/offers/reconcile');
+ assert.equal(m.seen.init.method,'POST');
+ assert.deepEqual(JSON.parse(m.seen.init.body),{
+  offerId:offer,requestKey:key,action:'accept'});
+ assert.deepEqual(result,{kind:'AUTO_RIDE',action:'accept',
+  outcome:'accepted',receiptId:event,serverPersisted:true,
+  liveEnabled:false,pushDelivered:false});
+});
+test('G64 unobserved or malformed recovery cannot fabricate a Driver accepted receipt',async()=>{
+ const base={apiOrigin:origin,accessToken:token,
+  kind:'AUTO_RIDE',offerId:offer,requestKey:key,action:'accept'};
+ const good={mode:'STAGING_DEMO_ONLY',state:'COMMITTED',
+  kind:'AUTO_RIDE',action:'accept',offerId:offer,requestKey:key,
+  outcome:'accepted',receiptId:event,serverPersisted:true,
+  liveEnabled:false,pushDelivered:false,qaOnly:true,
+  productionEnabled:false,retrySafe:false};
+ for(const data of [
+  {...good,state:'NOT_YET_OBSERVED'},
+  {...good,requestKey:'22222222-2222-4222-8222-222222222223'},
+  {...good,kind:'DELIVERY'},
+  {...good,action:'decline'},
+  {...good,receiptId:'bad'},
+  {...good,serverPersisted:false},
+  {...good,retrySafe:true},
+  {...good,qaOnly:false},
+  {...good,passengerPhone:'secret'}
+ ]){
+  await assert.rejects(()=>reconcilePrivateDriverOffer({
+   ...base,request:fake(data).request
+  }));
+ }
+ for(const status of [401,403,409,429,503]){
+  await assert.rejects(()=>reconcilePrivateDriverOffer({
+   ...base,request:fake({state:'NOT_YET_OBSERVED',retrySafe:false},status).request
+  }));
+ }
 });
