@@ -123,14 +123,16 @@ SELECT public.mobility_stage_g56_mint_owner_qa(
  floor(extract(epoch FROM clock_timestamp())*1000)::bigint,
  'DRIVER_OPEN','RIDE','56560000-0000-4656-8656-000000000200',NULL)->>'ticket'
  AS open_ticket \gset
+SELECT pg_catalog.set_config('qore.g56_open_ticket', :'open_ticket',false);
 SET LOCAL ROLE mobility_g56_driver_gateway_ci;
 SELECT public.mobility_stage_g56_open_qa(:'open_ticket'::uuid)->>'conversationId'
  AS conversation \gset
 RESET ROLE;
+SELECT pg_catalog.set_config('qore.g56_conversation', :'conversation',false);
 DO $opened$
 BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.mobility_stage_g50_chat_threads
-  WHERE conversation_id=:'conversation'::uuid)
+  WHERE conversation_id=pg_catalog.current_setting('qore.g56_conversation')::uuid)
  THEN RAISE EXCEPTION 'G56 delegated open did not persist'; END IF;
 END $opened$;
 -- Request payload is sent by a delegated ticket; actor never comes from mobile.
@@ -139,28 +141,30 @@ SELECT public.mobility_stage_g56_mint_owner_qa(
  '56560000-0000-4656-8656-000000000102',
  floor(extract(epoch FROM clock_timestamp())*1000)::bigint,
  'DRIVER_SEND','RIDE','56560000-0000-4656-8656-000000000200',
- :'conversation'::uuid)->>'ticket' AS send_ticket \gset
+ pg_catalog.current_setting('qore.g56_conversation')::uuid)->>'ticket' AS send_ticket \gset
 SET LOCAL ROLE mobility_g56_driver_gateway_ci;
 SELECT public.mobility_stage_g56_send_qa(
  :'send_ticket'::uuid,'56560000-0000-4656-8656-000000000401','Voy llegando')
  ->>'messageId' AS message \gset
 RESET ROLE;
+SELECT pg_catalog.set_config('qore.g56_message', :'message',false);
 SELECT public.mobility_stage_g56_mint_owner_qa(
  '56560000-0000-4656-8656-000000000002',
  '56560000-0000-4656-8656-000000000102',
  floor(extract(epoch FROM clock_timestamp())*1000)::bigint,
  'DRIVER_SEND','RIDE','56560000-0000-4656-8656-000000000200',
- :'conversation'::uuid)->>'ticket' AS replay_ticket \gset
+ pg_catalog.current_setting('qore.g56_conversation')::uuid)->>'ticket' AS replay_ticket \gset
 SET LOCAL ROLE mobility_g56_driver_gateway_ci;
 SELECT public.mobility_stage_g56_send_qa(
  :'replay_ticket'::uuid,'56560000-0000-4656-8656-000000000401','Voy llegando')
  ->>'messageId' AS replayed \gset
 RESET ROLE;
+SELECT pg_catalog.set_config('qore.g56_replayed', :'replayed',false);
 DO $verify_ack$
 BEGIN
- IF :'message'<>:'replayed' OR
+ IF pg_catalog.current_setting('qore.g56_message')<>pg_catalog.current_setting('qore.g56_replayed') OR
  (SELECT count(*) FROM public.mobility_stage_g50_chat_messages
-  WHERE conversation_id=:'conversation'::uuid)<>1
+  WHERE conversation_id=pg_catalog.current_setting('qore.g56_conversation')::uuid)<>1
  THEN RAISE EXCEPTION 'G56 idempotence duplicated Driver message'; END IF;
 END $verify_ack$;
 SELECT public.mobility_stage_g56_mint_owner_qa(
@@ -168,7 +172,7 @@ SELECT public.mobility_stage_g56_mint_owner_qa(
  '56560000-0000-4656-8656-000000000102',
  floor(extract(epoch FROM clock_timestamp())*1000)::bigint,
  'DRIVER_HISTORY','RIDE','56560000-0000-4656-8656-000000000200',
- :'conversation'::uuid)->>'ticket' AS history_ticket \gset
+ pg_catalog.current_setting('qore.g56_conversation')::uuid)->>'ticket' AS history_ticket \gset
 SET LOCAL ROLE mobility_g56_driver_gateway_ci;
 SELECT public.mobility_stage_g56_history_qa(:'history_ticket'::uuid,NULL,NULL,100)
  AS delegated_driver_history;
@@ -179,18 +183,18 @@ DECLARE minted jsonb; denied boolean; atms bigint:=
 BEGIN
  IF (SELECT count(*) FROM public.mobility_stage_g50_chat_messages
   WHERE sender_id='56560000-0000-4656-8656-000000000002'
-  AND message_id=:'message'::uuid)<>1
+  AND message_id=pg_catalog.current_setting('qore.g56_message')::uuid)<>1
  THEN RAISE EXCEPTION 'G56 wrong Driver sender'; END IF;
  denied:=false;
  BEGIN
-  PERFORM public.mobility_stage_g56_open_qa(:'open_ticket'::uuid);
+  PERFORM public.mobility_stage_g56_open_qa(pg_catalog.current_setting('qore.g56_open_ticket')::uuid);
  EXCEPTION WHEN SQLSTATE 'G5605' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G56 one-use ticket replay accepted'; END IF;
  minted:=public.mobility_stage_g56_mint_owner_qa(
   '56560000-0000-4656-8656-000000000002',
   '56560000-0000-4656-8656-000000000102',atms,
   'DRIVER_SEND','RIDE','56560000-0000-4656-8656-000000000200',
-  :'conversation'::uuid);
+  pg_catalog.current_setting('qore.g56_conversation')::uuid);
  UPDATE public.mobility_stage_g56_fixture_source
  SET driver_id='56560000-0000-4656-8656-000000000003';
  denied:=false;
@@ -205,7 +209,7 @@ BEGIN
   '56560000-0000-4656-8656-000000000002',
   '56560000-0000-4656-8656-000000000102',atms,
   'DRIVER_HISTORY','RIDE','56560000-0000-4656-8656-000000000200',
-  :'conversation'::uuid);
+  pg_catalog.current_setting('qore.g56_conversation')::uuid);
  UPDATE public.mobility_stage_g42_provider_session_grants
  SET revoked_at=clock_timestamp(),revision=revision+1
  WHERE user_id='56560000-0000-4656-8656-000000000002'
