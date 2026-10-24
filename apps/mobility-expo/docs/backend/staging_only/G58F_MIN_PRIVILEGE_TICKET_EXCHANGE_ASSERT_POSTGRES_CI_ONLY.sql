@@ -23,8 +23,8 @@ BEGIN
    proc.proconfig AS config INTO p
  FROM pg_catalog.pg_proc proc WHERE proc.oid=to_regprocedure(f);
  IF NOT p.prosecdef OR p.owner<>'mobility_g58f_definer_ci'
- OR NOT ('search_path='=ANY(p.config))
- THEN RAISE EXCEPTION 'G58F exchange has unsafe owner/search_path/definer'; END IF;
+ OR NOT (('search_path='=ANY(p.config)) OR ('search_path=""'=ANY(p.config)))
+ THEN RAISE EXCEPTION 'G58F exchange has unsafe owner/search_path/definer: sec=%, owner=%, config=%',p.prosecdef,p.owner,p.config; END IF;
  IF (SELECT relrowsecurity FROM pg_catalog.pg_class
    WHERE oid='public.mobility_stage_g58f_owner_attestations'::regclass)
  IS DISTINCT FROM true
