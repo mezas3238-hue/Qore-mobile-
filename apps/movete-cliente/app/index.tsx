@@ -2,15 +2,29 @@ import React from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {router} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
-import {useClientView} from '../src/ClientRuntime';
+import {useClientView,useClientSimpleMode} from '../src/ClientRuntime';
 export default function ClientHome(){
  const {view}=useClientView();
+ const {simpleMode,setSimpleMode}=useClientSimpleMode();
  return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>Movete Fácil Cliente</Text>
    <Text style={styles.heroSub}>Automóviles, envíos y comercios en una sola app de cliente. Las operaciones se habilitan solo con contratos y autorización certificados.</Text>
   </View>
+  {simpleMode&&<Panel>
+   <Text accessibilityRole="header" style={styles.heading}>Acciones principales</Text>
+   <Text style={styles.text}>Elegí qué necesitás. Los viajes, envíos y pagos siguen sujetos a confirmación del servidor.</Text>
+   <Action large label="Preparar viaje en automóvil" onPress={()=>router.push('/viaje')}/>
+   <Action large label="Preparar envío" onPress={()=>router.push('/envios')}/>
+   <Action large label="Ver comercios" onPress={()=>router.push('/comercios')}/>
+   <Action large label="Seguridad y ayuda" onPress={()=>router.push('/soporte')}/>
+   <Action large label="Mi cuenta" onPress={()=>router.push('/cuenta')}/>
+   <Action secondary label="Mostrar todas las opciones"
+    onPress={()=>setSimpleMode(false)}/>
+   <Text style={styles.small}>Modo simple: visualización temporal, sin modificar permisos ni habilitar servicios reales.</Text>
+  </Panel>}
+  {!simpleMode&&<>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Tu próximo viaje en automóvil</Text>
    <Text style={styles.text}>Indicá origen, destino y el tipo de servicio que preferís. La tarifa y la disponibilidad deben venir del servidor.</Text>
@@ -44,5 +58,6 @@ export default function ClientHome(){
    <Action secondary label="Seguridad y soporte" onPress={()=>router.push('/soporte')}/>
    <Action secondary label="Mi cuenta" onPress={()=>router.push('/cuenta')}/>
   </Panel>
+  </>}
  </ScrollView>;
 }
