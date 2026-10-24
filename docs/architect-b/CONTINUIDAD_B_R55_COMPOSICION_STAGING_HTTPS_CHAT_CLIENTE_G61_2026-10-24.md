@@ -26,3 +26,6 @@ A publica 17 P0: IdP real; servidor HTTPS móvil; Postgres persistente/backup; o
 Revisar CI del mismo SHA: ownership B, Admin Web QA, aislamiento con Cliente/Driver tests TypeScript/Expo export web. **No declarar R55 SUCCESS si no aprobaron los tres**. A continuación: implementar en Cliente/adaptador un flujo QA completo con backend autorizado inyectado para historial/mensajería, sin falsos recibos, y exigir evidencias reales de IdP + HTTPS A. Coordinar en issue #9, con PR #8 y #7 DRAFT separados.
 
 Mandatos: NO MERGE / NO LIVE / NO PSP / NO VPS / NO credenciales ni PII reales / NO uso de Lovable como backend. 
+
+## Ensayo integrado añadido en este mismo corte
+Se amplió `passenger-chat-staging-composition.test.mjs` con dos pruebas de recorrido sintético de la composición ya existente: **Auth Passenger verificado → G51 bandeja autorizada → G52 conversación del mismo servicio → G53 POST con `requestKey` → ACK durable exacto**; además prueba de ACK perdido que conserva `pendingSend` y **rechaza un segundo POST con nueva clave**. Es infraestructura QA sintética: no demuestra backend real, IdP/HTTPS desplegado ni mensajería entre teléfonos físicos.
