@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canShowPassengerServiceChat,passengerChatPrivateViewKey} from './passenger-chat-navigation.mjs';
+import {canShowPassengerServiceChat,passengerChatPrivateViewKey,passengerPendingRecoveryRoute} from './passenger-chat-navigation.mjs';
 const id='123e4567-e89b-42d3-a456-426614174077',other='123e4567-e89b-42d3-a456-426614174088';
 const data=({authenticated:true,contractReady:true,accountSubject:id,
  historyOwnerId:id,serviceId:other,kind:'DELIVERY',status:'assigned'});
@@ -109,4 +109,37 @@ test('R23 un hilo sin sesión válida no resucita el borrador privado',()=>{
  assert.equal(passengerChatPrivateViewKey(base),passengerChatPrivateViewKey({
   sessionRevision:-1,serviceId:id,serviceKind:'RIDE'
  }));
+});
+
+
+// R24 — navegar a conciliación idempotente de un envío incierto.
+test('R24 ofrece regresar al hilo pendiente al visitar otro servicio',()=>{
+ const r=passengerPendingRecoveryRoute({
+  authenticated:true,contractReady:true,pendingSend:true,
+  pendingServiceId:id,pendingServiceKind:'RIDE',pendingConversationId:other,
+  currentServiceId:other,currentServiceKind:'DELIVERY'
+ });
+ assert.deepEqual(r,{serviceId:id,serviceKind:'RIDE',conversationId:other});
+ assert.equal(Object.isFrozen(r),true);
+});
+test('R24 no muestra regreso si la ruta actual ya puede reconciliar la misma clave',()=>{
+ const args={authenticated:true,contractReady:true,pendingSend:true,
+  pendingServiceId:id,pendingServiceKind:'RIDE',pendingConversationId:other,
+  currentServiceId:id,currentServiceKind:'RIDE'};
+ assert.equal(passengerPendingRecoveryRoute(args),null);
+ assert.equal(passengerPendingRecoveryRoute({...args,
+  currentConversationId:other}),null);
+ assert.deepEqual(passengerPendingRecoveryRoute({...args,
+  currentConversationId:id}),{serviceId:id,serviceKind:'RIDE',conversationId:other});
+});
+test('R24 nunca presenta enlaces pendientes sin sesión, contrato o DTO autorizado',()=>{
+ const base={authenticated:true,contractReady:true,pendingSend:true,
+  pendingServiceId:id,pendingServiceKind:'MERCHANT_ORDER',
+  pendingConversationId:other};
+ for(const patch of [
+  {authenticated:false},{contractReady:false},{pendingSend:false},
+  {pendingServiceId:'../../etc/passwd'},{pendingServiceKind:'ADMIN'},
+  {pendingConversationId:'not-a-uuid'},{pendingConversationId:null},
+  {pendingServiceId:null},{pendingServiceKind:'RIDE',pendingConversationId:'/'}
+ ])assert.equal(passengerPendingRecoveryRoute({...base,...patch}),null);
 });
