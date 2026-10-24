@@ -21,7 +21,11 @@ export function createG58CLocalChatRateGateQa({
  const budget=new Map();
  let lastTime=-1;
  return Object.freeze({allowRequest(input){
-  const actor=input?.actorId??input?.userId;
+  if(input===null||typeof input!=='object'||Array.isArray(input))return false;
+  const keys=Object.keys(input);
+  if(keys.length!==2||!keys.includes('operation')||
+   !(keys.includes('actorId')!==keys.includes('userId')))return false;
+  const actor=input.actorId??input.userId;
   if((input?.actorId!==undefined&&input?.userId!==undefined)||
    typeof actor!=='string'||!UUID.test(actor)||
    !OPERATIONS.has(input?.operation))return false;
