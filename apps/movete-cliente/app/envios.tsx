@@ -6,6 +6,7 @@ import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {DELIVERY_CATEGORIES,validateDeliveryForm} from '../src/domain/delivery-form.mjs';
 import {prepareLocalDeliveryRequest} from '../src/domain/client-request-preparation.mjs';
+import {projectDeliveryDraftUi} from '../src/domain/delivery-draft-ui-policy.mjs';
 type Kind='AUTO'|'MOTO';
 
 export default function ClientDeliveries(){
@@ -28,14 +29,19 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
  const [result,setResult]=useState('');
  const lock=useRef(false);
  const mutation=view.mutation;
- const myDraft=mutation.phase==='ready'&&mutation.operation==='deliveryRequest';
- const free=mutation.phase==='idle';
+ const ui=projectDeliveryDraftUi({
+  phase:mutation.phase,operation:mutation.operation,
+  authenticated:view.authenticated,validated,restricted,vehicleKind
+ });
+ // Unknown mutation phases and pending/foreign requests are never editable.
+ const free=ui.ok&&ui.editable;
+ const myDraft=ui.ok&&ui.canDiscard;
  function edit(setter:(s:string)=>void,value:string){
-  if(myDraft)return;
+  if(!free||lock.current)return;
   setter(value);setValidated(false);setResult('');
  }
  function select(action:()=>void){
-  if(myDraft)return;
+  if(!free||lock.current)return;
   action();setValidated(false);setResult('');
  }
  function validate(){
@@ -54,7 +60,7 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    checked.reason);
  }
  function prepare(){
-  if(!free||!validated||lock.current||!view.authenticated)return;
+  if(!ui.ok||!ui.canPrepare||lock.current)return;
   lock.current=true;
   try{
    const prepared=prepareLocalDeliveryRequest({pickup,destination,vehicleKind,
@@ -84,57 +90,73 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    <Text style={styles.heroSub}>Documentos, paquetes y compras compatibles en auto o moto de carga. No reserva repartidores.</Text>
   </View>
   <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>Estado de tu borrador</Text>
+   <Text accessibilityLiveRegion="polite" style={styles.small}>
+    {ui.ok?ui.status:'Estado del formulario no verificable. Se bloquearon las ediciones.'}
+   </Text>
+   <Text style={styles.small}>Los datos y direcciones son privados de este dispositivo;
+    revisar o preparar no solicita repartidor, no cotiza ni cobra.</Text>
+  </Panel>
+  <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 1 · Origen y entrega</Text>
    <TextInput style={styles.field} value={pickup}
-    onChangeText={value=>edit(setPickup,value)} editable={!myDraft}
+    onChangeText={value=>edit(setPickup,value)} editable={free}
     placeholder="Dirección de recogida" accessibilityLabel="Origen del envío" maxLength={120}/>
    <TextInput style={styles.field} value={destination}
-    onChangeText={value=>edit(setDestination,value)} editable={!myDraft}
+    onChangeText={value=>edit(setDestination,value)} editable={free}
     placeholder="Dirección de entrega" accessibilityLabel="Destino del envío" maxLength={120}/>
    <Text accessibilityRole="header" style={styles.heading}>Categoría</Text>
    {DELIVERY_CATEGORIES.map(item=><Action key={item.code} label={item.label}
-    disabled={myDraft} secondary={category!==item.code} selected={category===item.code}
+    disabled={!free} secondary={category!==item.code} selected={category===item.code}
     onPress={()=>select(()=>setCategory(item.code))}/>)}
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 2 · Vehículo de carga</Text>
    <View style={[styles.row,{justifyContent:'flex-start'}]}>
-    <View style={{flex:1,minWidth:140}}><Action label="Moto envíos" disabled={myDraft}
+    <View style={{flex:1,minWidth:140}}><Action label="Moto envíos" disabled={!free}
      secondary={vehicleKind!=='MOTO'} selected={vehicleKind==='MOTO'}
      onPress={()=>select(()=>setVehicleKind('MOTO'))}/></View>
-    <View style={{flex:1,minWidth:140}}><Action label="Auto envíos" disabled={myDraft}
+    <View style={{flex:1,minWidth:140}}><Action label="Auto envíos" disabled={!free}
      secondary={vehicleKind!=='AUTO'} selected={vehicleKind==='AUTO'}
      onPress={()=>select(()=>setVehicleKind('AUTO'))}/></View>
    </View>
    <Text style={styles.small}>Moto pasajeros no autorizada. Moto para carga hasta 10 kg y sujeta a permisos y cobertura del servidor.</Text>
    <Text accessibilityRole="header" style={styles.heading}>Peso y dimensiones</Text>
-   <TextInput style={styles.field} value={weight} editable={!myDraft}
+   <TextInput style={styles.field} value={weight} editable={free}
     onChangeText={value=>edit(setWeight,value)} placeholder="Peso en gramos"
     accessibilityLabel="Peso en gramos" keyboardType="numeric" maxLength={6}/>
-   <TextInput style={styles.field} value={length} editable={!myDraft}
+   <TextInput style={styles.field} value={length} editable={free}
     onChangeText={value=>edit(setLength,value)} placeholder="Largo en cm"
     accessibilityLabel="Largo en centímetros" keyboardType="numeric" maxLength={3}/>
-   <TextInput style={styles.field} value={width} editable={!myDraft}
+   <TextInput style={styles.field} value={width} editable={free}
     onChangeText={value=>edit(setWidth,value)} placeholder="Ancho en cm"
     accessibilityLabel="Ancho en centímetros" keyboardType="numeric" maxLength={3}/>
-   <TextInput style={styles.field} value={height} editable={!myDraft}
+   <TextInput style={styles.field} value={height} editable={free}
     onChangeText={value=>edit(setHeight,value)} placeholder="Alto en cm"
     accessibilityLabel="Alto en centímetros" keyboardType="numeric" maxLength={3}/>
    <Action label={restricted?'Artículos restringidos: SÍ':'Artículos restringidos: NO'}
-    disabled={myDraft} secondary={!restricted} selected={restricted}
+    disabled={!free} secondary={!restricted} selected={restricted}
     onPress={()=>select(()=>setRestricted(!restricted))}/>
    <Text style={styles.small}>No se aceptan productos restringidos. Declarar NO no verifica legalidad o mercancía en tránsito.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 3 · Revisar y preparar</Text>
-   <Action label="Revisar borrador de envío" disabled={!free} onPress={validate}/>
+   <Action label="Revisar borrador de envío" disabled={!free}
+    hint="Revisión local: no se envía ni reserva ningún servicio."
+    onPress={validate}/>
    {validated&&<View>
     <Text style={styles.text}>Ruta: {pickup.trim()} → {destination.trim()}</Text>
     <Text style={styles.text}>Carga: {weight} g, {length} × {width} × {height} cm.</Text>
     <Text style={styles.text}>Vehículo: {vehicleKind==='MOTO'?'Moto de carga':'Auto de carga'}.</Text>
    </View>}
-   {validated&&free&&view.authenticated&&
-    <Action label="Preparar solicitud segura (sin enviar)" onPress={prepare}/>}
+   {ui.ok&&ui.canPrepare&&
+    <Action label="Preparar solicitud segura (sin enviar)"
+     hint="Solo guarda el borrador privado. No crea un pedido ni despacha un repartidor."
+     onPress={prepare}/>}
+   {validated&&free&&restricted&&
+    <Text accessibilityRole="alert" style={styles.small}>
+     No se puede preparar un envío con artículos restringidos declarados.
+    </Text>}
    {!view.authenticated&&<Text style={styles.small}>
     Iniciá sesión como pasajero para preparar el envío. La revisión del formulario no reserva ni cobra.
    </Text>}
@@ -145,7 +167,7 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    {!free&&!myDraft&&<Text style={styles.small}>
     Existe una solicitud pendiente, reconocida o sin conciliar. No podés generar otra clave hasta resolverla.
    </Text>}
-   {result!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive"
+   {result!==''&&<Text accessibilityLiveRegion="polite"
     style={[styles.text,{color:palette.primary}]}>{result}</Text>}
   </Panel>
   <Panel>
