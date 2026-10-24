@@ -471,7 +471,10 @@ export function createClientExperience({authProvider=null,gateway=null,
   prepareSimulatedPayment:body=>{const result=prepare('paymentAuthorize',body);notify();return result;},
   submit:async()=>{const result=await mutations.submit();notify();return result;},
   retry:async()=>{const result=await mutations.retry();notify();return result;},
-  reconcileBooking:async()=>{const result=await mutations.reconcileBooking();notify();return result;},
+  reconcileBooking:async()=>{
+   const pending=mutations.reconcileBooking();notify();
+   const result=await pending;notify();return result;
+  }
   startTracking:tripId=>{const result=startTracking(tripId);notify();return result;},
   syncTracking:async()=>{const result=await syncTracking();notify();return result;},
   connectionLost:()=>{tracking.connectionLost();notify();},
