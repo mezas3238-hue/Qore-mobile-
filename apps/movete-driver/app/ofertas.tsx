@@ -77,6 +77,25 @@ export default function DriverOffers(){
     disabled={state.phase==='not-configured'||state.phase==='loading'}
     onPress={()=>{void refresh();}}/>
   </Panel>
+  {state.phase==='connected'&&actions.decisions.some(d=>
+   !available.some(o=>o.offerId===d.offerId))&&<Panel>
+   <Text style={styles.heading}>Decisiones anteriores de esta sesión</Text>
+   <Text style={styles.small}>Aunque una oferta desaparezca del listado o venza, eso no confirma que su aceptación haya sido anulada. La consulta usa exclusivamente la clave original.</Text>
+   {actions.decisions.filter(d=>!available.some(o=>o.offerId===d.offerId))
+    .map(d=><View key={d.offerId} style={{gap:8}}>
+     <Text style={styles.text}>
+      {d.kind==='AUTO_RIDE'?'Viaje':'Envío'} ·
+      {d.action==='accept'?' aceptación':' rechazo'} ·
+      {d.phase==='confirmed'?' confirmado por servidor':
+       d.phase==='uncertain'?' resultado aún incierto':
+       d.phase==='sending'?' consultando':' bloqueado'}
+     </Text>
+     {d.phase==='uncertain'&&enabled&&<Action
+      label="Consultar decisión original" secondary
+      disabled={actions.busy}
+      onPress={()=>{void reconcilePending(d.offerId);}}/>}
+    </View>)}
+  </Panel>}
   <Panel>
    <Text style={styles.heading}>Seguridad de las asignaciones</Text>
    <Text style={styles.text}>La revisión de licencia G20 se comprueba también al aceptar la oferta; las ofertas vencidas no pueden aceptarse y las motocicletas no están habilitadas para transportar pasajeros.</Text>
