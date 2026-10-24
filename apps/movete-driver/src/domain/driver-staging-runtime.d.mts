@@ -4,6 +4,8 @@ import type {DriverChatHttpsStagingAdapters}
  from './driver-chat-https-staging.mjs';
 import type {DriverWorkspaceControllerOptions}
  from './driver-workspace.mjs';
+import type {DriverOfferActionsAdapters}
+ from './driver-offer-actions.mjs';
 export declare const DRIVER_STAGING_RUNTIME_LIVE_ENABLED:false;
 export type DriverStagingRuntimeOptions=Readonly<{
  apiOrigin:string;
@@ -27,6 +29,7 @@ export type DriverStagingRuntime=Readonly<{
  allowedByOwner:true;
  authAdapter:DriverHttpsStagingAuthAdapter;
  chatAdapters:DriverChatHttpsStagingAdapters;
+ offerActions:DriverOfferActionsAdapters;
  workspaceReaders:Readonly<{
   readInbox:NonNullable<DriverWorkspaceControllerOptions['readInbox']>;
   readDocuments:NonNullable<DriverWorkspaceControllerOptions['readDocuments']>;
