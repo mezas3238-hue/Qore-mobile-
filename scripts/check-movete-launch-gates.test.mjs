@@ -26,7 +26,7 @@ test('G61 CLI explicit --require-go exits with nonzero when not ready',()=>{
   ],{cwd:new URL('../',import.meta.url),encoding:'utf8'});
  }catch(e){failure=e;}
  assert.equal(failure?.status,2);
- assert.match(failure.stdout,'NO_GO');
+ assert.match(failure.stdout,/NO_GO/);
 });
 test('G61 false owner checkbox cannot override incomplete concrete release evidence',()=>{
  for(const altered of [
