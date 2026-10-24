@@ -63,6 +63,12 @@ function fixture(){
     commercialRidesEnabled:false,outcome:'accepted',
     eventId:sent,pushDelivered:false});
   }
+  if(u===url+'/v1/staging/driver/offers/reconcile')
+   return reply(200,{mode:'STAGING_DEMO_ONLY',state:'COMMITTED',
+    kind:'AUTO_RIDE',action:'accept',offerId:offer,requestKey,
+    outcome:'accepted',receiptId:sent,serverPersisted:true,
+    liveEnabled:false,pushDelivered:false,qaOnly:true,
+    productionEnabled:false,retrySafe:false});
   if(u===url+'/v1/staging/driver/offers/decline')
    return reply(200,{mode:'STAGING_DEMO_ONLY',
     commercialRidesEnabled:false,outcome:'declined',
@@ -281,4 +287,29 @@ test('G63 Driver offer decision remains unavailable without real approved runtim
  const controller=createDriverOfferActionsController(fixture().runtime.offerActions);
  assert.equal(controller.current().phase,'signed-out');
  assert.equal(controller.current().productionEnabled,false);
+});
+
+test('G64 full Driver HTTPS offer recovery uses original key and zero second acceptance POSTs',async()=>{
+ const f=fixture();
+ const ws=await f.workspace.refresh();
+ const actions=createDriverOfferActionsController(f.runtime.offerActions);
+ actions.setSession(await f.runtime.authAdapter.getSession());
+ actions.setOffers(ws.offers,{currentLicenseApproved:ws.currentLicenseApproved});
+ f.loseOfferAck();
+ await actions.decide({offerId:offer,action:'accept'});
+ assert.equal(actions.current().decisions[0].phase,'uncertain');
+ actions.setOffers([],{currentLicenseApproved:true});
+ const result=await actions.reconcilePending(offer);
+ assert.equal(result.decisions[0].phase,'confirmed');
+ assert.equal(result.offers.length,0);
+ const sends=f.calls.filter(x=>x.url.endsWith('/offers/accept'));
+ const reads=f.calls.filter(x=>x.url.endsWith('/offers/reconcile'));
+ assert.equal(sends.length,1);
+ assert.equal(reads.length,1);
+ assert.deepEqual(JSON.parse(sends[0].body),{offerId:offer,requestKey});
+ assert.deepEqual(JSON.parse(reads[0].body),{
+  offerId:offer,requestKey,action:'accept'});
+ await actions.reconcilePending(offer);
+ assert.equal(f.calls.filter(x=>x.url.endsWith('/offers/reconcile')).length,1);
+ assert(!JSON.stringify(result).includes(token));
 });
