@@ -910,3 +910,43 @@ test('R29 revalidación de ACK ambiguo no permite seleccionar hilo nuevo',async(
  assert.equal(requests[1].expectedConversationId,conversationId);
  assert.equal(sends,2);
 });
+
+
+// R30 — GET G52 certificado puede leer sin conferir ninguna autorización POST.
+test('R30 solo lectura permite GET/paginación sin generar POST ni envío pendiente',async()=>{
+ const requests=[],olderCursor='q'.repeat(44);
+ const gateway=flags({
+  sendMessage:undefined,
+  readMessages:async params=>{
+   requests.push(params);
+   return {ok:true,data:requests.length===1?page('RIDE',olderCursor)
+    :{...page(),messages:[{...row(2),createdAt:now-2000}]}};
+  }
+ });
+ const flow=make(gateway);
+ assert.equal(flow.snapshot().contractReady,true);
+ assert.equal(flow.snapshot().sendReady,false);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).ok,true);
+ assert.equal(requests.length,2);
+ assert.equal(requests[1].expectedConversationId,conversationId);
+ assert.equal(flow.snapshot().messages.length,2);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_SEND_NOT_CERTIFIED');
+ assert.equal(flow.snapshot().pendingSend,false);
+ assert.equal(flow.snapshot().sendReady,false);
+});
+test('R30 revocar capacidad de POST con GET activo prohíbe envíos nuevos',async()=>{
+ let posts=0;
+ const gateway=flags({sendMessage:async()=>{posts++;return {ok:true,data:ack()};}});
+ const flow=make(gateway);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().sendReady,true);
+ gateway.sendMessage=undefined;
+ assert.equal(flow.snapshot().contractReady,true);
+ assert.equal(flow.snapshot().sendReady,false);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_SEND_NOT_CERTIFIED');
+ assert.equal(flow.snapshot().pendingSend,false);
+ assert.equal(posts,0);
+});
