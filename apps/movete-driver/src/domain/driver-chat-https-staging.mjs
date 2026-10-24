@@ -35,6 +35,9 @@ function stagingOrigin(value,pinnedHost){
   throw Error('G61 refuses unapproved, insecure or ambiguous API origin');
  return url.origin;
 }
+export function assertDriverApprovedStagingOrigin({apiOrigin,approvedStagingHost}={}){
+ return stagingOrigin(apiOrigin,approvedStagingHost);
+}
 const service=x=>['RIDE','DELIVERY','MERCHANT_ORDER'].includes(x);
 const validToken=x=>typeof x==='string'&&TOKEN.test(x);
 const bodyText=x=>typeof x==='string'&&x.length>0&&x.length<=500&&
