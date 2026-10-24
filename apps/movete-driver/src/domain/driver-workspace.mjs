@@ -36,6 +36,7 @@ const config=({authAdapter,apiOrigin,request,now})=>
  typeof apiOrigin==='string'&&typeof request==='function'&&typeof now==='function';
 export function createDriverWorkspaceController({
  authAdapter=null,apiOrigin=null,request=fetch,now=Date.now,
+ approvedStagingHost=null,allowedByOwner=false,
  readInbox=readDriverPrivateInbox,
  readDocuments=readDriverDocumentStatuses,
  readLicense=readDriverLicenseReadiness
@@ -78,7 +79,8 @@ export function createDriverWorkspaceController({
     if(session===null||session===undefined)return emit(make('signed-out'));
     if(!cleanSession(session))return emit(make('authorization-required'));
     // Keep token only in this async frame, never in controller persistent state.
-    const connection={apiOrigin,accessToken:session.accessToken,request};
+    const connection={apiOrigin,accessToken:session.accessToken,request,
+     approvedStagingHost,allowedByOwner};
     const [offers,documents,license]=await Promise.all([
      readInbox({...connection,now}),
      readDocuments(connection),
