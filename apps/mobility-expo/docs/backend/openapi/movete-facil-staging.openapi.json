@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g50",
+    "version": "1.0.0-g51",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G50 private chat QA schemas and API plan: not deployed, no real JWT-to-owner bridge or message transport"
+    "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
   "servers": [
     {
@@ -2690,6 +2690,132 @@
           }
         }
       }
+    },
+    "/v1/staging/chat/conversations": {
+      "get": {
+        "operationId": "listPrivatePassengerChatInboxG51",
+        "tags": [
+          "private-chat"
+        ],
+        "summary": "Owner-only private conversation inbox with signed keyset pagination",
+        "description": "Future contract. JWT-bound actor, G42 transactional session, source assignment revalidation. Signed cursor binds actor/session/revision/time; state is QA only.",
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "parameters": [
+          {
+            "name": "X-Qore-Chat-Cursor",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 384
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Future private QA endpoint; no deployed HTTPS service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatInboxPageG51"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/conversations/{conversationId}/read-receipt": {
+      "post": {
+        "operationId": "markOwnPrivateChatReadG51",
+        "tags": [
+          "private-chat"
+        ],
+        "summary": "Monotonic read watermark under current assignment and session lock",
+        "description": "Future QA-only read receipt. Cannot mark a future message or impersonate a participant.",
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/ChatReadReceiptG51"
+        },
+        "responses": {
+          "200": {
+            "description": "Future private QA endpoint; no deployed HTTPS service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatReadReceiptG51"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3013,6 +3139,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ChatSendRequestG50"
+            }
+          }
+        }
+      },
+      "ChatReadReceiptG51": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ChatReadReceiptRequestG51"
             }
           }
         }
@@ -5975,6 +6111,159 @@
             "description": "No phones, emails, URLs, bidi or controls; server revalidates"
           }
         }
+      },
+      "ChatInboxRowG51": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceId",
+          "serviceKind",
+          "state",
+          "assignmentVerified",
+          "counterpartRole",
+          "revision",
+          "unreadCount",
+          "updatedAt",
+          "canSend"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "const": "ACTIVE"
+          },
+          "assignmentVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "counterpartRole": {
+            "type": "string",
+            "const": "driver"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "canSend": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "ChatInboxPageG51": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ownerId",
+          "generatedAt",
+          "expiresAt",
+          "revision",
+          "items",
+          "nextCursor",
+          "productionEnabled"
+        ],
+        "properties": {
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatInboxRowG51"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 384
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "ChatReadReceiptRequestG51": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "throughSeq"
+        ],
+        "properties": {
+          "throughSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ChatReadReceiptG51": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "readThrough",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readThrough": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },
@@ -5987,5 +6276,6 @@
   "x-qore-g48-runtime-wired": false,
   "x-qore-g48-provider-to-db-proof-wired": false,
   "x-qore-g50-chat-runtime-wired": false,
-  "x-qore-g50-private-chat-qa-only": true
+  "x-qore-g50-private-chat-qa-only": true,
+  "x-qore-g51-chat-inbox-runtime-wired": false
 }
