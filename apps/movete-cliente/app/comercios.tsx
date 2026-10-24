@@ -4,43 +4,68 @@ import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {prepareCatalogBranchLookup,isSelectedCatalogBranchCurrent} from '../src/domain/catalog-branch-lookup.mjs';
-const categories=[
- ['Supermercados','Sucursales, stock y precios confirmados por servidor.'],
- ['Restaurantes','Menú, preparación, entrega y cancelaciones.'],
- ['Farmacias OTC','Solo productos sin receta habilitados por la normativa.'],
- ['Otros comercios','Categorías autorizadas por zona y por sucursal.']
-] as const;
+import {COMMERCE_VERTICALS,selectCommerceVertical,filterVerifiedCatalogPage,
+ filterVerifiedBranchPage} from '../src/domain/commerce-storefront.mjs';
+import type {CommerceVertical} from '../src/domain/commerce-storefront.mjs';
 export default function Commerce(){
  const {client,view}=useClientView();
+ // El key elimina búsqueda, rubro elegido y sucursal anterior ANTES de
+ // mostrar una cuenta nueva, incluso con subject igual y JWT rotado.
+ return <PrivateCommerce key={view.privateViewRevision} client={client} view={view}/>;
+}
+function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnapshot}){
  const [preferredBranch,setPreferredBranch]=useState<string|null>(null);
- useEffect(()=>setPreferredBranch(null),[view.privateViewRevision]);
+ const [selectedVertical,setSelectedVertical]=useState<CommerceVertical>('SUPERMARKET');
+ const [query,setQuery]=useState('');
+ const selected=selectCommerceVertical(selectedVertical);
  return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-  <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Comercios</Text>
-   <Text style={styles.heroSub}>Compras y entregas con precio y disponibilidad confirmados por el servidor.</Text></View>
+  <View style={styles.hero}>
+   <Text accessibilityRole="header" style={styles.heroText}>Tiendas y entregas</Text>
+   <Text style={styles.heroSub}>Supermercados, farmacias sin receta, restaurantes y más. Solo se muestran productos, stock y precios confirmados por servidor.</Text>
+  </View>
+  <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>¿Qué necesitás comprar?</Text>
+   <Text style={styles.text}>Elegí el tipo de comercio</Text>
+   {COMMERCE_VERTICALS.map(option=><View key={option.code}>
+    <Action label={option.label} secondary={selectedVertical!==option.code}
+     selected={selectedVertical===option.code}
+     onPress={()=>{setSelectedVertical(option.code);setPreferredBranch(null);}}/>
+   </View>)}
+   <Text style={styles.text}>{selected?.description}</Text>
+   <Text style={styles.small}>La categoría filtra solamente las sucursales de la página consultada al servidor; no verifica disponibilidad en toda la ciudad.</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Buscar dentro del catálogo verificado</Text>
+   <TextInput style={styles.field} accessibilityLabel="Buscar productos de la sucursal verificada"
+    value={query} onChangeText={setQuery} maxLength={64}
+    placeholder="Ej.: leche, arroz o protector solar" autoCorrect={false}/>
+   <Text style={styles.small}>La búsqueda es local sobre la página de productos autorizada. No conserva direcciones ni consultas entre sesiones.</Text>
+  </Panel>
   {!view.commerce.catalogReadReady&&<Panel>
-   <Text accessibilityRole="header" style={styles.heading}>Integración de catálogo requerida</Text>
-   <Text style={styles.text}>El carrito productivo ya exige catálogo versionado, stock y precios del servidor. La compra permanece bloqueada porque el contrato actual aún no publica el catálogo para compradores ni una confirmación tipada de pedido.</Text>
-   <Text style={styles.small}>Nunca se mostrarán productos ficticios ni se enviará un pedido con precios o stock vencidos.</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Catálogo pendiente de integración</Text>
+   <Text style={styles.text}>Para mostrar comercios, artículos y precios de verdad necesitamos el servicio de sucursales y catálogo autorizado por el backend.</Text>
+   <Text style={styles.small}>No hay ofertas, tiempos de entrega o stock simulados. La compra y el pago continúan desactivados.</Text>
   </Panel>}
   {view.authenticated&&view.branchDirectory.readReady&&
-   <CertifiedBranchDirectory key={'directory-'+view.privateViewRevision}
-    client={client} view={view} onSelect={setPreferredBranch}/>}
+   <CertifiedBranchDirectory client={client} view={view}
+    selectedVertical={selectedVertical} onSelect={setPreferredBranch}/>}
   {view.authenticated&&view.commerce.catalogReadReady&&
-   <CertifiedCatalog key={view.privateViewRevision} client={client} view={view} preferredBranch={preferredBranch}/>}
+   <CertifiedCatalog client={client} view={view} query={query}
+    preferredBranch={preferredBranch}/>}
   {view.authenticated&&view.commercePager.readReady&&
-   <ReadOnlyCatalogPager key={'pager-'+view.privateViewRevision} client={client} view={view} preferredBranch={preferredBranch}/>}
-  {categories.map(([title,description])=><Panel key={title}>
-   <Text accessibilityRole="header" style={styles.heading}>{title}</Text><Text style={styles.text}>{description}</Text>
-   <Text style={styles.small}>Se habilitará únicamente con sucursal, cobertura y catálogo vigentes del servidor.</Text>
-  </Panel>)}
+   <ReadOnlyCatalogPager client={client} view={view} query={query}
+    preferredBranch={preferredBranch}/>}
+  <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>¿Cómo funcionará tu pedido?</Text>
+   <Text style={styles.text}>Elegí un comercio habilitado, agregá productos con precio y stock vigentes, revisá el total del servidor y confirmá cuando el pago y el despacho estén certificados.</Text>
+   <Text style={styles.small}>Farmacias: solo productos permitidos sin receta, según las reglas legales y de la sucursal. Moto para reparto de carga, no para pasajeros.</Text>
+  </Panel>
  </ScrollView>;
 }
 
 /** No presenta productos ni precios mientras falte el GET certificado de A.
  * Los ítems mostrados proceden exclusivamente del flujo de catálogo autorizado.
  */
-function CertifiedCatalog({client,view,preferredBranch}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null}){
+function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null;query:string}){
  const commerce=view.commerce;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
@@ -61,6 +86,9 @@ function CertifiedCatalog({client,view,preferredBranch}:{client:ClientExperience
  };
  const fresh=commerce.stage==='SERVER_CATALOG'&&!commerce.catalogLoading
   &&isSelectedCatalogBranchCurrent(branchInput,commerce.branchId);
+ const verifiedMatches=fresh?filterVerifiedCatalogPage(commerce.catalogItems,
+  {query,verified:true}):null;
+ const visibleItems=verifiedMatches?.ok?verifiedMatches.items:[];
  const summary=commerce.estimatedSubtotalPyg===null?'—'
   :commerce.estimatedSubtotalPyg.toLocaleString('es-PY')+' Gs.';
  const edit=(id:string,quantity:number)=>{
@@ -91,7 +119,13 @@ function CertifiedCatalog({client,view,preferredBranch}:{client:ClientExperience
     onPress={()=>{const branch=commerce.branchId;if(branch){
      setBranchInput(branch);void load(branch);
     }}}/>
-   {commerce.catalogItems.filter(item=>item.active).map(item=>{
+   {verifiedMatches?.ok&&visibleItems.length===0&&<Text style={styles.small}>
+    Sin coincidencias en este catálogo verificado. No significa que el artículo esté agotado en otros comercios.
+   </Text>}
+   {verifiedMatches&&!verifiedMatches.ok&&<Text accessibilityRole="alert" style={styles.small}>
+    Búsqueda inválida o catálogo no verificable. No se muestran artículos.
+   </Text>}
+   {visibleItems.map(item=>{
     const count=commerce.items.find(row=>row.itemId===item.itemId)?.quantity??0;
     return <View key={item.itemId} style={styles.card}>
      <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>
@@ -128,13 +162,16 @@ function CertifiedCatalog({client,view,preferredBranch}:{client:ClientExperience
 /** Lectura de catálogo de múltiples páginas, sin alimentar carrito ni pagos.
  * Solo aparece con una API Buyer previamente auditada por A.
  */
-function ReadOnlyCatalogPager({client,view,preferredBranch}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null}){
+function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null;query:string}){
  const pager=view.commercePager;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
  useEffect(()=>{if(preferredBranch)setBranchInput(preferredBranch);},[preferredBranch]);
  if(!pager.readReady)return null;
  const matchingBranch=isSelectedCatalogBranchCurrent(branchInput,pager.branchId);
+ const matchedCatalog=!pager.loading&&pager.pageNumber>0&&matchingBranch
+  ?filterVerifiedCatalogPage(pager.visibleItems,{query,verified:true}):null;
+ const visibleItems=matchedCatalog?.ok?matchedCatalog.items:[];
  const load=async(next=false,previous=false)=>{
   const input=(next||previous)?pager.branchId:branchInput;
   const validated=prepareCatalogBranchLookup(input??'');
@@ -160,7 +197,13 @@ function ReadOnlyCatalogPager({client,view,preferredBranch}:{client:ClientExperi
   </Text>}
   {!pager.loading&&pager.pageNumber>0&&matchingBranch&&<>
    <Text style={styles.small}>Página {pager.pageNumber} · {pager.visibleItems.length} productos en esta página, no el total de la plataforma. Versión {pager.version}.</Text>
-   {pager.visibleItems.filter(item=>item.active).map(item=><View key={item.itemId} style={styles.card}>
+   {matchedCatalog?.ok&&visibleItems.length===0&&<Text style={styles.small}>
+    No hay productos coincidentes en esta página; usá los controles de paginación para seguir explorando.
+   </Text>}
+   {matchedCatalog&&!matchedCatalog.ok&&<Text accessibilityRole="alert" style={styles.small}>
+    La búsqueda o la página no pudo verificarse.
+   </Text>}
+   {visibleItems.map(item=><View key={item.itemId} style={styles.card}>
     <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>
     <Text style={styles.text}>{item.itemClass==='PHARMACY_OTC'?'Artículo de farmacia sin receta':'Artículo general'} · {item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock reportado: {item.stockUnits}</Text>
     <Text style={styles.small}>Solo consulta. El precio final y la compra requieren una transacción de servidor.</Text>
@@ -178,14 +221,18 @@ function ReadOnlyCatalogPager({client,view,preferredBranch}:{client:ClientExperi
 /** Listado G44 sin disponibilidad prometida, sin pedidos ni datos personales.
  * Solo se monta con un GET de sucursales certificado; OFF por defecto.
  */
-function CertifiedBranchDirectory({client,view,onSelect}:{
+function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
  client:ClientExperience;view:ClientSnapshot;onSelect:(id:string)=>void;
+ selectedVertical:CommerceVertical;
 }){
  const directory=view.branchDirectory;
  const [municipality,setMunicipality]=useState('');
  const [service,setService]=useState<'MOTO_DELIVERY'|'AUTO_DELIVERY'>('MOTO_DELIVERY');
  const [message,setMessage]=useState('');
  const sameQuery=directory.municipality===municipality&&directory.serviceKind===service;
+ const matchingCategory=!directory.loading&&directory.pageNumber>0&&sameQuery
+  ?filterVerifiedBranchPage(directory.items,{vertical:selectedVertical,verified:true}):null;
+ const visibleBranches=matchingCategory?.ok?matchingCategory.items:[];
  const browse=async(next=false,previous=false)=>{
   if(directory.loading)return;
   setMessage('');
@@ -218,7 +265,11 @@ function CertifiedBranchDirectory({client,view,onSelect}:{
   {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
   {!directory.loading&&directory.pageNumber>0&&sameQuery&&<>
    <Text style={styles.small}>Página {directory.pageNumber} · {directory.items.length} sucursales en esta página. Total global desconocido.</Text>
-   {directory.items.map(item=><View key={item.branchId} style={styles.card}>
+   <Text style={styles.small}>Categoría: {selectCommerceVertical(selectedVertical)?.label}. El filtro aplica solo a esta página: una lista vacía no implica ausencia de comercios en la zona.</Text>
+   {visibleBranches.length===0&&matchingCategory?.ok&&<Text style={styles.small}>
+    Sin sucursales de esta categoría en esta página. Podés consultar las siguientes.
+   </Text>}
+   {visibleBranches.map(item=><View key={item.branchId} style={styles.card}>
     <Text style={styles.heading}>{item.branchTag.replaceAll('_',' ')}</Text>
     <Text style={styles.text}>{item.merchantKind} · {item.municipality}</Text>
     <Text style={styles.small}>Solo descubrimiento. Esta sucursal no está autorizada a recibir pedidos desde esta pantalla.</Text>
