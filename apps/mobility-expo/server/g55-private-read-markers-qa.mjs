@@ -37,18 +37,19 @@ export function createG55HistoryWithReadMarkerQa({
   verifySessionNotRevoked,resolveExclusiveRole,allowRequest,
   mintOwnerTicket,executeScopedTicket,now};
  verifyBoundary(opts);
- let readMarker=null;
  // G52 signs cursors and independently authenticates every page; only the
  // database operation is replaced with G49/G55 scoped bearer capabilities.
- const base=createG52ChatHistoryQa({...opts,cursorSecret,
+ return Object.freeze({async handle(req){
+  let readMarker=null;
+  const base=createG52ChatHistoryQa({...opts,cursorSecret,
   rpc:async(name,args)=>{
    const operation=name==='mobility_stage_g50_open_owner_qa'?'CHAT_OPEN':
     name==='mobility_stage_g52_history_owner_qa'?'CHAT_HISTORY':null;
    if(!operation||!obj(args))throw Error('G55 unsafe RPC escape');
    const actorId=operation==='CHAT_OPEN'?args._actor:args._actor;
    const sessionId=args._session,tokenIatMs=args._iat;
-   const serviceKind=operation==='CHAT_OPEN'?args._kind:null;
-   const serviceId=operation==='CHAT_OPEN'?args._service:null;
+   const serviceKind=operation==='CHAT_OPEN'?args._kind:req.serviceKind;
+   const serviceId=operation==='CHAT_OPEN'?args._service:req.serviceId;
    let supplied={operation,actorId,sessionId,tokenIatMs};
    if(operation==='CHAT_OPEN'){
     supplied={...supplied,serviceKind,serviceId,conversationId:null};
@@ -56,12 +57,11 @@ export function createG55HistoryWithReadMarkerQa({
     // G55 history mint is bound to the already pinned G50 conversation.
     // Trusted SQL mint resolves serviceKind/serviceId from conversation;
     // caller never chooses another user's thread.
-    supplied={...supplied,conversationId:args._conversation};
+    supplied={...supplied,serviceKind,serviceId,conversationId:args._conversation};
    }
    if(!id(actorId)||!id(sessionId)||!safe(tokenIatMs)||
-    operation==='CHAT_OPEN'&&(!id(serviceId)||![
-     'RIDE','DELIVERY','MERCHANT_ORDER'].includes(serviceKind))||
-    operation==='CHAT_HISTORY'&&!id(args._conversation))
+    !id(serviceId)||!['RIDE','DELIVERY','MERCHANT_ORDER'].includes(serviceKind)||
+    (operation==='CHAT_HISTORY'&&!id(args._conversation)))
     throw Error('G55 invalid identity/scope');
    const ticket=await mintOwnerTicket(supplied);
    if(!validTicket(ticket,operation,now()))throw Error('G55 untrusted ticket');
@@ -92,9 +92,7 @@ export function createG55HistoryWithReadMarkerQa({
    return {data:envelope.page};
   }
  });
- return Object.freeze({async handle(req){
-  readMarker=null;
-  const page=await base.handle(req);
+ const page=await base.handle(req);
   if(page.status!==200)return page;
   if(readMarker&&(!page.body.messages.some(m=>m.messageId===readMarker.messageId&&
      m.senderRole==='driver')||readMarker.expiresAtMs<=now()))
