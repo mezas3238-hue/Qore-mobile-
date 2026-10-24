@@ -28,7 +28,7 @@ const isUuid=x=>typeof x==='string'&&UUID.test(x);
 function checkKey({driverId,kind,objectKey}={}){
  if(!isUuid(driverId)||!ALLOWED.has(kind)||typeof objectKey!=='string'||
     objectKey.length>180||
-    !new RegExp('^'+driverId+'/'+kind+'-[A-Za-z0-9_-]{12,80}[.](jpg|jpeg|png)
+    !new RegExp('^'+driverId+'/'+kind+'-[A-Za-z0-9_-]{12,80}[.](jpg|jpeg|png)$').test(objectKey))
   throw Error('G19 invalid private Driver evidence key');
 }
 function validMetadata(record,{driverId,objectKey}){
