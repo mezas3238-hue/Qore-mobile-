@@ -20,6 +20,9 @@ export default function ClientTracking(){
  const [confirm,setConfirm]=useState(false);
  const [cancelBusy,setCancelBusy]=useState(false);
  const [message,setMessage]=useState('');
+ const [historyMessage,setHistoryMessage]=useState('');
+ const [historyBusy,setHistoryBusy]=useState(false);
+ const historyLock=useRef(false);
  const locked=useRef(false);
  const confirmHeading=useRef<React.ElementRef<typeof Text>>(null);
  // F1: only the Passenger's verified QA booking may poll while this route is
@@ -55,6 +58,26 @@ export default function ClientTracking(){
   },50);
   return ()=>clearTimeout(timer);
  },[confirm]);
+ async function verifyOwnCompletedHistory(){
+  if(historyLock.current||!view.completedRideHistory.readReady
+   ||view.completedRideHistory.verified)return;
+  const before=client.snapshot();
+  if(!before.completedRideHistory.readReady
+   ||before.tracking.tripId!==view.tracking.tripId
+   ||before.tracking.revision!==view.tracking.revision
+   ||before.privateViewRevision!==view.privateViewRevision)return;
+  historyLock.current=true;setHistoryBusy(true);setHistoryMessage('');
+  try{
+   const outcome=await client.verifyCompletedRideHistory();
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.account?.subject!==view.account?.subject
+    ||after.tracking.tripId!==before.tracking.tripId)return;
+   setHistoryMessage(outcome.ok&&after.completedRideHistory.verified
+    ?'El historial privado del servidor confirma la finalización del viaje. Esto no es un comprobante de pago.'
+    :'El historial del servidor todavía no confirma esta finalización. No mostramos recibos ni pagos sin verificación.');
+  }finally{historyLock.current=false;setHistoryBusy(false);}
+ }
  function validateCancelAction(action:'prepare'|'submit'|'retry'){
   const allowed=guardTrackingCancellationUiAction(view,client.snapshot(),{action});
   if(!allowed.ok){
@@ -136,6 +159,21 @@ export default function ClientTracking(){
     {view.rideContinuation.canVerify&&view.rideContinuation.tripId===state.tripId
      &&!['completed','cancelled','failed'].includes(state.state)&&
      <Text style={styles.small}>El estado del viaje se consulta automáticamente cada 12 segundos mientras esta pantalla está abierta. Las ubicaciones y tiempos solo se muestran con datos vigentes del servidor.</Text>}
+    {state.state==='completed'&&<View>
+      <Text accessibilityRole="header" style={styles.heading}>Finalización e historial</Text>
+      <Text style={styles.small}>El estado finalizado del seguimiento no equivale a una entrada confirmada en el historial ni a un cobro realizado.</Text>
+      {view.completedRideHistory.verified
+       ?<Text accessibilityLiveRegion="polite" style={styles.text}>Finalización confirmada también por el historial privado del servidor.</Text>
+       :view.completedRideHistory.readReady
+        ?<Action label={historyBusy?'Verificando historial…':'Verificar finalización en mi historial'}
+         busy={historyBusy} disabled={historyBusy||view.completedRideHistory.verifying}
+         hint="Lectura independiente de tu historial. No crea otro viaje ni cobra."
+         onPress={()=>{void verifyOwnCompletedHistory();}}/>
+        :<Text style={styles.small}>La comprobación adicional del historial todavía no está disponible: se requiere una lectura segura y vigente de STAGING.</Text>}
+      {historyMessage!==''&&<Text accessibilityRole="alert" style={styles.small}>{historyMessage}</Text>}
+      {view.completedRideHistory.verified&&
+       <Action label="Abrir mi historial" secondary onPress={()=>router.push('/historial')}/>}
+     </View>}
     <Action label={state.syncing?'Sincronizando…':'Actualizar desde el servidor'} disabled={!canSync}
      busy={state.syncing}
       onPress={()=>{void client.syncTracking();}}/>
