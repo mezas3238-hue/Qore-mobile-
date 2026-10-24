@@ -90,13 +90,14 @@ export function createDriverOfferActionsController({
    pending={offerId,action};
    decisionMap.set(offerId,{offerId,kind,action,phase:'sending'});
    publish('ready');
-   let key;
+   let key,submitted=false;
    try{
     key=await makeRequestKey();
     if(stamp!==epoch||identity!==oldIdentity)return state;
     if(typeof key!=='string'||!UUID.test(key)||usedKeys.has(key))
      throw Error('G63 unsafe key');
     usedKeys.add(key);
+    submitted=true;
     const receipt=await decide({
      accessToken:oldIdentity.accessToken,kind,offerId,
      requestKey:key,action
@@ -109,15 +110,17 @@ export function createDriverOfferActionsController({
      throw Error('G63 untrusted server receipt');
     decisionMap.set(offerId,{offerId,kind,action,phase:'confirmed'});
     offers=offers.filter(o=>o.offerId!==offerId);
+    pending=null;
     return publish('ready');
    }catch{
     if(stamp!==epoch||identity!==oldIdentity)return state;
     // Any error may follow a COMMIT. Never repeat POST with a new key.
     decisionMap.set(offerId,{offerId,kind,action,
-     phase:key?'uncertain':'blocked'});
+     phase:submitted?'uncertain':'blocked'});
+    pending=null;
     return publish('ready');
    }finally{
-    if(stamp===epoch){pending=null;publish('ready');}
+    if(stamp===epoch&&pending!==null){pending=null;publish('ready');}
    }
   }
  });
