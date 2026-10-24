@@ -213,3 +213,144 @@ test('R56 ClientExperience accepts QA receipt, but does not invent a Driver assi
  assert.equal(client.snapshot().tracking.subscriptionActive,false);
  assert.equal(client.snapshot().quote,null);
 });
+
+test('R57 missing reconciliation contract cannot make a network READ',async()=>{
+ let reads=0;
+ const g=createPassengerBookingStagingGateway({...base(),
+  reconciliationRead:async()=>{reads++;return {ok:false};}});
+ assert.equal((await g.reconcile('rideRequest',{requestKey:key,
+  expectedSessionRevision:9,expectedSubject:subject})).code,
+  'BOOKING_RECONCILIATION_NOT_CERTIFIED');
+ assert.equal(reads,0);
+});
+test('R57 reconciliation uses same passenger key and never sends a POST',async()=>{
+ let reads=0,posts=0,scope;
+ const g=createPassengerBookingStagingGateway({...base(),
+  reconciliationContractCertified:true,
+  fetchImpl:async()=>{posts++;throw Error('No POST is allowed in reconciliation');},
+  reconciliationRead:async x=>{scope=x;reads++;return {
+   ok:true,status:200,data:receipt()};}
+ });
+ const x=await g.reconcile('rideRequest',{requestKey:key,
+  expectedSessionRevision:9,expectedSubject:subject});
+ assert.equal(x.ok,true);assert.equal(x.recoveredWithoutPost,true);
+ assert.equal(x.bookingConfirmedForProduction,false);
+ assert.equal(reads,1);assert.equal(posts,0);
+ assert.deepEqual(Object.keys(scope).sort(),
+  ['operation','requestKey','expectedSubject','expectedSessionRevision','bearer'].sort());
+ assert.equal(scope.bearer,token);assert.equal(scope.requestKey,key);
+});
+test('R57 404 NOT_YET_OBSERVED, empty or malformed read cannot unlock request',async()=>{
+ for(const data of [
+  {ok:false,status:404,code:'NOT_YET_OBSERVED'},
+  {ok:true,status:200,data:null},
+  {ok:true,status:200,data:receipt('rideRequest',{ownerId:id(88)})},
+  {ok:true,status:200,data:receipt('rideRequest',{requestKey:id(89)})},
+  {ok:true,status:201,data:receipt()},
+  {ok:true,status:200,data:receipt('rideRequest',{serverPersisted:false})}
+ ]){
+  const g=createPassengerBookingStagingGateway({...base(),
+   reconciliationContractCertified:true,reconciliationRead:async()=>data});
+  const x=await g.reconcile('rideRequest',{requestKey:key,
+   expectedSessionRevision:9,expectedSubject:subject});
+  assert.equal(x.code,'BOOKING_RECONCILIATION_UNKNOWN');
+ }
+});
+test('R57 read-only recovery denies another actor or revision before backend',async()=>{
+ let hits=0;
+ const g=createPassengerBookingStagingGateway({...base(),
+  reconciliationContractCertified:true,
+  reconciliationRead:async()=>{hits++;return {ok:true,status:200,data:receipt()};}});
+ for(const patch of [
+  {expectedSubject:id(88)},{expectedSubject:null},
+  {expectedSessionRevision:10},{requestKey:'bad'}
+ ]){
+  const x=await g.reconcile('rideRequest',{
+   requestKey:key,expectedSubject:subject,expectedSessionRevision:9,...patch
+  });
+  assert.equal(x.ok,false);
+ }
+ assert.equal(hits,0);
+});
+test('R57 JWT rotation while read is in flight never authorizes the old receipt',async()=>{
+ let current=identity(),release,posted=0;
+ const wait=new Promise(resolve=>{release=resolve;});
+ const g=createPassengerBookingStagingGateway({...base(),
+  getSession:async()=>current,
+  reconciliationContractCertified:true,reconciliationRead:async()=>wait,
+  fetchImpl:async()=>{posted++;throw Error('POST forbidden');}
+ });
+ const job=g.reconcile('rideRequest',{requestKey:key,
+  expectedSessionRevision:9,expectedSubject:subject});
+ await Promise.resolve();await Promise.resolve();
+ current={...identity(),token:'rotated-passenger-token-1234567890'};
+ release({ok:true,status:200,data:receipt()});
+ assert.equal((await job).code,'STALE_SESSION_RESPONSE');
+ assert.equal(posted,0);
+});
+test('R57 ClientExperience timeout blocks POST retry and new requestKey',async()=>{
+ let posts=0;
+ const client=createClientExperience({
+  now:()=>T,authProvider:{readSession:async()=>({
+   subject,role:'passenger',token,expiresAt:T+120000
+  }),signOut:async()=>{}},
+  bookingHttpOptions:{...base(),fetchImpl:async()=>{
+   posts++;throw Error('response lost after possible commit');
+  }}
+ });
+ await client.refreshSession();
+ assert.equal(client.prepareRide(ride()).ok,true);
+ assert.equal((await client.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal(client.snapshot().mutation.phase,'failed');
+ assert.equal((await client.retry()).code,'NO_READY_REQUEST');
+ assert.equal(client.prepareRide({...ride(),requestKey:id(9)}).code,
+  'RECONCILE_BEFORE_NEW_REQUEST');
+ assert.equal((await client.reconcileBooking()).code,
+  'BOOKING_RECONCILIATION_NOT_CERTIFIED');
+ assert.equal(posts,1);
+});
+test('R57 certified read-only recovery updates prior request, no new POST',async()=>{
+ let posts=0,reads=0;
+ const client=createClientExperience({
+  now:()=>T,authProvider:{readSession:async()=>({
+   subject,role:'passenger',token,expiresAt:T+120000
+  }),signOut:async()=>{}},
+  bookingHttpOptions:{...base(),
+   reconciliationContractCertified:true,
+   reconciliationRead:async scope=>{reads++;
+    assert.equal(scope.requestKey,key);assert.equal(scope.expectedSubject,subject);
+    return {ok:true,status:200,data:receipt()};},
+   fetchImpl:async()=>{posts++;return response({tripId:trip});}
+  }
+ });
+ await client.refreshSession();
+ client.prepareRide(ride());
+ assert.equal((await client.submit()).code,'BOOKING_RECEIPT_NOT_CERTIFIED');
+ assert.equal(client.snapshot().mutation.phase,'failed');
+ const result=await client.reconcileBooking();
+ assert.equal(result.ok,true);assert.equal(result.qaOnly,true);
+ assert.equal(client.snapshot().mutation.phase,'acknowledged');
+ assert.equal(client.snapshot().tracking.assignedDriver,null);
+ assert.equal((await client.retry()).code,'NO_READY_REQUEST');
+ assert.equal(posts,1);assert.equal(reads,1);
+});
+test('R57 an inconclusive read is not rollback permission',async()=>{
+ let posts=0,reads=0;
+ const client=createClientExperience({
+  now:()=>T,authProvider:{readSession:async()=>({
+   subject,role:'passenger',token,expiresAt:T+120000
+  }),signOut:async()=>{}},
+  bookingHttpOptions:{...base(),reconciliationContractCertified:true,
+   reconciliationRead:async()=>{reads++;return {
+    ok:false,status:404,code:'NOT_YET_OBSERVED'};},
+   fetchImpl:async()=>{posts++;throw Error('unknown');}}
+ });
+ await client.refreshSession();
+ client.prepareDelivery(shipment());
+ assert.equal((await client.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal((await client.reconcileBooking()).code,
+  'BOOKING_RECONCILIATION_UNKNOWN');
+ assert.equal(client.snapshot().mutation.phase,'failed');
+ assert.equal(client.prepareRide(ride()).code,'RECONCILE_BEFORE_NEW_REQUEST');
+ assert.equal(posts,1);assert.equal(reads,1);
+});
