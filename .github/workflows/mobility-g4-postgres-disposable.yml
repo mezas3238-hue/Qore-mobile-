@@ -38,6 +38,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G50_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G51_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G52_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G53_*'
+      - 'apps/mobility-expo/server/g53-*'
       - 'apps/mobility-expo/server/g52-*'
       - 'apps/mobility-expo/server/g48-*'
       - 'apps/mobility-expo/server/g47-*'
@@ -350,3 +352,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G52 two-connection revision-lock race and replay version gate
         run: python3 apps/mobility-expo/server/g52-chat-history-concurrency-ci.py
+
+      - name: G53 install Passenger-only persisted chat ACK with immutable G52 revision
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_POSTGRES_CI_ONLY.sql
+      - name: G53 assert stored ACK, idempotent revisions, client body contract, assignment and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_ASSERT_POSTGRES_CI_ONLY.sql
