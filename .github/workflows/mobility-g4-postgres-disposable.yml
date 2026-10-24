@@ -498,3 +498,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G71_KYC_DISPATCH_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G71 race two PostgreSQL sessions against pending upload and verified dispatch
         run: python3 apps/mobility-expo/server/g71-kyc-dispatch-race-ci.py
+
+      - name: G72 install F1 prequote to one booked AUTO with owner-only core
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G72_F1_AUTO_PREQUOTE_BOOKING_POSTGRES_CI_ONLY.sql
+      - name: G72 assert official synthetic Gs quote, strict B receipt, expired and lost ACK reconciliation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G72_F1_AUTO_PREQUOTE_BOOKING_ASSERT_POSTGRES_CI_ONLY.sql
