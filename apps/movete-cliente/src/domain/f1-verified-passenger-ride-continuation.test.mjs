@@ -236,8 +236,7 @@ test('F1 integrated: Passenger booking → tracking → foreground refresh → c
   cancel:()=>{clearCount++;}
  });
  assert.equal(loop.start().ok,true);
- await Promise.resolve();await Promise.resolve();await Promise.resolve();
- assert.equal(f.reads(),2);
+ assert.equal(f.reads(),1,'verified continuation already performed the first GET');
  const assigned={
   name:'Conductor Sintético',vehicleKind:'AUTO',model:'Toyota',
   color:'blanco',plate:'QA-777',rating:4.8
