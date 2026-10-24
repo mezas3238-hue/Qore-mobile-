@@ -412,3 +412,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_POSTGRES_CI_ONLY.sql
       - name: G57B assert Driver-only delegated role, one-by-one Passenger messages and reassignment fence
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G57B race two delegated Driver read receipts, first unread and G42 revocation
+        run: python3 apps/mobility-expo/server/g57b-driver-ordered-concurrency-ci.py
