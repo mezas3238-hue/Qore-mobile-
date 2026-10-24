@@ -42,10 +42,10 @@ CREATE TABLE public.mobility_stage_g58f_owner_attestations (
  CHECK(expires_at>issued_at AND expires_at<=issued_at+interval '15 seconds'),
  CHECK(redeemed_at IS NULL OR redeemed_at>=issued_at),
  CHECK(
-  (operation='CHAT_OPEN' AND service_kind IN ('RIDE','DELIVERY','MERCHANT_ORDER')
+  (operation='CHAT_OPEN' AND service_kind IS NOT NULL AND service_kind IN ('RIDE','DELIVERY','MERCHANT_ORDER')
    AND service_id IS NOT NULL AND conversation_id IS NULL)
   OR (operation IN ('CHAT_HISTORY','DRIVER_HISTORY')
-   AND service_kind IN ('RIDE','DELIVERY','MERCHANT_ORDER')
+   AND service_kind IS NOT NULL AND service_kind IN ('RIDE','DELIVERY','MERCHANT_ORDER')
    AND service_id IS NOT NULL AND conversation_id IS NOT NULL)
   OR (operation IN ('CHAT_READ','DRIVER_MARK_VISIBLE')
    AND service_kind IS NULL AND service_id IS NULL AND conversation_id IS NOT NULL)
