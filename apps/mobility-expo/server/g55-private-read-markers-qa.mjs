@@ -4,7 +4,7 @@
  * No HTTPS, production, issuer connection or real DB executor.
  */
 import {createG52ChatHistoryQa} from './g52-chat-history-qa.mjs';
-const ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id=x=>typeof x==='string'&&ID.test(x);
 const safe=x=>Number.isSafeInteger(x)&&x>=0;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
