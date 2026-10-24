@@ -12,6 +12,8 @@ import {MERCHANT_SUPPORT_REASONS,createMerchantSupportGuide}
  from '../src/domain/merchant-support-guide.mjs';
 import type {MerchantSupportUpdate,MerchantSupportSeverity}
  from '../src/domain/merchant-support-guide.mjs';
+import {createMerchantContactPreference}
+ from '../src/domain/merchant-contact-preference.mjs';
 import {projectQaIncidentStatusView}
  from '../src/domain/g40-incident-status-view.mjs';
 
@@ -182,18 +184,42 @@ function StructuredQaIncident({client,view}:{client:ClientExperience;view:Client
  */
 function MerchantOrderHelp({view}:{view:ClientSnapshot}){
  const [guide]=useState(()=>createMerchantSupportGuide());
+ const [contact]=useState(()=>createMerchantContactPreference());
  const [,setRevision]=useState(0);
  const [feedback,setFeedback]=useState('');
- useEffect(()=>()=>{guide.dispose();},[guide]);
+ useEffect(()=>()=>{guide.dispose();contact.dispose();},[guide,contact]);
  const actor=view.account&&view.authenticated?{
   role:'passenger' as const,subject:view.account.subject,
   sessionRevision:view.privateViewRevision
  }:null;
  const snapshot=guide.snapshot(actor);
+ const reviewed=snapshot.canReview?guide.review(actor):null;
+ const contactState=actor&&reviewed?.ok?contact.snapshot(reviewed,actor):null;
  const edit=(patch:MerchantSupportUpdate)=>{
+  // Editar pedido/motivo/gravedad revoca TODO consentimiento anterior.
+  contact.clear();
   const result=guide.update(actor,patch);
   setFeedback(result.ok?'':'Entrada inválida. Comprobá el pedido y el motivo.');
   setRevision(n=>n+1);
+ };
+ const changeRecipient=(recipient:'MERCHANT'|'SUPPORT')=>{
+  if(!actor||!reviewed?.ok)return;
+  const result=contact.choose(reviewed,actor,recipient);
+  setFeedback(result.ok?'':'Ese destinatario no está permitido para este motivo.');
+  setRevision(n=>n+1);
+ };
+ const changeContactConsent=(enabled:boolean)=>{
+  if(!actor||!reviewed?.ok)return;
+  const result=contact.setConsent(reviewed,actor,enabled);
+  setFeedback(result.ok?'':'Seleccioná primero a quién preferirías consultar.');
+  setRevision(n=>n+1);
+ };
+ const reviewContact=()=>{
+  if(!actor||!reviewed?.ok)return;
+  const result=contact.review(reviewed,actor);
+  setFeedback(result.ok
+   ?'Preferencia de contacto revisada EN ESTE DISPOSITIVO. NO se contactó al comercio ni al soporte. No se creó un caso.'
+   :'Elegí un destinatario y confirmá tu consentimiento. No se envió nada.');
  };
  const review=()=>{
   const result=guide.review(actor);
@@ -233,8 +259,41 @@ function MerchantOrderHelp({view}:{view:ClientSnapshot}){
    onPress={()=>edit({severity:item.code})}/>)}
   <Action label="Revisar guía local sin enviar" disabled={!snapshot.canReview}
    onPress={review}/>
+  {contactState?.ok&&<View>
+   <Text accessibilityRole="header" style={styles.heading}>
+    Preferencia de contacto · solo local
+   </Text>
+   <Text style={styles.small}>
+    Elegí a quién preferirías consultar dentro de Movete Fácil. No se envían
+    mensajes ni se notifica a nadie. La atención real requiere verificación
+    de propiedad del pedido y autorización del servidor.
+   </Text>
+   {contactState.allowedRecipients?.includes('MERCHANT')&&
+    <Action label="Preferir consultar al comercio"
+     selected={contactState.recipient==='MERCHANT'}
+     secondary={contactState.recipient!=='MERCHANT'}
+     onPress={()=>changeRecipient('MERCHANT')}/>}
+   <Action label="Preferir consultar a soporte de Movete Fácil"
+    selected={contactState.recipient==='SUPPORT'}
+    secondary={contactState.recipient!=='SUPPORT'}
+    onPress={()=>changeRecipient('SUPPORT')}/>
+   <Action label="Confirmar preferencia local (NO enviar)"
+    disabled={!contactState.recipient} selected={contactState.consent===true}
+    secondary={contactState.consent!==true}
+    onPress={()=>changeContactConsent(true)}/>
+   <Action label="Revocar consentimiento local" secondary
+    disabled={!contactState.consent}
+    onPress={()=>changeContactConsent(false)}/>
+   <Action label="Revisar preferencia sin contactar"
+    disabled={!contactState.readyToReview} onPress={reviewContact}/>
+   <Text style={styles.small}>
+    No habilitamos WhatsApp, SMS ni llamadas desde esta pantalla; tampoco
+    usaremos el chat del conductor para contactar a un comercio.
+    La preferencia vence a los 10 minutos y se elimina al cerrar sesión.
+   </Text>
+  </View>}
   <Action label="Borrar guía local" secondary
-   onPress={()=>{guide.clear();setFeedback('Guía local borrada.');
+   onPress={()=>{contact.clear();guide.clear();setFeedback('Guía local borrada.');
     setRevision(n=>n+1);}}/>
   {feedback!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="polite"
    style={styles.text}>{feedback}</Text>}
