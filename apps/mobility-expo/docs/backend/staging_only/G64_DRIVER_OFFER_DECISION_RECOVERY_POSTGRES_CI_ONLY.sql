@@ -18,6 +18,7 @@ CREATE FUNCTION public.mobility_stage_g64_reconcile_offer_decision_owner_qa(
 AS $fn$
 DECLARE row_state record;
  canonical_kind text;
+ expected_status text;
  persisted_id uuid;
 BEGIN
  IF current_database()<>'qore_disposable_chain'
@@ -58,9 +59,10 @@ BEGIN
    'state','NOT_YET_OBSERVED','qaOnly',true,
    'productionEnabled',false,'retrySafe',false,'reconcileAgain',true);
  END IF;
+ expected_status:=CASE WHEN _action='accept' THEN 'accepted'
+  ELSE 'declined' END;
  IF row_state.decision_key IS DISTINCT FROM _request_key
- OR row_state.decision_status IS DISTINCT FROM
-  CASE WHEN _action='accept' THEN 'accepted' ELSE 'declined' END
+ OR row_state.decision_status IS DISTINCT FROM expected_status
  THEN RAISE EXCEPTION 'G64 different key, action or terminal decision'
  USING ERRCODE='G6406'; END IF;
  IF (_action='accept' AND row_state.decision_event_id IS NULL)
