@@ -14,6 +14,9 @@ const exact=(o,keys)=>plain(o)&&Object.keys(o).length===keys.length&&
 const DRIVER='mobility_g56_driver_gateway_ci';
 const PASSENGER='mobility_g49_chat_gateway_ci';
 const rules=Object.freeze({
+ CHAT_OPEN:{role:PASSENGER,
+  sql:'SELECT public.mobility_stage_g49_open_qa($1) AS data',
+  keys:['operation','ticket']},
  DRIVER_INBOX:{role:DRIVER,
   sql:'SELECT public.mobility_stage_g56_driver_inbox_qa($1,$2,$3,$4,$5) AS data',
   keys:['operation','ticket','expectedRevision','beforeMs','beforeId','limit']},
@@ -35,6 +38,7 @@ function parse(c){
   return null;
  const r=rules[c.operation];
  if(!exact(c,r.keys)||!uuid(c.ticket))return null;
+ if(c.operation==='CHAT_OPEN')return {rule:r,args:[c.ticket]};
  if(c.operation.endsWith('MARK_VISIBLE_ORDERED')){
   if(!uuid(c.marker))return null;
   return {rule:r,args:[c.ticket,c.marker]};
