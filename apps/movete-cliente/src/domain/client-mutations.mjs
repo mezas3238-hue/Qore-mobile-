@@ -27,7 +27,7 @@ const SAFE_CODES=new Set([
 const safeCode=(candidate,fallback)=>
  typeof candidate==='string'&&SAFE_CODES.has(candidate)?candidate:fallback;
 const fail=(code)=>({ok:false,code});
-const UUID_RIDE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RIDE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** F1: only a strict R56 QA receipt may identify a persisted ride.
  * Generic HTTP 201, Driver push, or user-entered tripId are NOT evidence. */
 function verifiedBookingReceipt(reply,{operation,requestKey,subject,status}){
