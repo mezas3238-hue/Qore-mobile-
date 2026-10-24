@@ -7,6 +7,7 @@ export type ClientSnapshot={
  bookingRecovery:{readReady:boolean;productionEnabled:false};
  rideContinuation:{canVerify:boolean;tripId:string|null;qaOnly:true;productionEnabled:false};
  rideHistoryRecovery:{readReady:boolean;busy:boolean;qaOnly:true;productionEnabled:false};
+ completedRideHistory:{readReady:boolean;verifying:boolean;verified:boolean;tripId:string|null;qaOnly:true;productionEnabled:false};
  senderCustody:{readReady:boolean;loading:boolean;deliveryId:string|null;
   revision:number;state:string|null;vehicleKind:string|null;
   proofVerified:boolean;error:string|null;qaOnly:true;productionEnabled:false};
@@ -127,6 +128,9 @@ export type ClientExperience={
  }>;
  resumeRideFromHistory(args:{tripId:string;expectedHistoryRevision:number}):Promise<ClientResult & {
   tripId?:string;serverRevision?:number;qaOnly?:true;productionEnabled?:false
+ }>;
+ verifyCompletedRideHistory():Promise<ClientResult & {
+  tripId?:string;qaOnly?:true;productionEnabled?:false
  }>;
  syncTracking():Promise<ClientResult>;
  connectionLost():void;
