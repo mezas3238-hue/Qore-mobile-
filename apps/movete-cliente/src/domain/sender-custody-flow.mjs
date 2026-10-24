@@ -32,7 +32,8 @@ function proof(dto,deliveryId,subject){
  if(dto.state==='requested'&&(dto.assignmentPersisted||dto.proofVerified))return false;
  if(['accepted','picked_up','delivered','disputed','returned'].includes(dto.state)
   &&dto.assignmentPersisted!==true)return false;
- if(['delivered','returned'].includes(dto.state)&&dto.proofVerified!==true)return false;
+ if(['delivered','disputed','returned'].includes(dto.state)&&dto.proofVerified!==true)return false;
+ if(dto.state==='cancelled'&&dto.proofVerified!==false)return false;
  if(['requested','accepted','picked_up'].includes(dto.state)
   &&dto.proofVerified!==false)return false;
  return true;
