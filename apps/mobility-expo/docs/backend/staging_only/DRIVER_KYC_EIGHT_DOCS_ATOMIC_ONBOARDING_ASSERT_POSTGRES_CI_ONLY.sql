@@ -37,6 +37,8 @@ DECLARE
  iat bigint;
  output jsonb;
  doc_kind text;
+ evidence_doc uuid;
+ selfie_doc uuid;
  kinds text[]:=ARRAY['licencia','identidad_frente','identidad_dorso',
   'cedula_verde','habilitacion','seguro','inspeccion'];
  bad boolean;
@@ -59,10 +61,14 @@ BEGIN
  VALUES(v,d,'AUTO','economico','PY','ASUNCION','KYC7101',
  'QORE QA','KYC TEST',2024,4);
  FOREACH doc_kind IN ARRAY kinds LOOP
+  SELECT public.mobility_stage_register_driver_document(
+   d,pg_catalog.gen_random_uuid(),doc_kind::public.mobility_stage_driver_document_kind,
+   d::text||'/'||doc_kind||'-NEWREVIEWDOCFILE.jpg',
+   'image/jpeg',9000,repeat('a',64)) INTO evidence_doc;
   INSERT INTO public.mobility_stage_kyc_verified_evidence_qa(
-    driver_id,vehicle_id,kind,verified_by,authenticity_verified,
+    driver_id,vehicle_id,source_document_id,kind,verified_by,authenticity_verified,
     issuer_verified,malware_scan_passed,valid_until,evidence_revision)
-  VALUES(d,v,doc_kind,'QA_INDEPENDENT_ATTESTOR_NO_MEDIA',true,true,
+  VALUES(d,v,evidence_doc,doc_kind,'QA_INDEPENDENT_ATTESTOR_NO_MEDIA',true,true,
     true,pg_catalog.clock_timestamp()+interval '2 days',1);
  END LOOP;
  -- Seven valid records are not enough, even if vehicle is linked.
@@ -76,11 +82,15 @@ BEGIN
  WHERE driver_id=d AND vehicle_id=v)
  THEN RAISE EXCEPTION 'KYC missing selfie created approval'; END IF;
  -- Photo observed without liveness, consent and document match cannot pass.
+ SELECT public.mobility_stage_register_driver_document(
+  d,pg_catalog.gen_random_uuid(),'rostro_selfie',
+  d::text||'/rostro_selfie-NEWREVIEWDOCFILE.jpg',
+  'image/jpeg',9000,repeat('b',64)) INTO selfie_doc;
  INSERT INTO public.mobility_stage_kyc_verified_evidence_qa(
- driver_id,vehicle_id,kind,verified_by,authenticity_verified,
+ driver_id,vehicle_id,source_document_id,kind,verified_by,authenticity_verified,
  issuer_verified,malware_scan_passed,valid_until,evidence_revision,
  photo_received,consent_for_face,liveness_verified,id_face_match_verified)
- VALUES(d,v,'rostro_selfie','QA_INDEPENDENT_ATTESTOR_NO_MEDIA',
+ VALUES(d,v,selfie_doc,'rostro_selfie','QA_INDEPENDENT_ATTESTOR_NO_MEDIA',
  true,true,true,pg_catalog.clock_timestamp()+interval '2 hours',1,
  true,false,false,false);
  bad:=false;
@@ -133,6 +143,14 @@ BEGIN
  EXCEPTION WHEN SQLSTATE 'P7103' THEN bad:=true;
  END;
  IF NOT bad THEN RAISE EXCEPTION 'KYC revoked session bypassed'; END IF;
+ -- An independently uploaded replacement (even pending) invalidates the
+ -- attestation of a former document; no stale proof may approve the Driver.
+ PERFORM public.mobility_stage_register_driver_document(
+  d,pg_catalog.gen_random_uuid(),'identidad_frente',
+  d::text||'/identidad_frente-SECONDPRIVATEFILE.jpg',
+  'image/jpeg',9001,repeat('c',64));
+ IF public.mobility_stage_kyc_current_onboarding_owner_qa(d,v)
+ THEN RAISE EXCEPTION 'KYC stale document survives newer private upload'; END IF;
  RAISE NOTICE 'KYC PASS: eight documents, selfie liveness, idempotency, expiry, G42 revocation, no LIVE';
 END $test$;
 

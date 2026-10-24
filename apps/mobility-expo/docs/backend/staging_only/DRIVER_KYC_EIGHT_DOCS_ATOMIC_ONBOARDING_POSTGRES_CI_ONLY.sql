@@ -13,6 +13,7 @@ BEGIN;
 CREATE TABLE public.mobility_stage_kyc_verified_evidence_qa (
  driver_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
  vehicle_id uuid NOT NULL REFERENCES public.mobility_vehicles(id) ON DELETE RESTRICT,
+ source_document_id uuid NOT NULL UNIQUE REFERENCES public.mobility_stage_driver_documents(id) ON DELETE RESTRICT,
  kind text NOT NULL CHECK (kind IN (
   'licencia','identidad_frente','identidad_dorso','cedula_verde',
   'habilitacion','seguro','inspeccion','rostro_selfie')),
@@ -62,6 +63,7 @@ AS $body$
 DECLARE
  v public.mobility_vehicles%ROWTYPE;
  evidence public.mobility_stage_kyc_verified_evidence_qa%ROWTYPE;
+ source public.mobility_stage_driver_documents%ROWTYPE;
  observed integer:=0;
  seen text[]:=ARRAY[]::text[];
  stored_id uuid;
@@ -94,6 +96,15 @@ BEGIN
   WHERE driver_id=_driver AND vehicle_id=_vehicle
   ORDER BY kind FOR SHARE
  LOOP
+  SELECT * INTO source FROM public.mobility_stage_driver_documents
+   WHERE id=evidence.source_document_id FOR SHARE;
+  IF NOT FOUND OR source.driver_id<>_driver OR source.kind::text<>evidence.kind
+   OR source.status='rejected'
+   OR EXISTS(SELECT 1 FROM public.mobility_stage_driver_documents newer
+     WHERE newer.driver_id=_driver AND newer.kind=source.kind
+      AND (newer.submitted_at,newer.id)>(source.submitted_at,source.id))
+  THEN RAISE EXCEPTION 'KYC evidence is not the latest private G17 document'
+   USING ERRCODE='P7105'; END IF;
   IF evidence.verified_by<>'QA_INDEPENDENT_ATTESTOR_NO_MEDIA'
   OR evidence.authenticity_verified IS DISTINCT FROM true
   OR evidence.issuer_verified IS DISTINCT FROM true
@@ -155,7 +166,13 @@ AS $body$
    WHERE r.user_id=_driver AND r.role='driver'::public.app_role)
   AND (SELECT count(*) FROM public.user_roles r WHERE r.user_id=_driver)=1
   AND (SELECT count(*) FROM public.mobility_stage_kyc_verified_evidence_qa e
+   JOIN public.mobility_stage_driver_documents source ON source.id=e.source_document_id
    WHERE e.driver_id=_driver AND e.vehicle_id=_vehicle
+   AND source.driver_id=_driver AND source.kind::text=e.kind
+   AND source.status<>'rejected'
+   AND NOT EXISTS(SELECT 1 FROM public.mobility_stage_driver_documents newer
+     WHERE newer.driver_id=_driver AND newer.kind=source.kind
+      AND (newer.submitted_at,newer.id)>(source.submitted_at,source.id))
    AND e.verified_by='QA_INDEPENDENT_ATTESTOR_NO_MEDIA'
    AND e.authenticity_verified AND e.issuer_verified
    AND e.malware_scan_passed AND e.valid_until>pg_catalog.now()
