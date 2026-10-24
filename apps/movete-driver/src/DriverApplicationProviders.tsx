@@ -1,6 +1,7 @@
 import React from 'react';
 import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
+import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
 
 /**
@@ -25,10 +26,14 @@ export function DriverApplicationProviders({
   readInbox={runtime?.workspaceReaders.readInbox}
   readDocuments={runtime?.workspaceReaders.readDocuments}
   readLicense={runtime?.workspaceReaders.readLicense}>
+  <DriverOfferActionsProvider
+   authAdapter={runtime?.authAdapter??null}
+   qaAdapters={runtime?.offerActions??null}>
   <DriverMessagesProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.chatAdapters??null}>
    {children}
   </DriverMessagesProvider>
+  </DriverOfferActionsProvider>
  </DriverWorkspaceProvider>;
 }
