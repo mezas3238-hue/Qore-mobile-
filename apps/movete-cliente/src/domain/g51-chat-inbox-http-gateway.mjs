@@ -7,6 +7,8 @@ import {readBoundedResponseText} from './bounded-http-response.mjs';
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CURSOR=/^[A-Za-z0-9_.-]{44,384}$/;
+// RFC 6750 b64token: impedir saltos de línea, espacios y headers inyectables.
+const BEARER=/^[A-Za-z0-9._~+/-]{20,8192}={0,2}$/;
 const KINDS=new Set(['RIDE','DELIVERY','MERCHANT_ORDER']);
 const ROW=['conversationId','serviceId','serviceKind','state','assignmentVerified',
  'counterpartRole','revision','unreadCount','updatedAt','canSend'];
@@ -32,7 +34,7 @@ function verifiedOrigin(input){
  }catch{return null;}
 }
 const validSession=(s,now)=>object(s)&&s.role==='passenger'
- &&uuid(s.subject)&&typeof s.token==='string'&&s.token.length>=20
+ &&uuid(s.subject)&&typeof s.token==='string'&&BEARER.test(s.token)
  &&int(s.authRevision)&&int(s.sessionRevision)
  &&Number.isFinite(s.expiresAt)&&s.expiresAt>now+1000;
 function projectInbox(dto,subject,clock){
@@ -55,7 +57,11 @@ function projectInbox(dto,subject,clock){
    ||row.revision>dto.revision||!int(row.unreadCount)
    ||!int(row.updatedAt)||row.updatedAt>clock
    ||threads.has(row.conversationId)
-   ||services.has(row.serviceKind+':'+row.serviceId))return null;
+   ||services.has(row.serviceKind+':'+row.serviceId)
+   // G51 ordena newest-first por actividad y conversationId (desc).
+   ||items.length>0&&!(row.updatedAt<items[items.length-1].updatedAt
+     ||row.updatedAt===items[items.length-1].updatedAt
+      &&row.conversationId<items[items.length-1].conversationId))return null;
   threads.add(row.conversationId);
   services.add(row.serviceKind+':'+row.serviceId);
   items.push(Object.freeze({...row}));
@@ -138,7 +144,10 @@ export function createG51ChatInboxHttpGateway({
    if(!decoded.ok)return fail(decoded.code);
    let dto;try{dto=JSON.parse(decoded.text);}catch{return fail('BAD_SERVER_RESPONSE');}
    const projected=projectInbox(dto,before.subject,now());
-   if(!projected)return fail('INVALID_CHAT_INBOX_DTO');
+   // No aceptar la misma clave que acaba de paginar: un cursor repetido
+   // permitiría bucle infinito incluso consumiendo RAM limitada.
+   if(!projected||cursor!==null&&projected.nextCursor===cursor)
+    return fail('INVALID_CHAT_INBOX_DTO');
    let after;try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
    if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(expired())return fail('NETWORK_OR_TIMEOUT');
