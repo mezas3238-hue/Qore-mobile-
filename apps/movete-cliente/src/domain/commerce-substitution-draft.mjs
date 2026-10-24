@@ -4,7 +4,7 @@
  * Toda decisión queda ligada a sesión + revisión + carrito certificado.
  */
 import {reviewCommerceBasket} from './commerce-checkout-review.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const choices=new Set(['OMIT_IF_UNAVAILABLE','ASK_BEFORE_SUBSTITUTING']);
 const fail=code=>Object.freeze({ok:false,code,choices:Object.freeze([]),
  submitted:false,orderConfirmed:false,contactSent:false});
