@@ -141,21 +141,24 @@ ALTER FUNCTION public.mobility_stage_delivery_offer(uuid,uuid,uuid,uuid,integer)
 ALTER FUNCTION public.mobility_stage_delivery_accept_offer(uuid,uuid,uuid)
  RENAME TO mobility_stage_g71_delivery_accept_core;
 
-CREATE FUNCTION public.mobility_stage_auto_demo_offer(uuid,uuid,uuid,uuid,integer)
+CREATE FUNCTION public.mobility_stage_auto_demo_offer(
+ _trip_id uuid,_driver_id uuid,_vehicle_id uuid,_request_key uuid,_ttl_seconds integer)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
 BEGIN
  IF NOT public.mobility_stage_g71_valid_locked_dossier($2,$3)
  THEN RAISE EXCEPTION 'KYC offer denied' USING ERRCODE='P7401'; END IF;
  RETURN public.mobility_stage_g71_auto_offer_core($1,$2,$3,$4,$5);
 END $f$;
-CREATE FUNCTION public.mobility_stage_delivery_offer(uuid,uuid,uuid,uuid,integer)
+CREATE FUNCTION public.mobility_stage_delivery_offer(
+ _delivery_id uuid,_courier_id uuid,_vehicle_id uuid,_request_key uuid,_ttl_seconds integer)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
 BEGIN
  IF NOT public.mobility_stage_g71_valid_locked_dossier($2,$3)
  THEN RAISE EXCEPTION 'KYC delivery offer denied' USING ERRCODE='P7401'; END IF;
  RETURN public.mobility_stage_g71_delivery_offer_core($1,$2,$3,$4,$5);
 END $f$;
-CREATE FUNCTION public.mobility_stage_auto_demo_accept_offer(uuid,uuid,uuid)
+CREATE FUNCTION public.mobility_stage_auto_demo_accept_offer(
+ _offer_id uuid,_driver_id uuid,_decision_key uuid)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
 DECLARE v uuid;
 BEGIN
@@ -165,7 +168,8 @@ BEGIN
  THEN RAISE EXCEPTION 'KYC trip acceptance denied' USING ERRCODE='P7401'; END IF;
  RETURN public.mobility_stage_g71_auto_accept_core($1,$2,$3);
 END $f$;
-CREATE FUNCTION public.mobility_stage_delivery_accept_offer(uuid,uuid,uuid)
+CREATE FUNCTION public.mobility_stage_delivery_accept_offer(
+ _offer_id uuid,_courier_id uuid,_decision_key uuid)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f$
 DECLARE v uuid;
 BEGIN
