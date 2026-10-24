@@ -21,7 +21,7 @@ function harness({initial=fresh(),sync=async()=>({ok:true})}={}){
  const flush=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve();};
  return {loop,setState:next=>state=next,view:()=>state,
   hits:()=>hits,schedules:()=>schedules,cancels:()=>cancels,
-  fire:async()=>{if(interval&&!interval.cancelled)interval.cb();await flush();},
+  fire:async()=>{if(interval&&!interval.cancelled)await interval.cb();await flush();},
   flush,wasCancelled:()=>interval?.cancelled===true};
 }
 test('F1 no booking/certification, unknown passenger, or inactive trip means zero timer and zero GET',()=>{
