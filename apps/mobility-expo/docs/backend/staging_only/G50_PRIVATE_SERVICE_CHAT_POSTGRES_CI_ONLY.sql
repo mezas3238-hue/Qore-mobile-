@@ -7,12 +7,13 @@ BEGIN
  OR to_regprocedure('public.mobility_stage_g42_lock_session(uuid,uuid,bigint)') IS NULL
  OR to_regclass('public.mobility_stage_auto_demo_trips') IS NULL
  OR to_regclass('public.mobility_stage_deliveries') IS NULL
+ OR to_regclass('public.mobility_stage_merchant_orders') IS NULL
  THEN RAISE EXCEPTION 'G50 requires isolated PostgreSQL and G42/ride/delivery chain'; END IF;
 END $guard$;
 BEGIN;
 CREATE TABLE public.mobility_stage_g50_chat_threads(
  conversation_id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
- service_kind text NOT NULL CHECK(service_kind IN('RIDE','DELIVERY')),
+ service_kind text NOT NULL CHECK(service_kind IN('RIDE','DELIVERY','MERCHANT_ORDER')),
  service_id uuid NOT NULL,
  passenger_id uuid NOT NULL REFERENCES auth.users(id),
  driver_id uuid NOT NULL REFERENCES auth.users(id),
@@ -36,7 +37,7 @@ CREATE TABLE public.mobility_stage_g50_chat_messages(
  conversation_id uuid NOT NULL REFERENCES public.mobility_stage_g50_chat_threads(conversation_id),
  sender_id uuid NOT NULL REFERENCES auth.users(id),
  request_key uuid NOT NULL,
- body text NOT NULL CHECK(char_length(body) BETWEEN 1 AND 2000 AND octet_length(body)<=8000),
+ body text NOT NULL CHECK(char_length(body) BETWEEN 1 AND 500 AND octet_length(body)<=2000),
  created_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
  UNIQUE(conversation_id,sender_id,request_key)
 );
@@ -68,6 +69,13 @@ BEGIN
    FROM public.mobility_stage_deliveries d WHERE d.id=_service
     AND d.courier_id IS NOT NULL
    FOR SHARE;
+ ELSIF _kind='MERCHANT_ORDER' THEN
+  RETURN QUERY SELECT o.buyer_id,d.courier_id,
+    (o.status='handed_to_courier' AND d.status IN('accepted','picked_up'))
+   FROM public.mobility_stage_merchant_orders o
+   JOIN public.mobility_stage_deliveries d ON d.id=o.delivery_id
+   WHERE o.id=_service AND d.courier_id IS NOT NULL
+   FOR SHARE OF o,d;
  END IF;
 END $fn$;
 CREATE FUNCTION public.mobility_stage_g50_authorize(
@@ -110,7 +118,7 @@ AS $fn$
 DECLARE src record; old_thread public.mobility_stage_g50_chat_threads%ROWTYPE;
  expected_role text;
 BEGIN
- IF _kind NOT IN('RIDE','DELIVERY') OR _service IS NULL OR _actor IS NULL
+ IF _kind NOT IN('RIDE','DELIVERY','MERCHANT_ORDER') OR _service IS NULL OR _actor IS NULL
  OR _session IS NULL OR _iat IS NULL
  OR NOT public.mobility_stage_g42_lock_session(_actor,_session,_iat)
  THEN RAISE EXCEPTION 'G50 session or service denied' USING ERRCODE='G5001'; END IF;
@@ -154,8 +162,15 @@ AS $fn$
 DECLARE thread public.mobility_stage_g50_chat_threads%ROWTYPE;
  message public.mobility_stage_g50_chat_messages%ROWTYPE;
 BEGIN
- IF _request IS NULL OR _body IS NULL OR char_length(_body) NOT BETWEEN 1 AND 2000
- OR octet_length(_body)>8000 OR btrim(_body)=''
+ IF _request IS NULL OR _body IS NULL OR char_length(_body) NOT BETWEEN 1 AND 500
+ OR octet_length(_body)>2000 OR btrim(_body)='' OR
+ _body ~ '[[:cntrl:]]' OR
+ _body ~* '(https?://|www\\.|[[:alnum:]_.+%-]+@[[:alnum:].-]+\\.[[:alpha:]]{2,})' OR
+ _body ~ '([0-9][[:space:]().-]*){7,}' OR
+ EXISTS(SELECT 1 FROM pg_catalog.generate_series(8234,8238) AS code
+  WHERE pg_catalog.position(pg_catalog.chr(code) IN _body)>0) OR
+ EXISTS(SELECT 1 FROM pg_catalog.generate_series(8294,8297) AS code
+  WHERE pg_catalog.position(pg_catalog.chr(code) IN _body)>0)
  THEN RAISE EXCEPTION 'G50 invalid message' USING ERRCODE='G5002'; END IF;
  thread:=public.mobility_stage_g50_authorize(_conversation,_actor,_session,_iat,true);
  INSERT INTO public.mobility_stage_g50_chat_messages(
