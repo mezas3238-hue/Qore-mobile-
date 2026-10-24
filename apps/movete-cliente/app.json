@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Movete Fácil Cliente",
+    "slug": "movete-facil-cliente",
+    "scheme": "movetefacilcliente",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.movetefacil.cliente"
+    },
+    "android": {
+      "package": "com.movetefacil.cliente",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "name": "Movete Fácil Cliente",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "qoreAudience": "CLIENT",
+      "liveOperationsEnabled": false
+    },
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

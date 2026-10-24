@@ -1,0 +1,63 @@
+# Two independently installable Expo applications; no production deployment.
+name: Movete Facil two app isolation
+on:
+  push:
+    branches:
+      - 'feature/mobility-*'
+    paths:
+      - 'apps/movete-driver/**'
+      - 'apps/movete-cliente/**'
+      - 'scripts/check-mobile-boundaries.mjs'
+      - 'scripts/check-movete-launch-gates.mjs'
+      - 'scripts/check-movete-launch-gates.test.mjs'
+      - 'docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json'
+      - '.github/workflows/movete-apps-isolation.yml'
+  pull_request:
+    paths:
+      - 'apps/movete-driver/**'
+      - 'apps/movete-cliente/**'
+      - 'scripts/check-mobile-boundaries.mjs'
+      - 'scripts/check-movete-launch-gates.mjs'
+      - 'scripts/check-movete-launch-gates.test.mjs'
+      - 'docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json'
+      - '.github/workflows/movete-apps-isolation.yml'
+permissions:
+  contents: read
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enforce separate routes, bundles, role actions and no cross-imports
+        run: node scripts/check-mobile-boundaries.mjs
+      - name: Verify production NO-GO is explicit and cannot be disguised by QA success
+        run: |
+          node --test scripts/check-movete-launch-gates.test.mjs
+          node scripts/check-movete-launch-gates.mjs --json
+  expo-check:
+    name: ${{ matrix.app }} typecheck and export
+    runs-on: ubuntu-latest
+    needs: isolation
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [movete-driver, movete-cliente]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install this app dependencies ONLY
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: TypeScript and independent domain contracts
+        run: npm run check
+      - name: Export only this app for web preview (not a native app store build)
+        run: npx expo export --platform web
+        env:
+          CI: '1'

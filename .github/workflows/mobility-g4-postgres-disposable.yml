@@ -1,0 +1,483 @@
+# QORE Mobile — PostgreSQL G4 concurrency CI (disposable only)
+# This workflow deliberately uses an isolated local PostgreSQL service, not Supabase.
+name: QORE G4 PostgreSQL disposable smoke
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/mobility-g4-postgres-disposable.yml'
+      - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G27_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G28_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G29_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G30_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G31_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G32_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G33_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G34_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G35_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G36_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G37_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G38_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G40_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G41_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G42_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G43_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G44_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G45_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G46_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G47_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G48_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G49_*'
+      - 'apps/mobility-expo/server/g49-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G50_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G51_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G52_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G53_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G54_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G55_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G56_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G56B_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G57_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G57B_*'
+      - 'apps/mobility-expo/server/g57-*'
+      - 'apps/mobility-expo/server/g58-*'
+      - 'apps/mobility-expo/server/g58f-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G58F_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G59_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G59B_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G60C_*'
+      - 'apps/mobility-expo/server/g60c-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G64_*'
+      - 'apps/mobility-expo/server/g64-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G68_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G69_*'
+      - 'apps/mobility-expo/server/g69-*'
+      - 'apps/mobility-expo/server/g68-*'
+      - 'apps/mobility-expo/server/g67-*'
+      - 'apps/mobility-expo/server/g59b-*'
+      - 'apps/mobility-expo/server/g59-*'
+      - 'apps/mobility-expo/server/g56-*'
+      - 'apps/mobility-expo/server/g55-*'
+      - 'apps/mobility-expo/server/g54-*'
+      - 'apps/mobility-expo/server/g53-*'
+      - 'apps/mobility-expo/server/g52-*'
+      - 'apps/mobility-expo/server/g48-*'
+      - 'apps/mobility-expo/server/g47-*'
+      - 'apps/mobility-expo/server/g45-*'
+      - 'apps/mobility-expo/server/g43-*'
+      - 'apps/mobility-expo/server/g36-*'
+      - 'apps/mobility-expo/server/g32-*'
+      - 'apps/mobility-expo/server/g26-*'
+      - 'apps/mobility-expo/server/g20-*'
+      - 'apps/mobility-expo/server/g18-*'
+      - 'apps/mobility-expo/server/g17-*'
+      - 'apps/mobility-expo/server/g15-*'
+      - 'apps/mobility-expo/server/g13-*'
+      - 'apps/mobility-expo/server/g14-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G0_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G1_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G2_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G3_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G4_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G5_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/server/g67-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
+      - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
+permissions:
+  contents: read
+jobs:
+  sql-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qore_ci
+          POSTGRES_PASSWORD: qore_ci_only
+          POSTGRES_DB: qore_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qore_ci -d qore_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: qore_ci
+      PGPASSWORD: qore_ci_only
+      PGDATABASE: qore_disposable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify disposable PostgreSQL
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "SELECT current_setting('server_version_num')::integer >= 160000 AS postgres_16_or_later"
+          psql -v ON_ERROR_STOP=1 -c 'SELECT pg_advisory_lock(924001)'
+          psql -v ON_ERROR_STOP=1 -c 'SELECT pg_advisory_unlock(924001)'
+      - name: Explicitly keep G4 integration blocked until prerequisite schema and fixtures are wired
+        run: |
+          echo "PostgreSQL 16 service is available; this smoke test does NOT claim G4 transaction coverage."
+
+      - name: G12 disposable delivery push SQL contract
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_SMOKE_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_DISPOSABLE_ASSERT_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_DELIVERY_PUSH_EXPIRE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G12 two independent PostgreSQL sessions compete for same offer
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "UPDATE public.mobility_stage_delivery_offer_outbox SET claimed_at=NULL,claimed_by=NULL,accepted_for_processing_at=NULL,provider_ticket_id=NULL WHERE offer_id='00000000-0000-4000-8000-000000000012'"
+          python3 -m pip install 'psycopg[binary]>=3.2,<4'
+          python3 apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py
+
+  real-schema-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qore_ci
+          POSTGRES_PASSWORD: qore_ci_only
+          POSTGRES_DB: qore_disposable_chain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qore_ci -d qore_disposable_chain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: qore_ci
+      PGPASSWORD: qore_ci_only
+      PGDATABASE: qore_disposable_chain
+      PGAPPNAME: qore_ci_disposable_chain
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard isolated local chain database
+        run: |
+          test "$PGHOST" = "localhost"
+          test "$PGDATABASE" = "qore_disposable_chain"
+          test "$PGAPPNAME" = "qore_ci_disposable_chain"
+          psql -v ON_ERROR_STOP=1 -Atqc "SELECT current_database(),current_setting('application_name')"
+      - name: Install synthetic Auth scaffold (CI only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G0_DISPOSABLE_AUTH_SCAFFOLD_POSTGRES_CI_ONLY.sql
+      - name: Apply real isolated G1 G2 G3 G4 G5 G10 G12 SQL
+        run: |
+          set -euo pipefail
+          base=apps/mobility-expo/docs/backend/staging_only
+          for migration in \
+            G1_ISOLATED_SUPABASE_BASELINE_DO_NOT_APPLY_PRODUCTION.sql \
+            G2_AUTO_MOTO_COMPLIANCE_DO_NOT_APPLY_PRODUCTION.sql \
+            G2_SERVER_PREFLIGHT_DO_NOT_APPLY_PRODUCTION.sql \
+            G3_AUTO_DEMO_TRIP_CONTRACT_POSTGRES_CI_ONLY.sql \
+            G4_PRIVATE_AUTO_OFFERS_POSTGRES_CI_ONLY.sql \
+            G5_DELIVERY_CUSTODY_POSTGRES_CI_ONLY.sql \
+            G6_MERCHANT_ORDERS_POSTGRES_CI_ONLY.sql \
+            G10_PRIVATE_DELIVERY_OFFERS_POSTGRES_CI_ONLY.sql \
+            G12_DELIVERY_PUSH_CLAIM_ACK_POSTGRES_CI_ONLY.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$base/$migration"
+          done
+      - name: Validate real schema, RLS and service-role RPC invocations
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_FULL_CHAIN_SCHEMA_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Exercise synthetic G5-G10-G12 delivery on real migration chain
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G12_REAL_CHAIN_DELIVERY_E2E_POSTGRES_CI_ONLY.sql
+      - name: Upgrade real G12 rows to safely fenced G13 SQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G13_DELIVERY_PUSH_FENCED_DISPOSABLE_CI_ONLY.sql
+      - name: Test G13 lease fencing, legacy revocation, ACK and ambiguous outcomes
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G13_FENCED_DELIVERY_PUSH_FULL_CHAIN_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Verify G13 with two independent PostgreSQL sessions
+        run: |
+          python3 -m pip install 'psycopg[binary]>=3.2,<4'
+          python3 apps/mobility-expo/server/g13-fenced-delivery-push-concurrency-ci.py
+      - name: Test two courier acceptances racing for one delivery
+        run: python3 apps/mobility-expo/server/g14-competing-courier-acceptance-ci.py
+      - name: Apply G15 private courier polling fallback
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G15_COURIER_PRIVATE_OFFER_POLL_POSTGRES_CI_ONLY.sql
+      - name: Verify G15 polling without push, privacy and expiry
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G15_COURIER_PRIVATE_POLL_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G16 private AUTO driver offer polling
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G16_DRIVER_PRIVATE_AUTO_POLL_POSTGRES_CI_ONLY.sql
+      - name: Validate real G16 private AUTO discovery and one-winner acceptance
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G16_DRIVER_PRIVATE_AUTO_POLL_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G17 private Driver documentation and review registry
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G17_PRIVATE_DRIVER_DOCUMENTS_POSTGRES_CI_ONLY.sql
+      - name: Test G17 role isolation, KYC evidence and immutable admin review
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G17_PRIVATE_DRIVER_DOCUMENTS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G18 exclusive Driver onboarding role transition
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G18_DRIVER_ROLE_ENROLLMENT_POSTGRES_CI_ONLY.sql
+      - name: Verify G18 no mixed passenger/Driver identity or fake driver eligibility
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G18_DRIVER_ROLE_ENROLLMENT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: Apply G20 latest reviewed KYC license gate to AUTO and courier preflights
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G20_DRIVER_KYC_PREFLIGHT_FENCING_POSTGRES_CI_ONLY.sql
+      - name: Verify G20 rejections at offer acceptance, expired license and MOTO passengers
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G20_DRIVER_KYC_PREFLIGHT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G26 unbounded owner-history covering indexes (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_INDEXES_POSTGRES_CI_ONLY.sql
+      - name: G26 real PostgreSQL history 1200 rows, 24 pages and authenticated RLS
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_UNBOUNDED_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G26.3 scale history beyond 30,000 real PostgreSQL rows with full keyset traversal
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_LARGE_VOLUME_POSTGRES_CI_ONLY.sql
+      - name: G26.4 install disposable immutable owner-and-created-at history guards
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_POSTGRES_CI_ONLY.sql
+      - name: G26.4 attack 15 altered/backdated histories and retain lawful lifecycle updates
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G26_HISTORY_IMMUTABLE_ORIGIN_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G26.5 verify two-session PostgreSQL MVCC late commits and recovery by refresh
+        run: python3 apps/mobility-expo/server/g26-history-mvcc-concurrency-ci.py
+
+      - name: G27 A04.2 add independent Admin and Owner backoffice registry in disposable DB
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G27_BACKOFFICE_ROLES_POSTGRES_CI_ONLY.sql
+      - name: G27 A04.2 reject native dual role, revoked privileges, cross-role scopes and client writes
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G27_BACKOFFICE_ROLES_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G28 install already authored G7 and G8 real schemas on disposable chain only
+        run: |
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G7_FARES_SIMULATED_PAYMENTS_POSTGRES_CI_ONLY.sql
+          psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G8_SAFETY_OPERATIONS_POSTGRES_CI_ONLY.sql
+      - name: G28 install scoped read-only incident queue SQL (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G28_ADMIN_INCIDENT_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G28 test 121 incident rows in three full keyset pages and reject Owner/dual-role/access
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G28_ADMIN_INCIDENT_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G29 add G2 authoritative vehicle-review revision on disposable chain
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G2_REVIEW_AUDIT_DO_NOT_APPLY_PRODUCTION.sql
+      - name: G29 install server-only real AUTO KYC source query
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G29_ADMIN_KYC_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G29 verify 121 KYC rows, documentary truth, MOTO exclusion and role isolation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G29_ADMIN_KYC_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G30 install privileged read projection of actual Admin source-audit events
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G30_ADMIN_AUDIT_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G30 traverse 123 actual stored event rows in three pages and deny forged actor
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G30_ADMIN_AUDIT_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G31 apply safe service-specific zone coverage and observed telemetry in disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONE_COVERAGE_POSTGRES_CI_ONLY.sql
+      - name: G31 prove 121 zone-service rows, stale/unknown telemetry, no live eligibility and Admin-only scope
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONE_COVERAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G31.2 real PostgreSQL stress — 30030 zone-service rows and 601 keyset pages, unlimited total
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G31_ADMIN_ZONES_30030_ROWS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G32 install private Driver signal quarantine and atomic sequence fencing
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_LOCATION_SIGNAL_QUARANTINE_POSTGRES_CI_ONLY.sql
+      - name: G32 assert real DB revocation, replay denial and no location-to-availability promotion
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G32_DRIVER_SIGNAL_QUARANTINE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G32.2 two PostgreSQL sessions race same Driver sequence and concurrent consent revocation
+        run: python3 apps/mobility-expo/server/g32-driver-telemetry-concurrency-ci.py
+      - name: G33 install private read-only QA diagnostics of quarantined Driver signals
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G33_QUARANTINED_ZONE_DIAGNOSTICS_POSTGRES_CI_ONLY.sql
+      - name: G33 validate busy trip, busy delivery, consent withdrawal, cross-zone latest and no G31 publication
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G33_QUARANTINED_ZONE_DIAGNOSTICS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G34 consent revision trigger and append-only audit, strengthen G32 SQL revision check
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G34_CONSENT_REVISION_AUDIT_FENCING_POSTGRES_CI_ONLY.sql
+      - name: G34 reject stale Driver consent revision after withdrawal and re-opt-in in disposable DB
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G34_CONSENT_REVISION_AUDIT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G35 install private per-service documentary readiness QA probe
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G35_DRIVER_DOCUMENTARY_READINESS_POSTGRES_CI_ONLY.sql
+      - name: G35 prove source-backed KYC, cargo insurance expiry, busy-driver exclusion and no G31 promotion
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G35_DRIVER_DOCUMENTARY_READINESS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G36 install unique active Driver slot shared by AUTO rides and deliveries
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G36_CROSS_SERVICE_DRIVER_SLOT_POSTGRES_CI_ONLY.sql
+      - name: G36 reject direct-write and cross-service double-booking, validate terminal release and replay
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G36_CROSS_SERVICE_DRIVER_SLOT_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G37 install PostgreSQL-only state machine and strip direct assignment/event DML
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G37_TRIP_DELIVERY_DML_STATE_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G37 adversarial service_role direct writes, legal RPC and immutable lifecycle
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G37_TRIP_DELIVERY_DML_STATE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G37 reverify G36 two PostgreSQL sessions and both private-offer race orders after DML revoke
+        run: python3 apps/mobility-expo/server/g36-cross-service-driver-race-ci.py
+
+      - name: G38.0 separate delivered/disputed case from occupied Driver slot
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_0_DISPUTE_CASE_NO_SLOT_POSTGRES_CI_ONLY.sql
+      - name: G38.0 real private cargo lifecycle delivery-dispute-return and idempotency
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_0_DISPUTE_CASE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G38.1 install fail-closed transactional offer proof and eligibility fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_1_TRUSTED_OFFER_ACCEPTANCE_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G38.1 deny untrusted AUTO and DELIVERY private accept without certification
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_1_TRUSTED_OFFER_ACCEPTANCE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G38.2 forged proof and fresh synthetic GPS must never unlock legal zone dispatch
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_2_FORGED_PROOF_SIGNAL_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G40 mount typed incident receipt and owner-only read SQL in disposable PG
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G40_INCIDENT_RECEIPT_STATUS_POSTGRES_CI_ONLY.sql
+      - name: G40 verify persistent receipt, idempotency, cross-account and blocked SOS
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G40_INCIDENT_RECEIPT_STATUS_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G41 install server-filtered global incident priority queue (PG disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G41_ADMIN_INCIDENT_TRIAGE_PAGE_POSTGRES_CI_ONLY.sql
+      - name: G41 traverse 241 severity/status filtered rows, identity privileges and priority keys
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G41_ADMIN_INCIDENT_TRIAGE_PAGE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G42 install server-only provider session grant and revocation fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G42_PROVIDER_SESSION_REVOCATION_POSTGRES_CI_ONLY.sql
+      - name: G42 test session revocation, forged access, expiry and in-transaction lock
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G42_PROVIDER_SESSION_REVOCATION_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G43 mount disposable owner-only transaction-held session probe
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G43_TRANSACTIONAL_SESSION_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G43 SQL denied privilege, replay and revoked session checks
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G43_TRANSACTIONAL_SESSION_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G43 independent PG sessions operation-vs-revocation in both race orders
+        run: python3 apps/mobility-expo/server/g43-session-revocation-race-ci.py
+
+      - name: G44 install private buyer branch mapping and versioned catalog page
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G44_BUYER_DISCOVERY_CATALOG_POSTGRES_CI_ONLY.sql
+      - name: G44 test 205 products in 3 pages, mapped branch, role and invalidation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G44_BUYER_DISCOVERY_CATALOG_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G45 install owner-only synthetic buyer order and cancel receipts
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_BUYER_ORDER_STOCK_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G45 prove server priced stock reservation, replay, version change and cancellation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_BUYER_ORDER_STOCK_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G45 real two-session duplicate-key and oversell race in PostgreSQL
+        run: python3 apps/mobility-expo/server/g45-buyer-order-race-ci.py
+
+      - name: G46 install previously unwired historical G9 merchant management on disposable chain
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G9_MERCHANT_MANAGEMENT_POSTGRES_CI_ONLY.sql
+      - name: G46 revoke legacy G6/G9 commerce DML and identity-spoofable service-role RPCs
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G46_MERCHANT_COMMERCE_PRIVILEGE_LOCKDOWN_POSTGRES_CI_ONLY.sql
+      - name: G46 prove 8 merchant tables and 11 RPCs are not publicly accessible
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G46_MERCHANT_COMMERCE_PRIVILEGE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G47 install protected Driver Storage evidence metadata and 60s session leases
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G47_PRIVATE_DRIVER_EVIDENCE_LEASES_POSTGRES_CI_ONLY.sql
+      - name: G47 assert private Storage attestation, role isolation, revocation and immutable access audit
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G47_PRIVATE_DRIVER_EVIDENCE_LEASES_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G48 install no-login scoped gateway with single-use DB capabilities
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G48_SCOPED_DB_DELEGATION_POSTGRES_CI_ONLY.sql
+      - name: G48 prove least-privilege ticket, Driver status, Buyer server price and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G48_SCOPED_DB_DELEGATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G48 real two-connection one-use ticket race and revoked provider grant
+        run: python3 apps/mobility-expo/server/g48-scoped-db-delegation-race-ci.py
+
+      - name: G50 install private per-assignment QA chat for Ride, Delivery and Merchant order
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G50_PRIVATE_SERVICE_CHAT_POSTGRES_CI_ONLY.sql
+      - name: G50 test SQL privacy, idempotency, cursor, assignment rotation and transactional revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G50_PRIVATE_SERVICE_CHAT_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G50 two independent PG16 connections race open, idempotent send and revocation
+        run: python3 apps/mobility-expo/server/g50-private-chat-concurrency-ci.py
+
+      - name: G51 install private Passenger inbox, activity and unread read receipts
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G51_CHAT_INBOX_MONOTONIC_POSTGRES_CI_ONLY.sql
+      - name: G51 assert 205 conversations, 3 unlimited pages, cursor revision and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G51_CHAT_INBOX_MONOTONIC_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G52 install owner-only revisioned chat history and signed keyset SQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_KEYSET_POSTGRES_CI_ONLY.sql
+      - name: G52 prove 205 messages in 3 pages, revision, replay, revocation and role denial
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G52 two-connection revision-lock race and replay version gate
+        run: python3 apps/mobility-expo/server/g52-chat-history-concurrency-ci.py
+
+      - name: G53 install Passenger-only persisted chat ACK with immutable G52 revision
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_POSTGRES_CI_ONLY.sql
+      - name: G53 assert stored ACK, idempotent revisions, client body contract, assignment and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G53 two-session PostgreSQL persisted ACK and revocation race
+        run: python3 apps/mobility-expo/server/g53-passenger-chat-send-concurrency-ci.py
+
+      - name: G49 install NOLOGIN chat-only gateway with one-use tickets
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G49_SCOPED_CHAT_AUTH_BRIDGE_POSTGRES_CI_ONLY.sql
+      - name: G49 assert SQL privilege confinement, ticket scope, assignment revocation and role denial
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G49_SCOPED_CHAT_AUTH_BRIDGE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G54 install delegated Passenger inbox/read receipt one-use capability
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_POSTGRES_CI_ONLY.sql
+      - name: G54 test actual NOLOGIN SET ROLE, inbox unread, read watermark, ticket replay and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G54 two-connection delegated role consumes one read receipt then fences concurrent revocation
+        run: python3 apps/mobility-expo/server/g54-scoped-chat-inbox-read-concurrency-ci.py
+
+      - name: G55 install G52 page-bound opaque read marker and no-op activity fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G55_SERVER_ISSUED_READ_MARKERS_POSTGRES_CI_ONLY.sql
+      - name: G55 assert exact authorized Driver message marker, two bound capabilities and revoked-role rejection
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G55_SERVER_ISSUED_READ_MARKERS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G55 two PostgreSQL delegated tickets race same server-issued marker and revoked-session fence
+        run: python3 apps/mobility-expo/server/g55-private-read-markers-concurrency-ci.py
+      - name: G56 install isolated Driver-only scoped chat capabilities (NOLOGIN)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56_DRIVER_SCOPED_CHAT_POSTGRES_CI_ONLY.sql
+      - name: "G56 delegated Driver open/send/history: role isolation, assignment, replay and session revocation"
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56_DRIVER_SCOPED_CHAT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G56 two PostgreSQL sessions race one Driver ticket and lock against revocation
+        run: python3 apps/mobility-expo/server/g56-driver-scoped-chat-concurrency-ci.py
+      - name: G56B install Driver-only inbox pagination and activity revisions
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_POSTGRES_CI_ONLY.sql
+      - name: G56B test 205 Driver conversations, private unread, current assignment and scoped role
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G56B race two PostgreSQL delegated inbox readers, revision writes and G42 revocation
+        run: python3 apps/mobility-expo/server/g56b-driver-private-inbox-concurrency-ci.py
+      - name: G57 issue per-visible Driver-message marker and require ordered Passenger confirmation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57_ORDERED_VISIBLE_RECEIPTS_POSTGRES_CI_ONLY.sql
+      - name: G57 verify PostgreSQL delegated ordered read receipts with earlier-unread skip rejected
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57_ORDERED_VISIBLE_RECEIPTS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G57 race two delegated Passenger read markers and G42 session revocation
+        run: python3 apps/mobility-expo/server/g57-ordered-visible-concurrency-ci.py
+      - name: G57B install isolated Driver read-marker and ordered Passenger receipt bridge
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_POSTGRES_CI_ONLY.sql
+      - name: G57B assert Driver-only delegated role, one-by-one Passenger messages and reassignment fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G57B race two delegated Driver read receipts, first unread and G42 revocation
+        run: python3 apps/mobility-expo/server/g57b-driver-ordered-concurrency-ci.py
+      - name: G58 verify chat SQL Driver Passenger NOLOGIN roles and forbidden owner mint
+        run: python3 apps/mobility-expo/server/g58-delegated-role-isolation-ci.py
+      - name: G58D verify SQL transaction deadlines and concurrent lock recovery on disposable PostgreSQL
+        run: python3 apps/mobility-expo/server/g58d-disposable-sql-timeouts-ci.py
+      - name: G58F install restricted NOLOGIN attestation exchange (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G58F_MIN_PRIVILEGE_TICKET_EXCHANGE_POSTGRES_CI_ONLY.sql
+      - name: G58F assert dedicated definer, fixed search_path and no caller table or mint privilege
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G58F_MIN_PRIVILEGE_TICKET_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G58F race two delegated connections, one-use proof, revocation and denied roles
+        run: python3 apps/mobility-expo/server/g58f-scoped-ticket-exchange-race-ci.py
+      - name: G59 install owner-only authoritative receipt reconciliation on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59_UNKNOWN_COMMIT_RECONCILIATION_POSTGRES_CI_ONLY.sql
+      - name: G59 assert denied direct SDK, service and gateway execution grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59_UNKNOWN_COMMIT_RECONCILIATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G59 PostgreSQL source of truth after lost ACK, rollback, newer revision and revocation
+        run: python3 apps/mobility-expo/server/g59-uncertain-commit-reconciliation-ci.py
+      - name: G59B install Driver-only committed ACK reconciliation on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59B_DRIVER_UNKNOWN_COMMIT_RECONCILIATION_POSTGRES_CI_ONLY.sql
+      - name: G59B assert privileged Driver reconciliation has no delegated SDK grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59B_DRIVER_UNKNOWN_COMMIT_RECONCILIATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G59B race two Driver scoped SEND tickets and recover immutable ACK with G42 revocation
+        run: python3 apps/mobility-expo/server/g59b-driver-uncertain-commit-race-ci.py
+      - name: G60C install short lived opaque Driver SEND and RECONCILE SQL attestation exchange
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G60C_DRIVER_MIN_PRIVILEGE_WRITE_EXCHANGE_POSTGRES_CI_ONLY.sql
+      - name: G60C verify NOLOGIN privileges and no direct owner table or SQL mint exposure
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G60C_DRIVER_MIN_PRIVILEGE_WRITE_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G60C two PostgreSQL connections exchange once only, preserve original ACK and lock revoked sessions
+        run: python3 apps/mobility-expo/server/g60c-driver-write-exchange-race-ci.py
+      - name: G64 install owner-only historical Driver offer decision receipt lookup
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G64_DRIVER_OFFER_DECISION_RECOVERY_POSTGRES_CI_ONLY.sql
+      - name: G64 verify immutable AUTO and DELIVERY receipts, unknown, two DB sessions and G42 revoke fence
+        run: python3 apps/mobility-expo/server/g64-driver-offer-decision-recovery-ci.py
+      - name: G67 install mandatory proof fence inside every G5 delivered status mutation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_DELIVERY_PROOF_ATOMIC_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G67 assert SDK and delegated roles cannot mint or read proofs
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_DELIVERY_PROOF_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G67 test real two-session COMMIT proof and revocation race, UUID forgery and rollback
+        run: python3 apps/mobility-expo/server/g67-delivery-proof-atomic-race-ci.py
+      - name: G68 install private sender-owned delivery custody (disposable PG16)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G68_SENDER_OWNED_DELIVERY_READ_POSTGRES_CI_ONLY.sql
+      - name: G68 assert owned DTO, disjoint Passenger roles and G42 revocation in PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G68_SENDER_OWNED_DELIVERY_READ_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G69 install NOLOGIN sender-only one-use read exchange on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G69_SCOPED_SENDER_CUSTODY_EXCHANGE_POSTGRES_CI_ONLY.sql
+      - name: G69 verify delegated role denies direct SQL and caller proof mint
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G69_SCOPED_SENDER_CUSTODY_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G69 two PG connections one-use Passenger read and role-session-revocation denial
+        run: python3 apps/mobility-expo/server/g69-sender-custody-scoped-read-race-ci.py

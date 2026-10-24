@@ -1,0 +1,29 @@
+name: QORE Mobility STAGING Node contracts
+on:
+  push:
+    branches:
+      - feature/mobility-monorepo-isolated-20261016
+    paths:
+      - 'apps/mobility-expo/server/**'
+      - '.github/workflows/mobility-staging-node-contracts.yml'
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/**'
+      - '.github/workflows/mobility-staging-node-contracts.yml'
+permissions:
+  contents: read
+jobs:
+  staging-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Expo workspace dependencies
+        working-directory: apps/mobility-expo
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Run synthetic staging server contracts
+        working-directory: apps/mobility-expo/server
+        run: node --test *.test.mjs

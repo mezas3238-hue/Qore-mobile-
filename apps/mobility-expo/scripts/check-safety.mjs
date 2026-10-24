@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const text=readFileSync(resolve(root,'src/services/production-api.ts'),'utf8');
+assert.match(text,/export\s+const\s+LIVE_TRIPS_ENABLED\s*=\s*false\s+as\s+const\s*;/,'Viajes reales habilitados o guard ausente');
+assert.match(text,/throw\s+new\s+Error\(/,'requestProductionRide debe fallar cerrado');
+const app=JSON.parse(readFileSync(resolve(root,'app.json'),'utf8')).expo;
+assert.equal(app.android.package,'com.qore.viajeya','Android package de movilidad cambió sin ADR');
+assert.equal(app.ios.bundleIdentifier,'com.qore.viajeya','iOS bundle ID de movilidad cambió sin ADR');
+assert.ok(!existsSync(resolve(root,'gateway')),'Gateway de trading incrustado en Expo');
+assert.ok(!existsSync(resolve(root,'apps/mobile')),'Flutter incrustado en Expo');
+console.log('G0 guard OK: Expo aislado; paquetes propios; LIVE_TRIPS_ENABLED=false');

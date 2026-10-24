@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "ViajeYa | QORE Mobile",
+    "slug": "qore-mobile-viajes",
+    "scheme": "qoreviajes",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#F4F7F8",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.qore.viajeya",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "waze"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.qore.viajeya",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "name": "ViajeYa | QORE Mobile",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ViajeYa necesita seleccionar la fotografía de tu licencia para verificar tu solicitud de conductor.",
+          "cameraPermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ViajeYa usa tu ubicación solamente cuando lo autorizás para mostrar mapas y navegación.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
