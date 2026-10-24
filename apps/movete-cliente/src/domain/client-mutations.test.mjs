@@ -160,3 +160,76 @@ test('logout o reinicio explícito elimina el bloqueo y la clave privada',async(
  assert.equal(c.publicState().requestKey,null);
  assert.equal(c.prepare({operation:'rideRequest',body:ride,subject}).ok,true);
 });
+
+test('R59 untrusted gateway error cannot inject secrets into public ClientSnapshot',async()=>{
+ const secrets=[
+  'Bearer qa-secret-token-0981555333',
+  'AUTH_REQUIRED\nAuthorization: Bearer PRIVATE',
+  'REQUEST_REJECTED\u202epassword',
+  '<script>alert(1)</script>',
+  'A'.repeat(20000)
+ ];
+ for(const injected of secrets){
+  const c=fixture(async()=>({ok:false,code:injected}));
+  assert.equal(c.prepare({operation:'rideRequest',body:ride,subject}).ok,true);
+  const result=await c.submit();
+  assert.equal(result.code,'REQUEST_REJECTED');
+  assert.equal(c.publicState().error,'REQUEST_REJECTED');
+  assert.equal(c.publicState().phase,'failed');
+  assert.equal(JSON.stringify(c.publicState()).includes(injected),false);
+ }
+});
+test('R59 unknown non-string error and objects are never stringified in UI',async()=>{
+ for(const injected of [
+  null,123,[],{message:'PRIVATE_PHONE_0981'},new Error('PRIVATE_SECRET')
+ ]){
+  const c=fixture(async()=>({ok:false,code:injected}));
+  c.prepare({operation:'rideRequest',body:ride,subject});
+  assert.equal((await c.submit()).code,'REQUEST_REJECTED');
+  assert.equal(c.publicState().error,'REQUEST_REJECTED');
+  assert.equal(JSON.stringify(c.publicState()).includes('PRIVATE'),false);
+ }
+});
+test('R59 known protocol backpressure preserves explicit generic retry semantics',async()=>{
+ const c=fixture(async()=>({ok:false,code:'RATE_LIMITED'}));
+ c.prepare({operation:'rideRequest',body:ride,subject});
+ assert.equal((await c.submit()).code,'RATE_LIMITED');
+ assert.equal(c.publicState().phase,'retryable');
+});
+test('R59 certified booking transport does not repeat POST after injected error',async()=>{
+ let calls=0;
+ const c=createClientMutationController({
+  gateway:{bookingReconciliationRequired:true,
+   send:async()=>{calls++;return {ok:false,code:'PRIVATE_JWT_12345'};},
+   reconcile:async()=>({ok:false,code:'OTHER_CUSTOMER_PHONE_0981'})},
+  getSession:async()=>({subject,role:'passenger',sessionRevision:3})
+ });
+ c.prepare({operation:'rideRequest',body:ride,subject,sessionRevision:3});
+ assert.equal((await c.submit()).code,'REQUEST_REJECTED');
+ assert.equal(c.publicState().phase,'failed');
+ assert.equal((await c.retry()).code,'NO_READY_REQUEST');
+ assert.equal(c.prepare({operation:'rideRequest',body:ride,subject,
+  sessionRevision:3}).code,'RECONCILE_BEFORE_NEW_REQUEST');
+ assert.equal((await c.reconcileBooking()).code,'BOOKING_RECONCILIATION_UNKNOWN');
+ assert.equal(c.publicState().phase,'failed');
+ assert.equal(c.publicState().error,'BOOKING_RECONCILIATION_UNKNOWN');
+ assert.equal(JSON.stringify(c.publicState()).includes('PHONE'),false);
+ assert.equal(calls,1);
+});
+test('R59 known booking 201 ambiguity remains explicit but never public PII',async()=>{
+ const c=createClientMutationController({
+  gateway:{bookingReconciliationRequired:true,
+   send:async()=>({ok:false,code:'BOOKING_RECEIPT_NOT_CERTIFIED'}),
+   reconcile:async()=>({ok:false,code:'BOOKING_RECONCILIATION_UNKNOWN'})},
+  getSession:async()=>({subject,role:'passenger',sessionRevision:4})
+ });
+ c.prepare({operation:'deliveryRequest',body:{
+  requestKey:key,vehicleKind:'MOTO',category:'PARCEL',grams:2000,
+  lengthCm:20,widthCm:10,heightCm:5,pickupTag:'San Lorenzo centro',
+  deliveryTag:'Asunción centro',restrictedItemDeclared:false
+ },subject,sessionRevision:4});
+ assert.equal((await c.submit()).code,'BOOKING_RECEIPT_NOT_CERTIFIED');
+ assert.equal((await c.reconcileBooking()).code,'BOOKING_RECONCILIATION_UNKNOWN');
+ assert.equal(c.publicState().phase,'failed');
+ assert.equal(JSON.stringify(c.publicState()).includes('San Lorenzo'),false);
+});
