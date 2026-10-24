@@ -1,5 +1,5 @@
 export interface CommerceBasketItem {
- readonly itemId:string;readonly itemTag:string;readonly quantity:number;
+ readonly itemId:string;readonly itemTag:string|null;readonly quantity:number;
  readonly unitPricePyg:number|null;readonly lineSubtotalPyg:number|null;
 }
 export interface CommerceCatalogItem {
