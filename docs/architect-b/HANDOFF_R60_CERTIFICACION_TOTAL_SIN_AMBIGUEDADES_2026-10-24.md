@@ -18,7 +18,7 @@ La instrucción Owner es **«Todo tiene que estar certificado, sin ambigüedades
 
 **Verificador independiente de UI:** `apps/movete-admin/src/release-certification.mjs` con suite `release-certification.test.mjs` ejecutada por QA de Admin Web. Se verifica que:
 1. **No falta ninguno** de los 17 gates y 20 flujos, ni hay duplicados.
-2. El inventario espejo mantiene IDs, responsables y estados de la fuente soberana A (test que lee ambos JSON en la misma rama).
+2. El inventario espejo mantiene IDs, responsables y estados de una **copia exacta fechada del G61 soberano de A** (test que lee ambos JSON de B; el archivo original A no existe todavía en el checkout histórico de la rama B). La copia está en `docs/architect-b/FUENTE_A_G61_CERTIFICACION_PINNED_2026-10-24.json`, verificada contra el blob A `0fc668c3b3f7eb68e6c93032af416746c6f7aafc`. **Este test no verifica automáticamente futuras actualizaciones del HEAD de A**: una certificación final exige comparar nuevamente la fuente viva por GitHub.
 3. Una etiqueta `CERTIFIED` sin todas sus pruebas obligatorias **es inválida**; también es inválida si A todavía marca ese gate bloqueado o QA-only.
 4. Los tipos de evidencia deben corresponder al ambiente: `ANDROID_DEVICE` requiere `ANDROID_PHYSICAL`; `IOS_DEVICE` requiere `IOS_PHYSICAL`; `STAGING_E2E` no se acredita mediante `CI_QA`, `LEGAL_REVIEW` requiere revisión específica.
 5. Se rechazan enlaces de evidencia HTTP, externos no aprobados, con query/secret o SHA inválido. La estructura de metadatos sola **NO prueba la autenticidad** de la ejecución: cada enlace debe verificarse de forma independiente.
