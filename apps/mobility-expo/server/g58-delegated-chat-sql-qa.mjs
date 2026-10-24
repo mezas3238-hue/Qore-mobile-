@@ -81,6 +81,11 @@ export function createG58DelegatedChatSqlQa({
     throw Error('G58 SQL connection factory invalid');
    await db.query('BEGIN');
    started=true;
+   // Server-side immutable ceilings protect against a SQL call outliving
+   // the Node deadline; these settings reset at COMMIT/ROLLBACK.
+   await db.query("SET LOCAL statement_timeout = '2500ms'");
+   await db.query("SET LOCAL lock_timeout = '500ms'");
+   await db.query("SET LOCAL idle_in_transaction_session_timeout = '3500ms'");
    // Exact constant role only; SET LOCAL resets on every transaction end.
    await db.query('SET LOCAL ROLE '+chosen.rule.role);
    const who=await db.query(
