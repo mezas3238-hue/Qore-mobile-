@@ -45,7 +45,7 @@ BEGIN
  OR NOT EXISTS(SELECT 1 FROM public.user_roles
  WHERE user_id=d AND role='driver'::public.app_role)
  THEN RAISE EXCEPTION 'KYC independent G16 driver fixture absent'; END IF;
- iat:=(pg_catalog.extract(epoch FROM
+ iat:=(extract(epoch FROM
  (pg_catalog.clock_timestamp()-interval '10 seconds'))*1000)::bigint;
  INSERT INTO public.mobility_stage_g42_provider_session_grants(
  user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind)
