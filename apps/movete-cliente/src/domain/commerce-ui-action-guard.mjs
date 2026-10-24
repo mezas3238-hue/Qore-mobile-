@@ -4,7 +4,7 @@
  * This guard only authorizes a LOCAL draft edit; never a payment or order.
  */
 import {isCommercePageFresh} from './commerce-ttl-refresh.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const deny=code=>Object.freeze({ok:false,code});
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const actorValid=x=>x?.authenticated===true
