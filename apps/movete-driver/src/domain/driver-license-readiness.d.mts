@@ -8,6 +8,8 @@ export type DriverLicenseReviewSnapshot=Readonly<{
 export declare function readDriverLicenseReadiness(options:{
  apiOrigin:string;
  accessToken:string;
+ approvedStagingHost?:string|null;
+ allowedByOwner?:boolean;
  request?:(url:string,options:RequestInit)=>Promise<{
   status:number;json():Promise<unknown>;
  }>;
