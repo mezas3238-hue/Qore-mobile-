@@ -17,7 +17,7 @@ test('document insertion must prove JWT owner, owner_id and owner-only folder',(
  assert.match(noncomments,/rostro_selfie\)-\[A-Za-z0-9_-\]\{12,80\}/);
  for(const kind of ['licencia','identidad_frente','identidad_dorso','cedula_verde',
   'habilitacion','seguro','inspeccion','rostro_selfie']){
-  assert.match(noncomments,new RegExp('\\\\b'+kind+'\\\\b'));
+  assert.ok(noncomments.includes(kind),'missing evidence kind: '+kind);
  }
 });
 test('no anonymous, global-read, UPDATE or DELETE policy',()=>{
