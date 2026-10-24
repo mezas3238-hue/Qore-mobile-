@@ -145,7 +145,11 @@ export function createF1AutoPrequoteConsent({
   if(run!==generation)return fail('STALE_RESPONSE');
   if(!await actorMatches(s)){clear();return fail('SESSION_CHANGED');}
   if(run!==generation)return fail('STALE_RESPONSE');
+  // An HTTP 201 arriving after quote expiry cannot by itself prove the
+  // server accepted the tariff while valid. Keep the key latched and require
+  // the independent owner-scoped GET rather than trusting a stale ACK.
   if(result?.ok===true&&result.status===201
+   &&s.quote.expiresAt>now()
    &&validReceipt(result.data,s,requestKey)){
    state={...state,phase:'confirmed',tripId:result.data.tripId};
    return Object.freeze({ok:true,tripId:result.data.tripId,
