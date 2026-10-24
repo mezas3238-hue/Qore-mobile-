@@ -139,6 +139,15 @@ export declare function createClientExperience(options?:{
   readOwnDelivery?:(scope:Readonly<{deliveryId:string;ownerId:string;
    sessionRevision:number;bearer:string}>)=>Promise<unknown>|unknown;
  }|null;
+ // G68 Node/SQL QA does NOT authorize these flags; caller must supply
+ // independent evidence for a mounted, permitted HTTPS STAGING runtime.
+ senderCustodyHttpOptions?:{
+  enabled?:boolean;contractCertified?:boolean;
+  stagingRuntimeVerified?:boolean;g68SenderContractCertified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  bookingHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   qaReceiptContractCertified?:boolean;reconciliationContractCertified?:boolean;
