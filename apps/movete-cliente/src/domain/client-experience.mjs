@@ -407,7 +407,23 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   retryChat:async()=>{const p=chatFlow.retryPending();notify();const r=await p;notify();return r;},
   loadChatInbox:async args=>{
    const p=chatInbox.load(args);notify();
-   const r=await p;notify();return r;
+   const r=await p;
+   if(r?.ok===true){
+    // Reasignación POSITIVA confirmada por G51: mismo servicio activo
+    // pero conversationId diferente. Invalidar inmediatamente el historial,
+    // draft privado (view key) y pending ACK del hilo anterior.
+    // La AUSENCIA en una página paginada NO demuestra revocación.
+    const current=chatFlow.snapshot(),inbox=chatInbox.snapshot();
+    if(inbox.readReady&&!inbox.loading&&!inbox.stale
+     &&current.conversationId&&current.serviceId&&current.serviceKind
+     &&inbox.items.some(item=>item.serviceKind===current.serviceKind
+      &&item.serviceId===current.serviceId
+      &&item.conversationId!==current.conversationId)){
+     chatFlow.clear();
+     chatHintStore.clear();
+    }
+   }
+   notify();return r;
   },
   clearChatInbox:()=>{chatInbox.clear();notify();},
   // El hint Push no contiene texto del remitente ni concede acceso al hilo.
