@@ -16,8 +16,8 @@ export declare function createPassengerBookingStagingGateway(options?:{
  getSession?:()=>unknown|Promise<unknown>;
  fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
  onSessionInvalid?:()=>void;now?:()=>number;timeoutMs?:number;maxBytes?:number;
-}):Readonly<{isConfigured:()=>boolean;productionEnabled:false;
- bookingReconciliationRequired:true;
+}):Readonly<{isConfigured:()=>boolean;reconciliationConfigured:()=>boolean;
+ productionEnabled:false;bookingReconciliationRequired:true;
  send:(operation:string,args?:{body?:unknown;expectedSessionRevision?:number|null;
   expectedSubject?:string|null})=>
   Promise<PassengerBookingQaReply>;
