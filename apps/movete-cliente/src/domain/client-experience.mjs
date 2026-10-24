@@ -329,9 +329,11 @@ export function createClientExperience({authProvider=null,gateway=null,
  function guardCustodyScope(){
   if(!custodyAnchor)return true;
   const user=actor(),page=user?history.current(user.subject):null;
+  const stored=senderCustody.snapshot();
   const item=page?.items.find(x=>x.kind==='DELIVERY'
    &&x.serviceId===custodyAnchor.deliveryId);
   if(!user||user.subject!==custodyAnchor.subject
+   ||(stored.deliveryId!==null&&stored.deliveryId!==custodyAnchor.deliveryId)
    ||!item||item.revision!==custodyAnchor.historyRevision){
    senderCustody.clear();custodyAnchor=null;return false;
   }
@@ -534,6 +536,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     senderCustody.clear();custodyAnchor=null;notify();
     return fail('SENDER_DELIVERY_NOT_IN_OWN_HISTORY');
    }
+   if(senderCustody.snapshot().loading)return fail('SENDER_CUSTODY_READ_IN_FLIGHT');
    const subject=user.subject,rev=session.privacyRevision();
    custodyAnchor=Object.freeze({deliveryId,subject,historyRevision:item.revision});
    const operation=senderCustody.refresh(deliveryId,subject,rev);
