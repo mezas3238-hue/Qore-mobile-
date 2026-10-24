@@ -9,7 +9,7 @@ DECLARE
 BEGIN
  snapshot:=public.mobility_stage_kyc_expiry_snapshot_owner_qa(d,v);
  IF snapshot->>'state'<>'BLOCKED_REVIEW'
- OR snapshot->'renewalRequiredKinds' NOT ? 'identidad_frente'
+ OR NOT ((snapshot->'renewalRequiredKinds') ? 'identidad_frente')
  OR snapshot->>'qaOnboardingActive'<>'false'
  THEN RAISE EXCEPTION 'KYC replacement pending must block until verified: %',snapshot; END IF;
  -- Simulate an independently attested latest ID photo, server-only fixture.
@@ -31,8 +31,8 @@ BEGIN
  WHERE driver_id=d AND vehicle_id=v AND kind='licencia';
  snapshot:=public.mobility_stage_kyc_expiry_snapshot_owner_qa(d,v);
  IF snapshot->>'state'<>'BLOCKED_EXPIRED'
- OR snapshot->'expiredKinds' NOT ? 'licencia'
- OR snapshot->'renewalRequiredKinds' NOT ? 'licencia'
+ OR NOT ((snapshot->'expiredKinds') ? 'licencia')
+ OR NOT ((snapshot->'renewalRequiredKinds') ? 'licencia')
  OR snapshot->>'accountBlocked'<>'true'
  THEN RAISE EXCEPTION 'KYC expiry failed to immediately block: %',snapshot; END IF;
  -- Renewal upload alone makes old attestation stale, still blocked.
@@ -64,7 +64,7 @@ BEGIN
  WHERE driver_id=d AND vehicle_id=v AND kind='habilitacion';
  snapshot:=public.mobility_stage_kyc_expiry_snapshot_owner_qa(d,v);
  IF snapshot->>'state'<>'READY_QA'
- OR snapshot->'expiringSoonKinds' NOT ? 'habilitacion'
+ OR NOT ((snapshot->'expiringSoonKinds') ? 'habilitacion')
  OR snapshot->>'accountBlocked'<>'false'
  THEN RAISE EXCEPTION 'KYC advance renewal warning incorrect: %',snapshot; END IF;
  -- Suspension independent from document validity NEVER auto-clears.
