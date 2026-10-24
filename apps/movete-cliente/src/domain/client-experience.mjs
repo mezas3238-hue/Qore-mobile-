@@ -48,12 +48,14 @@ export function createClientExperience({authProvider=null,gateway=null,
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null;
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
+ let completedProof=null,completedBusy=false,completedEpoch=0;
  let custodyAnchor=null;
  const seenCursors=new Set();
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
+  completedEpoch++;completedBusy=false;completedProof=null;
   if(mutations)mutations.clear();
   if(tracking)tracking.stop();
   if(cancellation)cancellation.clear();
@@ -306,6 +308,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   const oldTrip=tracking.snapshot().tripId;
   const result=tracking.begin(tripId,user.subject);
   if(result.ok&&oldTrip!==tripId){
+   completedEpoch++;completedProof=null;
    cancellation.clear();fareFlow.clear();
    // Un viaje nuevo invalida precios de otro sujeto, pero conserva
    // cotizaciones verificadas que pertenecen EXACTAMENTE al mismo tripId.
@@ -403,7 +406,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  }
  function acceptHistory(dto,{append=false}={}){
   // Injected snapshots never authorize recovering a Passenger ride.
-  historyRideProof=null;
+  historyRideProof=null;completedProof=null;
   const user=actor();
   if(!user){history.clear();senderCustody.clear();custodyAnchor=null;return false;}
   // Replacing the server page revokes previous proof, even for the same ID.
@@ -427,7 +430,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(reset){senderCustody.clear();custodyAnchor=null;historyRideProof=null;}
   if(cursor!==null&&seenCursors.has(cursor))return fail('CURSOR_REPEATED');
   const capturedEpoch=session.revision(),capturedSubject=user.subject;
-  historyRideProof=null;
+  historyRideProof=null;completedProof=null;
   historyLoading=true;historyLoadError=null;notify();
   try{
    let answer;
@@ -531,6 +534,63 @@ export function createClientExperience({authProvider=null,gateway=null,
    if(generation===resumeGeneration){resumeBusy=false;notify();}
   }
  }
+ function completedRideHistory(){
+  const user=actor(),tracked=tracking.snapshot(),continuation=rideContinuation();
+  const fresh=Number.isSafeInteger(tracked.lastFetchedAt)
+   &&tracked.lastFetchedAt<=now()&&now()-tracked.lastFetchedAt<=60000;
+  const ready=Boolean(user&&historyGateway?.isConfigured()===true
+   &&statusGateway?.isConfigured()===true
+   &&continuation.canVerify&&continuation.tripId===tracked.tripId
+   &&tracked.subscriptionActive&&tracked.state==='completed'
+   &&Number.isSafeInteger(tracked.revision)&&tracked.revision>=1
+   &&!tracked.syncing&&!historyLoading&&fresh);
+  const page=ready?history.current(user.subject):null;
+  const record=page?.items.find(x=>x.kind==='RIDE'
+   &&x.serviceId===tracked.tripId&&x.status==='completed'
+   &&x.revision>=tracked.revision);
+  const verified=Boolean(ready&&completedProof
+   &&completedProof.subject===user.subject
+   &&completedProof.privateViewRevision===session.privacyRevision()
+   &&completedProof.tripId===tracked.tripId
+   &&completedProof.revision===tracked.revision
+   &&completedProof.historyAnchor===historyRideProof&&record);
+  return Object.freeze({readReady:ready,verifying:completedBusy,verified,
+   tripId:ready?tracked.tripId:null,qaOnly:true,productionEnabled:false});
+ }
+ /**
+  * F1: a completed status isn't proof of persistent history. Independently
+  * confirm an owner-scoped read-only HTTP history response, not a mobile cache.
+  * No billing, payouts, review posting or financial receipts are inferred.
+  */
+ async function verifyCompletedRideHistory(){
+  if(completedBusy)return fail('COMPLETED_HISTORY_IN_FLIGHT');
+  const user=actor(),before=tracking.snapshot();
+  if(!user||!completedRideHistory().readReady)
+   return fail('COMPLETED_HISTORY_NOT_READY');
+  const generation=++completedEpoch,privacy=session.privacyRevision();
+  completedBusy=true;completedProof=null;notify();
+  const tripId=before.tripId,revision=before.revision;
+  try{
+   const loaded=await loadHistoryPage({reset:true});
+   const after=actor(),tracked=tracking.snapshot();
+   if(generation!==completedEpoch||!after||after.subject!==user.subject
+    ||session.privacyRevision()!==privacy
+    ||tracked.tripId!==tripId||tracked.state!=='completed'
+    ||tracked.revision!==revision||!tracked.subscriptionActive)
+    return fail('COMPLETED_HISTORY_STALE_RESPONSE');
+   if(!loaded.ok)return fail('COMPLETED_HISTORY_UNVERIFIED');
+   const page=history.current(user.subject);
+   const row=page?.items.find(x=>x.kind==='RIDE'
+    &&x.serviceId===tripId&&x.status==='completed'
+    &&x.revision>=revision);
+   if(!row||!historyRideProof)return fail('COMPLETED_HISTORY_NOT_CONFIRMED');
+   completedProof=Object.freeze({subject:user.subject,
+    privateViewRevision:privacy,tripId,revision,historyAnchor:historyRideProof});
+   return Object.freeze({ok:true,tripId,qaOnly:true,productionEnabled:false});
+  }finally{
+   if(generation===completedEpoch){completedBusy=false;notify();}
+  }
+ }
  function snapshot(){
   const user=actor();
   guardCustodyScope();
@@ -544,6 +604,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
+    completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
@@ -563,6 +624,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     productionEnabled:false}),
    rideContinuation:rideContinuation(),
    rideHistoryRecovery:rideHistoryRecovery(),
+   completedRideHistory:completedRideHistory(),
    tracking:tracking.snapshot(),
    quote:quote.current(),
    history:history.current(user.subject),
@@ -653,6 +715,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   startTracking:tripId=>{const result=startTracking(tripId);notify();return result;},
   continueVerifiedRide,
   resumeRideFromHistory,
+  verifyCompletedRideHistory,
   syncTracking:async()=>{const result=await syncTracking();notify();return result;},
   connectionLost:()=>{tracking.connectionLost();notify();},
   acceptQuote:dto=>{const result=acceptQuote(dto);notify();return result;},
