@@ -19,7 +19,7 @@ export type DriverChatInboxPage=Readonly<{
 }>;
 export declare function createDriverChatInboxController(options:{
  readPage:(request:{bearer:string;cursor:string|null;limit:number})=>Promise<{
-  status:number;body:DriverChatInboxPage|Readonly<{code:string}>;
+  status:number;body:unknown;
  }>;
  now?:()=>number;liveEnabled?:false;pageSize?:number;
 }):Readonly<{
