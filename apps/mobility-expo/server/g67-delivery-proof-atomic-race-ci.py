@@ -140,17 +140,9 @@ with db() as con:
  assert sql(con,PROBE,second,COURIER,p2).fetchone()[0] is False
  assert sql(con,PROBE,second,COURIER,p2new).fetchone()[0] is True
  assert sql(con,"SELECT count(*) FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s",COURIER).fetchone()[0]==0
-# Session revocation fence: G42 write cannot complete before delivery TX.
-# The second delivery is unavailable due to revoked proof, so test a read-held
-# G42 lock via a third synthetic delivery after ending second fixture in QA.
-with db() as con:
- # Dispose synthetic second active fixture in owner-only rollback fixture.
- con.execute("ALTER TABLE public.mobility_stage_deliveries DISABLE TRIGGER USER")
- try:
-  sql(con,"DELETE FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s AND assignment_id=%s",COURIER,second)
-  sql(con,"DELETE FROM public.mobility_stage_g67_delivery_proofs WHERE delivery_id=%s",second)
-  sql(con,"DELETE FROM public.mobility_stage_deliveries WHERE id=%s",second)
- finally:con.execute("ALTER TABLE public.mobility_stage_deliveries ENABLE TRIGGER USER")
+# The second delivery is already terminal and its slot was released.
+# Retain durable G5 events and FK-referenced proofs; never delete history
+# just to prepare another synthetic assignment.
 third=fixture()
 p3=proof_for(third)
 held=db()
