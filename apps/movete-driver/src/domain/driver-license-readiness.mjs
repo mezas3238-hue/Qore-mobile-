@@ -4,22 +4,18 @@
 export const DRIVER_LICENSE_READINESS_LIVE_ENABLED=false;
 const TOKEN=/^[A-Za-z0-9._~-]{20,7900}$/;
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
 export async function readDriverLicenseReadiness({
- apiOrigin,accessToken,request=fetch
+ apiOrigin,accessToken,approvedStagingHost=null,allowedByOwner=false,
+ request=fetch
 }={}){
  if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||
   !TOKEN.test(accessToken)||typeof request!=='function')
   throw Error('Driver license session missing');
- let origin;
- try{origin=new URL(apiOrigin);}
- catch{throw Error('Driver license origin invalid');}
- if(origin.protocol!=='http:'||origin.hostname!=='127.0.0.1'||
-    !origin.port||origin.pathname!=='/'||origin.search||origin.hash||
-    origin.username||origin.password)
-  throw Error('Driver license status requires isolated localhost QA');
+ const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,allowedByOwner});
  let response;
  try{
-  response=await request(origin.origin+'/v1/staging/driver/license-readiness',{
+  response=await request(origin+'/v1/staging/driver/license-readiness',{
    method:'GET',cache:'no-store',credentials:'omit',
    headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
   });
