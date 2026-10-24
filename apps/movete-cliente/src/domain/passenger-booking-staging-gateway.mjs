@@ -40,7 +40,7 @@ export function createPassengerBookingStagingGateway({
  });
  const ready=permitted&&transport.isConfigured();
  let busy=false;
- async function send(operation,{body,expectedSessionRevision=null}={}){
+ async function send(operation,{body,expectedSessionRevision=null,expectedSubject=null}={}){
   if(!ready)return fail('BOOKING_STAGING_NOT_CERTIFIED');
   if(!KINDS.has(operation)||!object(body)||!validId(body.requestKey))
    return fail('INVALID_BOOKING_REQUEST');
