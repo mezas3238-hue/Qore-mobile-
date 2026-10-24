@@ -17,6 +17,9 @@ BEGIN;
 CREATE ROLE mobility_g58f_definer_ci NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 CREATE ROLE mobility_g58f_exchange_ci NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 GRANT USAGE ON SCHEMA public TO mobility_g58f_definer_ci, mobility_g58f_exchange_ci;
+-- PostgreSQL ownership transfer requires schema CREATE momentarily; revoke
+-- immediately after the two ALTER OWNER statements (never grant to exchange). 
+GRANT CREATE ON SCHEMA public TO mobility_g58f_definer_ci;
 -- The DB superuser fixture, never a public RPC, may INSERT short-lived
 -- independently attested data. This has NO real provider cryptographic evidence.
 -- SQL consumes only an opaque random token; actor, role, iat and scope CANNOT
@@ -122,6 +125,7 @@ END $fn$;
 -- IMPORTANT: dedicated function OWNER is a restricted NOLOGIN role, NOT qore_ci.
 ALTER FUNCTION public.mobility_stage_g58f_exchange_attestation_qa(uuid)
  OWNER TO mobility_g58f_definer_ci;
+REVOKE CREATE ON SCHEMA public FROM mobility_g58f_definer_ci;
 REVOKE ALL ON FUNCTION public.mobility_stage_g58f_exchange_attestation_qa(uuid)
  FROM PUBLIC,anon,authenticated,service_role,
  mobility_g48_gateway_ci,mobility_g49_chat_gateway_ci,
