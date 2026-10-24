@@ -62,7 +62,23 @@ export function createG58ChatLoopbackTransportQa({
   [driverInboxHandler,driverHistoryHandler,driverVisibleHandler,
    passengerHistoryHandler,passengerVisibleHandler].some(f=>typeof f!=='function'))
   throw Error('G58 QA requires five authenticated server-side adapters');
- const server=createServer(async(req,res)=>{
+ let activeRequests=0;
+ const MAX_ACTIVE_REQUESTS=12;
+ const HANDLER_DEADLINE_MS=2400;
+ const server=createServer({maxHeaderSize:8192},async(req,res)=>{
+  if(activeRequests>=MAX_ACTIVE_REQUESTS){
+   send(res,fail('G58E_GATEWAY_CAPACITY',503));return;
+  }
+  activeRequests++;
+  try{
+  // Never allow this local harness to be used from a non-loopback socket.
+  if(req.socket.remoteAddress!=='127.0.0.1'||
+   req.socket.localAddress!=='127.0.0.1'){
+   send(res,fail('G58E_LOOPBACK_ONLY',403));return;
+  }
+  if(req.rawHeaders.length>64){
+   send(res,fail('G58E_EXCESS_HEADERS',400));return;
+  }
   const raw=req.url;
   if(typeof raw!=='string'||raw.length>240||!raw.startsWith('/')||
    raw.includes('%')||raw.includes('#')||raw.includes('\\')||
@@ -161,13 +177,35 @@ export function createG58ChatLoopbackTransportQa({
    params={bearer,conversationId:(dr??pr)[1].toLowerCase(),
     messageId:body.messageId,marker:body.marker};
   }
+  // A completed SQL commit after a local HTTP deadline has UNKNOWN client
+  // outcome; never claim rollback, and never transparently replay a write.
+  let timeout;
+  const timedOut=Symbol('G58E_UNCERTAIN_OUTCOME');
   try{
-   const out=await handler(params);
+   const out=await Promise.race([
+    Promise.resolve().then(()=>handler(params)),
+    new Promise(resolve=>{
+     timeout=setTimeout(()=>resolve(timedOut),HANDLER_DEADLINE_MS);
+    })
+   ]);
+   if(out===timedOut){
+    send(res,fail('G58E_OUTCOME_UNKNOWN',503));return;
+   }
    if(!plain(out)||!Number.isSafeInteger(out.status)||!plain(out.body))
     throw Error('untrusted adapter');
    send(res,out);
   }catch{send(res,fail('G58_SCOPED_GATEWAY_UNAVAILABLE'));}
+  finally{clearTimeout(timeout);}
+  }finally{activeRequests--;}
  });
+ // Infrastructure ceilings are effective even before handlers parse Bearer.
+ server.headersTimeout=2000;
+ server.requestTimeout=3000;
+ server.keepAliveTimeout=1000;
+ server.timeout=3000;
+ server.maxHeadersCount=32;
+ server.maxRequestsPerSocket=10;
+ server.maxConnections=16;
  return Object.freeze({
   server,
   async listen(){
