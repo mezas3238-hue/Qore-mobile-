@@ -7,6 +7,7 @@ import {prepareCatalogBranchLookup,isSelectedCatalogBranchCurrent} from '../src/
 import {COMMERCE_VERTICALS,selectCommerceVertical,filterVerifiedCatalogPage,
  filterVerifiedBranchPage} from '../src/domain/commerce-storefront.mjs';
 import type {CommerceVertical} from '../src/domain/commerce-storefront.mjs';
+import {reviewCommerceBasket} from '../src/domain/commerce-checkout-review.mjs';
 export default function Commerce(){
  const {client,view}=useClientView();
  // El key elimina búsqueda, rubro elegido y sucursal anterior ANTES de
@@ -88,12 +89,16 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
   }finally{setLoading(false);}
  };
  const fresh=commerce.stage==='SERVER_CATALOG'&&!commerce.catalogLoading
+  &&commerce.catalogExpiresAt!==null&&commerce.catalogExpiresAt>Date.now()
   &&isSelectedCatalogBranchCurrent(branchInput,commerce.branchId);
  const verifiedMatches=fresh?filterVerifiedCatalogPage(commerce.catalogItems,
   {query,verified:true}):null;
  const visibleItems=verifiedMatches?.ok?verifiedMatches.items:[];
- const summary=commerce.estimatedSubtotalPyg===null?'—'
-  :commerce.estimatedSubtotalPyg.toLocaleString('es-PY')+' Gs.';
+ const review=fresh?reviewCommerceBasket(commerce,{
+  authenticated:view.authenticated,now:Date.now()
+ }):null;
+ const summary=review?.ok
+  ?review.estimatedSubtotalPyg.toLocaleString('es-PY')+' Gs.':'—';
  const edit=(id:string,quantity:number)=>{
   client.setCommerceQuantity(id,quantity);
  };
@@ -149,10 +154,29 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
    <Action label="Automóvil de carga" selected={commerce.vehicleKind==='AUTO'}
     secondary={commerce.vehicleKind!=='AUTO'}
     disabled={busy} onPress={()=>client.selectCommerceVehicle('AUTO')}/>
+   <Text accessibilityRole="header" style={styles.heading}>Revisión de tu carrito</Text>
+   {!review?.ok&&<Text style={styles.small}>
+    Agregá artículos disponibles para consultar un subtotal estimado; todavía no es un pedido ni una reserva.
+   </Text>}
+   {review?.ok&&<View>
+    <Text style={styles.small}>Sucursal verificada · Versión {review.catalogVersion} ·
+     Reparto preferido: {review.vehicleKind==='MOTO'?'moto de carga':'automóvil de carga'}</Text>
+    {review.lines.map(line=><View key={line.itemId} style={styles.row}>
+     <Text style={styles.text}>
+      {line.quantity} × {line.itemTag.replaceAll('_',' ')}
+     </Text>
+     <Text style={styles.text}>
+      {line.lineSubtotalPyg.toLocaleString('es-PY')} Gs.
+     </Text>
+    </View>)}
+   </View>}
    <Text accessibilityRole="header" style={styles.heading}>
-    Subtotal estimado: {summary}
+    Subtotal informativo: {summary}
    </Text>
-   <Text style={styles.small}>No incluye envío, descuentos, comisiones ni cobro. Solo el backend puede emitir el total final y reservar inventario.</Text>
+   <Text style={styles.small}>
+    Costo de entrega: pendiente del servidor. Descuentos: no confirmados.
+    Total final: pendiente. No incluye cobro, reserva de stock ni confirmación de pedido.
+   </Text>
    <Action label="Vaciar carrito y retirar catálogo de esta sesión" secondary disabled={busy}
     onPress={()=>{client.clearCommerce();setBranchInput('');setMessage('Carrito borrado de la sesión.');}}/>
   </>}
