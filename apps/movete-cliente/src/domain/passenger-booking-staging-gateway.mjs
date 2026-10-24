@@ -26,7 +26,8 @@ function certifiedQaReceipt(dto,{operation,requestKey,subject}){
 }
 export function createPassengerBookingStagingGateway({
  enabled=false,contractCertified=false,stagingRuntimeVerified=false,
- qaReceiptContractCertified=false,origin,pinnedOrigin,getSession,fetchImpl,
+ qaReceiptContractCertified=false,reconciliationContractCertified=false,
+ reconciliationRead=null,origin,pinnedOrigin,getSession,fetchImpl,
  onSessionInvalid=()=>{},now=()=>Date.now(),timeoutMs=8000,maxBytes=32768
 }={}){
  const permitted=enabled===true&&contractCertified===true
@@ -39,6 +40,10 @@ export function createPassengerBookingStagingGateway({
   now,timeoutMs,maxBytes
  });
  const ready=permitted&&transport.isConfigured();
+ // Reconciliation is a SEPARATE owner-certified, read-only capability.
+ // No endpoint/URL is fabricated here; the backend contract is still absent.
+ const canReconcile=ready&&reconciliationContractCertified===true
+  &&typeof reconciliationRead==='function';
  let busy=false;
  async function send(operation,{body,expectedSessionRevision=null,expectedSubject=null}={}){
   if(!ready)return fail('BOOKING_STAGING_NOT_CERTIFIED');
@@ -78,7 +83,53 @@ export function createPassengerBookingStagingGateway({
    return fail('NETWORK_OR_TIMEOUT');
   }finally{busy=false;}
  }
+ async function reconcile(operation,{requestKey,expectedSessionRevision=null,
+  expectedSubject=null}={}){
+  if(!canReconcile)return fail('BOOKING_RECONCILIATION_NOT_CERTIFIED');
+  if(!KINDS.has(operation)||!validId(requestKey)||!validId(expectedSubject)
+   ||!Number.isSafeInteger(expectedSessionRevision)
+   ||expectedSessionRevision<0)return fail('INVALID_RECONCILIATION_SCOPE');
+  if(busy)return fail('BOOKING_IN_FLIGHT');
+  busy=true;
+  try{
+   let before;
+   try{before=await getSession();}catch{return fail('AUTH_UNAVAILABLE');}
+   if(!object(before)||before.role!=='passenger'
+    ||before.subject!==expectedSubject
+    ||before.sessionRevision!==expectedSessionRevision
+    ||typeof before.token!=='string'||before.token.length<20
+    ||!Number.isSafeInteger(before.expiresAt)
+    ||before.expiresAt<=now()+1000)
+    return fail('STALE_SESSION_RESPONSE');
+   // The callback must be a separately certified READ. Never call send().
+   let answer;
+   try{answer=await reconciliationRead(Object.freeze({
+    operation,requestKey,expectedSubject,expectedSessionRevision,
+    bearer:before.token
+   }));}catch{return fail('BOOKING_RECONCILIATION_UNKNOWN');}
+   let after;
+   try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
+   if(!object(after)||after.role!=='passenger'
+    ||after.subject!==before.subject||after.token!==before.token
+    ||after.authRevision!==before.authRevision
+    ||after.sessionRevision!==before.sessionRevision
+    ||after.expiresAt!==before.expiresAt
+    ||after.expiresAt<=now()+1000)
+    return fail('STALE_SESSION_RESPONSE');
+   if(answer?.ok!==true||answer.status!==200
+    ||!certifiedQaReceipt(answer.data,{
+     operation,requestKey,subject:expectedSubject
+    }))
+    // Missing or inconclusive evidence is NEVER permission to POST again.
+    return fail('BOOKING_RECONCILIATION_UNKNOWN');
+   return Object.freeze({ok:true,status:200,qaOnly:true,
+    commercialEnabled:false,bookingConfirmedForProduction:false,
+    recoveredWithoutPost:true,data:Object.freeze({...answer.data})});
+  }catch{return fail('BOOKING_RECONCILIATION_UNKNOWN');}
+  finally{busy=false;}
+ }
  return Object.freeze({
-  isConfigured:()=>Boolean(ready),send,productionEnabled:false
+  isConfigured:()=>Boolean(ready),send,reconcile,
+  bookingReconciliationRequired:true,productionEnabled:false
  });
 }
