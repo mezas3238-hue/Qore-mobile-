@@ -91,7 +91,7 @@ export function createDriverOfferActionsController({
     return state;
    const stamp=++epoch,oldIdentity=identity,kind=offered.kind;
    pending={offerId,action};
-   decisionMap.set(offerId,{offerId,kind,action,phase:'sending'});
+   decisionMap.set(offerId,{offerId,serviceId:offered.serviceId,kind,action,phase:'sending'});
    publish('ready');
    let key,submitted=false;
    try{
@@ -112,7 +112,7 @@ export function createDriverOfferActionsController({
      typeof receipt.receiptId!=='string'||!ID.test(receipt.receiptId)||
      receipt.liveEnabled!==false||receipt.pushDelivered!==false)
      throw Error('G63 untrusted server receipt');
-    decisionMap.set(offerId,{offerId,kind,action,phase:'confirmed'});
+    decisionMap.set(offerId,{offerId,serviceId:offered.serviceId,kind,action,phase:'confirmed'});
     originalRequests.delete(offerId);
     offers=offers.filter(o=>o.offerId!==offerId);
     pending=null;
@@ -120,7 +120,7 @@ export function createDriverOfferActionsController({
    }catch{
     if(stamp!==epoch||identity!==oldIdentity)return state;
     // Any error may follow a COMMIT. Never repeat POST with a new key.
-    decisionMap.set(offerId,{offerId,kind,action,
+    decisionMap.set(offerId,{offerId,serviceId:offered.serviceId,kind,action,
      phase:submitted?'uncertain':'blocked'});
     pending=null;
     return publish('ready');
@@ -151,8 +151,8 @@ export function createDriverOfferActionsController({
      (original.action==='decline'&&receipt.receiptId!==offerId))
      throw Error('G64 original SQL receipt invalid');
     originalRequests.delete(offerId);
-    decisionMap.set(offerId,{offerId,kind:original.kind,
-     action:original.action,phase:'confirmed'});
+    decisionMap.set(offerId,{offerId,serviceId:decisionMap.get(offerId)?.serviceId,
+     kind:original.kind,action:original.action,phase:'confirmed'});
     offers=offers.filter(o=>o.offerId!==offerId);
     pending=null;
     return publish('ready');
