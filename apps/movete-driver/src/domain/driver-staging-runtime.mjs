@@ -14,6 +14,8 @@ import {readDriverDocumentStatuses} from './driver-documents.mjs';
 import {readDriverLicenseReadiness} from './driver-license-readiness.mjs';
 import {decidePrivateDriverOffer,reconcilePrivateDriverOffer}
  from './driver-offer-decision.mjs';
+import {readPrivateDriverTripStatus,transitionPrivateDriverTrip}
+ from './driver-trip-lifecycle-http.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -76,10 +78,23 @@ export function createDriverStagingRuntime({
     accessToken,kind,offerId,requestKey,action,request
    })
  });
+ const tripActions=Object.freeze({
+  readStatus:({accessToken,tripId})=>readPrivateDriverTripStatus({
+   apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+   accessToken,tripId,request
+  }),
+  transition:({accessToken,tripId,event,eventKey})=>
+   transitionPrivateDriverTrip({
+    apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+    accessToken,tripId,event,eventKey,request
+   }),
+  makeRequestKey:chatAdapters.makeRequestKey,
+  liveEnabled:false
+ });
  return Object.freeze({
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
-  offerActions,
+  offerActions,tripActions,
   productionEnabled:false,qaOnly:true
  });
 }
