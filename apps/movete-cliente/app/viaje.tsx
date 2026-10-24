@@ -2,6 +2,7 @@ import React,{useRef,useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
+import {BookingRecoveryPanel} from '../src/BookingRecoveryPanel';
 import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {validateRideDraft} from '../src/domain/capabilities.mjs';
@@ -180,6 +181,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    {feedback!==''&&<Text accessibilityLiveRegion="polite"
     style={[styles.text,{color:palette.primary}]}>{feedback}</Text>}
   </Panel>
+  <BookingRecoveryPanel client={client} view={view} operation="rideRequest"/>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Cotización y conductor</Text>
    <Action label="Aceptar tarifa y buscar conductor — pendiente de backend" disabled
