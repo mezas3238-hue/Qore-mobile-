@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g57",
+    "version": "1.0.0-g57b",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
@@ -3621,6 +3621,180 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ChatMarkVisibleOrderedReceiptG57"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/chat/services/{serviceKind}/{serviceId}/conversations/{conversationId}/history-with-ordered-markers": {
+      "get": {
+        "tags": [
+          "private-chat"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "operationId": "driverReadHistoryWithPassengerMarkersG57B",
+        "summary": "Future Driver history plus marker for each incoming Passenger message",
+        "description": "OFF: G56 Driver-only authorized page, one opaque marker per incoming Passenger message, no implicit read on history fetch. G57B database requires earliest unread first.",
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "QA-only Driver G56 page and G57B markers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverChatOrderedHistoryG57B"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/chat/conversations/{conversationId}/mark-visible-ordered": {
+      "post": {
+        "tags": [
+          "private-chat"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "operationId": "driverMarkEarliestPassengerMessageVisibleG57B",
+        "summary": "Future Driver confirmation of one actually visible, earliest unread Passenger message",
+        "description": "OFF: independently authenticated exclusive Driver; G42 session and assignment rechecked in SQL, marker from G56 page, no caller-supplied seq, and no skip of earlier Passenger messages.",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverChatMarkVisibleOrderedRequestG57B"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted and ordered Driver read ACK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverChatMarkVisibleOrderedReceiptG57B"
                 }
               }
             }
@@ -7866,6 +8040,82 @@
             "const": true
           }
         }
+      },
+      "DriverChatOrderedHistoryG57B": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "page",
+          "readMarkers",
+          "qaOnly",
+          "productionEnabled"
+        ],
+        "properties": {
+          "page": {
+            "$ref": "#/components/schemas/DriverChatHistoryG56"
+          },
+          "readMarkers": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatPerMessageReadMarkerG57"
+            }
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "DriverChatMarkVisibleOrderedRequestG57B": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "marker"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "marker": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "DriverChatMarkVisibleOrderedReceiptG57B": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "messageId",
+          "readConfirmed",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readConfirmed": {
+            "type": "boolean",
+            "const": true
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },
@@ -7889,5 +8139,6 @@
   "x-qore-g55-server-issued-read-marker-runtime-wired": false,
   "x-qore-g56-driver-chat-runtime-wired": false,
   "x-qore-g56b-driver-inbox-runtime-wired": false,
-  "x-qore-g57-ordered-visible-runtime-wired": false
+  "x-qore-g57-ordered-visible-runtime-wired": false,
+  "x-qore-g57b-driver-ordered-visible-runtime-wired": false
 }
