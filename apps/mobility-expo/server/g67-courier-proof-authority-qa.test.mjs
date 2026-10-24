@@ -29,7 +29,7 @@ test('G67 provides server-attested reference exclusively to current courier',asy
  const f=fixture();
  const r=await f.authority.obtainVerifiedProof({
   accessToken:bearer,deliveryId:delivery,actorId:driver});
- assert.deepEqual(r,{deliveryId,actorId:driver,proofRef:proof,verifiedByServer:true});
+ assert.deepEqual(r,{deliveryId:delivery,actorId:driver,proofRef:proof,verifiedByServer:true});
  assert.deepEqual(f.calls,[{actorId:driver,deliveryId,sessionId:session,
   tokenIatMs:now-1000}]);
  assert(!JSON.stringify(r).includes(bearer));
