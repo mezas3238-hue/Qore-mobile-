@@ -115,7 +115,13 @@ export function createRiderPollingCoordinator({
    if(seq===version)busy=false;
   }
  }
+ function stopIfMatching(tripId,subject){
+  // The active subscription may exist before a valid server status arrives,
+  // when store.current().tripId is still null. Never stop another trip.
+  if(!active||active.tripId!==tripId||active.subject!==subject)return false;
+  reset();return true;
+ }
  return Object.freeze({
-  begin,tick,stop:reset,connectionLost,snapshot
+  begin,tick,stop:reset,stopIfMatching,connectionLost,snapshot
  });
 }
