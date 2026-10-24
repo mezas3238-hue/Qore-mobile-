@@ -12,6 +12,7 @@ import {createCommerceSubstitutionDraft} from '../src/domain/commerce-substituti
 import type {SubstitutionChoice} from '../src/domain/commerce-substitution-draft.mjs';
 import {createCommerceUiReadFence} from '../src/domain/commerce-ui-read-fence.mjs';
 import {guardCommerceUiAction} from '../src/domain/commerce-ui-action-guard.mjs';
+import {guardCommerceBranchSelection} from '../src/domain/commerce-branch-selection-guard.mjs';
 import {isCommercePageFresh} from '../src/domain/commerce-ttl-refresh.mjs';
 import {useCommerceExpiryClock} from '../src/useCommerceExpiryClock';
 export default function Commerce(){
@@ -413,7 +414,7 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
   {directory.error&&<Text accessibilityRole="alert" style={styles.text}>
    La página no pudo validarse; no se presentan resultados antiguos.
   </Text>}
-  {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
+  {message!==''&&<Text accessibilityLiveRegion="polite" style={styles.text}>{message}</Text>}
   {!directory.loading&&directory.pageNumber>0&&sameQuery&&!directoryFresh&&
    <Text accessibilityRole="alert" style={styles.text}>
     Esta lista de sucursales caducó. Actualizá el municipio para volver a consultarla.
@@ -430,17 +431,22 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
     <Text style={styles.text}>{item.merchantKind} · {item.municipality}</Text>
     <Text style={styles.small}>Solo descubrimiento. Esta sucursal no está autorizada a recibir pedidos desde esta pantalla.</Text>
     <Action label={'Elegir sucursal '+item.branchTag.replaceAll('_',' ')}
+     hint="La selección solo prepara una consulta posterior del catálogo. No confirma pedidos ni disponibilidad."
      secondary disabled={!directoryFresh||directory.loading||readFence.isBusy()}
      onPress={()=>{
-      // El control de servidor G44 valida cada GET; esta barrera local
-      // rechaza toques en una fila caducada incluso antes del re-render.
-      if(!isCommercePageFresh(directory.expiresAt,Date.now())){
-       setMessage('La lista caducó. Consultá de nuevo las sucursales.');
+      // Comparar el render anterior con el estado REAL de Cliente al tocar.
+      // Nunca elegir desde otra sesión, municipio, rubro o página vencida.
+      const validated=guardCommerceBranchSelection(view,client.snapshot(),{
+       branchId:item.branchId,vertical:selectedVertical,
+       municipality,serviceKind:service,now:Date.now()
+      });
+      if(!validated.ok){
+       setMessage('La lista o la sesión cambió. Consultá nuevamente las sucursales.');
        return;
       }
-      onSelect(item.branchId);
-      setMessage('Sucursal elegida. Consultá el catálogo para obtener precios y stock verificados.');
-     }}/> 
+      onSelect(validated.branchId);
+      setMessage('Sucursal elegida para consultar su catálogo. No hay pedido ni repartidor confirmado.');
+     }}/>
    </View>)}
    <Action label="Sucursales anteriores" secondary
     disabled={!directoryFresh||!directory.hasPrevious||directory.loading||readFence.isBusy()}
