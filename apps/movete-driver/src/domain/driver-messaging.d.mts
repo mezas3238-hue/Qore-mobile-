@@ -64,6 +64,7 @@ export type DriverMessagingController=Readonly<{
  loadMoreInbox:()=>Promise<DriverMessagingSnapshot>;
  open:(conversationId:string)=>Promise<DriverMessagingSnapshot>;
  loadOlder:()=>Promise<DriverMessagingSnapshot>;
+ refreshConversation:()=>Promise<DriverMessagingSnapshot>;
  backToInbox:()=>DriverMessagingSnapshot;
  sendMessage:(body:string)=>Promise<DriverMessagingSnapshot>;
  reconcilePending:()=>Promise<DriverMessagingSnapshot>;
