@@ -18,6 +18,7 @@ import {readPrivateDriverTripStatus,transitionPrivateDriverTrip}
  from './driver-trip-lifecycle-http.mjs';
 import {readPrivateCourierCustody,transitionPrivateCourierCustody}
  from './driver-custody-http.mjs';
+import {readDriverKycExpiry} from './driver-kyc-expiry.mjs';
 import {submitPrivateDriverEvidence}
  from './driver-document-upload.mjs';
 import {resolveDriverStatusOrigin}
@@ -29,9 +30,11 @@ export function createDriverStagingRuntime({
  verifyExclusiveDriverRole,request,
  makeRequestKey,verifyStopped,
  captureEvidence=null,uploadPrivateObject=null,
+ enableKycExpiryStatus=false,
  allowedByOwner=false,liveEnabled=false,now=Date.now
 }={}){
  if(allowedByOwner!==true||liveEnabled!==false||
+   typeof enableKycExpiryStatus!=='boolean'||
    typeof request!=='function'||typeof now!=='function')
   throw Error('G62 requires a separately approved STAGING composition');
  const origin=resolveDriverStatusOrigin({
@@ -48,7 +51,8 @@ export function createDriverStagingRuntime({
  const readOnlyPaths=new Set([
   '/v1/staging/driver/inbox',
   '/v1/staging/driver/documents',
-  '/v1/staging/driver/license-readiness'
+  '/v1/staging/driver/license-readiness',
+  '/v1/staging/driver/kyc/validity'
  ]);
  const workspaceRequest=(url,options={})=>{
   let parsed;
@@ -68,6 +72,12 @@ export function createDriverStagingRuntime({
   readDocuments:params=>readDriverDocumentStatuses({...params,...scope}),
   readLicense:params=>readDriverLicenseReadiness({...params,...scope})
  });
+ const kycValidityAdapter=enableKycExpiryStatus?Object.freeze({
+  readStatus:({accessToken})=>readDriverKycExpiry({
+   apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+   accessToken,request:workspaceRequest,now
+  })
+ }):null;
  const offerActions=Object.freeze({
   makeRequestKey:chatAdapters.makeRequestKey,
   now,
@@ -123,7 +133,7 @@ export function createDriverStagingRuntime({
   })
  });
  return Object.freeze({
-  documentUploads,
+  documentUploads,kycValidityAdapter,
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
   offerActions,tripActions,custodyActions,

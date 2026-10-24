@@ -3,6 +3,7 @@ import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
 import {DriverTripProvider} from './DriverTripProvider';
+import {DriverKycExpiryProvider} from './DriverKycExpiryProvider';
 import {DriverDocumentUploadProvider} from './DriverDocumentUploadProvider';
 import {DriverCustodyProvider} from './DriverCustodyProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
@@ -29,7 +30,10 @@ export function DriverApplicationProviders({
   readInbox={runtime?.workspaceReaders.readInbox}
   readDocuments={runtime?.workspaceReaders.readDocuments}
   readLicense={runtime?.workspaceReaders.readLicense}>
-  <DriverDocumentUploadProvider
+  <DriverKycExpiryProvider
+   authAdapter={runtime?.authAdapter??null}
+   adapter={runtime?.kycValidityAdapter??null}>
+ <DriverDocumentUploadProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.documentUploads??null}>
  <DriverOfferActionsProvider
@@ -50,5 +54,6 @@ export function DriverApplicationProviders({
   </DriverTripProvider>
   </DriverOfferActionsProvider>
  </DriverDocumentUploadProvider>
+ </DriverKycExpiryProvider>
  </DriverWorkspaceProvider>;
 }

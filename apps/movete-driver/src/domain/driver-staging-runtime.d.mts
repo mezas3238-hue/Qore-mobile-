@@ -9,6 +9,8 @@ import type {DriverOfferActionsAdapters}
 import type {DriverTripAdapters} from './driver-trip-lifecycle.mjs';
 import type {DriverDocumentUploadAdapters}
  from './driver-document-upload.mjs';
+import type {DriverKycExpirySnapshot}
+ from './driver-kyc-expiry.mjs';
 import type {DriverCustodyAdapters} from './driver-custody-controller.mjs';
 export declare const DRIVER_STAGING_RUNTIME_LIVE_ENABLED:false;
 export type DriverStagingRuntimeOptions=Readonly<{
@@ -27,6 +29,7 @@ export type DriverStagingRuntimeOptions=Readonly<{
  }>;
  allowedByOwner:true;
  liveEnabled?:false;
+ enableKycExpiryStatus?:boolean;
  now?:()=>number;
 }>;
 export type DriverStagingRuntime=Readonly<{
@@ -38,6 +41,7 @@ export type DriverStagingRuntime=Readonly<{
  offerActions:DriverOfferActionsAdapters;
  tripActions:DriverTripAdapters;
  custodyActions:DriverCustodyAdapters;
+ kycValidityAdapter:Readonly<{readStatus:(x:{accessToken:string})=>Promise<DriverKycExpirySnapshot>}>|null;
  documentUploads:DriverDocumentUploadAdapters|null;
  workspaceReaders:Readonly<{
   readInbox:NonNullable<DriverWorkspaceControllerOptions['readInbox']>;

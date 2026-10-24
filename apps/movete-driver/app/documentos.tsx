@@ -2,6 +2,7 @@ import React,{useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {validateDriverDraft} from '../src/domain/capabilities.mjs';
+import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverDocumentUpload} from '../src/DriverDocumentUploadProvider';
 import type {DriverKycUploadKind} from '../src/domain/driver-document-upload.mjs';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
@@ -12,6 +13,7 @@ export default function DriverDocuments(){
  const [result,setResult]=useState('');
  const {state,refresh}=useDriverWorkspace();
  const upload=useDriverDocumentUpload();
+ const kyc=useDriverKycExpiry();
  const [consent,setConsent]=useState(false);
  const kindLabels:Record<string,string>={
   licencia:'Licencia de conducir',identidad_frente:'Identidad — frente',
@@ -46,6 +48,22 @@ export default function DriverDocuments(){
     setResult(checked.ok?'Borrador válido. No se enviaron documentos ni se aprobó el vehículo.':checked.reason);
    }}/>
    {result!==''&&<Text accessibilityRole="alert" style={[styles.text,{color:palette.teal}]}>{result}</Text>}
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>Vencimientos y estado de la cuenta</Text>
+   <View accessibilityRole="alert" style={{
+    borderRadius:12,padding:14,
+    backgroundColor:kyc.snapshot?.state==='READY_QA'?'#E2F2EF':'#FFF0D4'
+   }}>
+    <Text style={[styles.text,{fontWeight:'800',
+     color:kyc.snapshot?.state==='READY_QA'?palette.teal:palette.amber}]}>
+     {kyc.notice.text}
+    </Text>
+   </View>
+   <Text style={styles.small}>Esta alerta se actualiza al entrar, al volver a la aplicación y cada minuto mientras está abierta. La verificación de documentos y la habilitación para servicios son decisiones del servidor.</Text>
+   <Action label="Comprobar vencimientos ahora" secondary
+    disabled={kyc.phase==='not-configured'||kyc.phase==='checking'}
+    onPress={()=>{void kyc.refresh();}}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mi documentación privada</Text>
