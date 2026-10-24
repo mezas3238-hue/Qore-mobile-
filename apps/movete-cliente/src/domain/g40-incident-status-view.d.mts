@@ -1,7 +1,7 @@
 export type G40IncidentState='open'|'triaged'|'investigating'|'resolved'|'dismissed';
 export interface G40Receipt {
  readonly incidentId:string;readonly receiptId:string;
- readonly state:G40IncidentState;readonly revision:number;
+ readonly state:string;readonly revision:number;
  readonly createdAt:string;readonly observedAt:string;
  readonly receiptStatus:'RECEIVED_IN_QA_DATABASE_ONLY';
 }
