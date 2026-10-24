@@ -357,3 +357,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_POSTGRES_CI_ONLY.sql
       - name: G53 assert stored ACK, idempotent revisions, client body contract, assignment and revocation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G53 two-session PostgreSQL persisted ACK and revocation race
+        run: python3 apps/mobility-expo/server/g53-passenger-chat-send-concurrency-ci.py
