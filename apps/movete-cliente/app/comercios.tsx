@@ -35,7 +35,14 @@ function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnaps
      style={{width:'47%',minWidth:130}}>
      <Action label={option.label} secondary={selectedVertical!==option.code}
       selected={selectedVertical===option.code}
-      onPress={()=>{setSelectedVertical(option.code);setPreferredBranch(null);}}/>
+      onPress={()=>{
+       if(option.code!==selectedVertical){
+        // No reutilizar precios ni carrito de un rubro ajeno mientras A
+        // no certifique el tipo de comercio en el catálogo.
+        client.clearCommerce();client.clearCommercePage();
+        setSelectedVertical(option.code);setPreferredBranch(null);
+       }
+      }}/>
     </View>)}
    </View>
    <Text style={styles.text}>{selected?.description}</Text>
