@@ -75,8 +75,59 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    clear();return fail(code);
   }
   state.error=code;
-  state.phase=['NETWORK_OR_TIMEOUT','SERVICE_UNAVAILABLE','RATE_LIMITED'].includes(code)?'retryable':'failed';
+  // R57: a booking POST may have COMMITTED before timeout, 409 or a
+  // malformed ACK. Never issue another POST, even with the same key,
+  // until the independently certified READ reconciles its outcome.
+  state.phase=gateway?.bookingReconciliationRequired===true
+   &&['rideRequest','deliveryRequest'].includes(operation)
+   ?'failed'
+   :['NETWORK_OR_TIMEOUT','SERVICE_UNAVAILABLE','RATE_LIMITED'].includes(code)
+    ?'retryable':'failed';
   return fail(code);
  }
- return Object.freeze({prepare,submit:()=>run(false),retry:()=>run(true),clear,publicState});
+ async function reconcileBooking(){
+  if(gateway?.bookingReconciliationRequired!==true
+   ||typeof gateway.reconcile!=='function')
+   return fail('BOOKING_RECONCILIATION_NOT_CERTIFIED');
+  if(state.phase!=='failed'
+   ||!['rideRequest','deliveryRequest'].includes(state.operation))
+   return fail('NO_BOOKING_TO_RECONCILE');
+  if(!getSession)return fail('AUTH_UNAVAILABLE');
+  const started=++generation;
+  const expectedSubject=state.subject;
+  const expectedSessionRevision=state.sessionRevision;
+  const operation=state.operation,requestKey=state.requestKey;
+  state.phase='in_flight';
+  let actor;
+  try{actor=await getSession();}catch{actor=null;}
+  if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+  if(!actor||actor.role!=='passenger'||actor.subject!==expectedSubject
+   ||actor.sessionRevision!==expectedSessionRevision){
+   clear();return fail('SESSION_CHANGED');
+  }
+  let reply;
+  try{reply=await gateway.reconcile(operation,{
+   requestKey,expectedSubject,expectedSessionRevision
+  });}catch{reply=fail('BOOKING_RECONCILIATION_UNKNOWN');}
+  if(started!==generation||state.subject!==expectedSubject)
+   return fail('STALE_RESPONSE_IGNORED');
+  let after;
+  try{after=await getSession();}catch{after=null;}
+  if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+  if(!after||after.role!=='passenger'||after.subject!==expectedSubject
+   ||after.sessionRevision!==expectedSessionRevision){
+   clear();return fail('SESSION_CHANGED');
+  }
+  if(reply?.ok===true&&reply.recoveredWithoutPost===true
+   &&reply.qaOnly===true&&reply.bookingConfirmedForProduction===false){
+   state.phase='acknowledged';state.error=null;
+   return Object.freeze({ok:true,requestKey,status:200,
+    qaOnly:true,productionEnabled:false});
+  }
+  state.phase='failed';
+  state.error=reply?.code??'BOOKING_RECONCILIATION_UNKNOWN';
+  return fail(state.error);
+ }
+ return Object.freeze({prepare,submit:()=>run(false),retry:()=>run(true),
+  reconcileBooking,clear,publicState});
 }
