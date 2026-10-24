@@ -78,7 +78,7 @@ test('R66 transient HTTP failure erases evidence but retains server monotonic fl
  assert.equal((await f.read()).ok,true);
  assert.equal((await f.read()).code,'SENDER_CUSTODY_UNVERIFIED');
  assert.equal(f.flow.snapshot().state,null);
- assert.equal((await f.read()).code,'SENDER_CUSTODY_STATE_CONFLICT');
+ assert.equal((await f.read()).code,'SENDER_CUSTODY_STALE_REVISION');
  assert.equal(f.flow.snapshot().proofVerified,false);
  assert.equal(JSON.stringify(f.flow.snapshot()).includes('098111111'),false);
 });
