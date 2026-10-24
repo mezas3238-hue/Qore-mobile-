@@ -59,12 +59,12 @@ export function createG58BLocalAuthChainQa({
  const budget=createG58CLocalChatRateGateQa({...QA,now});
  const guardedRequest=scope=>
   allowRequest(scope)===true&&budget.allowRequest(scope)===true;
- const issuer=createG58EAuditedQaTicketIssuer({
+ const scopedIssuer=createG58EAuditedQaTicketIssuer({
   ...QA,verifySessionNotRevoked:auth.verifySessionNotRevoked,
   resolveExclusiveRole,issueSyntheticTicket,now
  });
  const common={...QA,...auth,resolveExclusiveRole,
-  allowRequest:guardedRequest,mintOwnerTicket:issuer.mintOwnerTicket,
+  allowRequest:guardedRequest,mintOwnerTicket:scopedIssuer.mintOwnerTicket,
   executeScopedTicket:sql.executeScopedTicket,cursorSecret,now};
  const inbox=createG56BDriverPrivateInboxQa(common);
  const driverHistory=createG57BDriverHistoryWithOrderedMarkersQa(common);
