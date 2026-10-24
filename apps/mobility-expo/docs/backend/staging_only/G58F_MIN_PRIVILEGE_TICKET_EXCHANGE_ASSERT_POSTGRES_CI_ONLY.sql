@@ -34,7 +34,7 @@ BEGIN
  <>'mobility_g58f_definer_ci'
  THEN RAISE EXCEPTION 'G58F table owner is too broad'; END IF;
  FOR role_name IN SELECT unnest(ARRAY[
-  'PUBLIC','anon','authenticated','service_role',
+  'anon','authenticated','service_role',
   'mobility_g48_gateway_ci','mobility_g49_chat_gateway_ci',
   'mobility_g56_driver_gateway_ci'])
  LOOP
