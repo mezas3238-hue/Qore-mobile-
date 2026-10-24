@@ -19,7 +19,7 @@ const actions:Record<string,string>={
 export default function DriverDelivery(){
  const {deliveryId:raw}=useLocalSearchParams<{deliveryId?:string}>();
  const deliveryId=typeof raw==='string'?raw:null;
- const {state,enabled,open,refresh,advance}=useDriverCustody();
+ const {state,enabled,hasProofSource,open,refresh,advance}=useDriverCustody();
  useEffect(()=>{
   if(enabled&&deliveryId&&state.phase==='ready')void open(deliveryId);
  },[enabled,deliveryId,state.phase,open]);
@@ -28,7 +28,7 @@ export default function DriverDelivery(){
   state.nextEvent!==null&&!state.uncertain;
  // G66 default composition does not have a verified proof registry. The
  // controller blocks deliver even if a UI wrongly invokes advance().
- const proofRequired=state.nextEvent==='deliver'&&!state.proofVerified;
+ const proofRequired=state.nextEvent==='deliver'&&!hasProofSource;
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Custodia de mi entrega</Text>
