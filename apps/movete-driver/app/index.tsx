@@ -49,6 +49,11 @@ export default function DriverHome(){
    <Action label="Consultar mis ofertas" secondary onPress={()=>router.push('/ofertas')}/>
   </Panel>
   <Panel>
+   <Text style={styles.heading}>Mensajes con clientes</Text>
+   <Text style={styles.text}>La mensajería privada requiere asignación vigente y backend autenticado; permanece bloqueada.</Text>
+   <Action label="Ver estado de mensajería" secondary onPress={()=>router.push('/mensajes')}/>
+  </Panel>
+  <Panel>
    <Text style={styles.heading}>Mis ingresos</Text>
    <Action label="Ver ganancias y liquidaciones" secondary onPress={()=>router.push('/ganancias')}/>
   </Panel>
