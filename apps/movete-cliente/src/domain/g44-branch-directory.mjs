@@ -29,11 +29,15 @@ export function createG44BranchDirectory({
   &&typeof getActor==='function';
  const clear=()=>{revision++;loading=false;state=empty();};
  function snapshot(){
-  // Tiempo de pantalla local; G44 no promete frescura/consistencia global.
-  const fresh=!loading&&state.receivedAt!==null
-   &&now()>=state.receivedAt&&now()-state.receivedAt<30000;
+  // Fecha estrictamente local de caducidad G44; jamás prueba disponibilidad
+  // de un repartidor ni renueva sesión o permiso del servidor.
+  const current=now();
+  const expiry=state.receivedAt===null?null:state.receivedAt+30000;
+  const fresh=!loading&&Number.isSafeInteger(current)
+   &&Number.isSafeInteger(expiry)&&current>=state.receivedAt&&current<expiry;
   return Object.freeze({
    readReady:configured(),loading,error:state.error,
+   expiresAt:fresh?expiry:null,
    municipality:fresh?state.municipality:null,
    serviceKind:fresh?state.serviceKind:null,
    pageNumber:fresh?state.pageNumber:0,
