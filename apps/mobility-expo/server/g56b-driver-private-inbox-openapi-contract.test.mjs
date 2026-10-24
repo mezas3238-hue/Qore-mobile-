@@ -46,7 +46,7 @@ test('G56B closed schemas carry only Driver-scoped metadata; no PII or SQL seq',
 });
 test('G56B PG16 NOLOGIN Role SQL privilege, triggers and 205-record keyset test are gated',()=>{
  assert.match(sql,/qore_disposable_chain/);
- assert.match(sql,/mobility_stage_g56_driver_gateway_ci/);
+ assert.match(sql,/mobility_g56_driver_gateway_ci/);
  assert.match(sql,/mobility_stage_g42_lock_session/);
  assert.match(sql,/FOR UPDATE/);
  assert.match(sql,/FOR SHARE/);
