@@ -6,6 +6,15 @@ import {readBoundedResponseText} from './bounded-http-response.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATES=new Set(['searching','assigned','arriving','in_progress','completed','cancelled']);
 const EVENT_STATES=new Set(['searching','accepted','at_pickup','in_progress','completed','cancelled']);
+/**
+ * R61. G11 Passenger event vocabulary and G65 Driver lifecycle must agree.
+ * Driver "accepted" is Passenger "assigned"; arrival is "at_pickup".
+ * We do not derive real GPS/ETA or assignment from a Driver-only response.
+ */
+const EVENT_FOR_PASSENGER_STATE=Object.freeze({
+ searching:'searching',assigned:'accepted',arriving:'at_pickup',
+ in_progress:'in_progress',completed:'completed',cancelled:'cancelled'
+});
 const fail=(code,status=0)=>Object.freeze({ok:false,code,status});
 const uuid=x=>typeof x==='string'&&UUID.test(x);
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -59,7 +68,9 @@ function validStatus(x,tripId,ownerId,clock){
   typeof x.assignmentPersisted!=='boolean'||typeof x.gpsConsent!=='boolean'||
   typeof x.etaVerified!=='boolean'||typeof x.locationVisible!=='boolean'||
   x.mode!=='STAGING_DEMO_ONLY'||x.commercialRidesEnabled!==false||
-  x.deliveryConfirmed!==false||!validEvent(x.event,tripId,ownerId))return false;
+  x.deliveryConfirmed!==false||!validEvent(x.event,tripId,ownerId)
+  ||x.event.serverRevision!==x.revision
+  ||x.event.status!==EVENT_FOR_PASSENGER_STATE[x.state])return false;
  if(x.driver!==null&&(!exact(x.driver,['verified','displayName'])||
   x.driver.verified!==true||!text(x.driver.displayName,2,70)))return false;
  if(x.vehicle!==null&&(!exact(x.vehicle,['kind','plate'])||
@@ -73,6 +84,11 @@ function validStatus(x,tripId,ownerId,clock){
  if(x.etaMinutes!==null&&!int(x.etaMinutes,0,240))return false;
  // No aceptar campos sensibles si los flags del servidor contradicen el DTO.
  const assigned=['assigned','arriving','in_progress'].includes(x.state);
+ // Historical event objects must not leak a Driver/GPS to an unassigned,
+ // terminal or consent-denied Passenger screen.
+ if((!assigned||!x.assignmentPersisted)&&
+    (x.event.acceptedDriver!==null||x.event.tracking!==null))return false;
+ if(!x.locationVisible&&x.event.tracking!==null)return false;
  if(!assigned||!x.assignmentPersisted){
   if(x.driver!==null||x.vehicle!==null||x.location!==null||
    x.etaMinutes!==null||x.locationVisible===true)return false;
