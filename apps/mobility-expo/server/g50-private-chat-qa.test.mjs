@@ -74,9 +74,13 @@ test('G50 refuses forged fields, body overflow and SQL request key abuse',async(
  const f=fx();
  for(const req of [
   {...send,body:''},{...send,body:' '.repeat(10)},
-  {...send,body:'x'.repeat(2001)},{...send,requestKey:'bad'},
+  {...send,body:'hola https://example.com'},
+  {...send,body:'contacto ejemplo@correo.com'},
+  {...send,body:'tel 0981 123 456'},
+  {...send,body:'abc\\u202Edef'},
+  {...send,body:'x'.repeat(501)},{...send,requestKey:'bad'},
   {...send,actorId:passenger},{...read,actorId:driver},
-  {...open,serviceKind:'MERCHANT_ORDER'},{...open,serviceId:'wrong'}
+  {...open,serviceKind:'SHOPPING'},{...open,serviceId:'wrong'}
  ])assert.equal((await f.chat.handle(req)).status,400);
  assert.equal(f.calls.length,0);
 });
