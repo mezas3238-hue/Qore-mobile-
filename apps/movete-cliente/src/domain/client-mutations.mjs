@@ -62,7 +62,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    clear();return fail('SESSION_CHANGED');
   }
   let reply;
-  try{reply=await gateway.send(operation,{body,expectedSessionRevision});}
+  try{reply=await gateway.send(operation,{body,expectedSessionRevision,expectedSubject});}
   catch{reply=fail('NETWORK_OR_TIMEOUT');}
   if(started!==generation||state.subject!==session.subject)return fail('STALE_RESPONSE_IGNORED');
   if(reply&&reply.ok===true){
