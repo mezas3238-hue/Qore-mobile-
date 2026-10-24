@@ -1,11 +1,11 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {FlatList,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
-import {useLocalSearchParams} from 'expo-router';
+import {router,useLocalSearchParams} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
-import {passengerChatPrivateViewKey} from '../src/domain/passenger-chat-navigation.mjs';
+import {passengerChatPrivateViewKey,passengerPendingRecoveryRoute} from '../src/domain/passenger-chat-navigation.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Service='RIDE'|'DELIVERY'|'MERCHANT_ORDER';
@@ -51,6 +51,13 @@ function PrivateChat({client,view,serviceId,serviceKind,
  const matching=!invalidThread&&chat.serviceId===serviceId
   &&chat.serviceKind===serviceKind
   &&(conversationId===null||chat.conversationId===conversationId);
+ const pendingRecovery=passengerPendingRecoveryRoute({
+  authenticated:view.authenticated,contractReady:chat.contractReady,
+  pendingSend:chat.pendingSend,pendingServiceId:chat.serviceId,
+  pendingServiceKind:chat.serviceKind,pendingConversationId:chat.conversationId,
+  currentServiceId:serviceId,currentServiceKind:serviceKind,
+  currentConversationId:conversationId
+ });
  const open=async(older=false)=>{
   if(!serviceId||!serviceKind||invalidThread||busy.current
    ||chat.loading||chat.sending)return;
@@ -115,6 +122,17 @@ function PrivateChat({client,view,serviceId,serviceKind,
      <Text style={styles.text}>Abrí esta pantalla desde un viaje, envío o pedido con repartidor efectivamente asignado. No se pueden buscar conductores por nombre o número.</Text>}
     {view.authenticated&&!invalidThread&&serviceId&&serviceKind&&!chat.contractReady&&
      <Text accessibilityRole="alert" style={styles.text}>Chat en preparación. Faltan el servicio de mensajería, la autorización de asignaciones y la recepción en Driver certificados por el backend.</Text>}
+    {pendingRecovery&&<View>
+     <Text accessibilityRole="alert" style={styles.text}>
+      Hay un mensaje anterior sin confirmación. Volvé a esa conversación para reconciliar la misma solicitud antes de abrir otro chat.
+     </Text>
+     <Action secondary label="Revisar el mensaje pendiente" onPress={()=>
+      router.push({pathname:'/mensajes',params:{
+       serviceId:pendingRecovery.serviceId,
+       serviceKind:pendingRecovery.serviceKind,
+       conversationId:pendingRecovery.conversationId
+      }})}/>
+    </View>}
     {view.authenticated&&!invalidThread&&serviceId&&serviceKind&&chat.contractReady&&<>
      <Text style={styles.text}>Servicio: {serviceKind==='RIDE'?'Viaje en automóvil':
        serviceKind==='DELIVERY'?'Envío particular':'Entrega de comercio'}</Text>
