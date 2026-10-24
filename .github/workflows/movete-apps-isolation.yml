@@ -8,12 +8,18 @@ on:
       - 'apps/movete-driver/**'
       - 'apps/movete-cliente/**'
       - 'scripts/check-mobile-boundaries.mjs'
+      - 'scripts/check-movete-launch-gates.mjs'
+      - 'scripts/check-movete-launch-gates.test.mjs'
+      - 'docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json'
       - '.github/workflows/movete-apps-isolation.yml'
   pull_request:
     paths:
       - 'apps/movete-driver/**'
       - 'apps/movete-cliente/**'
       - 'scripts/check-mobile-boundaries.mjs'
+      - 'scripts/check-movete-launch-gates.mjs'
+      - 'scripts/check-movete-launch-gates.test.mjs'
+      - 'docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json'
       - '.github/workflows/movete-apps-isolation.yml'
 permissions:
   contents: read
@@ -27,6 +33,10 @@ jobs:
           node-version: '22'
       - name: Enforce separate routes, bundles, role actions and no cross-imports
         run: node scripts/check-mobile-boundaries.mjs
+      - name: Verify production NO-GO is explicit and cannot be disguised by QA success
+        run: |
+          node --test scripts/check-movete-launch-gates.test.mjs
+          node scripts/check-movete-launch-gates.mjs --json
   expo-check:
     name: ${{ matrix.app }} typecheck and export
     runs-on: ubuntu-latest
