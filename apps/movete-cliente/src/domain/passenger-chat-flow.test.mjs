@@ -771,3 +771,46 @@ test('GET antiguo no hereda autorización tras caducar el cursor durante espera'
  assert.equal(flow.snapshot().hasOlder,false);
  assert.equal(reads,2);
 });
+
+
+// R21 — el encabezado compacto conserva autorización sin almacenar filas privadas.
+test('header compacto R21 mantiene GET paginado y POST durable sin exponer la identidad del Driver',async()=>{
+ let reads=0;
+ const flow=make(flags({readMessages:async()=>({ok:true,data:reads++===0
+  ?page('RIDE','u'.repeat(44)):{...page('RIDE'),
+   messages:[row(2)]}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).ok,true);
+ assert.equal(flow.snapshot().messages.length,2);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).ok,true);
+ assert.equal(flow.snapshot().messages[0].messageId,messageId);
+ assert.equal(flow.snapshot().hasOlder,false);
+ assert.equal(flow.snapshot().phoneNumbersRequired,false);
+});
+test('header compacto R21 permite reconciliar envío incierto solo tras GET autorizado',async()=>{
+ let clock=now,reads=0,writes=0;
+ const keys=[];
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async()=>{
+    reads++;return {ok:true,data:{...page(),
+     generatedAt:clock-1000,expiresAt:clock+60000}};
+   },
+   sendMessage:async args=>{
+    writes++;keys.push(args.requestKey);
+    return writes===1?{ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'}:
+     {ok:true,data:{...ack(),createdAt:clock-100}};
+   }
+  })});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ clock+=60001;
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,true);
+ assert.equal((await flow.retryPending()).ok,true);
+ assert.equal(reads,2);
+ assert.deepEqual(keys,[key,key]);
+ assert.equal(flow.snapshot().messages[0].messageId,messageId);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
