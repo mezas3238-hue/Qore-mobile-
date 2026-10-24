@@ -3,7 +3,7 @@
  * Fail-closed on account changes, stale/ambiguous response and network loss.
  */
 export const DRIVER_CHAT_LIVE_ENABLED=false;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN=/^[A-Za-z0-9._~-]{20,7900}$/;
 const uuid=x=>typeof x==='string'&&UUID.test(x);
 const safe=n=>Number.isSafeInteger(n)&&n>=0;
