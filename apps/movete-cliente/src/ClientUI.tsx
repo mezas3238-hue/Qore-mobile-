@@ -23,9 +23,9 @@ export function Panel({children}:{children:React.ReactNode}){
  return <View style={styles.card}>{children}</View>;
 }
 export function Action({label,onPress,secondary=false,disabled=false,selected=false,
- busy=false,hint}:{
+ busy=false,hint,large=false}:{
  label:string;onPress:()=>void;secondary?:boolean;disabled?:boolean;
- selected?:boolean;busy?:boolean;hint?:string
+ selected?:boolean;busy?:boolean;hint?:string;large?:boolean
 }){
  const blocked=disabled||busy;
  const background=blocked?palette.disabled:secondary?palette.secondary:palette.primary;
@@ -33,10 +33,10 @@ export function Action({label,onPress,secondary=false,disabled=false,selected=fa
  return <Pressable accessibilityRole="button" accessibilityLabel={label}
   accessibilityHint={hint} accessibilityState={{disabled:blocked,selected,busy}}
   focusable disabled={blocked} onPress={onPress} hitSlop={4}
-  style={({pressed})=>({paddingHorizontal:15,paddingVertical:12,minHeight:ACTION_MIN_HEIGHT,
+  style={({pressed})=>({paddingHorizontal:15,paddingVertical:12,minHeight:large?68:ACTION_MIN_HEIGHT,
    justifyContent:'center',borderRadius:13,backgroundColor:background,
    borderWidth:selected?2:0,borderColor:selected?palette.ink:'transparent',
    opacity:pressed?0.82:1})}>
-  <Text style={{textAlign:'center',fontSize:16,lineHeight:22,fontWeight:'800',color}}>{label}</Text>
+  <Text style={{textAlign:'center',fontSize:large?20:16,lineHeight:large?27:22,fontWeight:'800',color}}>{label}</Text>
  </Pressable>;
 }
