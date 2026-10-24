@@ -1,11 +1,12 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {AccessibilityInfo,findNodeHandle,ScrollView,Text,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
-import {router} from 'expo-router';
+import {router,useFocusEffect} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import {createSecureCancellationKey} from '../src/domain/secure-cancel-key.mjs';
 import {guardTrackingCancellationUiAction} from '../src/domain/tracking-cancellation-ui-guard.mjs';
+import {createF1FocusedTrackingSync} from '../src/domain/f1-focused-tracking-sync.mjs';
 
 const LABEL:Record<string,string>={
  idle:'Sin viaje activo',searching:'Buscando automóvil',assigned:'Conductor asignado',
@@ -21,6 +22,17 @@ export default function ClientTracking(){
  const [message,setMessage]=useState('');
  const locked=useRef(false);
  const confirmHeading=useRef<React.ElementRef<typeof Text>>(null);
+ // F1: only the Passenger's verified QA booking may poll while this route is
+ // focused. No side effects on other screens or before a certified status GET.
+ const foreground=useMemo(()=>createF1FocusedTrackingSync({
+  readSnapshot:()=>client.snapshot(),
+  syncTracking:()=>client.syncTracking()
+ }),[client]);
+ useFocusEffect(useCallback(()=>{
+  foreground.start();
+  return ()=>foreground.stop();
+ },[foreground,view.privateViewRevision,view.tracking.tripId,
+  view.tracking.subscriptionActive,view.rideContinuation.tripId]));
  const canSync=view.authenticated&&state.subscriptionActive&&!state.syncing;
  const canCancel=view.authenticated&&state.subscriptionActive&&!state.syncing
   &&CANCELLABLE.has(state.state)&&view.cancellation.contractReady;
@@ -115,6 +127,9 @@ export default function ClientTracking(){
       </Text>}
      </View>}
     {state.lastError&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.small}>Sincronización: {state.lastError}. La ubicación caducada está oculta.</Text>}
+    {view.rideContinuation.canVerify&&view.rideContinuation.tripId===state.tripId
+     &&!['completed','cancelled','failed'].includes(state.state)&&
+     <Text style={styles.small}>El estado del viaje se consulta automáticamente cada 12 segundos mientras esta pantalla está abierta. Las ubicaciones y tiempos solo se muestran con datos vigentes del servidor.</Text>}
     <Action label={state.syncing?'Sincronizando…':'Actualizar desde el servidor'} disabled={!canSync}
      busy={state.syncing}
       onPress={()=>{void client.syncTracking();}}/>
