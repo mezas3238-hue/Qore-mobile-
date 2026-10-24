@@ -10,7 +10,8 @@
 - `history` firma cursor HMAC SHA-256 con secreto servidor de al menos 32 bytes, identidad y sesión, tipo/id de servicio, conversación, revisión y caducidad de 60 segundos. Oculta `beforeSeq` y `seq` brutos del DTO devuelto; la base los conserva internamente. Cada página admite 1–100 mensajes sin máximo histórico.
 - `send` requiere requestKey UUID y valida que el ACK SQL tenga exactamente `conversationId,serviceId,requestKey,messageId,senderRole,body,createdAt,revision,serverStored`. No se declara éxito hasta recibir `serverStored:true` de la operación SQL confirmada; un replay conserva su recibo histórico.
 - `server/g56-driver-scoped-chat-qa.test.mjs`: pruebas de JWT/rol/revocación, DTO estricto, mensaje inválido o con contacto/URL, cursor alterado/cruzado, revisión y ACK falsificados, y fallos de dependencias.
-- Workflow `.github/workflows/mobility-g4-postgres-disposable.yml`: instalar SQL G56 **después** de G55 y ejecutar aserciones PostgreSQL16 real desechable. El workflow Node detecta automáticamente los nuevos tests por `server/*.test.mjs`.
+- Workflow `.github/workflows/mobility-g4-postgres-disposable.yml`: instala SQL G56 **después** de G55, ejecuta aserciones PostgreSQL16 y el ensayo de dos conexiones. El workflow Node detecta automáticamente los nuevos tests por `server/*.test.mjs`.
+- OpenAPI `1.0.0-g56`: rutas Driver separadas para OPEN/HISTORY/SEND con `x-qore-runtime-wired:false`, BearerAuth, respuestas de error y esquemas estrictos. Test `server/g56-driver-scoped-chat-openapi-contract.test.mjs` impide introducir raw seq, actorId o un ACK con rol Passenger.
 
 ## 2. Contratos de llamada Node (NO HTTP montado)
 
@@ -35,7 +36,7 @@ El adaptador inyecta dos autoridades **que no son intercambiables**: `mintOwnerT
 - **Driver Inbox aún pendiente:** servicio a servicio, paginación, unreadCount, cambios de asignación, cursors y wrapper NOLOGIN. G51 es exclusivamente Passenger y NO debe reutilizarse para Driver.
 - **HTTP aún OFF:** rutas Driver, verificación real de JWT/JWKS, rate gates de proceso, ejecutor SQL transaccional no-owner, trazabilidad, TLS y secretos fuera de móviles.
 - **UI Driver aún OFF:** integrar pantalla `apps/movete-driver/app/mensajes.tsx` con interfaz Inbox/History/Composer cuando haya proveedor real autorizado; no simular mensajes ni activar botones que envíen a nada.
-- **Falta concurrencia G56:** dos conexiones compitiendo ticket de un uso, reasignación/revocación mientras abre/envía, paginación masiva. Implementar y ejecutar en PostgreSQL16.
+- **Concurrencia G56 implementada:** `server/g56-driver-scoped-chat-concurrency-ci.py` usa dos sesiones PostgreSQL reales, `SET LOCAL ROLE`, competencia por un mismo ticket, replay exacto, colisión de requestKey, Driver reasignado y revocación G42 bloqueada hasta commit. Es un ensayo CI desechable; aún falta estrés de miles de mensajes, paginación amplia y carreras del inbox.
 - **G57 pendiente:** leer solo mensajes realmente visibles y contiguos; G55 page marker **no** es prueba física. La UI Cliente pertenece a B.
 - **G58 pendiente:** composición HTTP local, Auth fixture con issuer/aud/JWKS fijados y gateway delegado, sin desplegar.
 - Documentar el resultado de **cuatro workflows en un mismo SHA** antes de usar palabra certificación. El código puede evolucionar mientras se ejecutan CI.
