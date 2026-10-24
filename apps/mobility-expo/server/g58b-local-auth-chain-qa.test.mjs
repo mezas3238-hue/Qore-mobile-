@@ -152,7 +152,7 @@ test('G58B signed JWT -> independent provider/G42/role -> minted QA ticket -> de
  try{
   assert.equal(address,'127.0.0.1');
   const inbox=await http(port,'/v1/staging/driver/chat/conversations',tokenDriver);
-  assert.equal(inbox.status,200,JSON.stringify(inbox.body));
+  assert.equal(inbox.status,200,JSON.stringify({body:inbox.body,steps:x.calls.map(v=>v[0]==='db'?v[1]:v[0])}));
   assert.equal(inbox.body.ownerId,driver);
   assert.deepEqual(inbox.body.items,[]);
   const dh=await http(port,'/v1/staging/driver/chat/services/RIDE/'+service+
