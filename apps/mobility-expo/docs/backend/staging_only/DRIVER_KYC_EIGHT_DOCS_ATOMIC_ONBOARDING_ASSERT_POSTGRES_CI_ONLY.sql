@@ -36,7 +36,7 @@ DECLARE
  k uuid:='71710000-0000-4717-8717-000000000103';
  iat bigint;
  output jsonb;
- kind text;
+ doc_kind text;
  kinds text[]:=ARRAY['licencia','identidad_frente','identidad_dorso',
   'cedula_verde','habilitacion','seguro','inspeccion'];
  bad boolean;
@@ -58,11 +58,11 @@ BEGIN
  plate_normalized,brand,model,manufacture_year,passenger_capacity)
  VALUES(v,d,'AUTO','economico','PY','ASUNCION','KYC7101',
  'QORE QA','KYC TEST',2024,4);
- FOREACH kind IN ARRAY kinds LOOP
+ FOREACH doc_kind IN ARRAY kinds LOOP
   INSERT INTO public.mobility_stage_kyc_verified_evidence_qa(
     driver_id,vehicle_id,kind,verified_by,authenticity_verified,
     issuer_verified,malware_scan_passed,valid_until,evidence_revision)
-  VALUES(d,v,kind,'QA_INDEPENDENT_ATTESTOR_NO_MEDIA',true,true,
+  VALUES(d,v,doc_kind,'QA_INDEPENDENT_ATTESTOR_NO_MEDIA',true,true,
     true,pg_catalog.clock_timestamp()+interval '2 days',1);
  END LOOP;
  -- Seven valid records are not enough, even if vehicle is linked.
