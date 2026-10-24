@@ -7,7 +7,7 @@
  * runs without authenticated QA booking/status gates. No background timers.
  */
 const TERMINAL=new Set(['completed','cancelled','failed']);
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail=code=>Object.freeze({ok:false,code});
 function scopeOf(snapshot){
  if(!snapshot||snapshot.authenticated!==true
