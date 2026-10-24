@@ -17,7 +17,7 @@ import {createG57BDriverHistoryWithOrderedMarkersQa,
 import {createG57OrderedHistoryQa,createG57MarkVisibleOrderedQa}
  from './g57-ordered-visible-qa.mjs';
 const QA=Object.freeze({environment:'isolated_staging',localQaOnly:true,liveEnabled:false});
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid=x=>typeof x==='string'&&UUID.test(x);
 export function createG58BLocalAuthChainQa({
  environment,localQaOnly,liveEnabled,
