@@ -325,46 +325,60 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(!actor()){clearPrivate();return fail('AUTH_REQUIRED');}
   return tracking.tick();
  }
- // F1: QA persisted booking -> authoritative Passenger GET. Never infer
- // assignment, commercial status, or fare from HTTP 201 alone.
+ // F1: both booking paths need the SAME authority chain:
+ // own persisted receipt -> fresh Passenger GET -> tracking. Neither the UI
+ // quote nor a generic HTTP 201 is enough. A still must certify the runtime.
+ function currentBookingProof(){
+  const user=actor(),privacy=session.privacyRevision();
+  if(!user||statusGateway?.isConfigured()!==true)return null;
+  const legacy=mutations.verifiedRide(),quoted=prequoteAuto.verifiedBooking();
+  const legacyReady=Boolean(legacy&&legacy.subject===user.subject
+   &&legacy.sessionRevision===privacy
+   &&bookingGateway?.isConfigured()===true);
+  const quotedReady=Boolean(quoted&&quoted.subject===user.subject
+   &&quoted.sessionRevision===privacy
+   &&prequoteAuto.isBookingConfigured()===true);
+  // A single Passenger session cannot ambiguously resume two booked trips.
+  if(legacyReady&&quotedReady&&legacy.tripId!==quoted.tripId)return null;
+  return quotedReady?quoted:legacyReady?legacy:null;
+ }
  function rideContinuation(){
-  const user=actor(),receipt=mutations.verifiedRide();
-  const bookingReady=Boolean(user&&receipt&&receipt.subject===user.subject
-   &&receipt.sessionRevision===session.privacyRevision()
-   &&bookingGateway?.isConfigured()===true
-   &&statusGateway?.isConfigured()===true);
+  const user=actor(),receipt=currentBookingProof();
   const recoveredReady=Boolean(user&&recoveredRide
    &&recoveredRide.subject===user.subject
    &&recoveredRide.privateViewRevision===session.privacyRevision()
    &&statusGateway?.isConfigured()===true
    &&tracking.snapshot().subscriptionActive
    &&tracking.snapshot().tripId===recoveredRide.tripId);
-  return Object.freeze({canVerify:bookingReady||recoveredReady,
-   tripId:bookingReady?receipt.tripId:recoveredReady?recoveredRide.tripId:null,
+  return Object.freeze({canVerify:Boolean(receipt)||recoveredReady,
+   tripId:receipt?.tripId??(recoveredReady?recoveredRide.tripId:null),
    qaOnly:true,productionEnabled:false});
  }
  async function continueVerifiedRide(){
-  const receipt=mutations.verifiedRide(),scope=rideContinuation(),user=actor();
-  if(!scope.canVerify||!receipt||!user)
+  const receipt=currentBookingProof(),scope=rideContinuation(),user=actor();
+  if(!scope.canVerify||!receipt||!user||scope.tripId!==receipt.tripId)
    return fail('RIDE_CONTINUATION_NOT_CERTIFIED');
   const privacy=session.privacyRevision(),key=receipt.requestKey;
   const started=startTracking(receipt.tripId);
   if(!started.ok)return started;
   notify();
   const check=await syncTracking();
-  const current=actor(),still=mutations.verifiedRide();
+  const current=actor(),still=currentBookingProof(),tracked=tracking.snapshot();
   if(!check.ok||!current||current.subject!==user.subject
    ||session.privacyRevision()!==privacy||!still
    ||still.requestKey!==key||still.tripId!==receipt.tripId
-   ||tracking.snapshot().tripId!==receipt.tripId){
-   // Never leave an unverified trip connected, even after HTTP 200.
+   ||still.serverRevision!==receipt.serverRevision
+   ||!tracked.subscriptionActive||tracked.tripId!==receipt.tripId
+   ||!Number.isSafeInteger(tracked.revision)
+   ||tracked.revision<receipt.serverRevision){
+   // Even a syntactically valid HTTP 200 cannot resurrect an unverified ride.
    tracking.stopIfMatching(receipt.tripId,user.subject);
    notify();
    return fail('RIDE_STATUS_NOT_VERIFIED');
   }
   notify();
   return Object.freeze({ok:true,tripId:receipt.tripId,
-   serverRevision:tracking.snapshot().revision,
+   serverRevision:tracked.revision,
    qaOnly:true,productionEnabled:false});
  }
  function prepareCancelRide({tripId,requestKey}={}){
