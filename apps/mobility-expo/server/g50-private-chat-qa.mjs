@@ -15,7 +15,7 @@ const SENT=['conversationId','messageId','seq','senderId','body','createdAt','se
 const PAGE=['conversationId','messages','nextAfter','hasMore','qaOnly'];
 const MSG=['messageId','seq','senderId','body','createdAt','serverStored'];
 const validMessage=x=>exact(x,MSG)&&uuid(x.messageId)&&uuid(x.senderId)&&safe(x.seq)&&x.seq>0&&
- typeof x.body==='string'&&x.body.length>=1&&x.body.length<=2000&&
+ typeof x.body==='string'&&x.body.length>=1&&x.body.length<=500&&
  typeof x.createdAt==='string'&&!Number.isNaN(Date.parse(x.createdAt))&&x.serverStored===true;
 function validReceipt(operation,x,request,actorId){
  if(operation==='OPEN')return exact(x,OPEN)&&uuid(x.conversationId)&&x.serviceKind===request.serviceKind&&
@@ -47,15 +47,18 @@ export function createG50PrivateChatQa({
   let args;
   if(operation==='OPEN'){
    if(!exact(request,['bearer','operation','serviceKind','serviceId'])||
-    !['RIDE','DELIVERY'].includes(request.serviceKind)||!uuid(request.serviceId))
+    !['RIDE','DELIVERY','MERCHANT_ORDER'].includes(request.serviceKind)||!uuid(request.serviceId))
     return response(400,'INVALID_OPEN');
    args={_kind:request.serviceKind,_service:request.serviceId};
   }else if(operation==='SEND'){
    if(!exact(request,['bearer','operation','conversationId','requestKey','body'])||
     !uuid(request.conversationId)||!uuid(request.requestKey)||
     typeof request.body!=='string'||request.body.trim()===''||
-    request.body.length>2000||request.body.length<1||
-    Buffer.byteLength(request.body,'utf8')>8000)
+    request.body.length>500||request.body.length<1||
+    Buffer.byteLength(request.body,'utf8')>2000||
+    /[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(request.body)||
+    /https?:\\/\\/|www\\.|[\\w.+%-]+@[\\w.-]+\\.[a-z]{2,}/iu.test(request.body)||
+    /(?:\\d[\\s().-]*){7,}/u.test(request.body))
     return response(400,'INVALID_MESSAGE');
    args={_conversation:request.conversationId,
     _request:request.requestKey,_body:request.body};
