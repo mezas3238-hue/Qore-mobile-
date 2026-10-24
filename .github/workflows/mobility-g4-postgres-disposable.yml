@@ -35,6 +35,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G46_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G47_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G48_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G49_*'
+      - 'apps/mobility-expo/server/g49-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G50_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G51_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G52_*'
@@ -359,3 +361,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G53_PASSENGER_CHAT_SEND_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G53 two-session PostgreSQL persisted ACK and revocation race
         run: python3 apps/mobility-expo/server/g53-passenger-chat-send-concurrency-ci.py
+
+      - name: G49 install NOLOGIN chat-only gateway with one-use tickets
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G49_SCOPED_CHAT_AUTH_BRIDGE_POSTGRES_CI_ONLY.sql
+      - name: G49 assert SQL privilege confinement, ticket scope, assignment revocation and role denial
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G49_SCOPED_CHAT_AUTH_BRIDGE_ASSERT_POSTGRES_CI_ONLY.sql
