@@ -5,6 +5,7 @@ import {router} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import {createSecureCancellationKey} from '../src/domain/secure-cancel-key.mjs';
+import {guardTrackingCancellationUiAction} from '../src/domain/tracking-cancellation-ui-guard.mjs';
 
 const LABEL:Record<string,string>={
  idle:'Sin viaje activo',searching:'Buscando automóvil',assigned:'Conductor asignado',
@@ -21,11 +22,13 @@ export default function ClientTracking(){
  const locked=useRef(false);
  const confirmHeading=useRef<React.ElementRef<typeof Text>>(null);
  const canSync=view.authenticated&&state.subscriptionActive&&!state.syncing;
- const canCancel=view.authenticated&&state.subscriptionActive
+ const canCancel=view.authenticated&&state.subscriptionActive&&!state.syncing
   &&CANCELLABLE.has(state.state)&&view.cancellation.contractReady;
  const phase=view.cancellation.phase;
+ // JWT rotation, assignment/status revision, or a new trip invalidates an
+ // open cancellation confirmation even if the user subject is unchanged.
  useEffect(()=>{setConfirm(false);setMessage('');},
-  [view.account?.subject,state.tripId]);
+  [view.privateViewRevision,state.tripId,state.state,state.revision,state.syncing]);
  useEffect(()=>{
   if(!confirm)return;
   const timer=setTimeout(()=>{
@@ -34,8 +37,18 @@ export default function ClientTracking(){
   },50);
   return ()=>clearTimeout(timer);
  },[confirm]);
+ function validateCancelAction(action:'prepare'|'submit'|'retry'){
+  const allowed=guardTrackingCancellationUiAction(view,client.snapshot(),{action});
+  if(!allowed.ok){
+   setConfirm(false);
+   setMessage('La sesión o el estado del viaje cambió. Actualizá el seguimiento antes de cancelar.');
+   return false;
+  }
+  return true;
+ }
  function prepareCancel(){
   if(!canCancel||!state.tripId||locked.current)return;
+  if(!validateCancelAction('prepare'))return;
   if(phase==='ready'){setConfirm(true);return;}
   if(phase!=='idle')return;
   const candidate=createSecureCancellationKey(()=>Crypto.randomUUID());
@@ -50,6 +63,7 @@ export default function ClientTracking(){
  async function performCancel(retry:boolean){
   if(locked.current||!canCancel)return;
   if(retry?phase!=='retryable':phase!=='ready')return;
+  if(!validateCancelAction(retry?'retry':'submit'))return;
   locked.current=true;setCancelBusy(true);setConfirm(false);setMessage('');
   const old=client.snapshot().cancellation;
   const subject=view.account?.subject;
@@ -57,7 +71,11 @@ export default function ClientTracking(){
   try{
    const result=retry?await client.retryCancelRide():await client.submitCancelRide();
    const latest=client.snapshot();
-   if(latest.account?.subject!==subject||latest.tracking.tripId!==tripId
+   if(latest.account?.subject!==subject
+    ||latest.privateViewRevision!==view.privateViewRevision
+    ||latest.tracking.tripId!==tripId
+    ||latest.tracking.revision!==state.revision
+    ||latest.tracking.state!==state.state
     ||latest.cancellation.requestKey!==old.requestKey)return;
    if(result.ok){
     setMessage(result.statusRefreshed
@@ -112,13 +130,17 @@ export default function ClientTracking(){
        style={styles.heading}>¿Confirmás cancelar este viaje?</Text>
       <Text style={styles.text}>Esto enviará una solicitud al servidor. No podemos asegurar costos, reembolsos ni el estado final hasta consultar el servidor.</Text>
       <Action label="Sí, enviar cancelación" disabled={cancelBusy} busy={cancelBusy}
+       hint="Se revalidará la sesión, el viaje y la misma solicitud antes del envío. No garantiza reembolso."
        onPress={()=>{void performCancel(false);}}/>
       <Action label="Volver sin enviar" secondary disabled={cancelBusy} busy={cancelBusy}
+       hint="Cierra la confirmación, sin cancelar el viaje."
        onPress={()=>setConfirm(false)}/>
      </View>}
     {canCancel&&phase==='retryable'&&
      <Action label={cancelBusy?'Enviando…':'Reintentar misma cancelación'}
-      disabled={cancelBusy} busy={cancelBusy} onPress={()=>{void performCancel(true);}}/>}
+      disabled={cancelBusy} busy={cancelBusy}
+      hint="Usa la misma clave de la cancelación pendiente. No crea otra solicitud."
+      onPress={()=>{void performCancel(true);}}/>}
     {canCancel&&['failed','acknowledged'].includes(phase)&&
      <Text style={styles.small}>Antes de cualquier nueva operación, consultá el estado actual del servidor. No se envía otra cancelación automáticamente.</Text>}
     {message!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.text}>{message}</Text>}
