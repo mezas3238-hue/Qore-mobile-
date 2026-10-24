@@ -174,3 +174,56 @@ test('R25 deadline caducado no expone DTO que llegó demasiado tarde',async()=>{
   timeoutMs:1000,fetchImpl:async()=>{clock+=1001;return response(page());}});
  assert.equal((await gateway.readInbox(context)).code,'NETWORK_OR_TIMEOUT');
 });
+
+
+// R26 — defensa antes de fetch y de cualquier entrega al Store.
+test('R26 no permite tokens bearer con saltos de línea, espacios o control en headers',async()=>{
+ let calls=0;
+ for(const token of [
+  'synthetic-only-token-123456\nX-Extra: leaked',
+  'synthetic-only-token-123456\rInjected: yes',
+  'synthetic token with spaces 123456',
+  'synthetic-only-token-123456\tmalformed',
+  'synthetic-token-with-colon:123456',
+  'x'.repeat(8195)
+ ]){
+  const gateway=createG51ChatInboxHttpGateway({...settings,
+   getSession:async()=>({...actor(),token}),
+   fetchImpl:async()=>{calls++;return response(page());}});
+  assert.equal((await gateway.readInbox(context)).code,'AUTH_REQUIRED');
+ }
+ assert.equal(calls,0);
+});
+test('R26 rechaza bandeja desordenada antes de devolver su DTO',async()=>{
+ for(const items of [[row(2),row(1)],
+  [{...row(1),updatedAt:time-1000},{...row(2),updatedAt:time-1000}]]){
+  const gateway=createG51ChatInboxHttpGateway({...settings,
+   fetchImpl:async()=>response(page(items))});
+  assert.equal((await gateway.readInbox(context)).code,'INVALID_CHAT_INBOX_DTO');
+ }
+});
+test('R26 admite desempate estable con updatedAt igual y UUID descendente',async()=>{
+ const first={...row(2),updatedAt:time-1000};
+ const second={...row(1),updatedAt:time-1000};
+ const gateway=createG51ChatInboxHttpGateway({...settings,
+  fetchImpl:async()=>response(page([first,second]))});
+ const r=await gateway.readInbox(context);
+ assert.equal(r.ok,true);
+ assert.deepEqual(r.data.items.map(x=>x.conversationId),
+  [first.conversationId,second.conversationId]);
+});
+test('R26 rechaza cursor repetido enviado de regreso por el servidor',async()=>{
+ const gateway=createG51ChatInboxHttpGateway({...settings,
+  fetchImpl:async()=>response(page([row(1)],cursor))});
+ assert.equal((await gateway.readInbox({...context,cursor})).code,
+  'INVALID_CHAT_INBOX_DTO');
+});
+test('R26 conserva paginación firmada distinta y sin tope global',async()=>{
+ const follow='f'.repeat(44);
+ const gateway=createG51ChatInboxHttpGateway({...settings,
+  fetchImpl:async()=>response(page([row(1)],follow))});
+ const result=await gateway.readInbox({...context,cursor});
+ assert.equal(result.ok,true);
+ assert.equal(result.data.nextCursor,follow);
+ assert.equal(result.data.items.length,1);
+});
