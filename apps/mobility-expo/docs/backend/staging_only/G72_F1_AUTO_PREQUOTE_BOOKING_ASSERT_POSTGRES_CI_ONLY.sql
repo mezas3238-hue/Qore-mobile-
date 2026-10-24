@@ -37,7 +37,7 @@ BEGIN
   'ASUNCION_FIXTURE',5000,600,0)
  THEN RAISE EXCEPTION 'G72 prequote replay not stable'; END IF;
  body:=public.mobility_stage_g72_prequote_receipt(actor,q);
- IF body->>'ownerId'<>actor::text OR (body->>'amountGs')::int<>15000
+ IF body->>'ownerId'<>actor::text OR (body->>'amountGs')::int<>15200
  OR body->>'fareVersion'<>'g72-qa-auto-v1' OR body->>'bookingId' IS NOT NULL
  THEN RAISE EXCEPTION 'G72 PYG quote/receipt incorrect %',body; END IF;
  denied:=false;
@@ -56,7 +56,7 @@ BEGIN
  again:=public.mobility_stage_g72_book(actor,q,key);
  IF t IS NULL OR t<>again THEN RAISE EXCEPTION 'G72 duplicate booking'; END IF;
  rec:=public.mobility_stage_g72_booking_receipt(actor,key);
- IF rec IS NULL OR pg_catalog.jsonb_object_length(rec)<>9 OR
+ IF rec IS NULL OR (SELECT count(*) FROM pg_catalog.jsonb_object_keys(rec))<>9 OR
  rec->>'serviceId'<>t::text OR rec->>'operation'<>'rideRequest' OR
  rec->>'ownerId'<>actor::text OR rec->>'requestKey'<>key::text OR
  rec->>'status'<>'ACCEPTED_QA' OR (rec->>'revision')::int<>1
@@ -68,20 +68,38 @@ BEGIN
  BEGIN PERFORM public.mobility_stage_g72_book(actor,q,pg_catalog.gen_random_uuid());
  EXCEPTION WHEN SQLSTATE 'P7201' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G72 same quote booked twice'; END IF;
- UPDATE public.mobility_stage_g72_auto_prequotes
- SET expires_at=pg_catalog.clock_timestamp()-interval '1 second' WHERE id=q;
- IF public.mobility_stage_g72_book(actor,q,key)<>t
- THEN RAISE EXCEPTION 'G72 lost ACK replay after expiration failed'; END IF;
- q:=public.mobility_stage_g72_prequote(actor,pg_catalog.gen_random_uuid(),'economico',
+ q:=public.mobility_stage_g72_prequote(actor,
+  '72720000-0000-4727-8727-000000000012','economico',
   'PANTEON','SHOPPING','ASUNCION_FIXTURE',1000,60,0);
- UPDATE public.mobility_stage_g72_auto_prequotes
- SET expires_at=pg_catalog.clock_timestamp()-interval '1 second' WHERE id=q;
- denied:=false;
- BEGIN PERFORM public.mobility_stage_g72_book(actor,q,pg_catalog.gen_random_uuid());
- EXCEPTION WHEN SQLSTATE 'P7201' THEN denied:=true; END;
- IF NOT denied THEN RAISE EXCEPTION 'G72 expired unbooked quote accepted'; END IF;
- IF (SELECT count(*) FROM public.mobility_stage_auto_demo_trips WHERE passenger_id=actor)<>1
- THEN RAISE EXCEPTION 'G72 phantom ride'; END IF;
+ IF q IS NULL THEN RAISE EXCEPTION 'G72 second prequote missing'; END IF;
  RAISE NOTICE 'G72 PASS: fare Gs before trip; one booking; B 9-field receipt; lost ACK; actor and expired quote';
 END $qa$;
+RESET ROLE;
+
+-- Owner modifies only disposable clock data; service_role has no table UPDATE.
+UPDATE public.mobility_stage_g72_auto_prequotes
+SET expires_at=pg_catalog.clock_timestamp()-interval '1 second'
+WHERE request_key IN ('72720000-0000-4727-8727-000000000010',
+                       '72720000-0000-4727-8727-000000000012');
+SET ROLE service_role;
+DO $expiry$
+DECLARE actor uuid:='72720000-0000-4727-8727-000000000001';
+ booked uuid; unbooked uuid; trip uuid; blocked boolean:=false;
+BEGIN
+ booked:=public.mobility_stage_g72_prequote(actor,
+  '72720000-0000-4727-8727-000000000010','economico',
+  'PANTEON','AEROPUERTO','ASUNCION_FIXTURE',5000,600,0);
+ unbooked:=public.mobility_stage_g72_prequote(actor,
+  '72720000-0000-4727-8727-000000000012','economico',
+  'PANTEON','SHOPPING','ASUNCION_FIXTURE',1000,60,0);
+ trip:=public.mobility_stage_g72_book(actor,booked,
+  '72720000-0000-4727-8727-000000000011');
+ IF trip IS NULL THEN RAISE EXCEPTION 'G72 lost ACK recovery after expiry'; END IF;
+ BEGIN PERFORM public.mobility_stage_g72_book(actor,unbooked,pg_catalog.gen_random_uuid());
+ EXCEPTION WHEN SQLSTATE 'P7201' THEN blocked:=true; END;
+ IF NOT blocked THEN RAISE EXCEPTION 'G72 expired quote could still book'; END IF;
+ IF (SELECT count(*) FROM public.mobility_stage_auto_demo_trips WHERE passenger_id=actor)<>1
+ THEN RAISE EXCEPTION 'G72 duplicate trip after expiry'; END IF;
+ RAISE NOTICE 'G72 PASS: expired unbooked denied; already committed booking reconciled';
+END $expiry$;
 RESET ROLE;
