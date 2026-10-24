@@ -16,6 +16,8 @@ import {decidePrivateDriverOffer,reconcilePrivateDriverOffer}
  from './driver-offer-decision.mjs';
 import {readPrivateDriverTripStatus,transitionPrivateDriverTrip}
  from './driver-trip-lifecycle-http.mjs';
+import {readPrivateCourierCustody,transitionPrivateCourierCustody}
+ from './driver-custody-http.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -91,10 +93,24 @@ export function createDriverStagingRuntime({
   makeRequestKey:chatAdapters.makeRequestKey,
   liveEnabled:false
  });
+ const custodyActions=Object.freeze({
+  readStatus:({accessToken,deliveryId})=>readPrivateCourierCustody({
+   apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+   accessToken,deliveryId,request
+  }),
+  transition:({accessToken,deliveryId,event,eventKey,proofRef})=>
+   transitionPrivateCourierCustody({
+    apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+    accessToken,deliveryId,event,eventKey,proofRef:proofRef??null,request
+   }),
+  makeRequestKey:chatAdapters.makeRequestKey,
+  obtainVerifiedProof:null,
+  liveEnabled:false
+ });
  return Object.freeze({
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
-  offerActions,tripActions,
+  offerActions,tripActions,custodyActions,
   productionEnabled:false,qaOnly:true
  });
 }
