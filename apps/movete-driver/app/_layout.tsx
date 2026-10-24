@@ -9,6 +9,7 @@ export default function DriverLayout(){
    <Stack.Screen name="index" options={{title:'Movete Fácil Driver'}}/>
    <Stack.Screen name="documentos" options={{title:'Mis documentos'}}/>
    <Stack.Screen name="ofertas" options={{title:'Ofertas para mí'}}/>
+   <Stack.Screen name="mensajes" options={{title:"Mensajes privados"}}/>
    <Stack.Screen name="ganancias" options={{title:'Ganancias'}}/>
   </Stack>
  </DriverWorkspaceProvider>;
