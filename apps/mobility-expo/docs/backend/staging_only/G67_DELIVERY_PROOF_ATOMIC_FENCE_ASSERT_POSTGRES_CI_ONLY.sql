@@ -15,10 +15,10 @@ BEGIN
  WHERE tgrelid='public.mobility_stage_deliveries'::regclass
  AND tgname='mobility_stage_g67_proof_at_commit' AND tgenabled='O')
  THEN RAISE EXCEPTION 'G67 delivery trigger disabled'; END IF;
- FOR role_name IN SELECT unnest(ARRAY['PUBLIC','anon','authenticated','service_role',
+ FOR role_name IN SELECT unnest(ARRAY['anon','authenticated','service_role',
  'mobility_g48_gateway_ci','mobility_g56_driver_gateway_ci',
  'mobility_g60c_execute_ci']) LOOP
-  IF role_name<>'PUBLIC' AND NOT EXISTS(
+  IF NOT EXISTS(
    SELECT 1 FROM pg_catalog.pg_roles WHERE rolname=role_name)
   THEN RAISE EXCEPTION 'G67 missing gateway role %',role_name; END IF;
   IF pg_catalog.has_table_privilege(role_name,'public.mobility_stage_g67_delivery_proofs',
