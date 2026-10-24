@@ -97,9 +97,12 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    return gateway?.enabled===true&&gateway?.contractCertified===true
     &&gateway?.stagingRuntimeVerified===true&&gateway?.isConfigured?.()===true
     &&typeof gateway.readMessages==='function'
-    &&typeof gateway.sendMessage==='function'&&typeof getActor==='function';
+    &&typeof getActor==='function';
   }catch{return false;}
  };
+ // La lectura autorizada no habilita POST: solo una operación de escritura
+ // real y certificada puede marcar mensajes como entregados.
+ const sendReady=()=>ready()&&typeof gateway?.sendMessage==='function';
  const clear=()=>{
   generation++;loading=false;sending=false;state=blank();
   try{gateway?.cancelPending?.();}catch{/* logout local nunca se bloquea */}
@@ -136,7 +139,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   // pero las filas caducadas nunca vuelven a exponerse al dispositivo.
   const pending=Boolean(state.header&&state.pending);
   return Object.freeze({
-   contractReady:ready(),loading,sending,
+   contractReady:ready(),sendReady:sendReady(),loading,sending,
    active:Boolean((valid||pending)&&!loading),
    serviceId:valid||pending?state.header.serviceId:null,
    serviceKind:valid||pending?state.header.serviceKind:null,
@@ -259,6 +262,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  }
  async function send({body,requestKey,retry=false}={}){
   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
+  if(!sendReady())return fail('CHAT_SEND_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
   if(!state.header||state.header.expiresAt<=now())return fail('CHAT_NOT_AUTHORIZED');
   if(!cleanMessage(body)||!validId(requestKey))return fail('INVALID_MESSAGE');
@@ -338,6 +342,7 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  async function retryPending(){
   if(!state.pending||!state.header)return fail('NO_PENDING_MESSAGE');
   if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
+  if(!sendReady())return fail('CHAT_SEND_NOT_CERTIFIED');
   if(loading||sending)return fail('CHAT_BUSY');
   if(state.header.expiresAt<=now()){
    // Antes de un reintento con token/permiso temporal vencido,
