@@ -24,9 +24,16 @@ export default function PassengerChatScreen(){
  // Si llega una referencia de hilo manipulada, la ruta no puede abrir
  // un hilo no fijado: fallar cerrado en vez de ignorar el parámetro.
  const invalidThread=params.conversationId!==undefined&&conversationId===null;
+ // La ruta desde historial no especifica hilo. Usar la conversación
+ // efectivamente autorizada, solo del mismo servicio, para desmontar el
+ // editor al reasignarse Driver durante un refresh (sin cambio de JWT).
  return <PrivateChat key={passengerChatPrivateViewKey({
   sessionRevision:view.privateViewRevision,serviceId,serviceKind,
-  conversationId:invalidThread?'INVALID_THREAD':conversationId
+  conversationId:invalidThread?'INVALID_THREAD':conversationId,
+  authorized:view.authenticated&&view.chat.contractReady&&view.chat.active,
+  authorizedConversationId:view.chat.conversationId,
+  authorizedServiceId:view.chat.serviceId,
+  authorizedServiceKind:view.chat.serviceKind
  })} client={client} view={view} invalidThread={invalidThread}
   serviceId={serviceId} serviceKind={serviceKind}
   conversationId={conversationId}/>;
