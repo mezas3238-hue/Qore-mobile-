@@ -11,7 +11,7 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc WHERE
  oid='public.mobility_stage_kyc_atomic_approve_owner_qa(uuid,uuid,uuid,bigint,uuid)'::regprocedure
  AND prosecdef AND EXISTS(SELECT 1 FROM pg_catalog.unnest(proconfig)
- AS value WHERE value IN ('search_path=','search_path=""')))
+ AS settings(config) WHERE config IN ('search_path=','search_path=""')))
  THEN RAISE EXCEPTION 'KYC approval must have fixed empty search_path'; END IF;
  IF has_function_privilege('anon',
  'public.mobility_stage_kyc_atomic_approve_owner_qa(uuid,uuid,uuid,bigint,uuid)','EXECUTE')
