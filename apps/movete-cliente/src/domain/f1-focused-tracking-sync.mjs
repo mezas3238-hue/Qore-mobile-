@@ -74,7 +74,7 @@ export function createF1FocusedTrackingSync({
   try{own=scopeOf(readSnapshot());}catch{return fail('TRACKING_SCOPE_UNVERIFIED');}
   if(own===null)return fail('TRACKING_NOT_CERTIFIED');
   active=true;scope=own;generation++;
-  try{timer=schedule(()=>{void refresh();},intervalMs);}
+  try{timer=schedule(()=>refresh(),intervalMs);}
   catch{stop();return fail('TRACKING_TIMER_UNAVAILABLE');}
   // First actual GET is still guarded and deduped by ClientExperience.
   void refresh();
