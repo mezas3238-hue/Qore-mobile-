@@ -46,12 +46,19 @@ test('dos ticks paralelos no emiten dos solicitudes',async()=>{
  release({ok:true,data:good(1)});
  assert.equal((await first).ok,true);
 });
-test('estado atrasado no revive conductor ni mapa',async()=>{
+test('R61 servidor con revisión menor bloquea refresco y borra GPS caducable',async()=>{
  let n=0;
  const p=make(async()=>({ok:true,data:good(n++===0?2:1)}));
- await p.tick();
- assert.equal((await p.tick()).applied,false);
+ assert.equal((await p.tick()).ok,true);
+ assert.ok(p.snapshot().position);
+ const saved=p.snapshot().lastFetchedAt;
+ assert.equal((await p.tick()).code,'STALE_SERVER_REVISION');
  assert.equal(p.snapshot().revision,2);
+ assert.equal(p.snapshot().position,null);
+ assert.equal(p.snapshot().etaMinutes,null);
+ assert.equal(p.snapshot().lastFetchedAt,null);
+ assert.equal(p.snapshot().lastError,'STALE_SERVER_REVISION');
+ assert.equal(saved,time);
 });
 test('conexión perdida borra GPS/ETA inmediatamente',async()=>{
  const p=make();await p.tick();
@@ -101,5 +108,45 @@ test('500 y network failure retiran GPS sin fingir viaje terminado',async()=>{
  await p.tick();
  assert.equal((await p.tick()).code,'SERVICE_UNAVAILABLE');
  assert.equal(p.snapshot().position,null);
+ assert.equal(p.snapshot().state,'assigned');
+});
+
+test('R61 untrusted HTTP error never leaks identity, bearer or HTML to Tracking',async()=>{
+ const poison=[
+  'Bearer private-secret-passenger-token',
+  'AUTH_REQUIRED\nPHONE:0981123456',
+  '<img src=x onerror=alert(1)>',
+  'STATUS_UNAVAILABLE PRIVATE_0981555000',
+  'X'.repeat(10000),
+  {message:'private-access-token'},
+  null
+ ];
+ for(const malicious of poison){
+  let reads=0;
+  const p=make(async()=>++reads===1
+   ?{ok:true,data:good(1)}:{ok:false,code:malicious});
+  assert.equal((await p.tick()).ok,true);
+  const result=await p.tick();
+  assert.equal(result.code,'SERVER_UNAVAILABLE');
+  assert.equal(p.snapshot().lastError,'SERVER_UNAVAILABLE');
+  assert.equal(p.snapshot().position,null);
+  assert.equal(p.snapshot().etaMinutes,null);
+  assert.equal(JSON.stringify(p.snapshot()).includes('private'),false);
+ }
+});
+test('R61 keep known HTTP errors for support without inventing status',async()=>{
+ for(const code of ['STATUS_CONTRACT_PENDING','SERVICE_UNAVAILABLE',
+  'NETWORK_OR_TIMEOUT','RATE_LIMITED','BAD_CONTENT_TYPE']){
+  const p=make(async()=>({ok:false,code}));
+  assert.equal((await p.tick()).code,code);
+  assert.equal(p.snapshot().lastError,code);
+  assert.equal(p.snapshot().lastFetchedAt,null);
+ }
+});
+test('R61 matching revision is not a new event but does not replay a state',async()=>{
+ const p=make(async()=>({ok:true,data:good(4)}));
+ assert.equal((await p.tick()).applied,true);
+ assert.equal((await p.tick()).applied,false);
+ assert.equal(p.snapshot().revision,4);
  assert.equal(p.snapshot().state,'assigned');
 });
