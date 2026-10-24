@@ -52,6 +52,8 @@ on:
       - 'apps/mobility-expo/server/g58f-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G58F_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G59_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G59B_*'
+      - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
@@ -435,3 +437,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59_UNKNOWN_COMMIT_RECONCILIATION_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G59 PostgreSQL source of truth after lost ACK, rollback, newer revision and revocation
         run: python3 apps/mobility-expo/server/g59-uncertain-commit-reconciliation-ci.py
+      - name: G59B install Driver-only committed ACK reconciliation on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59B_DRIVER_UNKNOWN_COMMIT_RECONCILIATION_POSTGRES_CI_ONLY.sql
+      - name: G59B assert privileged Driver reconciliation has no delegated SDK grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59B_DRIVER_UNKNOWN_COMMIT_RECONCILIATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G59B race two Driver scoped SEND tickets and recover immutable ACK with G42 revocation
+        run: python3 apps/mobility-expo/server/g59b-driver-uncertain-commit-race-ci.py
