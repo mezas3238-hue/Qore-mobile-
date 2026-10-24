@@ -13,6 +13,7 @@ type State=Omit<DriverOfferActionsSnapshot,'phase'>&{
 type ContextValue={
  state:State;enabled:boolean;
  decide:(offerId:string,action:OfferAction)=>Promise<void>;
+ reconcilePending:(offerId:string)=>Promise<void>;
 };
 const OFF:State=Object.freeze({phase:'not-configured',
  offers:Object.freeze([]),decisions:Object.freeze([]),
@@ -64,6 +65,10 @@ export function DriverOfferActionsProvider({
  },[controller,authAdapter,workspace,state.phase]);
  const context=useMemo<ContextValue>(()=>({
   state,enabled:!!controller&&!!authAdapter,
+  reconcilePending:async offerId=>{
+   if(workspace.phase!=='connected')return;
+   await controller?.reconcilePending(offerId);
+  },
   decide:async(offerId,action)=>{
    // No actions when the workspace is offline/reauthenticating.
    if(workspace.phase!=='connected'||!workspace.currentLicenseApproved)return;
