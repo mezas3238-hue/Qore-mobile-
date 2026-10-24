@@ -58,6 +58,10 @@ export function passengerChatPrivateViewKey({sessionRevision,
  * R24: volver al MISMO hilo pendiente si la persona navega a otro servicio.
  * Este enlace solo recupera la pantalla de conciliación; nunca autoriza
  * POST ni sustituye la verificación server-side antes de retryPending().
+ * @param {{authenticated?:boolean,contractReady?:boolean,pendingSend?:boolean,
+ * pendingServiceId?:string|null,pendingServiceKind?:string|null,
+ * pendingConversationId?:string|null,currentServiceId?:string|null,
+ * currentServiceKind?:string|null,currentConversationId?:string|null}} [options]
  */
 export function passengerPendingRecoveryRoute({
  authenticated=false,contractReady=false,pendingSend=false,
