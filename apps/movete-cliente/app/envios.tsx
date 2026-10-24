@@ -2,6 +2,7 @@ import React,{useRef,useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
+import {BookingRecoveryPanel} from '../src/BookingRecoveryPanel';
 import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {DELIVERY_CATEGORIES,validateDeliveryForm} from '../src/domain/delivery-form.mjs';
@@ -170,6 +171,7 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    {result!==''&&<Text accessibilityLiveRegion="polite"
     style={[styles.text,{color:palette.primary}]}>{result}</Text>}
   </Panel>
+  <BookingRecoveryPanel client={client} view={view} operation="deliveryRequest"/>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Mensajes con el repartidor</Text>
    <Text style={styles.text}>El chat de tu envío o pedido se abrirá desde su seguimiento una vez que el servidor confirme quién lo repartirá. También funcionará con repartidores en moto de carga.</Text>
