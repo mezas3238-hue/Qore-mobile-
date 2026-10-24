@@ -61,7 +61,7 @@ test('G57B current Driver assignment, per-Passenger markers and delegated-only r
  assert.match(ci,/G57B_DRIVER_ORDERED_VISIBLE_POSTGRES_CI_ONLY.sql/);
  assert.match(ci,/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql/);
  assert.match(ci,/g57b-driver-ordered-concurrency-ci.py/);
- assert.match(race,/Barrier\\(2\\)/);
+ assert.ok(race.includes('Barrier(2)'));
  assert.match(race,/SET LOCAL ROLE mobility_g56_driver_gateway_ci/);
  assert.match(race,/G5718/);
  assert.match(race,/G5711/);
