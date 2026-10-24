@@ -479,3 +479,49 @@ test('navegación histórica sin conversationId sigue validando asignación por 
  assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
  assert.equal(flow.snapshot().conversationId,conversationId);
 });
+
+// R14: defensas contra páginas malformadas, cursor sin avance y TTL privado.
+test('página vacía con cursor activo falla cerrado sin paginación infinita',async()=>{
+ const cursor='P'.repeat(44);
+ const flow=make(flags({readMessages:async()=>({ok:true,
+  data:{...page('DELIVERY',cursor),messages:[]}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY'})).code,
+  'INVALID_CHAT_PAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().hasOlder,false);
+});
+test('la última página puede estar vacía si el servidor cerró el cursor',async()=>{
+ const flow=make(flags({readMessages:async()=>({ok:true,
+  data:{...page('DELIVERY'),messages:[]}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'DELIVERY'})).ok,true);
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().hasOlder,false);
+});
+test('marcas temporales inconsistentes y páginas viejas rechazan permiso obsoleto',async()=>{
+ for(const patch of [
+  {generatedAt:now-300001,expiresAt:now+60000},
+  {generatedAt:now+1},
+  {generatedAt:now-2000,expiresAt:now-2000},
+  {generatedAt:now-1000,expiresAt:now+300001},
+  {expiresAt:NaN},{generatedAt:Infinity}
+ ]){
+  const flow=make(flags({readMessages:async()=>({ok:true,data:{...page(),...patch}})}));
+  assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,
+   'INVALID_CHAT_PAGE',JSON.stringify(patch));
+  assert.equal(flow.snapshot().messages.length,0);
+ }
+});
+test('el TTL vencido purga físicamente chat sin mensaje incierto',async()=>{
+ let clock=now;
+ const flow=createPassengerChatFlow({gateway:flags(),getActor:async()=>actor(),
+  now:()=>clock});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().messages.length,1);
+ clock+=60001;
+ const stale=flow.snapshot();
+ assert.equal(stale.messages.length,0);
+ assert.equal(stale.conversationId,null);
+ assert.equal(stale.active,false);
+ assert.equal(stale.pendingSend,false);
+ assert.equal(stale.window.rowsRead,0);
+});
