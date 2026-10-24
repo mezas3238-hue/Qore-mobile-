@@ -505,3 +505,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G72_F1_AUTO_PREQUOTE_BOOKING_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G72 race two SQL sessions booking the same quoted AUTO trip
         run: python3 apps/mobility-expo/server/g72-f1-auto-booking-race-ci.py
+      - name: G73 install verified route binding and exact B F1 15/11 receipt SQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G73_F1_ROUTE_QUOTE_BOOKING_POSTGRES_CI_ONLY.sql
+      - name: G73 certify private route, prequote, acceptance and recovery in PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G73_F1_ROUTE_QUOTE_BOOKING_ASSERT_POSTGRES_CI_ONLY.sql
