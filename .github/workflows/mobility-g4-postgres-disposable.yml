@@ -37,6 +37,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G48_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G50_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G51_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G52_*'
+      - 'apps/mobility-expo/server/g52-*'
       - 'apps/mobility-expo/server/g48-*'
       - 'apps/mobility-expo/server/g47-*'
       - 'apps/mobility-expo/server/g45-*'
@@ -341,3 +343,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G51_CHAT_INBOX_MONOTONIC_POSTGRES_CI_ONLY.sql
       - name: G51 assert 205 conversations, 3 unlimited pages, cursor revision and revocation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G51_CHAT_INBOX_MONOTONIC_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G52 install owner-only revisioned chat history and signed keyset SQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_KEYSET_POSTGRES_CI_ONLY.sql
+      - name: G52 prove 205 messages in 3 pages, revision, replay, revocation and role denial
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_ASSERT_POSTGRES_CI_ONLY.sql
