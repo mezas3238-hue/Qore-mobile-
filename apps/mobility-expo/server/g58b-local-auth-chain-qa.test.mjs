@@ -242,3 +242,23 @@ test('G58B refused marker and SQL authorization conflicts never yield optimistic
   assert.ok(!JSON.stringify(response).includes('password'));
  }finally{await x.app.close();}
 });
+
+test('G58C integrated localhost budget returns 429 after 30 valid requests from one authenticated Driver',async()=>{
+ const x=fixture();const {port}=await x.app.listen();
+ try{
+  const endpoint='/v1/staging/driver/chat/conversations';
+  for(let index=0;index<30;index++){
+   const r=await http(port,endpoint,tokenDriver);
+   assert.equal(r.status,200,'valid request '+index+': '+JSON.stringify(r.body));
+  }
+  const blocked=await http(port,endpoint,tokenDriver);
+  assert.equal(blocked.status,429);
+  assert.equal(blocked.body.code,'DRIVER_INBOX_RATE_LIMIT');
+  assert.equal(x.calls.filter(v=>v[0]==='mint').length,30);
+  // Another verified person is not counted in the first Driver's budget.
+  const separate=await http(port,
+   '/v1/staging/chat/services/RIDE/'+service+'/history-with-ordered-markers',
+   tokenPassenger);
+  assert.equal(separate.status,200);
+ }finally{await x.app.close();}
+});
