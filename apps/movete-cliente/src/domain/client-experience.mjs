@@ -341,7 +341,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    ||still.requestKey!==key||still.tripId!==receipt.tripId
    ||tracking.snapshot().tripId!==receipt.tripId){
    // Never leave an unverified trip connected, even after HTTP 200.
-   if(tracking.snapshot().tripId===receipt.tripId)tracking.stop();
+   tracking.stopIfMatching(receipt.tripId,user.subject);
    notify();
    return fail('RIDE_STATUS_NOT_VERIFIED');
   }
