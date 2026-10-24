@@ -59,9 +59,9 @@ BEGIN
  OR vehicle.review_status IN ('rejected'::public.mobility_review_status,
                               'suspended'::public.mobility_review_status)
  THEN RETURN false; END IF;
- SELECT id INTO decision FROM public.mobility_stage_kyc_onboarding_decisions_qa
- WHERE driver_id=d AND vehicle_id=v_id
- AND decision='QA_ONBOARDING_APPROVED_NOT_COMMERCIAL' FOR SHARE;
+ SELECT a.id INTO decision FROM public.mobility_stage_kyc_onboarding_decisions_qa a
+ WHERE a.driver_id=d AND a.vehicle_id=v_id
+ AND a.decision='QA_ONBOARDING_APPROVED_NOT_COMMERCIAL' FOR SHARE;
  IF NOT FOUND THEN RETURN false; END IF;
  FOR e IN SELECT * FROM public.mobility_stage_kyc_verified_evidence_qa
           WHERE driver_id=d AND vehicle_id=v_id ORDER BY kind FOR SHARE LOOP
