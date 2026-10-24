@@ -217,7 +217,7 @@ RESET ROLE;
 DO $foreign$
 BEGIN
  IF pg_catalog.jsonb_array_length(
-  (:'foreign_page')::jsonb->'items')<>0
+  pg_catalog.current_setting('qore.g56b_foreign')::jsonb->'items')<>0
  THEN RAISE EXCEPTION 'G56B leaked inbox to unrelated Driver'; END IF;
 END $foreign$;
 -- Source reassignment hides a conversation before OPEN rotates the thread.
@@ -251,13 +251,14 @@ SELECT public.mobility_stage_g56_inbox_mint_owner_qa(
  '56561200-0000-4656-8656-000000000002',
  '56561200-0000-4656-8656-000000000102',
  floor(extract(epoch FROM clock_timestamp())*1000)::bigint)->>'ticket' AS stale_ticket \gset
+SELECT pg_catalog.set_config('qore.g56b_stale_ticket', :'stale_ticket',false);
 DO $stale$
 DECLARE rejected boolean:=false; prior jsonb:=
  pg_catalog.current_setting('qore.g56b_one')::jsonb;
 BEGIN
  BEGIN
   PERFORM public.mobility_stage_g56_driver_inbox_qa(
-   :'stale_ticket'::uuid,(prior->>'revision')::bigint,
+   pg_catalog.current_setting('qore.g56b_stale_ticket')::uuid,(prior->>'revision')::bigint,
    (prior->'nextPosition'->>'updatedAt')::bigint,
    (prior->'nextPosition'->>'conversationId')::uuid,100);
  EXCEPTION WHEN SQLSTATE 'G5619' THEN rejected:=true; END;
@@ -272,12 +273,13 @@ UPDATE public.mobility_stage_g42_provider_session_grants
  SET revoked_at=pg_catalog.clock_timestamp(),revision=revision+1
  WHERE user_id='56561200-0000-4656-8656-000000000002'
  AND session_id='56561200-0000-4656-8656-000000000102';
+SELECT pg_catalog.set_config('qore.g56b_revoked_ticket', :'revoked_ticket',false);
 DO $revocation$
 DECLARE rejected boolean:=false;
 BEGIN
  BEGIN
   PERFORM public.mobility_stage_g56_driver_inbox_qa(
-   :'revoked_ticket'::uuid,NULL,NULL,NULL,100);
+   pg_catalog.current_setting('qore.g56b_revoked_ticket')::uuid,NULL,NULL,NULL,100);
  EXCEPTION WHEN SQLSTATE 'G5611' THEN rejected:=true; END;
  IF NOT rejected THEN RAISE EXCEPTION 'G56B revoked session retained inbox'; END IF;
  RAISE NOTICE 'G56B PASS: 205 Driver chats/3 pages, unread, cross-user, stale, reassignment, revocation';
