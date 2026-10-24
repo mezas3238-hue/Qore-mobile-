@@ -29,6 +29,8 @@ function fx(extra={}){
 }
 test('G58 only executes allowlisted G57A/B functions inside scoped SQL transaction',async()=>{
  const cases=[
+  [{operation:'CHAT_OPEN',ticket},pax,
+   'SELECT public.mobility_stage_g49_open_qa($1) AS data'],
   [{operation:'DRIVER_INBOX',ticket,expectedRevision:null,beforeMs:null,
     beforeId:null,limit:50},drv,
    'SELECT public.mobility_stage_g56_driver_inbox_qa($1,$2,$3,$4,$5) AS data'],
@@ -51,7 +53,8 @@ test('G58 only executes allowlisted G57A/B functions inside scoped SQL transacti
    'BEGIN','SET LOCAL ROLE '+role,
    "SELECT current_user AS effective_role, current_database() AS database, current_setting('application_name') AS application_name",
    sql,'COMMIT','RELEASE']);
-  assert.deepEqual(f.calls[3].args,command.operation==='DRIVER_INBOX'?
+  assert.deepEqual(f.calls[3].args,command.operation==='CHAT_OPEN'?
+   [ticket]:command.operation==='DRIVER_INBOX'?
    [ticket,null,null,null,50]:command.operation.endsWith('MARK_VISIBLE_ORDERED')?
    [ticket,marker]:[ticket,command.expectedRevision,command.beforeSeq,command.limit]);
  }
