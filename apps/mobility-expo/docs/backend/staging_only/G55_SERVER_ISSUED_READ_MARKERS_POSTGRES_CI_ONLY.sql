@@ -51,7 +51,7 @@ BEGIN
  THEN RAISE EXCEPTION 'G55 invalid history marker page' USING ERRCODE='G5502'; END IF;
  SELECT * INTO proof FROM public.mobility_stage_g49_chat_tickets
  WHERE ticket_hash=pg_catalog.sha256(pg_catalog.convert_to(_history_ticket::text,'UTF8'))
- FOR SHARE;
+ FOR UPDATE;
  IF NOT FOUND OR proof.operation<>'CHAT_HISTORY' OR proof.conversation_id IS NULL
  THEN RAISE EXCEPTION 'G55 not a chat history capability' USING ERRCODE='G5502'; END IF;
  -- Consumes G49 ticket and checks live G42+Passenger+assignment in same TX.
