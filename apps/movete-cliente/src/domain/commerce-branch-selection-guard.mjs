@@ -4,7 +4,7 @@
  * lookup; it is not availability, ordering, payment or delivery authorization.
  */
 import {isCommercePageFresh} from './commerce-ttl-refresh.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VERTICALS=new Set(['SUPERMARKET','PHARMACY','RESTAURANT','RETAIL','OTHER']);
 const SERVICES=new Set(['MOTO_DELIVERY','AUTO_DELIVERY']);
 const ROW_KEYS=['branchId','branchTag','merchantKind','municipality',
