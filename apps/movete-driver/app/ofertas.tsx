@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/DriverUI';
+import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
 import {router} from 'expo-router';
@@ -12,6 +13,7 @@ import {router} from 'expo-router';
  */
 export default function DriverOffers(){
  const {state,refresh}=useDriverWorkspace();
+ const kyc=useDriverKycExpiry();
  const {state:actions,enabled,decide,reconcilePending}=useDriverOfferActions();
  const [clock,setClock]=useState(()=>Date.now());
  useEffect(()=>{
@@ -28,6 +30,7 @@ export default function DriverOffers(){
   </View>
   <Panel>
    <Text style={styles.heading}>Bandeja de ofertas — solo QA</Text>
+   <Text accessibilityRole="alert" style={styles.text}>{kyc.notice.text}</Text>
    {state.phase==='connected'?<>
     <Text style={styles.small}>El contenido procede del backend de pruebas. Una oferta aquí no confirma push, recepción en el teléfono ni habilitación para prestar servicios reales.</Text>
     {available.length===0?
@@ -39,7 +42,8 @@ export default function DriverOffers(){
       {(()=>{
        const decision=actions.decisions.find(x=>x.offerId===offer.offerId);
        const allowed=enabled&&actions.phase==='ready'&&
-        state.currentLicenseApproved&&actions.offers.some(x=>x.offerId===offer.offerId)&&
+        state.currentLicenseApproved&&kyc.snapshot?.state==='READY_QA'&&
+        kyc.snapshot?.accountBlocked===false&&actions.offers.some(x=>x.offerId===offer.offerId)&&
         !decision&&!actions.busy&&offer.expiresAtMs>clock+3000;
        return <>
         {decision&&<Text style={styles.text}>

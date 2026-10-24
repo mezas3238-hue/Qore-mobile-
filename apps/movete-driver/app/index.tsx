@@ -2,10 +2,12 @@ import React,{useState} from 'react';
 import {ScrollView,Switch,Text,View} from 'react-native';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
+import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 export default function DriverHome(){
  const [demoAvailable,setDemoAvailable]=useState(false);
  const {state,refresh}=useDriverWorkspace();
+ const kyc=useDriverKycExpiry();
  const phase:Record<string,string>={
   'not-configured':'STAGING sin conectar — no hay sesión de conductor',
   'signed-out':'Sesión de conductor cerrada',
@@ -31,10 +33,19 @@ export default function DriverHome(){
     state.currentLicenseApproved?'aprobada en la revisión':'pendiente, rechazada o no verificada':'sin consultar'}. Ningún resultado habilita viajes reales.</Text>
   </Panel>
   <Panel>
+   <Text style={styles.heading}>Vigencia documental y avisos</Text>
+   <Text accessibilityRole="alert" style={[styles.text,{
+    color:kyc.snapshot?.state==='READY_QA'?palette.teal:palette.amber,
+    fontWeight:'800'
+   }]}>{kyc.notice.text}</Text>
+   <Action label="Renovar o comprobar documentos" secondary
+    onPress={()=>router.push('/documentos')}/>
+  </Panel>
+  <Panel>
    <Text style={styles.heading}>Mi disponibilidad</Text>
    <View style={styles.row}>
     <Text style={[styles.text,{flex:1}]}>{demoAvailable?'Disponible en la simulación':'No disponible en la simulación'}</Text>
-    <Switch value={demoAvailable} onValueChange={setDemoAvailable} trackColor={{true:palette.teal}} accessibilityLabel="Disponibilidad local de demostración"/>
+    <Switch value={demoAvailable&&kyc.snapshot?.accountBlocked===false} onValueChange={setDemoAvailable} disabled={kyc.snapshot?.accountBlocked!==false} trackColor={{true:palette.teal}} accessibilityLabel="Disponibilidad local de demostración"/>
    </View>
    <Text style={styles.small}>Este interruptor no publica tu GPS ni te pone disponible en la red de conductores.</Text>
   </Panel>
