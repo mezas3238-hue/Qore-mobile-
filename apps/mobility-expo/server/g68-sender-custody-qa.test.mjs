@@ -26,7 +26,7 @@ function fixture(extras={}){
 }
 test('G68 exact sender-only requested DTO matches B R62 without courier/proof/media',async()=>{
  const x=fixture(),r=await x.read(get());
- assert.equal(r.status,200);
+ assert.equal(r.status,200,JSON.stringify(r));
  assert.deepEqual(r.body,{mode:'STAGING_DEMO_ONLY',deliveryId:delivery,
   ownerId:sender,state:'requested',revision:1,vehicleKind:'MOTO',
   assignmentPersisted:false,proofVerified:false,
@@ -40,7 +40,7 @@ test('G68 server-only verified proof required for delivered, disputed and return
   const x=fixture({loadOwnDelivery:async()=>({...row,courierId:courier,
    vehicleId:vehicle,proofRef:proof,status:state,revision:7})});
   const r=await x.read(get());
-  assert.equal(r.status,200,state);
+  assert.equal(r.status,200,JSON.stringify({state,response:r}));
   assert.equal(r.body.proofVerified,true);
   assert.deepEqual(x.calls.proof,[{actorId:sender,courierId:courier,
    deliveryId:delivery,proofRef:proof}]);
