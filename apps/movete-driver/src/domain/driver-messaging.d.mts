@@ -48,8 +48,8 @@ export type DriverMessagingAdapters=Readonly<{
   marker:string})=>Promise<QaReply>;
  makeRequestKey:()=>Promise<string>|string;
  /** Independently verified vehicle-stopped fact, not a Driver UI toggle. */
- verifyStopped:()=>Promise<{vehicleStopped:true;source:'trusted_navigation';
-  observedAtMs:number}|{vehicleStopped:false;source:string;observedAtMs:number}>;
+ verifyStopped:()=>Promise<{vehicleStopped:boolean;source:string;
+  observedAtMs:number}>;
  now?:()=>number;
  liveEnabled?:false;
 }>;
