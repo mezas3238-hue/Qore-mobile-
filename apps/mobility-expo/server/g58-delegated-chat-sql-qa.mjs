@@ -73,7 +73,7 @@ export function createG58DelegatedChatSqlQa({
   let db,started=false,committed=false;
   try{
    db=await openConnection();
-   if(!plain(db)||typeof db.query!=='function'||typeof db.release!=='function')
+   if(db===null||typeof db!=='object'||typeof db.query!=='function'||typeof db.release!=='function')
     throw Error('G58 SQL connection factory invalid');
    await db.query('BEGIN');
    started=true;
