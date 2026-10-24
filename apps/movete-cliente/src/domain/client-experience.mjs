@@ -477,7 +477,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   reconcileBooking:async()=>{
    const pending=mutations.reconcileBooking();notify();
    const result=await pending;notify();return result;
-  }
+  },
   startTracking:tripId=>{const result=startTracking(tripId);notify();return result;},
   syncTracking:async()=>{const result=await syncTracking();notify();return result;},
   connectionLost:()=>{tracking.connectionLost();notify();},
