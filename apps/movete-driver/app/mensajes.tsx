@@ -22,7 +22,8 @@ const explanation:Record<string,string>={
 };
 export default function DriverMessages(){
  const {state,configured,refreshInbox,loadMoreInbox,open,loadOlder,
-  backToInbox,sendMessage,reconcilePending,confirmVisible}=useDriverMessages();
+  backToInbox,sendMessage,reconcilePending,confirmVisible,
+  refreshConversation}=useDriverMessages();
  const [draft,setDraft]=useState('');
  const [opened,setOpened]=useState<string|null>(null);
  useEffect(()=>{
