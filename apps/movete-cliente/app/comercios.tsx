@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useMemo,useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
@@ -8,6 +8,8 @@ import {COMMERCE_VERTICALS,selectCommerceVertical,filterVerifiedCatalogPage,
  filterVerifiedBranchPage} from '../src/domain/commerce-storefront.mjs';
 import type {CommerceVertical} from '../src/domain/commerce-storefront.mjs';
 import {reviewCommerceBasket} from '../src/domain/commerce-checkout-review.mjs';
+import {createCommerceSubstitutionDraft} from '../src/domain/commerce-substitution-draft.mjs';
+import type {SubstitutionChoice} from '../src/domain/commerce-substitution-draft.mjs';
 export default function Commerce(){
  const {client,view}=useClientView();
  // El key elimina búsqueda, rubro elegido y sucursal anterior ANTES de
@@ -73,7 +75,13 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
  const commerce=view.commerce;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
- useEffect(()=>{if(preferredBranch)setBranchInput(preferredBranch);},[preferredBranch]);
+ const substitutionFlow=useMemo(()=>createCommerceSubstitutionDraft(),[]);
+ const [choiceRevision,setChoiceRevision]=useState(0);
+ // El cambio de revisión fuerza una nueva proyección de elecciones en RAM.
+ void choiceRevision;
+ useEffect(()=>{
+  if(preferredBranch){substitutionFlow.clear();setBranchInput(preferredBranch);}
+ },[preferredBranch,substitutionFlow]);
  const [loading,setLoading]=useState(false);
  const busy=commerce.catalogLoading||loading;
  const clearMessage=()=>setMessage('');
@@ -81,6 +89,8 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
   if(busy)return;
   const branch=prepareCatalogBranchLookup(branchOverride??branchInput);
   if(!branch.ok){setMessage('Ingresá un identificador válido de una sucursal autorizada.');return;}
+  substitutionFlow.clear();
+  setChoiceRevision(r=>r+1);
   setLoading(true);setMessage('');
   try{
    const result=await client.loadCommerceCatalog(branch.branchId);
@@ -97,17 +107,28 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
  const review=fresh?reviewCommerceBasket(commerce,{
   authenticated:view.authenticated,now:Date.now()
  }):null;
+ const actor={authenticated:view.authenticated,subject:view.account?.subject??null,
+  sessionRevision:view.privateViewRevision};
+ const preferences=substitutionFlow.snapshot(commerce,actor);
  const summary=review?.ok
   ?review.estimatedSubtotalPyg.toLocaleString('es-PY')+' Gs.':'—';
  const edit=(id:string,quantity:number)=>{
   client.setCommerceQuantity(id,quantity);
+  setChoiceRevision(r=>r+1);
+ };
+ const chooseSubstitution=(itemId:string,choice:SubstitutionChoice|null)=>{
+  const result=substitutionFlow.choose(commerce,actor,{itemId,choice});
+  if(!result.ok)setMessage('El carrito cambió o venció. Revisá el catálogo antes de elegir.');
+  setChoiceRevision(r=>r+1);
  };
  return <Panel>
   <Text accessibilityRole="header" style={styles.heading}>Carrito del catálogo autorizado</Text>
   <Text style={styles.small}>Esta vista solo usa catálogo versionado y vigente de una sucursal autorizada. No representa reserva de stock, tarifa de envío, pago ni pedido confirmado.</Text>
   <Text style={styles.text}>Código de sucursal autorizada</Text>
   <TextInput style={styles.field} autoCapitalize="none" autoCorrect={false}
-   value={branchInput} onChangeText={value=>{setBranchInput(value);clearMessage();}}
+   value={branchInput} onChangeText={value=>{
+    substitutionFlow.clear();setBranchInput(value);clearMessage();
+   }}
    maxLength={36} editable={!busy}
    placeholder="Identificador de sucursal" accessibilityLabel="Identificador de sucursal autorizada"/>
   <Text style={styles.small}>Este código técnico es temporal: la lista pública de sucursales dependerá del contrato de descubrimiento del backend. No ingreses nombres ni datos personales.</Text>
@@ -169,6 +190,29 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
       {line.lineSubtotalPyg.toLocaleString('es-PY')} Gs.
      </Text>
     </View>)}
+    {preferences.ok&&<View style={{gap:8}}>
+     <Text accessibilityRole="header" style={styles.heading}>
+      Si falta algún producto · decisiones locales
+     </Text>
+     <Text style={styles.small}>
+      Estas preferencias solo están en este dispositivo durante la sesión.
+      No se envían al comercio, al repartidor ni al servidor; no autorizan reemplazos automáticos.
+     </Text>
+     {preferences.choices.map(choice=><View key={choice.itemId} style={styles.card}>
+      <Text style={styles.text}>{choice.itemTag.replaceAll('_',' ')}</Text>
+      <Action secondary={choice.choice!=='OMIT_IF_UNAVAILABLE'}
+       selected={choice.choice==='OMIT_IF_UNAVAILABLE'}
+       label="Si falta: quitar este producto (borrador)"
+       onPress={()=>chooseSubstitution(choice.itemId,'OMIT_IF_UNAVAILABLE')}/>
+      <Action secondary={choice.choice!=='ASK_BEFORE_SUBSTITUTING'}
+       selected={choice.choice==='ASK_BEFORE_SUBSTITUTING'}
+       label="Si falta: consultar antes de cambiarlo (borrador)"
+       onPress={()=>chooseSubstitution(choice.itemId,'ASK_BEFORE_SUBSTITUTING')}/>
+      <Action secondary selected={choice.choice===null}
+       label="Sin preferencia: no autorizar sustitución"
+       onPress={()=>chooseSubstitution(choice.itemId,null)}/>
+     </View>)}
+    </View>}
    </View>}
    <Text accessibilityRole="header" style={styles.heading}>
     Subtotal informativo: {summary}
@@ -178,7 +222,11 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
     Total final: pendiente. No incluye cobro, reserva de stock ni confirmación de pedido.
    </Text>
    <Action label="Vaciar carrito y retirar catálogo de esta sesión" secondary disabled={busy}
-    onPress={()=>{client.clearCommerce();setBranchInput('');setMessage('Carrito borrado de la sesión.');}}/>
+    onPress={()=>{
+     substitutionFlow.clear();setChoiceRevision(r=>r+1);
+     client.clearCommerce();setBranchInput('');
+     setMessage('Carrito borrado de la sesión, incluidas las preferencias.');
+    }}/>
   </>}
   <Action label="Finalizar compra — pendiente del servidor"
    disabled hint="La confirmación y el pago requieren catálogo, stock y PSP certificados"
