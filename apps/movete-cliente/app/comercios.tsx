@@ -27,11 +27,14 @@ function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnaps
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>¿Qué necesitás comprar?</Text>
    <Text style={styles.text}>Elegí el tipo de comercio</Text>
-   {COMMERCE_VERTICALS.map(option=><View key={option.code}>
-    <Action label={option.label} secondary={selectedVertical!==option.code}
-     selected={selectedVertical===option.code}
-     onPress={()=>{setSelectedVertical(option.code);setPreferredBranch(null);}}/>
-   </View>)}
+   <View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}>
+    {COMMERCE_VERTICALS.map(option=><View key={option.code}
+     style={{width:'47%',minWidth:130}}>
+     <Action label={option.label} secondary={selectedVertical!==option.code}
+      selected={selectedVertical===option.code}
+      onPress={()=>{setSelectedVertical(option.code);setPreferredBranch(null);}}/>
+    </View>)}
+   </View>
    <Text style={styles.text}>{selected?.description}</Text>
    <Text style={styles.small}>La categoría filtra solamente las sucursales de la página consultada al servidor; no verifica disponibilidad en toda la ciudad.</Text>
    <Text accessibilityRole="header" style={styles.heading}>Buscar dentro del catálogo verificado</Text>
