@@ -12,7 +12,7 @@ END $guard$;
 BEGIN;
 CREATE TABLE public.mobility_stage_g67_delivery_proofs (
  proof_ref uuid PRIMARY KEY,
- delivery_id uuid NOT NULL UNIQUE REFERENCES public.mobility_stage_deliveries(id) ON DELETE RESTRICT,
+ delivery_id uuid NOT NULL REFERENCES public.mobility_stage_deliveries(id) ON DELETE RESTRICT,
  courier_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
  session_id uuid NOT NULL,
  token_iat_ms bigint NOT NULL CHECK(token_iat_ms BETWEEN 0 AND 9999999999999),
@@ -30,6 +30,11 @@ CREATE TABLE public.mobility_stage_g67_delivery_proofs (
  CHECK (revoked_at IS NULL OR revoked_at>=attested_at),
  CHECK (consumed_at IS NULL OR consumed_at>=attested_at)
 );
+-- Revoked evidence may be replaced by a new independently attested proof.
+-- At most one non-revoked proof per service; consumed proofs stay immutable.
+CREATE UNIQUE INDEX mobility_stage_g67_one_valid_proof_per_delivery
+ ON public.mobility_stage_g67_delivery_proofs(delivery_id)
+ WHERE revoked_at IS NULL;
 CREATE INDEX mobility_stage_g67_courier_lookup
  ON public.mobility_stage_g67_delivery_proofs(courier_id,delivery_id);
 ALTER TABLE public.mobility_stage_g67_delivery_proofs ENABLE ROW LEVEL SECURITY;
