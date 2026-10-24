@@ -12,6 +12,8 @@ export type DriverOfferDecision=Readonly<{
 export type DriverOfferDecisionOptions={
  apiOrigin:string;
  accessToken:string;
+ approvedStagingHost?:string|null;
+ allowedByOwner?:boolean;
  kind:PrivateDriverOfferKind;
  offerId:string;
  /** Stable UUID: reuse this exact key after a timeout; do not create on every retry. */
