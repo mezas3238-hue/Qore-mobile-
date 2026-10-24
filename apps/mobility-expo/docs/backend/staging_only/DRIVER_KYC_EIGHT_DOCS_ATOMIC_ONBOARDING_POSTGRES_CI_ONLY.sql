@@ -136,4 +136,35 @@ END $body$;
 REVOKE ALL ON FUNCTION public.mobility_stage_kyc_atomic_approve_owner_qa(
  uuid,uuid,uuid,bigint,uuid)
  FROM PUBLIC,anon,authenticated,service_role;
+-- Current onboarding validity is always derived from LIVE QA evidence metadata;
+-- a historical decision row is NOT a permanent authorization. No vehicle or
+-- assignment is commercially eligible as a result of this predicate.
+CREATE FUNCTION public.mobility_stage_kyc_current_onboarding_owner_qa(
+ _driver uuid,_vehicle uuid
+) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
+AS $body$
+ SELECT COALESCE(
+  EXISTS(SELECT 1 FROM public.mobility_stage_kyc_onboarding_decisions_qa a
+  WHERE a.driver_id=_driver AND a.vehicle_id=_vehicle)
+  AND EXISTS(SELECT 1 FROM public.mobility_vehicles v
+   WHERE v.id=_vehicle AND v.driver_id=_driver
+    AND v.country_code='PY'
+    AND v.review_status NOT IN ('rejected'::public.mobility_review_status,
+     'suspended'::public.mobility_review_status))
+  AND EXISTS(SELECT 1 FROM public.user_roles r
+   WHERE r.user_id=_driver AND r.role='driver'::public.app_role)
+  AND (SELECT count(*) FROM public.user_roles r WHERE r.user_id=_driver)=1
+  AND (SELECT count(*) FROM public.mobility_stage_kyc_verified_evidence_qa e
+   WHERE e.driver_id=_driver AND e.vehicle_id=_vehicle
+   AND e.verified_by='QA_INDEPENDENT_ATTESTOR_NO_MEDIA'
+   AND e.authenticity_verified AND e.issuer_verified
+   AND e.malware_scan_passed AND e.valid_until>pg_catalog.now()
+   AND (e.kind<>'rostro_selfie' OR
+    (e.photo_received AND e.consent_for_face AND
+     e.liveness_verified AND e.id_face_match_verified))
+   )=8,
+ false)
+$body$;
+REVOKE ALL ON FUNCTION public.mobility_stage_kyc_current_onboarding_owner_qa(
+ uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
 COMMIT;
