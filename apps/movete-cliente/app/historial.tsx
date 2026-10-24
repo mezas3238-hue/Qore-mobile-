@@ -71,6 +71,37 @@ export default function ClientHistory(){
     <Text style={styles.text}>Estado: {item.status}</Text>
     <Text style={styles.small}>Registrado: {new Date(item.createdAt).toLocaleString('es-PY')} · Revisión {item.revision}</Text>
     <Text style={styles.small}>El comprobante y el total no se inventan ni se calculan en esta vista.</Text>
+    {item.kind==='DELIVERY'&&view.senderCustody.readReady&&
+     <Action label={view.senderCustody.loading?'Verificando entrega…':'Consultar custodia de mi envío'}
+      disabled={view.senderCustody.loading}
+      hint="Consulta privada de solo lectura. No confirma una entrega sin prueba registrada en servidor."
+      onPress={()=>{
+       const current=client.snapshot();
+       const old=current.history?.items.find(i=>i.kind==='DELIVERY'
+        &&i.serviceId===item.serviceId);
+       if(!current.authenticated||!old
+        ||current.account?.subject!==view.account?.subject
+        ||current.privateViewRevision!==view.privateViewRevision
+        ||current.history?.ownerId!==view.history?.ownerId
+        ||old.revision!==item.revision
+        ||!current.senderCustody.readReady)return;
+       void client.readOwnDeliveryCustody(item.serviceId);
+      }}/>}
+    {item.kind==='DELIVERY'&&view.senderCustody.deliveryId===item.serviceId&&
+     <View>
+      {view.senderCustody.state!==null?
+       <Text accessibilityLiveRegion="polite" style={styles.text}>
+        Custodia verificada en QA: {view.senderCustody.state}.
+        {' '}Revisión {view.senderCustody.revision}.
+        {' '}{view.senderCustody.state==='delivered'&&view.senderCustody.proofVerified
+         ?'Prueba independiente confirmada por servidor de QA.'
+         :'No hay entrega final verificada en esta consulta.'}
+       </Text>:null}
+      {view.senderCustody.error&&
+       <Text accessibilityLiveRegion="polite" style={styles.small}>
+        No se pudo verificar el estado actual del envío. No se confirma ninguna entrega.
+       </Text>}
+     </View>}
     {canShowPassengerServiceChat({authenticated:view.authenticated,
      contractReady:view.chat.contractReady,accountSubject:view.account?.subject,
      historyOwnerId:view.history?.ownerId,serviceId:item.serviceId,
