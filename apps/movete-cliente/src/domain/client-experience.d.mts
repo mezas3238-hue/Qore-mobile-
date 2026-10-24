@@ -50,7 +50,7 @@ export type ClientSnapshot={
   requiresServerAuthorization:true;containsMessageBody:false;
   containsSenderIdentity:false}[];
  branchDirectory:{readReady:boolean;loading:boolean;error:string|null;
-  municipality:string|null;serviceKind:string|null;pageNumber:number;
+  expiresAt:number|null;municipality:string|null;serviceKind:string|null;pageNumber:number;
   items:readonly {branchId:string;branchTag:string;merchantKind:string;
    municipality:string;serviceKind:'AUTO_DELIVERY'|'MOTO_DELIVERY';
    eligibleByPolicy:false;orderEnabled:false}[];
