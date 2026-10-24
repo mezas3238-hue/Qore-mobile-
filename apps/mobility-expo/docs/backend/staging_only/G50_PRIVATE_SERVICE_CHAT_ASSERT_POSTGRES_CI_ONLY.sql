@@ -30,10 +30,14 @@ INSERT INTO auth.users(id) VALUES
  ('50500000-0000-4050-8050-000000000003'),
  ('50500000-0000-4050-8050-000000000004')
 ON CONFLICT DO NOTHING;
+-- G1 Auth creation automatically seeds passenger, so convert driver fixtures
+-- instead of inserting duplicate passenger roles or creating dual roles.
+DELETE FROM public.user_roles
+ WHERE user_id IN('50500000-0000-4050-8050-000000000002',
+                  '50500000-0000-4050-8050-000000000004')
+ AND role='passenger'::public.app_role;
 INSERT INTO public.user_roles(user_id,role) VALUES
- ('50500000-0000-4050-8050-000000000001','passenger'),
  ('50500000-0000-4050-8050-000000000002','driver'),
- ('50500000-0000-4050-8050-000000000003','passenger'),
  ('50500000-0000-4050-8050-000000000004','driver');
 INSERT INTO public.mobility_stage_g42_provider_session_grants(
  user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind
