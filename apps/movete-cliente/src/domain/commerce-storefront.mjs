@@ -33,11 +33,11 @@ export function filterVerifiedCatalogPage(items,{query='',verified=false}={}){
   if(!item||typeof item!=='object'||Array.isArray(item)
    ||typeof item.itemTag!=='string'
    ||item.itemTag.length<1||item.itemTag.length>120
-   ||item.active!==true||!Number.isSafeInteger(item.stockUnits)
+   ||(item.active!==true&&item.active!==false)||!Number.isSafeInteger(item.stockUnits)
    ||item.stockUnits<0||!Number.isSafeInteger(item.unitPricePyg)
    ||item.unitPricePyg<0)
    return fail('INVALID_CATALOG_PAGE');
-  if(searched.normalized===''||fold(item.itemTag).includes(searched.normalized))
+  if(item.active===true&&(searched.normalized===''||fold(item.itemTag).includes(searched.normalized)))
    result.push(item);
  }
  return Object.freeze({ok:true,items:Object.freeze(result),
