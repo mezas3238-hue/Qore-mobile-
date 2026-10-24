@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g48",
+    "version": "1.0.0-g50",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G48 local-only delegated DB read proofs via NOLOGIN least-privilege role; no real Auth mint, HTTPS or LIVE"
+    "x-qore-contract-extension": "G50 private chat QA schemas and API plan: not deployed, no real JWT-to-owner bridge or message transport"
   },
   "servers": [
     {
@@ -2479,6 +2479,217 @@
           }
         }
       }
+    },
+    "/v1/staging/chat/services/{serviceKind}/{serviceId}/conversation": {
+      "post": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Future QA route only. Requires verified JWT, provider session, exclusive role and G42 transactional lock. No app can currently call this endpoint.",
+        "operationId": "openPrivateServiceChatG50",
+        "summary": "Resolve immutable conversation bound to current service and assigned courier",
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored in disposable QA PostgreSQL only, endpoint NOT mounted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatOpenG50"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/conversations/{conversationId}/messages": {
+      "get": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Future QA route only. Requires verified JWT, provider session, exclusive role and G42 transactional lock. No app can currently call this endpoint.",
+        "operationId": "readPrivateChatMessagesG50",
+        "summary": "Keyset page; no total message count limit",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored in disposable QA PostgreSQL only, endpoint NOT mounted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatPageG50"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "description": "Future QA route only. Requires verified JWT, provider session, exclusive role and G42 transactional lock. No app can currently call this endpoint.",
+        "operationId": "sendPrivateChatMessageG50",
+        "summary": "Persist idempotent message; only DB commit confirms ACK",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/ChatSendG50"
+        },
+        "responses": {
+          "200": {
+            "description": "Stored in disposable QA PostgreSQL only, endpoint NOT mounted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSentG50"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2792,6 +3003,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RideCancellationV1"
+            }
+          }
+        }
+      },
+      "ChatSendG50": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ChatSendRequestG50"
             }
           }
         }
@@ -5571,6 +5792,189 @@
             "$ref": "#/components/schemas/Uuid"
           }
         }
+      },
+      "ChatOpenG50": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceKind",
+          "serviceId",
+          "serverStored",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serverStored": {
+            "type": "boolean",
+            "const": true
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "ChatMessageG50": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "seq",
+          "senderId",
+          "body",
+          "createdAt",
+          "serverStored"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "senderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serverStored": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "ChatSentG50": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "messageId",
+          "seq",
+          "senderId",
+          "body",
+          "createdAt",
+          "serverStored",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "senderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serverStored": {
+            "type": "boolean",
+            "const": true
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "ChatPageG50": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "messages",
+          "nextAfter",
+          "hasMore",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageG50"
+            }
+          },
+          "nextAfter": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "ChatSendRequestG50": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "body"
+        ],
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "No phones, emails, URLs, bidi or controls; server revalidates"
+          }
+        }
       }
     }
   },
@@ -5581,5 +5985,7 @@
   "x-qore-driver-evidence-signed-url-enabled": false,
   "x-qore-g48-gateway-role-login-enabled": false,
   "x-qore-g48-runtime-wired": false,
-  "x-qore-g48-provider-to-db-proof-wired": false
+  "x-qore-g48-provider-to-db-proof-wired": false,
+  "x-qore-g50-chat-runtime-wired": false,
+  "x-qore-g50-private-chat-qa-only": true
 }
