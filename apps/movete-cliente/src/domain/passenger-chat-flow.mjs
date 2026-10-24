@@ -188,6 +188,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
    if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
+   // Un cursor pertenece al TTL de la página que lo emitió.
+   if(older&&state.header.expiresAt<=now()){
+    clear();return fail('CHAT_AUTHORIZATION_EXPIRED');
+   }
    if(result?.ok!==true){
     const code=result?.code||'CHAT_UNAVAILABLE';
     clear();state.error=code;return fail(code);
