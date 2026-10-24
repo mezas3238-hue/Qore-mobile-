@@ -126,6 +126,10 @@ export function createPassengerChatInbox({gateway=null,getActor=null,
    try{after=await getActor();}catch{after=null;}
    if(started!==epoch)return fail('STALE_SESSION_RESPONSE');
    if(!sameActor(before,after)){clear();return fail('STALE_SESSION_RESPONSE');}
+   // El cursor deja de autorizar nuevas páginas si su TTL vence en red.
+   if(next&&old.expiresAt<=now()){
+    clear();return fail('CHAT_INBOX_CURSOR_EXPIRED');
+   }
    if(answer?.ok!==true){
     const code=typeof answer?.code==='string'?answer.code:'CHAT_INBOX_UNAVAILABLE';
     // Solo una avería transitoria puede mantener una página existente,
