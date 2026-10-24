@@ -57,6 +57,8 @@ on:
       - 'apps/mobility-expo/server/g60c-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G64_*'
       - 'apps/mobility-expo/server/g64-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
       - 'apps/mobility-expo/server/g56-*'
@@ -459,6 +461,12 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G64_DRIVER_OFFER_DECISION_RECOVERY_POSTGRES_CI_ONLY.sql
       - name: G64 verify immutable AUTO and DELIVERY receipts, unknown, two DB sessions and G42 revoke fence
         run: python3 apps/mobility-expo/server/g64-driver-offer-decision-recovery-ci.py
+      - name: G67 install mandatory proof fence inside every G5 delivered status mutation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_DELIVERY_PROOF_ATOMIC_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G67 assert SDK and delegated roles cannot mint or read proofs
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_DELIVERY_PROOF_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G67 test real two-session COMMIT proof and revocation race, UUID forgery and rollback
+        run: python3 apps/mobility-expo/server/g67-delivery-proof-atomic-race-ci.py
 
       - name: G67 install owner-only delivery proof and atomic event fence (disposable PG16)
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_ATOMIC_DELIVERY_PROOF_POSTGRES_CI_ONLY.sql
