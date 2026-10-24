@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {AccessibilityInfo,findNodeHandle,ScrollView,Text,View} from 'react-native';
+import {AccessibilityInfo,AppState,findNodeHandle,ScrollView,Text,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import {router,useFocusEffect} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
@@ -29,8 +29,14 @@ export default function ClientTracking(){
   syncTracking:()=>client.syncTracking()
  }),[client]);
  useFocusEffect(useCallback(()=>{
-  foreground.start();
-  return ()=>foreground.stop();
+  // React Navigation focus may persist when Android/iOS app is backgrounded.
+  // Only an ACTIVE app with this route focused may poll the Passenger GET.
+  if(AppState.currentState==='active')foreground.start();
+  const subscription=AppState.addEventListener('change',state=>{
+   if(state==='active')foreground.start();
+   else foreground.stop();
+  });
+  return ()=>{subscription.remove();foreground.stop();};
  },[foreground,view.privateViewRevision,view.tracking.tripId,
   view.tracking.subscriptionActive,view.rideContinuation.tripId]));
  const canSync=view.authenticated&&state.subscriptionActive&&!state.syncing;
