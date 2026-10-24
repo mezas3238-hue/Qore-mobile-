@@ -31,6 +31,8 @@ export type DriverWorkspaceController=Readonly<{
 export type DriverWorkspaceControllerOptions={
  authAdapter?:DriverAuthSessionAdapter|null;
  apiOrigin?:string|null;
+ approvedStagingHost?:string|null;
+ allowedByOwner?:boolean;
  request?:typeof fetch;
  now?:()=>number;
  readInbox?:(input:Record<string,unknown>)=>Promise<ReadonlyArray<DriverOffer>>;
