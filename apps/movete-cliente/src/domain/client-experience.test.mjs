@@ -1280,3 +1280,65 @@ test('R27 G51 borra bandeja al cambiar de titular y no conserva páginas privada
  assert.equal(api.snapshot().chatInbox.hasNext,false);
  assert.equal(count,1);
 });
+
+
+// R30 — integración real de código: lectura HTTP G52 con sesión Passenger,
+// pero sin habilitar el envío hasta que A monte POST/ACK con idempotencia.
+test('R30 Cliente integra historial G52 solo lectura con token actual y POST apagado',async()=>{
+ const seen=[];
+ const history={conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+  ownerId:a,counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:7,generatedAt:now-1000,expiresAt:now+60000,
+  messages:[{messageId:key,senderRole:'driver',body:'En camino',
+   createdAt:now-2000,revision:7}],nextCursor:null,
+  canSend:true,productionEnabled:false};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g52ChatHistoryHttpOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:'https://qa-g52.example.invalid',
+   pinnedOrigin:'https://qa-g52.example.invalid',
+   fetchImpl:async(url,init)=>{
+    seen.push({url,init});
+    return {status:200,ok:true,redirected:false,
+     headers:{get:k=>k==='content-type'?'application/json':null},
+     text:async()=>JSON.stringify(history)};
+   }
+  }
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().chat.contractReady,true);
+ assert.equal(api.snapshot().chat.sendReady,false);
+ assert.equal((await api.openChat({
+  serviceId:trip,serviceKind:'RIDE',expectedConversationId:quoteId
+ })).ok,true);
+ assert.equal(api.snapshot().chat.messages.length,1);
+ assert.equal(api.snapshot().chat.messages[0].body,'En camino');
+ assert.equal(api.snapshot().chat.sendReady,false);
+ assert.equal((await api.sendChat({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_SEND_NOT_CERTIFIED');
+ assert.equal(api.snapshot().chat.pendingSend,false);
+ assert.equal(seen.length,1);
+ assert.equal(seen[0].init.method,'GET');
+ assert.equal(seen[0].init.headers.Authorization,'Bearer '+fakeSession().token);
+ assert.equal(seen[0].url,'https://qa-g52.example.invalid/v1/staging/chat/services/RIDE/'
+  +trip+'/messages?limit=100&expectedConversationId='+quoteId);
+});
+test('R30 gateway G52 sin certificación de runtime no abre chat ni hace red',async()=>{
+ let hits=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g52ChatHistoryHttpOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:false,
+   origin:'https://qa-g52.example.invalid',
+   pinnedOrigin:'https://qa-g52.example.invalid',
+   fetchImpl:async()=>{hits++;throw Error('unreachable');}
+  }
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().chat.contractReady,false);
+ assert.equal(api.snapshot().chat.sendReady,false);
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE'})).code,
+  'CHAT_CONTRACT_NOT_CERTIFIED');
+ assert.equal(hits,0);
+});
