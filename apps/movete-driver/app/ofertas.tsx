@@ -95,6 +95,11 @@ export default function DriverOffers(){
        label="Abrir estado del viaje"
        secondary onPress={()=>router.push({pathname:'/viaje',
         params:{tripId:d.serviceId}})}/>}
+     {d.phase==='confirmed'&&d.action==='accept'&&
+      d.kind==='DELIVERY'&&enabled&&<Action
+       label="Abrir custodia de envío"
+       secondary onPress={()=>router.push({pathname:'/entrega',
+        params:{deliveryId:d.serviceId}})}/>}
      {d.phase==='uncertain'&&enabled&&<Action
       label="Consultar decisión original" secondary
       disabled={actions.busy}
