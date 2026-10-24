@@ -22,6 +22,8 @@ G49 ya añadió tickets de un uso y permisos mínimos para abrir, leer historial
 
 La bandeja sigue paginada de a lo sumo 100 conversaciones por página sin tope total. Cada conversación solo existe para el pasajero cuando la asignación fuente sigue vigente. Una marca de lectura `throughSeq` no puede saltar más allá de lo realmente persistido y nunca hace retroceder la marca existente. El contador `unreadCount` se reduce al reflejar esos recibos. La app no recibe teléfonos, cuerpos en bandeja, URLs ni secretos del emisor.
 
+**Dependencia de UX aún abierta:** `throughSeq` es la secuencia persistida del último mensaje efectivamente visualizado. El DTO estricto G52 de Cliente B no publica `seq`. Está **prohibido** inferirlo de `revision`, `createdAt` o `messageId`, o marcar automáticamente todo el historial al abrir una conversación. Falta definir y verificar un marcador de lectura emitido por el servidor, ligado al mensaje visualizado, antes de conectar el POST de B. G54 certifica la autorización y persistencia de una marca confiable, no su obtención desde la app.
+
 El token de delegación autoriza **una sola operación**. No debe ser entregado al móvil: el cliente manda su JWT al futuro gateway de backend y este debe realizar la verificación/firma/roles, mintar y consumir el ticket con credenciales privadas. Una devolución `serverStored` no equivale a `delivered/read` en dispositivo.
 
 ## Trabajo pendiente que impide usar la app comercialmente
