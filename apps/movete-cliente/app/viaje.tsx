@@ -1,6 +1,7 @@
 import React,{useRef,useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
+import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
 import {BookingRecoveryPanel} from '../src/BookingRecoveryPanel';
 import {useClientView} from '../src/ClientRuntime';
@@ -32,6 +33,8 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const [validated,setValidated]=useState(false);
  const [feedback,setFeedback]=useState('');
  const lock=useRef(false);
+ const consultationLock=useRef(false);
+ const [consulting,setConsulting]=useState(false);
  const mutation=view.mutation;
  const ui=projectRideDraftUi({
   phase:mutation.phase,operation:mutation.operation,
@@ -83,6 +86,23 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     'Solicitud guardada temporalmente en esta sesión. NO fue enviada, cotizada ni despachada.':
     'No se pudo preparar el viaje: hay otra solicitud pendiente o faltan permisos.');
   }finally{lock.current=false;}
+ }
+ async function consultVerifiedRide(){
+  if(consultationLock.current||!view.rideContinuation.canVerify)return;
+  const before=client.snapshot();
+  if(!before.rideContinuation.canVerify||before.rideContinuation.tripId!==view.rideContinuation.tripId
+   ||before.privateViewRevision!==view.privateViewRevision)return;
+  consultationLock.current=true;setConsulting(true);
+  try{
+   const result=await client.continueVerifiedRide();
+   const latest=client.snapshot();
+   if(latest.privateViewRevision!==view.privateViewRevision
+    ||latest.rideContinuation.tripId!==before.rideContinuation.tripId)return;
+   if(result.ok&&latest.tracking.subscriptionActive
+    &&latest.tracking.tripId===result.tripId){
+    router.push('/seguimiento');
+   }else setFeedback('No se pudo verificar el viaje desde el servidor. No hay seguimiento confirmado.');
+  }finally{consultationLock.current=false;setConsulting(false);}
  }
  function discard(){
   if(!myDraft||!mutation.requestKey||lock.current)return;
@@ -182,6 +202,14 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     style={[styles.text,{color:palette.primary}]}>{feedback}</Text>}
   </Panel>
   <BookingRecoveryPanel client={client} view={view} operation="rideRequest"/>
+  {view.rideContinuation.canVerify&&<Panel>
+   <Text accessibilityRole="header" style={styles.heading}>Viaje registrado en STAGING</Text>
+   <Text style={styles.small}>Hay un recibo de solicitud persistida en QA. Consultaremos el estado con el servidor antes de abrir seguimiento; todavía no confirma tarifa, conductor ni operación comercial.</Text>
+   <Action label={consulting?'Verificando viaje…':'Verificar viaje y abrir seguimiento'}
+    busy={consulting} disabled={consulting}
+    hint="GET autoritativo del pasajero, sin nuevo despacho ni cobro."
+    onPress={()=>{void consultVerifiedRide();}}/>
+  </Panel>}
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Cotización y conductor</Text>
    <Action label="Aceptar tarifa y buscar conductor — pendiente de backend" disabled
