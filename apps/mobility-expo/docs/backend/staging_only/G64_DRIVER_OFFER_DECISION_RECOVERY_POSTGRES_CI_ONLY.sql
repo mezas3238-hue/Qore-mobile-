@@ -17,9 +17,8 @@ CREATE FUNCTION public.mobility_stage_g64_reconcile_offer_decision_owner_qa(
  SET search_path=''
 AS $fn$
 DECLARE row_state record;
-DECLARE canonical_kind text;
-DECLARE stored_action text;
-DECLARE persisted_id uuid;
+ canonical_kind text;
+ persisted_id uuid;
 BEGIN
  IF current_database()<>'qore_disposable_chain'
  OR current_setting('application_name')<>'qore_ci_disposable_chain'
