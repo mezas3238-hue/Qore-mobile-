@@ -83,8 +83,10 @@ test('R58 invalid key or untrusted operation cannot authorize recovery',()=>{
 test('R58 invalid or missing snapshots always fail closed',()=>{
  const x=view();
  for(const bad of [null,undefined,{},[],false]){
-  assert.equal(check(bad,x).ok,false);
-  assert.equal(check(x,bad).ok,false);
+  // Invoke directly: check(x,current=x) would replace explicit undefined
+  // with the valid default before the test reached the guard.
+  assert.equal(projectBookingRecoveryUi(bad,x,{operation:'rideRequest'}).ok,false);
+  assert.equal(projectBookingRecoveryUi(x,bad,{operation:'rideRequest'}).ok,false);
  }
 });
 test('R58 flagged production mode is never eligible for read action',()=>{
