@@ -68,7 +68,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const reading=new Set();
  function snapshot(){
   const current=session.publicSession();
-  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,
+  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,merchantCases:null,merchantCaseContractReady:false,
    pagination:Object.freeze({kyc:pages.get('kyc'),zones:pages.get('zones'),
     incidents:pages.get('incidents'),audit:pages.get('audit')}),
    actionsEnabled:false});}
@@ -81,6 +81,9 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    incidents:current.role==='admin'?incidents.current(current.role):null,
    audit:current.role==='admin'?audit.current(current.role):null,
    globalTriage:current.role==='admin'?globalTriage.snapshot():null,
+   // R43 aislado: no convertir G41/seguridad genérica en casos comerciales.
+   // El endpoint MerchantSupport A todavía no existe ni está certificado.
+   merchantCases:null,merchantCaseContractReady:false,
    pagination:Object.freeze({
     kyc:pages.get('kyc'),zones:pages.get('zones'),
     incidents:pages.get('incidents'),audit:pages.get('audit')
