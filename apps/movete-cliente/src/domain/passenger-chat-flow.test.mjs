@@ -525,3 +525,48 @@ test('el TTL vencido purga físicamente chat sin mensaje incierto',async()=>{
  assert.equal(stale.pendingSend,false);
  assert.equal(stale.window.rowsRead,0);
 });
+
+// R15: cambio de conversación del mismo servicio y JWT durante ACK.
+test('mismo envío reasignado espera conciliación antes de abrir nuevo hilo',async()=>{
+ const replacement=id(91);
+ let phase=0,attempts=0;
+ const keys=[];
+ const flow=make(flags({
+  readMessages:async()=>({ok:true,data:{...page(),
+   conversationId:phase===0?conversationId:replacement,
+   messages:[phase===0?row(1):row(2)]}}),
+  sendMessage:async args=>{
+   keys.push(args.requestKey);
+   return ++attempts===1?{ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'}:
+    {ok:true,data:ack()};
+  }
+ }));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:conversationId})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:replacement})).code,'PENDING_MESSAGE_RECONCILIATION');
+ assert.equal(flow.snapshot().conversationId,conversationId);
+ assert.equal((await flow.retryPending()).ok,true);
+ assert.deepEqual(keys,[key,key]);
+ phase=1;
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:replacement})).ok,true);
+ assert.equal(flow.snapshot().conversationId,replacement);
+ assert.deepEqual(flow.snapshot().messages.map(x=>x.messageId),[row(2).messageId]);
+});
+test('ACK demorado bajo JWT rotado no publica texto ni confirma envío',async()=>{
+ let identity=actor(),release;
+ const deferred=new Promise(resolve=>{release=resolve;});
+ const flow=make(flags({sendMessage:async()=>deferred}),async()=>identity);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ const sending=flow.send({body:'Estoy aquí',requestKey:key});
+ await Promise.resolve();await Promise.resolve();
+ identity={...actor(),sessionRevision:4};
+ release({ok:true,data:ack()});
+ assert.equal((await sending).code,'STALE_SESSION_RESPONSE');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,false);
+ assert.equal(flow.snapshot().conversationId,null);
+});
