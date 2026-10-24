@@ -3,8 +3,11 @@ export type AdminKycRecord={
  licenseStatus:string;insuranceStatus:string;inspectionStatus:string;reviewRevision:number;
 };
 export type PageState={pageNumber:number;hasNext:boolean;hasPrevious:boolean;nextCursor:string|null};
+import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
 export type AdminSnapshot={
  authenticated:boolean;
+ merchantCases:MerchantCasePageSuccess|null;
+ merchantCaseContractReady:false;
  account:{subject:string;role:'admin'|'owner';mfaVerified:true}|null;
  kyc:{revision:number;generatedAt:number;expiresAt:number;items:readonly Readonly<AdminKycRecord>[]} |null;
  finance:{period:{from:string;to:string;timezone:'America/Asuncion'};currency:'PYG';
