@@ -21,6 +21,7 @@ import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
 import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
 import {createG51ChatInboxHttpGateway} from './g51-chat-inbox-http-gateway.mjs';
 import {createG52ChatHistoryHttpGateway} from './g52-chat-history-http-gateway.mjs';
+import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -34,7 +35,7 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
- now=()=>Date.now()}={}){
+ g53ChatSendHttpOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
@@ -81,7 +82,28 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
- chatFlow=createPassengerChatFlow({gateway:chatGateway??g52HistoryHttp,
+ // Escritura G53 NO se deduce de GET G52: dos runtime gates y el
+ // MISMO origen fijado deben estar certificados. Exponer sendMessage solo
+ // cuando la pareja está completa, o el UI podría anunciar POST falso.
+ const g53SendHttp=g53ChatSendHttpOptions?createG53ChatSendHttpGateway({
+  ...g53ChatSendHttpOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ const g53MaySend=g52HistoryHttp?.isConfigured()===true
+  &&g53SendHttp?.isConfigured()===true
+  &&g52ChatHistoryHttpOptions?.origin===g53ChatSendHttpOptions?.origin
+  &&g52ChatHistoryHttpOptions?.pinnedOrigin===g53ChatSendHttpOptions?.pinnedOrigin;
+ const combinedChatGateway=g53MaySend?Object.freeze({
+  ...g52HistoryHttp,
+  sendMessage:args=>g53SendHttp.sendMessage(args),
+  cancelPending:()=>{g52HistoryHttp.cancelPending();g53SendHttp.cancelPending();}
+ }):g52HistoryHttp;
+ chatFlow=createPassengerChatFlow({gateway:chatGateway??combinedChatGateway,
   getActor:async()=>actorSession(),now});
  // G51 está descrito por A pero NO montado. Solo una configuración
  // explícita de HTTPS, Auth y gates certificados habilita su transporte.
