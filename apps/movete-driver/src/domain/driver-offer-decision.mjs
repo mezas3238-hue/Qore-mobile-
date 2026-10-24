@@ -3,28 +3,26 @@
  * send driver/courier identity, tariff, GPS, passenger details or role.
  * Caller retains requestKey across retries after uncertain network outcomes.
  */
+import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
 export const DRIVER_OFFER_DECISIONS_LIVE_ENABLED=false;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BEARER=/^[A-Za-z0-9._~-]{20,7900}$/;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const route={AUTO_RIDE:'/v1/staging/driver/offers/',DELIVERY:'/v1/staging/courier/delivery-offers/'};
 export async function decidePrivateDriverOffer({
- apiOrigin,accessToken,kind,offerId,requestKey,action,request=fetch
+ apiOrigin,accessToken,kind,offerId,requestKey,action,
+ approvedStagingHost=null,allowedByOwner=false,request=fetch
 }={}){
  if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||!BEARER.test(accessToken)||
    !Object.hasOwn(route,kind)||typeof offerId!=='string'||!UUID.test(offerId)||
    typeof requestKey!=='string'||!UUID.test(requestKey)||
    !['accept','decline'].includes(action)||typeof request!=='function')
   throw Error('Invalid private Driver decision configuration');
- let origin;
- try{origin=new URL(apiOrigin);}catch{throw Error('Invalid Driver QA origin');}
- if(origin.protocol!=='http:'||origin.hostname!=='127.0.0.1'||!origin.port||
-   origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)
-  throw Error('Private Driver decisions require isolated localhost QA');
+ const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,allowedByOwner});
  let response;
  try{
-  response=await request(origin.origin+route[kind]+action,{
-   method:'POST',cache:'no-store',credentials:'omit',
+  response=await request(origin+route[kind]+action,{
+   method:'POST',cache:'no-store',credentials:'omit',redirect:'error',
    headers:{authorization:'Bearer '+accessToken,
     accept:'application/json','content-type':'application/json'},
    body:JSON.stringify({offerId,requestKey})
