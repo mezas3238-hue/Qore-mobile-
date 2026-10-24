@@ -21,7 +21,7 @@ INSERT INTO public.mobility_stage_fare_rules
  VALUES('g72-qa-auto-v1','AUTO','ASUNCION_FIXTURE',4000,2000,120,7000,
   1000,pg_catalog.clock_timestamp()-interval '2 hours',
   pg_catalog.clock_timestamp()+interval '2 hours',true,
-  '22222222-2222-4222-8222-222222222222',
+  '72720000-0000-4727-8727-000000000001',
   pg_catalog.clock_timestamp()-interval '3 hours');
 
 SET ROLE service_role;
