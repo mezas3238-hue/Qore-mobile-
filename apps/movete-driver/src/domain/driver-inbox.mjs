@@ -6,22 +6,20 @@ export const DRIVER_INBOX_LIVE_ENABLED=false;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const bearer=/^[A-Za-z0-9._~-]{20,7900}$/;
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
 export async function readDriverPrivateInbox({
- apiOrigin,accessToken,request=fetch,now=Date.now
+ apiOrigin,accessToken,approvedStagingHost=null,allowedByOwner=false,
+ request=fetch,now=Date.now
 }={}){
  if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||
     !bearer.test(accessToken)||typeof request!=='function'||typeof now!=='function')
   throw Error('Driver QA login or connection not configured');
- let url;
- try{url=new URL(apiOrigin);}catch{throw Error('Driver QA origin invalid');}
- if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||!url.port||
-   url.pathname!=='/'||url.search||url.hash||url.username||url.password)
-  throw Error('Driver API origin must be isolated localhost QA');
+ const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,allowedByOwner});
  const at=now();
  if(!Number.isSafeInteger(at)||at<0)throw Error('Driver QA clock invalid');
  let response;
  try{
-  response=await request(url.origin+'/v1/staging/driver/inbox',{
+  response=await request(origin+'/v1/staging/driver/inbox',{
    method:'GET',cache:'no-store',credentials:'omit',
    headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
   });
