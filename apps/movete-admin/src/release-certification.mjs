@@ -81,7 +81,7 @@ function evidenceValid(e){
    : u.pathname.startsWith('/'+OWNER_REPO+'/blob/'+e.commitSha+'/');
  }catch{return false;}
 }
-const safeOwner=new Set(['A','B','A+B','Owner','Owner+A+B']);
+const safeOwner=new Set(['A','B','A+B','A/B','Owner','Owner+A+B','Owner/A/B']);
 const REQUIRED_KINDS={
  DOMAIN_CI:['DOMAIN_CI'],API_CONTRACT:['API_CONTRACT'],
  NEGATIVE_SECURITY:['NEGATIVE_SECURITY'],STAGING_E2E:['STAGING_E2E'],
