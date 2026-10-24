@@ -6,6 +6,31 @@
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATES=new Set(['requested','accepted','picked_up','delivered','disputed','returned','cancelled']);
+// R66: G5 SQL permits requested→accepted→picked_up→delivered→disputed
+// →returned; cancellation only from requested/accepted. GET can skip
+// intermediate states after offline time, but never rewind the same delivery.
+const RANK=Object.freeze({requested:0,accepted:1,picked_up:2,
+ delivered:3,disputed:4,returned:5});
+function compatible(previous,next){
+ if(previous.deliveryId!==next.deliveryId)return true;
+ if(next.revision<previous.revision)return false;
+ if(next.vehicleKind!==previous.vehicleKind)return false;
+ if(next.revision===previous.revision)
+  return next.state===previous.state
+   &&next.assignmentPersisted===previous.assignmentPersisted
+   &&next.proofVerified===previous.proofVerified;
+ if(previous.state==='cancelled'||previous.state==='returned')return false;
+ if(next.state==='cancelled')
+  return (previous.state==='requested'||previous.state==='accepted')
+   &&next.revision>=previous.revision+1;
+ if(previous.state==='delivered'&&next.state==='disputed'
+  ||previous.state==='disputed'&&next.state==='returned')
+  return next.revision>=previous.revision+1;
+ if(RANK[next.state]===undefined||RANK[previous.state]===undefined)return false;
+ // A G5 increases revision once per custody transition.
+ const delta=RANK[next.state]-RANK[previous.state];
+ return delta>0&&next.revision-previous.revision>=delta;
+}
 const KINDS=new Set(['AUTO','MOTO']);
 const FIELDS=['mode','deliveryId','ownerId','state','revision','vehicleKind',
  'assignmentPersisted','proofVerified','qaOnly','productionEnabled','liveDeliveriesEnabled'];
@@ -45,8 +70,8 @@ export function createSenderCustodyFlow({
  const ready=enabled===true&&contractCertified===true
   &&stagingRuntimeVerified===true&&typeof readOwnDelivery==='function'
   &&typeof getSession==='function'&&typeof now==='function';
- let epoch=0,busy=false,record=null,error=null;
- function clear(){epoch++;busy=false;record=null;error=null;}
+ let epoch=0,busy=false,record=null,error=null,acceptedFloor=null;
+ function clear(){epoch++;busy=false;record=null;acceptedFloor=null;error=null;}
  function snapshot(){
   return Object.freeze({readReady:Boolean(ready),loading:busy,
    deliveryId:record?.deliveryId??null,revision:record?.revision??-1,
@@ -61,7 +86,7 @@ export function createSenderCustodyFlow({
    ||expectedSessionRevision<0)return fail('INVALID_SENDER_CUSTODY_SCOPE');
   if(busy)return fail('SENDER_CUSTODY_READ_IN_FLIGHT');
   // Never expose a previous proof while another GET may replace its scope.
-  const prior=record;record=null;
+  record=null;
   const generation=++epoch;busy=true;error=null;
   try{
    let before;
@@ -92,13 +117,17 @@ export function createSenderCustodyFlow({
     return fail(error);
    }
    const dto=response.data;
-   if(prior!==null&&prior.deliveryId===deliveryId&&dto.revision<prior.revision){
-    record=null;error='SENDER_CUSTODY_STALE_REVISION';
+   const next=Object.freeze({deliveryId:dto.deliveryId,
+    revision:dto.revision,state:dto.state,vehicleKind:dto.vehicleKind,
+    assignmentPersisted:dto.assignmentPersisted,
+    proofVerified:dto.proofVerified});
+   if(acceptedFloor!==null&&acceptedFloor.deliveryId===deliveryId
+    &&!compatible(acceptedFloor,next)){
+    record=null;error='SENDER_CUSTODY_STATE_CONFLICT';
     return fail(error);
    }
-   record=Object.freeze({deliveryId:dto.deliveryId,
-    revision:dto.revision,state:dto.state,vehicleKind:dto.vehicleKind,
-    proofVerified:dto.proofVerified});
+   acceptedFloor=next;
+   record=next;
    error=null;
    return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
   }finally{if(generation===epoch)busy=false;}
