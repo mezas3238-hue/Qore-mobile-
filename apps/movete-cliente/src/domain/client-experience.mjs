@@ -315,6 +315,41 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(!actor()){clearPrivate();return fail('AUTH_REQUIRED');}
   return tracking.tick();
  }
+ // F1: QA persisted booking -> authoritative Passenger GET. Never infer
+ // assignment, commercial status, or fare from HTTP 201 alone.
+ function rideContinuation(){
+  const user=actor(),receipt=mutations.verifiedRide();
+  const canVerify=Boolean(user&&receipt&&receipt.subject===user.subject
+   &&receipt.sessionRevision===session.privacyRevision()
+   &&bookingGateway?.isConfigured()===true
+   &&statusGateway?.isConfigured()===true);
+  return Object.freeze({canVerify,tripId:canVerify?receipt.tripId:null,
+   qaOnly:true,productionEnabled:false});
+ }
+ async function continueVerifiedRide(){
+  const receipt=mutations.verifiedRide(),scope=rideContinuation(),user=actor();
+  if(!scope.canVerify||!receipt||!user)
+   return fail('RIDE_CONTINUATION_NOT_CERTIFIED');
+  const privacy=session.privacyRevision(),key=receipt.requestKey;
+  const started=startTracking(receipt.tripId);
+  if(!started.ok)return started;
+  notify();
+  const check=await syncTracking();
+  const current=actor(),still=mutations.verifiedRide();
+  if(!check.ok||!current||current.subject!==user.subject
+   ||session.privacyRevision()!==privacy||!still
+   ||still.requestKey!==key||still.tripId!==receipt.tripId
+   ||tracking.snapshot().tripId!==receipt.tripId){
+   // Never leave an unverified trip connected, even after HTTP 200.
+   if(tracking.snapshot().tripId===receipt.tripId)tracking.stop();
+   notify();
+   return fail('RIDE_STATUS_NOT_VERIFIED');
+  }
+  notify();
+  return Object.freeze({ok:true,tripId:receipt.tripId,
+   serverRevision:tracking.snapshot().revision,
+   qaOnly:true,productionEnabled:false});
+ }
  function prepareCancelRide({tripId,requestKey}={}){
   const user=actor();
   if(!user)return fail('AUTH_REQUIRED');
@@ -435,6 +470,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    clearPrivate();
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
+    rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
@@ -452,6 +488,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    mutation:mutations.publicState(),
    bookingRecovery:Object.freeze({readReady:Boolean(bookingGateway?.reconciliationConfigured?.()),
     productionEnabled:false}),
+   rideContinuation:rideContinuation(),
    tracking:tracking.snapshot(),
    quote:quote.current(),
    history:history.current(user.subject),
@@ -540,6 +577,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    const result=await pending;notify();return result;
   },
   startTracking:tripId=>{const result=startTracking(tripId);notify();return result;},
+  continueVerifiedRide,
   syncTracking:async()=>{const result=await syncTracking();notify();return result;},
   connectionLost:()=>{tracking.connectionLost();notify();},
   acceptQuote:dto=>{const result=acceptQuote(dto);notify();return result;},
