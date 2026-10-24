@@ -11,6 +11,8 @@ import {reviewCommerceBasket} from '../src/domain/commerce-checkout-review.mjs';
 import {createCommerceSubstitutionDraft} from '../src/domain/commerce-substitution-draft.mjs';
 import type {SubstitutionChoice} from '../src/domain/commerce-substitution-draft.mjs';
 import {createCommerceUiReadFence} from '../src/domain/commerce-ui-read-fence.mjs';
+import {isCommercePageFresh} from '../src/domain/commerce-ttl-refresh.mjs';
+import {useCommerceExpiryClock} from '../src/useCommerceExpiryClock';
 export default function Commerce(){
  const {client,view}=useClientView();
  // El key elimina búsqueda, rubro elegido y sucursal anterior ANTES de
@@ -96,6 +98,7 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
   }
  },[preferredBranch,substitutionFlow,readFence]);
  const [loading,setLoading]=useState(false);
+ const verifiedNow=useCommerceExpiryClock(commerce.catalogExpiresAt);
  const busy=commerce.catalogLoading||loading||readFence.isBusy();
  const clearMessage=()=>setMessage('');
  const load=async(branchOverride?:string)=>{
@@ -114,13 +117,13 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
   });
  };
  const fresh=commerce.stage==='SERVER_CATALOG'&&!commerce.catalogLoading
-  &&commerce.catalogExpiresAt!==null&&commerce.catalogExpiresAt>Date.now()
+  &&isCommercePageFresh(commerce.catalogExpiresAt,verifiedNow)
   &&isSelectedCatalogBranchCurrent(branchInput,commerce.branchId);
  const verifiedMatches=fresh?filterVerifiedCatalogPage(commerce.catalogItems,
   {query,verified:true}):null;
  const visibleItems=verifiedMatches?.ok?verifiedMatches.items:[];
  const review=fresh?reviewCommerceBasket(commerce,{
-  authenticated:view.authenticated,now:Date.now()
+  authenticated:view.authenticated,now:verifiedNow
  }):null;
  const actor={authenticated:view.authenticated,subject:view.account?.subject??null,
   sessionRevision:view.privateViewRevision};
@@ -261,9 +264,11 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
  useEffect(()=>{if(preferredBranch){
   readFence.invalidate();setBranchInput(preferredBranch);setMessage('');
  }},[preferredBranch,readFence]);
+ const verifiedNow=useCommerceExpiryClock(pager.expiresAt);
+ const pageFresh=isCommercePageFresh(pager.expiresAt,verifiedNow);
  if(!pager.readReady)return null;
  const matchingBranch=isSelectedCatalogBranchCurrent(branchInput,pager.branchId);
- const matchedCatalog=!pager.loading&&pager.pageNumber>0&&matchingBranch
+ const matchedCatalog=!pager.loading&&pager.pageNumber>0&&matchingBranch&&pageFresh
   ?filterVerifiedCatalogPage(pager.visibleItems,{query,verified:true}):null;
  const visibleItems=matchedCatalog?.ok?matchedCatalog.items:[];
  const load=async(next=false,previous=false)=>{
@@ -294,7 +299,12 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
   {!pager.loading&&pager.pageNumber>0&&!matchingBranch&&<Text style={styles.text}>
    La sucursal ingresada no coincide con la última consulta. Volvé a validar para ver precios vigentes.
   </Text>}
-  {!pager.loading&&pager.pageNumber>0&&matchingBranch&&<>
+  {!pager.loading&&pager.pageNumber>0&&matchingBranch&&!pageFresh&&
+   <Text accessibilityRole="alert" style={styles.text}>
+    Esta página de productos caducó. Se ocultaron los artículos y los precios.
+    Volvé a consultar la sucursal para ver datos vigentes.
+   </Text>}
+  {!pager.loading&&pager.pageNumber>0&&matchingBranch&&pageFresh&&<>
    <Text style={styles.small}>Página {pager.pageNumber} · {pager.visibleItems.length} productos en esta página, no el total de la plataforma. Versión {pager.version}.</Text>
    {matchedCatalog?.ok&&visibleItems.length===0&&<Text style={styles.small}>
     No hay productos coincidentes en esta página; usá los controles de paginación para seguir explorando.
@@ -308,10 +318,10 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
     <Text style={styles.small}>Solo consulta. El precio final y la compra requieren una transacción de servidor.</Text>
    </View>)}
    <Action label="Página anterior" secondary
-    disabled={!pager.hasPrevious||pager.loading||readFence.isBusy()}
+    disabled={!pager.hasPrevious||!pageFresh||pager.loading||readFence.isBusy()}
     onPress={()=>void load(false,true)}/>
    <Action label="Página siguiente" secondary
-    disabled={!pager.hasNext||pager.loading||readFence.isBusy()}
+    disabled={!pager.hasNext||!pageFresh||pager.loading||readFence.isBusy()}
     onPress={()=>void load(true,false)}/>
    <Action label="Cerrar exploración" secondary
     disabled={pager.loading||readFence.isBusy()}
