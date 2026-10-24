@@ -332,3 +332,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G50_PRIVATE_SERVICE_CHAT_POSTGRES_CI_ONLY.sql
       - name: G50 test SQL privacy, idempotency, cursor, assignment rotation and transactional revocation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G50_PRIVATE_SERVICE_CHAT_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G50 two independent PG16 connections race open, idempotent send and revocation
+        run: python3 apps/mobility-expo/server/g50-private-chat-concurrency-ci.py
