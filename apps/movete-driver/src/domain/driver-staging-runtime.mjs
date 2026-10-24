@@ -12,6 +12,7 @@ import {createDriverChatHttpsStagingAdapters}
 import {readDriverPrivateInbox} from './driver-inbox.mjs';
 import {readDriverDocumentStatuses} from './driver-documents.mjs';
 import {readDriverLicenseReadiness} from './driver-license-readiness.mjs';
+import {decidePrivateDriverOffer} from './driver-offer-decision.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -59,9 +60,20 @@ export function createDriverStagingRuntime({
   readDocuments:params=>readDriverDocumentStatuses({...params,...scope}),
   readLicense:params=>readDriverLicenseReadiness({...params,...scope})
  });
+ const offerActions=Object.freeze({
+  makeRequestKey:chatAdapters.makeRequestKey,
+  now,
+  liveEnabled:false,
+  decide:({accessToken,kind,offerId,requestKey,action})=>
+   decidePrivateDriverOffer({
+    apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+    accessToken,kind,offerId,requestKey,action,request
+   })
+ });
  return Object.freeze({
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
+  offerActions,
   productionEnabled:false,qaOnly:true
  });
 }
