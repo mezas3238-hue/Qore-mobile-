@@ -46,6 +46,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G56_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G56B_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G57_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G57B_*'
       - 'apps/mobility-expo/server/g57-*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
@@ -407,3 +408,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57_ORDERED_VISIBLE_RECEIPTS_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G57 race two delegated Passenger read markers and G42 session revocation
         run: python3 apps/mobility-expo/server/g57-ordered-visible-concurrency-ci.py
+      - name: G57B install isolated Driver read-marker and ordered Passenger receipt bridge
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_POSTGRES_CI_ONLY.sql
+      - name: G57B assert Driver-only delegated role, one-by-one Passenger messages and reassignment fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql
