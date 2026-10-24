@@ -83,6 +83,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G3_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G4_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G5_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
       - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
 permissions:
@@ -457,3 +459,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G64_DRIVER_OFFER_DECISION_RECOVERY_POSTGRES_CI_ONLY.sql
       - name: G64 verify immutable AUTO and DELIVERY receipts, unknown, two DB sessions and G42 revoke fence
         run: python3 apps/mobility-expo/server/g64-driver-offer-decision-recovery-ci.py
+
+      - name: G67 install owner-only delivery proof and atomic event fence (disposable PG16)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_ATOMIC_DELIVERY_PROOF_POSTGRES_CI_ONLY.sql
+      - name: G67 assert no proof mint privileges, forged UUIDs, G5 COMMIT and rollback
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_ATOMIC_DELIVERY_PROOF_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G67 two PostgreSQL sessions race proof revoke, delivery and lost ACK
+        run: python3 apps/mobility-expo/server/g67-delivery-proof-concurrency-ci.py
