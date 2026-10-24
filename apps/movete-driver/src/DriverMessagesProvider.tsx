@@ -6,7 +6,9 @@ import type {
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 
 /** G60A: independent Driver chat. No default provider, HTTP, credentials or LIVE. */
-type DriverMessagesView=DriverMessagingSnapshot&{phase:DriverMessagingSnapshot['phase']|'not-configured'};
+type DriverMessagesView=Omit<DriverMessagingSnapshot,'phase'>&{
+ phase:DriverMessagingSnapshot['phase']|'not-configured';
+};
 type MessagesContextValue={
  state:DriverMessagesView;configured:boolean;
  refreshInbox:()=>Promise<void>;loadMoreInbox:()=>Promise<void>;
