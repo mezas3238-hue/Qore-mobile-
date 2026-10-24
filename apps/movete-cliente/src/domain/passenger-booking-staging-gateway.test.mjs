@@ -30,7 +30,7 @@ const base=()=>({enabled:true,contractCertified:true,
  getSession:async()=>identity(),fetchImpl:async()=>response(),
  now:()=>T,timeoutMs:4500});
 const send=(g,body=ride(),operation='rideRequest')=>
- g.send(operation,{body,expectedSessionRevision:9});
+ g.send(operation,{body,expectedSessionRevision:9,expectedSubject:subject});
 
 test('R56 refuses all bookings by default, with zero network calls',async()=>{
  let n=0;
@@ -117,6 +117,17 @@ test('R56 cross-session or Driver role is denied before any POST',async()=>{
    fetchImpl:async()=>{hits++;return response();}});
   assert.equal((await send(g)).ok,false);
  }
+ assert.equal(hits,0);
+});
+test('R56 explicit expected subject is mandatory even for direct gateway calls',async()=>{
+ let hits=0;
+ const g=createPassengerBookingStagingGateway({...base(),
+  fetchImpl:async()=>{hits++;return response();}});
+ const omitted=await g.send('rideRequest',{body:ride(),expectedSessionRevision:9});
+ assert.equal(omitted.code,'STALE_SESSION_RESPONSE');
+ const foreign=await g.send('rideRequest',{
+  body:ride(),expectedSessionRevision:9,expectedSubject:id(77)});
+ assert.equal(foreign.code,'STALE_SESSION_RESPONSE');
  assert.equal(hits,0);
 });
 test('R56 invalid operations or altered ride payload do not touch network',async()=>{
