@@ -60,6 +60,7 @@ function makeCodec(secret){
    const [body,mac]=cursor.split('.');
    const expected=Buffer.from(sign(body),'base64url');
    const actual=Buffer.from(mac,'base64url');
+   if(actual.toString('base64url')!==mac)throw Error('BAD_CURSOR');
    if(actual.length!==expected.length||!timingSafeEqual(actual,expected))
     throw Error('BAD_CURSOR');
    const decoded=Buffer.from(body,'base64url');
@@ -131,16 +132,20 @@ export function createG51ChatInboxQa({
     res.error.code==='G5109'?'INBOX_REVISION_CHANGED':'INBOX_ACCESS_DENIED');
   }
   const data=res.data;
-  if(!validateDb(data,identity.id,at,req.limit)||
+  const receivedAt=now();
+  if(!integer(receivedAt)||receivedAt<at)return error(503,'CLOCK_UNAVAILABLE');
+  if(!validateDb(data,identity.id,receivedAt,req.limit)||
    (position!==null&&data.revision!==position.revision)||
    (position!==null&&data.items.some(item=>!older(item,{
     updatedAt:position.beforeMs,conversationId:position.beforeId}))))
    return error(503,'UNTRUSTED_INBOX_RECEIPT');
+  const effectiveExpiry=Math.min(data.expiresAt,identity.expiresAtMs);
+  if(effectiveExpiry<=receivedAt)return error(401,'SESSION_EXPIRED');
   const nextCursor=data.hasMore?codec.encode([1,identity.id,identity.sessionId,
    identity.tokenIatMs,data.revision,data.nextPosition.updatedAt,
-   data.nextPosition.conversationId,Math.min(data.expiresAt,identity.expiresAtMs)]):null;
+   data.nextPosition.conversationId,effectiveExpiry]):null;
   return Object.freeze({status:200,body:Object.freeze({
-   ownerId:data.ownerId,generatedAt:data.generatedAt,expiresAt:data.expiresAt,
+   ownerId:data.ownerId,generatedAt:data.generatedAt,expiresAt:effectiveExpiry,
    revision:data.revision,items:data.items,nextCursor,productionEnabled:false
   })});
  }});
