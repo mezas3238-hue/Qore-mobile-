@@ -4,7 +4,7 @@
  * Unknown COMMIT blocks further transitions; manual status refresh only.
  */
 export const DRIVER_TRIP_CONTROLLER_LIVE_ENABLED=false;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN=/^[A-Za-z0-9._~-]{20,7900}$/;
 const EVENT={accepted:'arrive',arriving:'pickup',
  in_progress:'complete',completed:null,cancelled:null};
