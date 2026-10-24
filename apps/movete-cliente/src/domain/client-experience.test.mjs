@@ -1630,3 +1630,67 @@ test('R33 nueva asignación bloquea POST pendiente que ya tuvo ACK ambiguo',asyn
  assert.equal((await api.retryChat()).code,'NO_PENDING_MESSAGE');
  assert.equal(posts.length,1);
 });
+
+test('R62 default Passenger snapshot does not authorize sender delivery custody',async()=>{
+ const api=createClientExperience();
+ assert.equal(api.snapshot().senderCustody.readReady,false);
+ assert.equal(api.snapshot().senderCustody.deliveryId,null);
+ assert.equal((await api.readOwnDeliveryCustody(trip)).code,'AUTH_REQUIRED');
+});
+test('R62 only a delivery in authorized Passenger history can be queried',async()=>{
+ const delivery='66662000-0000-4666-8666-000000000005';
+ let reads=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  senderCustodyOptions:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,
+   readOwnDelivery:async()=>{reads++;return {ok:true,status:200,data:{
+    mode:'STAGING_DEMO_ONLY',deliveryId:delivery,ownerId:a,
+    state:'delivered',revision:3,vehicleKind:'MOTO',
+    assignmentPersisted:true,proofVerified:true,qaOnly:true,
+    productionEnabled:false,liveDeliveriesEnabled:false}};}}
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().senderCustody.readReady,true);
+ assert.equal((await api.readOwnDeliveryCustody(delivery)).code,
+  'SENDER_DELIVERY_NOT_IN_OWN_HISTORY');
+ assert.equal(reads,0);
+ assert.equal(api.acceptHistory({ownerId:a,generatedAt:now-1000,
+  expiresAt:now+60000,nextCursor:null,items:[
+   {serviceId:trip,kind:'RIDE',status:'assigned',
+    createdAt:now-5000,revision:1},
+   {serviceId:delivery,kind:'DELIVERY',status:'assigned',
+    createdAt:now-3000,revision:1}
+  ]}),true);
+ assert.equal((await api.readOwnDeliveryCustody(trip)).code,
+  'SENDER_DELIVERY_NOT_IN_OWN_HISTORY');
+ assert.equal(reads,0);
+ assert.equal((await api.readOwnDeliveryCustody(delivery)).ok,true);
+ assert.equal(reads,1);
+ assert.equal(api.snapshot().senderCustody.state,'delivered');
+ assert.equal(api.snapshot().senderCustody.proofVerified,true);
+ assert.equal(api.snapshot().senderCustody.productionEnabled,false);
+ await api.signOut();
+ assert.equal(api.snapshot().senderCustody.readReady,false);
+ assert.equal(api.snapshot().senderCustody.state,null);
+});
+test('R62 rejected proof cannot become delivered even with HTTP 200',async()=>{
+ const delivery='66662000-0000-4666-8666-000000000005';
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  senderCustodyOptions:{enabled:true,contractCertified:true,
+   stagingRuntimeVerified:true,
+   readOwnDelivery:async()=>({ok:true,status:200,data:{
+    mode:'STAGING_DEMO_ONLY',deliveryId:delivery,ownerId:a,
+    state:'delivered',revision:3,vehicleKind:'AUTO',
+    assignmentPersisted:true,proofVerified:false,qaOnly:true,
+    productionEnabled:false,liveDeliveriesEnabled:false}})
+  }});
+ await api.refreshSession();
+ api.acceptHistory({ownerId:a,generatedAt:now-1000,expiresAt:now+60000,
+  nextCursor:null,items:[{serviceId:delivery,kind:'DELIVERY',
+   status:'assigned',createdAt:now-3000,revision:1}]});
+ assert.equal((await api.readOwnDeliveryCustody(delivery)).code,
+  'SENDER_CUSTODY_UNVERIFIED');
+ assert.equal(api.snapshot().senderCustody.state,null);
+});
