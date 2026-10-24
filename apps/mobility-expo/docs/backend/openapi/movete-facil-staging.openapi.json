@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g53",
+    "version": "1.0.0-g54",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
@@ -2755,7 +2755,8 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-qore-g54-scoped-sql-delegation": true
       }
     },
     "/v1/staging/chat/conversations/{conversationId}/read-receipt": {
@@ -2765,7 +2766,7 @@
           "private-chat"
         ],
         "summary": "Monotonic read watermark under current assignment and session lock",
-        "description": "Future QA-only read receipt. Cannot mark a future message or impersonate a participant.",
+        "description": "Future QA-only read receipt. Cannot mark a future message or impersonate a participant. G54 delegates private SQL through a one-use CHAT_READ ticket, NOLOGIN role and G42 transactional session lock; never expose owner-only functions.",
         "x-qore-runtime-wired": false,
         "x-qore-qa-only": true,
         "parameters": [
@@ -2814,7 +2815,8 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-qore-g54-scoped-sql-delegation": true
       }
     },
     "/v1/staging/chat/services/{serviceKind}/{serviceId}/messages": {
@@ -6653,6 +6655,44 @@
             "const": true
           }
         }
+      },
+      "ChatReadReceiptG54": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "readThrough",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readThrough": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "ChatReadReceiptRequestG54": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "throughSeq"
+        ],
+        "properties": {
+          "throughSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       }
     }
   },
@@ -6671,5 +6711,6 @@
   "x-qore-g53-passenger-chat-send-runtime-wired": false,
   "x-qore-g49-provider-chat-bridge-runtime-wired": false,
   "x-qore-g49-scoped-chat-role": "mobility_g49_chat_gateway_ci",
-  "x-qore-g49-qa-issuer-and-grants-synthetic-only": true
+  "x-qore-g49-qa-issuer-and-grants-synthetic-only": true,
+  "x-qore-g54-scoped-inbox-read-runtime-wired": false
 }
