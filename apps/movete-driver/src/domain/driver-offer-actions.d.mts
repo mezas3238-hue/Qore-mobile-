@@ -19,6 +19,11 @@ export type DriverOfferActionsAdapters=Readonly<{
    kind:OfferKind;action:OfferAction;outcome:'accepted'|'declined';
    receiptId:string;liveEnabled:false;pushDelivered:false;
   }>;
+ reconcile?:(params:{accessToken:string;kind:OfferKind;offerId:string;
+  requestKey:string;action:OfferAction})=>Promise<{
+   kind:OfferKind;action:OfferAction;outcome:'accepted'|'declined';
+   receiptId:string;serverPersisted:true;liveEnabled:false;pushDelivered:false;
+  }>;
  makeRequestKey:()=>string|Promise<string>;
  now?:()=>number;liveEnabled?:false;
 }>;
@@ -32,6 +37,7 @@ export type DriverOfferActionsController=Readonly<{
   serviceId:string;expiresAtMs:number}>,
   options?:{currentLicenseApproved?:boolean})=>DriverOfferActionsSnapshot;
  decide:(request:{offerId:string;action:OfferAction})=>Promise<DriverOfferActionsSnapshot>;
+ reconcilePending:(offerId:string)=>Promise<DriverOfferActionsSnapshot>;
 }>;
 export declare function createDriverOfferActionsController(
  opts:DriverOfferActionsAdapters
