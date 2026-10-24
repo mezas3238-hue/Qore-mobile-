@@ -669,3 +669,30 @@ test('revalidar mensaje incierto no acepta rollback del mismo hilo al vencer TTL
  assert.equal(flow.snapshot().messages.length,0);
  assert.equal(flow.snapshot().pendingSend,false);
 });
+
+
+// R17 — ACK confirmado actualiza el high-water mark del hilo.
+test('ACK duradero impide reabrir la misma conversación desde un GET regresivo',async()=>{
+ let n=0;
+ const flow=make(flags({readMessages:async()=>({ok:true,data:++n===1
+  ?page():{...page(),messages:[row(1)],revision:7}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).ok,true);
+ assert.equal(flow.snapshot().messages.some(m=>m.messageId===messageId),true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:conversationId})).code,'INVALID_CHAT_PAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('ACK invalida cursor emitido antes de escribir; GET fresco recupera paginación',async()=>{
+ let reads=0;
+ const cursor='k'.repeat(44);
+ const flow=make(flags({readMessages:async()=>({ok:true,
+  data:reads++===0?page('RIDE',cursor)
+   :{...page('RIDE',cursor),revision:8}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().hasOlder,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).ok,true);
+ assert.equal(flow.snapshot().hasOlder,false);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().hasOlder,true);
+});
