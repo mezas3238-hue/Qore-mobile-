@@ -10,6 +10,7 @@ import type {CommerceVertical} from '../src/domain/commerce-storefront.mjs';
 import {reviewCommerceBasket} from '../src/domain/commerce-checkout-review.mjs';
 import {createCommerceSubstitutionDraft} from '../src/domain/commerce-substitution-draft.mjs';
 import type {SubstitutionChoice} from '../src/domain/commerce-substitution-draft.mjs';
+import {createCommerceUiReadFence} from '../src/domain/commerce-ui-read-fence.mjs';
 export default function Commerce(){
  const {client,view}=useClientView();
  // El key elimina búsqueda, rubro elegido y sucursal anterior ANTES de
@@ -59,13 +60,13 @@ function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnaps
    <Text style={styles.small}>No hay ofertas, tiempos de entrega o stock simulados. La compra y el pago continúan desactivados.</Text>
   </Panel>}
   {view.authenticated&&view.branchDirectory.readReady&&
-   <CertifiedBranchDirectory client={client} view={view}
+   <CertifiedBranchDirectory key={selectedVertical} client={client} view={view}
     selectedVertical={selectedVertical} onSelect={setPreferredBranch}/>}
   {view.authenticated&&view.commerce.catalogReadReady&&
-   <CertifiedCatalog client={client} view={view} query={query}
+   <CertifiedCatalog key={selectedVertical} client={client} view={view} query={query}
     preferredBranch={preferredBranch}/>}
   {view.authenticated&&view.commercePager.readReady&&
-   <ReadOnlyCatalogPager client={client} view={view} query={query}
+   <ReadOnlyCatalogPager key={selectedVertical} client={client} view={view} query={query}
     preferredBranch={preferredBranch}/>}
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>¿Cómo funcionará tu pedido?</Text>
@@ -82,28 +83,35 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
  const commerce=view.commerce;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
+ const [readFence]=useState(()=>createCommerceUiReadFence());
  const substitutionFlow=useMemo(()=>createCommerceSubstitutionDraft(),[]);
+ useEffect(()=>()=>{readFence.dispose();},[readFence]);
  const [choiceRevision,setChoiceRevision]=useState(0);
  // El cambio de revisión fuerza una nueva proyección de elecciones en RAM.
  void choiceRevision;
  useEffect(()=>{
-  if(preferredBranch){substitutionFlow.clear();setBranchInput(preferredBranch);}
- },[preferredBranch,substitutionFlow]);
+  if(preferredBranch){
+   readFence.invalidate();substitutionFlow.clear();setBranchInput(preferredBranch);
+   setMessage('');
+  }
+ },[preferredBranch,substitutionFlow,readFence]);
  const [loading,setLoading]=useState(false);
- const busy=commerce.catalogLoading||loading;
+ const busy=commerce.catalogLoading||loading||readFence.isBusy();
  const clearMessage=()=>setMessage('');
  const load=async(branchOverride?:string)=>{
-  if(busy)return;
+  if(busy||readFence.isBusy())return;
   const branch=prepareCatalogBranchLookup(branchOverride??branchInput);
   if(!branch.ok){setMessage('Ingresá un identificador válido de una sucursal autorizada.');return;}
   substitutionFlow.clear();
   setChoiceRevision(r=>r+1);
   setLoading(true);setMessage('');
-  try{
-   const result=await client.loadCommerceCatalog(branch.branchId);
-   setMessage(result.ok?'Catálogo validado por el servidor. Precio y stock sujetos a actualización.':
-    'No se pudo verificar la sucursal o el catálogo. No se conservarán precios sin validación.');
-  }finally{setLoading(false);}
+  await readFence.run(()=>client.loadCommerceCatalog(branch.branchId),{
+   onResult:result=>setMessage(result.ok
+    ?'Catálogo validado por el servidor. Precio y stock sujetos a actualización.'
+    :'No se pudo verificar la sucursal o el catálogo. No se conservarán precios sin validación.'),
+   onError:()=>setMessage('Consulta no confirmada. Volvé a verificar la sucursal.'),
+   onFinish:()=>setLoading(false)
+  });
  };
  const fresh=commerce.stage==='SERVER_CATALOG'&&!commerce.catalogLoading
   &&commerce.catalogExpiresAt!==null&&commerce.catalogExpiresAt>Date.now()
@@ -134,7 +142,7 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
   <Text style={styles.text}>Código de sucursal autorizada</Text>
   <TextInput style={styles.field} autoCapitalize="none" autoCorrect={false}
    value={branchInput} onChangeText={value=>{
-    substitutionFlow.clear();setBranchInput(value);clearMessage();
+    readFence.invalidate();substitutionFlow.clear();setBranchInput(value);clearMessage();
    }}
    maxLength={36} editable={!busy}
    placeholder="Identificador de sucursal" accessibilityLabel="Identificador de sucursal autorizada"/>
@@ -248,29 +256,38 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
  const pager=view.commercePager;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
- useEffect(()=>{if(preferredBranch)setBranchInput(preferredBranch);},[preferredBranch]);
+ const [readFence]=useState(()=>createCommerceUiReadFence());
+ useEffect(()=>()=>{readFence.dispose();},[readFence]);
+ useEffect(()=>{if(preferredBranch){
+  readFence.invalidate();setBranchInput(preferredBranch);setMessage('');
+ }},[preferredBranch,readFence]);
  if(!pager.readReady)return null;
  const matchingBranch=isSelectedCatalogBranchCurrent(branchInput,pager.branchId);
  const matchedCatalog=!pager.loading&&pager.pageNumber>0&&matchingBranch
   ?filterVerifiedCatalogPage(pager.visibleItems,{query,verified:true}):null;
  const visibleItems=matchedCatalog?.ok?matchedCatalog.items:[];
  const load=async(next=false,previous=false)=>{
+  if(pager.loading||readFence.isBusy())return;
   const input=(next||previous)?pager.branchId:branchInput;
   const validated=prepareCatalogBranchLookup(input??'');
   if(!validated.ok){setMessage('Ingresá un identificador válido de sucursal.');return;}
   setMessage('');
-  const result=await client.loadCommercePage({branchId:validated.branchId,next,previous});
-  if(!result.ok)setMessage('No se pudo validar esta página del catálogo. Actualizá desde el inicio.');
+  await readFence.run(()=>client.loadCommercePage({branchId:validated.branchId,next,previous}),{
+   onResult:result=>{if(!result.ok)
+    setMessage('No se pudo validar esta página del catálogo. Actualizá desde el inicio.');},
+   onError:()=>setMessage('Consulta no confirmada. Volvé a comenzar la exploración.')
+  });
  };
  return <Panel>
   <Text accessibilityRole="header" style={styles.heading}>Explorar catálogo paginado · solo lectura</Text>
   <Text style={styles.small}>Esta exploración no agrega artículos al carrito, no reserva stock ni confirma pedidos. Las cantidades totales de la plataforma son desconocidas.</Text>
   <TextInput style={styles.field} value={branchInput}
-   onChangeText={v=>{setBranchInput(v);setMessage('');}}
-   editable={!pager.loading} maxLength={36} autoCapitalize="none" autoCorrect={false}
+   onChangeText={v=>{readFence.invalidate();setBranchInput(v);setMessage('');}}
+   editable={!pager.loading&&!readFence.isBusy()} maxLength={36} autoCapitalize="none" autoCorrect={false}
    placeholder="Identificador de sucursal" accessibilityLabel="Sucursal de catálogo paginado"/>
-  <Action label={pager.loading?'Consultando página…':'Explorar sucursal'}
-   busy={pager.loading} disabled={pager.loading} onPress={()=>void load()}/>
+  <Action label={pager.loading||readFence.isBusy()?'Consultando página…':'Explorar sucursal'}
+   busy={pager.loading||readFence.isBusy()} disabled={pager.loading||readFence.isBusy()}
+   onPress={()=>void load()}/>
   {pager.error&&<Text accessibilityRole="alert" style={styles.text}>La página no cumple el contrato del servidor. No se muestran artículos antiguos.</Text>}
   {message!==''&&<Text accessibilityRole="alert" style={styles.text}>{message}</Text>}
   {pager.loading&&<Text accessibilityLiveRegion="polite" style={styles.text}>Comprobando precios y stock. Se oculta la página anterior.</Text>}
@@ -290,11 +307,15 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
     <Text style={styles.text}>{item.itemClass==='PHARMACY_OTC'?'Artículo de farmacia sin receta':'Artículo general'} · {item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock reportado: {item.stockUnits}</Text>
     <Text style={styles.small}>Solo consulta. El precio final y la compra requieren una transacción de servidor.</Text>
    </View>)}
-   <Action label="Página anterior" secondary disabled={!pager.hasPrevious}
+   <Action label="Página anterior" secondary
+    disabled={!pager.hasPrevious||pager.loading||readFence.isBusy()}
     onPress={()=>void load(false,true)}/>
-   <Action label="Página siguiente" secondary disabled={!pager.hasNext}
+   <Action label="Página siguiente" secondary
+    disabled={!pager.hasNext||pager.loading||readFence.isBusy()}
     onPress={()=>void load(true,false)}/>
-   <Action label="Cerrar exploración" secondary onPress={()=>{client.clearCommercePage();setMessage('');}}/>
+   <Action label="Cerrar exploración" secondary
+    disabled={pager.loading||readFence.isBusy()}
+    onPress={()=>{readFence.invalidate();client.clearCommercePage();setMessage('');}}/>
   </>}
   <Text style={styles.small}>No hay límite global de registros de catálogo en el navegador; cada solicitud recibe solo una página. La compra multi-página necesita contrato atómico de A.</Text>
  </Panel>;
@@ -311,32 +332,40 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
  const [municipality,setMunicipality]=useState('');
  const [service,setService]=useState<'MOTO_DELIVERY'|'AUTO_DELIVERY'>('MOTO_DELIVERY');
  const [message,setMessage]=useState('');
+ const [readFence]=useState(()=>createCommerceUiReadFence());
+ useEffect(()=>()=>{readFence.dispose();},[readFence]);
  const sameQuery=directory.municipality===municipality&&directory.serviceKind===service;
  const matchingCategory=!directory.loading&&directory.pageNumber>0&&sameQuery
   ?filterVerifiedBranchPage(directory.items,{vertical:selectedVertical,verified:true}):null;
  const visibleBranches=matchingCategory?.ok?matchingCategory.items:[];
  const browse=async(next=false,previous=false)=>{
-  if(directory.loading)return;
+  if(directory.loading||readFence.isBusy())return;
   setMessage('');
-  const result=await client.loadBuyerBranches({municipality,serviceKind:service,next,previous});
-  if(!result.ok)setMessage('No fue posible validar esa página de sucursales. Revisá el municipio y volvé a consultar.');
+  await readFence.run(()=>client.loadBuyerBranches({municipality,serviceKind:service,next,previous}),{
+   onResult:result=>{if(!result.ok)
+    setMessage('No fue posible validar esa página de sucursales. Revisá el municipio y volvé a consultar.');},
+   onError:()=>setMessage('Consulta no confirmada. Volvé a verificar el municipio.')
+  });
  };
  if(!directory.readReady)return null;
  return <Panel>
   <Text accessibilityRole="header" style={styles.heading}>Buscar sucursales por municipio · G44</Text>
   <Text style={styles.small}>Consulta de sucursales habilitadas en el catálogo QA. Cobertura reportada no significa disponibilidad de repartidor ni autorización para realizar pedidos.</Text>
   <TextInput style={styles.field} placeholder="Municipio (por ejemplo, Asunción)"
-   value={municipality} onChangeText={v=>{setMunicipality(v);setMessage('');}}
-   editable={!directory.loading} maxLength={80}
+   value={municipality} onChangeText={v=>{
+    readFence.invalidate();setMunicipality(v);setMessage('');
+   }}
+   editable={!directory.loading&&!readFence.isBusy()} maxLength={80}
    accessibilityLabel="Municipio para buscar sucursales"/>
   <Action label="Entregas en moto de carga" secondary={service!=='MOTO_DELIVERY'}
-   selected={service==='MOTO_DELIVERY'} disabled={directory.loading}
-   onPress={()=>{setService('MOTO_DELIVERY');setMessage('');}}/>
+   selected={service==='MOTO_DELIVERY'} disabled={directory.loading||readFence.isBusy()}
+   onPress={()=>{readFence.invalidate();setService('MOTO_DELIVERY');setMessage('');}}/>
   <Action label="Entregas en automóvil" secondary={service!=='AUTO_DELIVERY'}
-   selected={service==='AUTO_DELIVERY'} disabled={directory.loading}
-   onPress={()=>{setService('AUTO_DELIVERY');setMessage('');}}/>
-  <Action label={directory.loading?'Consultando sucursales…':'Consultar sucursales'}
-   busy={directory.loading} disabled={directory.loading}
+   selected={service==='AUTO_DELIVERY'} disabled={directory.loading||readFence.isBusy()}
+   onPress={()=>{readFence.invalidate();setService('AUTO_DELIVERY');setMessage('');}}/>
+  <Action label={directory.loading||readFence.isBusy()?'Consultando sucursales…':'Consultar sucursales'}
+   busy={directory.loading||readFence.isBusy()}
+   disabled={directory.loading||readFence.isBusy()}
    onPress={()=>void browse()}/>
   {directory.loading&&<Text accessibilityLiveRegion="polite" style={styles.text}>
    Verificando en servidor los registros del municipio. Se oculta la página anterior.
@@ -359,12 +388,15 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
      secondary onPress={()=>{onSelect(item.branchId);
       setMessage('Sucursal elegida. Consultá el catálogo para obtener precios y stock verificados.');}}/>
    </View>)}
-   <Action label="Sucursales anteriores" secondary disabled={!directory.hasPrevious}
+   <Action label="Sucursales anteriores" secondary
+    disabled={!directory.hasPrevious||directory.loading||readFence.isBusy()}
     onPress={()=>void browse(false,true)}/>
-   <Action label="Siguientes sucursales" secondary disabled={!directory.hasNext}
+   <Action label="Siguientes sucursales" secondary
+    disabled={!directory.hasNext||directory.loading||readFence.isBusy()}
     onPress={()=>void browse(true,false)}/>
    <Action label="Cerrar búsqueda de sucursales" secondary
-    onPress={()=>{client.clearBuyerBranches();setMessage('');}}/>
+    disabled={directory.loading||readFence.isBusy()}
+    onPress={()=>{readFence.invalidate();client.clearBuyerBranches();setMessage('');}}/>
   </>}
   <Text style={styles.small}>Cada respuesta contiene hasta 100 sucursales, sin limitar los registros totales. Las consultas caducan localmente a los 30 segundos; se deberá reconfirmar la disponibilidad real antes de un pedido.</Text>
  </Panel>;
