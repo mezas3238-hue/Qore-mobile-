@@ -1490,3 +1490,42 @@ test('R31 ACK ilegible mantiene la misma requestKey al reintentar sin duplicar',
  assert.equal(api.snapshot().chat.pendingSend,false);
  assert.equal(api.snapshot().chat.messages.length,1);
 });
+
+
+test('R32 abrir historial G52 no altera el unreadCount confirmado ni crea read-receipt POST',async()=>{
+ const origin='https://qa-chat.example.invalid',methods=[];
+ const options={enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin,pinnedOrigin:origin};
+ const inbox={ownerId:a,generatedAt:now-1000,expiresAt:now+60000,
+  revision:9,productionEnabled:false,nextCursor:null,items:[{
+   conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',state:'ACTIVE',
+   assignmentVerified:true,counterpartRole:'driver',
+   revision:9,unreadCount:151,updatedAt:now-2000,canSend:true
+  }]};
+ const history={conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+  ownerId:a,counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:9,generatedAt:now-1000,expiresAt:now+60000,
+  messages:[{messageId:key,senderRole:'driver',body:'En camino',
+   createdAt:now-2000,revision:9}],nextCursor:null,
+  canSend:true,productionEnabled:false};
+ const send=(dto)=>async(_url,init)=>{
+  methods.push(init.method);
+  return {status:200,ok:true,redirected:false,
+   headers:{get:k=>k==='content-type'?'application/json':null},
+   text:async()=>JSON.stringify(dto)};
+ };
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g51ChatInboxHttpOptions:{...options,fetchImpl:send(inbox)},
+  g52ChatHistoryHttpOptions:{...options,fetchImpl:send(history)}
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal((await api.loadChatInbox()).ok,true);
+ assert.equal(api.snapshot().chatInbox.items[0].unreadCount,151);
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE',
+  expectedConversationId:quoteId})).ok,true);
+ assert.equal(api.snapshot().chat.messages.length,1);
+ assert.equal(api.snapshot().chatInbox.items[0].unreadCount,151);
+ assert.equal(api.snapshot().chat.sendReady,false);
+ assert.deepEqual(methods,['GET','GET']);
+});
