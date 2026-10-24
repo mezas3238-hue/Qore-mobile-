@@ -29,3 +29,7 @@ Mandatos: NO MERGE / NO LIVE / NO PSP / NO VPS / NO credenciales ni PII reales /
 
 ## Ensayo integrado añadido en este mismo corte
 Se amplió `passenger-chat-staging-composition.test.mjs` con dos pruebas de recorrido sintético de la composición ya existente: **Auth Passenger verificado → G51 bandeja autorizada → G52 conversación del mismo servicio → G53 POST con `requestKey` → ACK durable exacto**; además prueba de ACK perdido que conserva `pendingSend` y **rechaza un segundo POST con nueva clave**. Es infraestructura QA sintética: no demuestra backend real, IdP/HTTPS desplegado ni mensajería entre teléfonos físicos.
+
+## Incidencia de QA y corrección R55
+
+La primera suite Cliente de R55 en el SHA `6f19bfe1c5fb22e0c4f6f6a3142367110d9f2a20` detectó **4 fallos en 12 pruebas nuevas**, mientras los tests anteriores seguían pasando. Causa: regex UUID de cuatro grupos en la nueva verificación previa del pasajero (`8-4-4-12`) que rechazaba sujetos Passenger válidos (`8-4-4-4-12`), impidiendo probar el recorrido G51/G52/G53. Se corrigió el validador en el commit `c923f15d3c9a1ec09ed6e32f55dd87f4b34c8653`. No se eliminó el requisito de identidad válida ni la verificación independiente; debe certificarse el nuevo SHA completo antes de marcarlo PASS.
