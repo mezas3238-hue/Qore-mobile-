@@ -214,6 +214,7 @@ SET LOCAL ROLE mobility_g56_driver_gateway_ci;
 SELECT public.mobility_stage_g56_driver_inbox_qa(
  :'foreign_ticket'::uuid,NULL,NULL,NULL,100) AS foreign_page \gset
 RESET ROLE;
+SELECT pg_catalog.set_config('qore.g56b_foreign', :'foreign_page',false);
 DO $foreign$
 BEGIN
  IF pg_catalog.jsonb_array_length(
