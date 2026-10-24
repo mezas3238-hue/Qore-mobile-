@@ -35,10 +35,10 @@ test('R60 official P0 inventory: 17 gates, 20 flows and unambiguous NO_GO',()=>{
  assert.deepEqual(r.flowCounts,{blocked:20,qaOnly:0,certified:0});
  assert.equal(x.release.ownerGoLiveAuthorization,false);
 });
-test('R60 mirror exactly matches authoritative A gate IDs and source states',()=>{
+test('R60 mirror exactly matches immutable G61 snapshot fetched from sovereign A',()=>{
  const x=registry();
  const master=JSON.parse(readFileSync(new URL(
-  '../../../docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json',
+  '../../../docs/architect-b/FUENTE_A_G61_CERTIFICACION_PINNED_2026-10-24.json',
   import.meta.url),'utf8'));
  assert.equal(master.decision,'NO_GO');
  assert.equal(master.ownerGoLiveAuthorization,false);
