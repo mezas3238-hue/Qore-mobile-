@@ -6,6 +6,7 @@ import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experie
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
 import type {IncidentPageFilter,IncidentPageOrder} from './incident-page-triage.mjs';
+import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
 import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
@@ -257,6 +258,74 @@ function GlobalTriagePanel({client,state}:{client:AdminExperience;state:AdminSna
  </Panel>;
 }
 
+/**
+ * R43: bandeja comercial INDEPENDIENTE de seguridad genérica y G41.
+ * La UI nunca transforma una categoría OTHER/DELIVERY en MERCHANT_ORDER.
+ * Hasta que A monte el endpoint no hay casos para mostrar ni gestionar.
+ */
+function MerchantCasesReadOnly({cases,contractReady,allowed}:{
+ cases:MerchantCasePageSuccess|null;contractReady:boolean;allowed:boolean;
+}){
+ const fresh=allowed&&contractReady&&cases?.ok===true
+  &&cases.expiresAt>Date.now();
+ const reasons:Record<string,string>={
+  MISSING_ITEM:'Producto faltante',WRONG_ITEM:'Producto equivocado',
+  DAMAGED_ITEM:'Artículo dañado',LATE_DELIVERY:'Entrega demorada',
+  PRICE_DISPUTE:'Desacuerdo por importe',
+  SAFETY_CONCERN:'Problema de seguridad (NO SOS)'
+ };
+ const states:Record<string,string>={
+  RECEIVED_QA:'Recibido en base QA',CLASSIFIED_QA:'Clasificado en QA',
+  REVIEW_QA:'En estado de revisión QA',CLOSED_QA:'Cerrado en QA'
+ };
+ return <Panel className="detail">
+  <div className="section-head"><div>
+   <h2>Casos de pedidos comerciales</h2>
+   <p>Supermercados, farmacias autorizadas, restaurantes y otros comercios.
+    Canal independiente del chat con conductores.</p>
+  </div><span className="muted-tag">QA · SOLO LECTURA</span></div>
+  {!allowed?<div className="owner-warning" role="alert">
+   Se requiere sesión administrativa autorizada con MFA. No hay acceso de propietario, pasajero ni conductor a esta bandeja.
+  </div>
+  :!contractReady?<div className="empty">
+   <h3>Gestión comercial pendiente de conexión</h3>
+   <p>No existe todavía un endpoint certificado que identifique expedientes de pedidos comerciales. La cola de incidentes generales no puede usarse para deducirlos.</p>
+   <p>No se han asignado agentes, enviado mensajes, abierto tickets ni contactado comercios desde esta pantalla.</p>
+  </div>
+  :!fresh?<div className="owner-warning" role="alert">
+   Sin página comercial certificada y vigente. No se pueden mostrar expedientes anteriores ni asumir que hay cero casos.
+  </div>
+  :<>
+   <p role="status">
+    {cases.counts.visible} expedientes en esta página, de los cuales
+    {' '}{cases.counts.open} tienen estado abierto QA. Total de la plataforma desconocido.
+   </p>
+   {cases.items.length===0?<div className="empty">
+    <h3>Esta página no contiene casos</h3>
+    <p>Puede haber otros expedientes en páginas siguientes; no se infiere un total global.</p>
+   </div>:<div className="zone-rows">
+    {cases.items.map(item=><div className="zone-row" key={item.caseId}>
+     <div>
+      <strong>{reasons[item.reason]??'Motivo no verificable'} · {item.severity}</strong>
+      <small>{states[item.state]??'Estado QA no verificable'}</small>
+      <small>Actualización QA: {new Date(item.updatedAt).toLocaleString('es-PY')}</small>
+     </div><div className="zone-count">
+      #{item.revision}<small>Revisión QA</small>
+     </div>
+    </div>)}
+   </div>}
+   <p className="training-disclaimer">
+    Solo esta página autorizada. Sin asignaciones, respuestas,
+    resolución operativa, atención humana, suspensión ni SOS.
+   </p>
+  </>}
+  <p className="training-disclaimer">
+   Sin identificadores de clientes, teléfonos, direcciones o artículos privados.
+   La autorización, comunicación y decisiones corresponden al backend auditado.
+  </p>
+ </Panel>;
+}
+
 function IncidentReadOnly({incidents,allowed}:{
  incidents:AdminSnapshot['incidents'];allowed:boolean;
 }){
@@ -432,6 +501,10 @@ function App(){
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
      </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+   <MerchantCasesReadOnly
+    cases={adminState.merchantCases}
+    contractReady={adminState.merchantCaseContractReady}
+    allowed={adminState.account?.role==='admin'&&adminState.account.mfaVerified===true}/>
    <GlobalTriagePanel client={client} state={adminState}/>
    <IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>
   </>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail">
