@@ -19,6 +19,7 @@ ROLES={
   "public.mobility_stage_g57b_driver_mark_visible_qa(uuid,uuid)"
  ],
  PAX:[
+  "public.mobility_stage_g49_open_qa(uuid)",
   "public.mobility_stage_g57_history_markers_qa(uuid,bigint,bigint,integer)",
   "public.mobility_stage_g57_mark_visible_ordered_qa(uuid,uuid)"
  ]
