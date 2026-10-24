@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g56",
+    "version": "1.0.0-g57",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
@@ -3456,6 +3456,171 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DriverChatInboxPageG56B"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/services/{serviceKind}/{serviceId}/history-with-ordered-markers": {
+      "get": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "readChatHistoryWithEveryIncomingMarkerG57",
+        "summary": "QA-only history plus server-issued marker for each incoming Driver message",
+        "description": "Not mounted. Reuses exact G52 page; marker sidecar contains one opaque marker per Driver message authorized in page. Reading the page never marks a message as read. UI must explicitly confirm each visible message, in order.",
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized page and ordered visibility sidecar; not a delivery or visibility proof",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHistoryWithOrderedMarkersG57"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/conversations/{conversationId}/mark-visible-ordered": {
+      "post": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "markContiguousIncomingDriverMessageVisibleG57",
+        "summary": "Future explicit and strictly ordered incoming Driver read acknowledgment",
+        "description": "Not mounted. Requires provider-verified exclusive Passenger and a fresh G54 CHAT_READ ticket, plus exact G57 marker and messageId. Rejects later incoming message if any earlier Driver message is still unread. No raw throughSeq, no automatic read on GET.",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatMarkVisibleOrderedRequestG57"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Database-confirmed first-unread message only, no SQL sequence exposed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMarkVisibleOrderedReceiptG57"
                 }
               }
             }
@@ -7601,6 +7766,106 @@
             "const": true
           }
         }
+      },
+      "ChatPerMessageReadMarkerG57": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "marker",
+          "messageId",
+          "expiresAtMs"
+        ],
+        "properties": {
+          "marker": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expiresAtMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ChatHistoryWithOrderedMarkersG57": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "page",
+          "readMarkers",
+          "qaOnly",
+          "productionEnabled"
+        ],
+        "properties": {
+          "page": {
+            "$ref": "#/components/schemas/ChatHistoryPageG52"
+          },
+          "readMarkers": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatPerMessageReadMarkerG57"
+            }
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "ChatMarkVisibleOrderedRequestG57": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "marker"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "marker": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ChatMarkVisibleOrderedReceiptG57": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "messageId",
+          "readConfirmed",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readConfirmed": {
+            "type": "boolean",
+            "const": true
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },
@@ -7623,5 +7888,6 @@
   "x-qore-g54-scoped-inbox-read-runtime-wired": false,
   "x-qore-g55-server-issued-read-marker-runtime-wired": false,
   "x-qore-g56-driver-chat-runtime-wired": false,
-  "x-qore-g56b-driver-inbox-runtime-wired": false
+  "x-qore-g56b-driver-inbox-runtime-wired": false,
+  "x-qore-g57-ordered-visible-runtime-wired": false
 }
