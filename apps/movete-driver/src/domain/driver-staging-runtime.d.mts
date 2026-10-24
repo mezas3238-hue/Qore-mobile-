@@ -7,6 +7,8 @@ import type {DriverWorkspaceControllerOptions}
 import type {DriverOfferActionsAdapters}
  from './driver-offer-actions.mjs';
 import type {DriverTripAdapters} from './driver-trip-lifecycle.mjs';
+import type {DriverDocumentUploadAdapters}
+ from './driver-document-upload.mjs';
 import type {DriverCustodyAdapters} from './driver-custody-controller.mjs';
 export declare const DRIVER_STAGING_RUNTIME_LIVE_ENABLED:false;
 export type DriverStagingRuntimeOptions=Readonly<{
@@ -18,6 +20,8 @@ export type DriverStagingRuntimeOptions=Readonly<{
  }>)=>Promise<boolean>;
  request:typeof fetch;
  makeRequestKey:()=>string|Promise<string>;
+ captureEvidence?:((x:{kind:import('./driver-document-upload.mjs').DriverKycUploadKind;source:'camera'|'camera_or_library';maxBytes:number})=>Promise<{bytes:Uint8Array;mimeType:string;source:'camera'|'library'}|null>)|null;
+ uploadPrivateObject?:((x:{bucket:string;objectKey:string;mimeType:string;bytes:Uint8Array;upsert:false;accessToken:string})=>Promise<{storedPrivately:boolean}>)|null;
  verifyStopped:()=>Promise<{
   vehicleStopped:boolean;source:string;observedAtMs:number;
  }>;
@@ -34,6 +38,7 @@ export type DriverStagingRuntime=Readonly<{
  offerActions:DriverOfferActionsAdapters;
  tripActions:DriverTripAdapters;
  custodyActions:DriverCustodyAdapters;
+ documentUploads:DriverDocumentUploadAdapters|null;
  workspaceReaders:Readonly<{
   readInbox:NonNullable<DriverWorkspaceControllerOptions['readInbox']>;
   readDocuments:NonNullable<DriverWorkspaceControllerOptions['readDocuments']>;

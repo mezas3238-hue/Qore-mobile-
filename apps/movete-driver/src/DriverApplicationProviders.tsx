@@ -3,6 +3,7 @@ import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
 import {DriverTripProvider} from './DriverTripProvider';
+import {DriverDocumentUploadProvider} from './DriverDocumentUploadProvider';
 import {DriverCustodyProvider} from './DriverCustodyProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
 
@@ -28,7 +29,10 @@ export function DriverApplicationProviders({
   readInbox={runtime?.workspaceReaders.readInbox}
   readDocuments={runtime?.workspaceReaders.readDocuments}
   readLicense={runtime?.workspaceReaders.readLicense}>
-  <DriverOfferActionsProvider
+  <DriverDocumentUploadProvider
+   authAdapter={runtime?.authAdapter??null}
+   qaAdapters={runtime?.documentUploads??null}>
+ <DriverOfferActionsProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.offerActions??null}>
   <DriverTripProvider
@@ -45,5 +49,6 @@ export function DriverApplicationProviders({
   </DriverCustodyProvider>
   </DriverTripProvider>
   </DriverOfferActionsProvider>
+ </DriverDocumentUploadProvider>
  </DriverWorkspaceProvider>;
 }

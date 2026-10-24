@@ -2,6 +2,8 @@ import React,{useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {validateDriverDraft} from '../src/domain/capabilities.mjs';
+import {useDriverDocumentUpload} from '../src/DriverDocumentUploadProvider';
+import type {DriverKycUploadKind} from '../src/domain/driver-document-upload.mjs';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 export default function DriverDocuments(){
  const [fullName,setFullName]=useState('');
@@ -9,6 +11,8 @@ export default function DriverDocuments(){
  const [kind,setKind]=useState<'AUTO'|'MOTO'>('AUTO');
  const [result,setResult]=useState('');
  const {state,refresh}=useDriverWorkspace();
+ const upload=useDriverDocumentUpload();
+ const [consent,setConsent]=useState(false);
  const kindLabels:Record<string,string>={
   licencia:'Licencia de conducir',identidad_frente:'Identidad — frente',
   identidad_dorso:'Identidad — dorso',cedula_verde:'Cédula verde',
@@ -61,7 +65,19 @@ export default function DriverDocuments(){
    <Action label="Actualizar estado privado" secondary
     disabled={state.phase==='not-configured'||state.phase==='loading'}
     onPress={()=>{void refresh();}}/>
-   <Text style={styles.small}>La carga de archivos reales está bloqueada hasta disponer de Storage privado y escáner autorizados. La autorización de motos para paquetes no habilita viajes con pasajeros.</Text>
+   <Text style={styles.small}>Cada archivo queda pendiente hasta la verificación oficial. La autorización de motos para paquetes no habilita viajes con pasajeros.</Text>
+   <Text style={styles.heading}>Presentar mi expediente</Text>
+   {upload.enabled&&state.phase==='connected'?<>
+    {Object.entries(kindLabels).map(([documentKind,label])=>
+     <Action key={documentKind} label={'Capturar '+label}
+      secondary disabled={upload.state.phase==='sending'}
+      onPress={()=>{void upload.submit(documentKind as DriverKycUploadKind,
+       documentKind==='rostro_selfie'?consent:false).then(()=>refresh());}}/>)}
+    <Action label={consent?'Consentimiento para selfie: aceptado':'Consentimiento para selfie: no aceptado'}
+     secondary onPress={()=>setConsent(value=>!value)}/>
+    <Text style={styles.small}>La fotografía del rostro requiere consentimiento expreso y captura de cámara; su carga no verifica automáticamente la identidad. El sistema solo confirma la recepción privada.</Text>
+    {upload.state.message!==''&&<Text accessibilityRole="alert" style={styles.text}>{upload.state.message}</Text>}
+   </>:<Text style={styles.small}>Captura y subida deshabilitadas hasta conectar una cámara nativa, Storage privado y un backend STAGING autorizados; no se envían fotos a destinos públicos.</Text>}
   </Panel>
  </ScrollView>;
 }

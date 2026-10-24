@@ -18,6 +18,8 @@ import {readPrivateDriverTripStatus,transitionPrivateDriverTrip}
  from './driver-trip-lifecycle-http.mjs';
 import {readPrivateCourierCustody,transitionPrivateCourierCustody}
  from './driver-custody-http.mjs';
+import {submitPrivateDriverEvidence}
+ from './driver-document-upload.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -26,6 +28,7 @@ export function createDriverStagingRuntime({
  apiOrigin,approvedStagingHost,auth,
  verifyExclusiveDriverRole,request,
  makeRequestKey,verifyStopped,
+ captureEvidence=null,uploadPrivateObject=null,
  allowedByOwner=false,liveEnabled=false,now=Date.now
 }={}){
  if(allowedByOwner!==true||liveEnabled!==false||
@@ -107,7 +110,20 @@ export function createDriverStagingRuntime({
   obtainVerifiedProof:null,
   liveEnabled:false
  });
+ if((captureEvidence===null)!==(uploadPrivateObject===null))
+  throw Error('Driver KYC capture and Storage must be configured together');
+ if(captureEvidence!==null&&
+  (typeof captureEvidence!=='function'||typeof uploadPrivateObject!=='function'))
+  throw Error('Driver KYC requires authorized private camera and Storage SDK');
+ const documentUploads=captureEvidence===null?null:Object.freeze({
+  upload:({kind,faceConsent})=>submitPrivateDriverEvidence({
+   kind,faceConsent,authAdapter,apiOrigin:origin,approvedStagingHost,
+   allowedByOwner:true,captureEvidence,uploadPrivateObject,
+   makeRequestKey:chatAdapters.makeRequestKey,request
+  })
+ });
  return Object.freeze({
+  documentUploads,
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
   offerActions,tripActions,custodyActions,
