@@ -3,7 +3,7 @@
  * A proof UUID in the row is NOT evidence; trust G67 DB authority only.
  */
 export const G68_SENDER_CUSTODY_LIVE_ENABLED=false;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROUTE=/^\/v1\/staging\/sender\/deliveries\/([0-9a-f-]{36})\/custody$/i;
 const TOKEN=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const STATES=new Set(['requested','accepted','picked_up','delivered','disputed','returned','cancelled']);
