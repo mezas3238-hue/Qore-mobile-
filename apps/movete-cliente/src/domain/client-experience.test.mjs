@@ -1380,3 +1380,113 @@ test('R30 logout durante GET G52 en vuelo cancela y descarta mensajes de la sesi
  assert.equal(view.chat.active,false);
  assert.equal(view.chat.pendingSend,false);
 });
+
+
+// R31 — composicion G52 GET + G53 POST de QA sintética, sin activar LIVE.
+test('R31 Cliente vincula lector G52 y writer G53 solo con mismo origen certificado',async()=>{
+ const origin='https://qa-chat.example.invalid',seen=[];
+ const history={conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+  ownerId:a,counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:7,generatedAt:now-1000,expiresAt:now+60000,
+  messages:[{messageId:key,senderRole:'driver',body:'En camino',
+   createdAt:now-2000,revision:7}],nextCursor:null,
+  canSend:true,productionEnabled:false};
+ const ack={conversationId:quoteId,serviceId:trip,requestKey:key,messageId:b,
+  senderRole:'passenger',body:'Estoy aquí',createdAt:now-100,
+  revision:8,serverStored:true};
+ const fetcher=async(url,init)=>{
+  seen.push({url,init});
+  return {status:200,ok:true,redirected:false,
+   headers:{get:k=>k==='content-type'?'application/json':null},
+   text:async()=>JSON.stringify(init.method==='POST'?ack:history)};
+ };
+ const options={enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin,pinnedOrigin:origin,fetchImpl:fetcher};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g52ChatHistoryHttpOptions:options,g53ChatSendHttpOptions:options
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().chat.contractReady,true);
+ assert.equal(api.snapshot().chat.sendReady,true);
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE',
+  expectedConversationId:quoteId})).ok,true);
+ assert.equal((await api.sendChat({body:'Estoy aquí',requestKey:key})).ok,true);
+ const snap=api.snapshot();
+ assert.equal(snap.chat.messages.length,2);
+ assert.equal(snap.chat.messages[0].messageId,b);
+ assert.equal(snap.chat.pendingSend,false);
+ assert.deepEqual(seen.map(s=>s.init.method),['GET','POST']);
+ assert.equal(seen[1].url,origin+'/v1/staging/chat/services/RIDE/'
+  +trip+'/conversations/'+quoteId+'/messages');
+ assert.deepEqual(JSON.parse(seen[1].init.body),
+  {requestKey:key,body:'Estoy aquí'});
+});
+test('R31 writer apagado o en otro host no habilita POST aunque GET este listo',async()=>{
+ const origin='https://qa-chat.example.invalid',getOrigin={
+  enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin,pinnedOrigin:origin,
+  fetchImpl:async()=>({status:200,ok:true,redirected:false,
+   headers:{get:k=>k==='content-type'?'application/json':null},
+   text:async()=>JSON.stringify({conversationId:quoteId,serviceId:trip,
+    serviceKind:'RIDE',ownerId:a,counterpartRole:'driver',
+    assignmentVerified:true,state:'ACTIVE',revision:7,
+    generatedAt:now-1000,expiresAt:now+60000,messages:[],
+    nextCursor:null,canSend:true,productionEnabled:false})})
+ };
+ for(const writer of [
+  {...getOrigin,enabled:false},
+  {...getOrigin,origin:'https://other.example.invalid',
+   pinnedOrigin:'https://other.example.invalid'}
+ ]){
+  let post=0;
+  const api=createClientExperience({now:()=>now,
+   authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+   g52ChatHistoryHttpOptions:getOrigin,
+   g53ChatSendHttpOptions:{...writer,fetchImpl:async()=>{post++;throw Error('forbidden');}}
+  });
+  assert.equal((await api.refreshSession()).ok,true);
+  assert.equal(api.snapshot().chat.contractReady,true);
+  assert.equal(api.snapshot().chat.sendReady,false);
+  assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE'})).ok,true);
+  assert.equal((await api.sendChat({body:'Estoy aquí',requestKey:key})).code,
+   'CHAT_SEND_NOT_CERTIFIED');
+  assert.equal(post,0);
+ }
+});
+test('R31 ACK ilegible mantiene la misma requestKey al reintentar sin duplicar',async()=>{
+ const origin='https://qa-chat.example.invalid',posted=[];
+ const history={conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+  ownerId:a,counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:7,generatedAt:now-1000,expiresAt:now+60000,
+  messages:[],nextCursor:null,canSend:true,productionEnabled:false};
+ const options={enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin,pinnedOrigin:origin};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g52ChatHistoryHttpOptions:{...options,fetchImpl:async()=>({
+   status:200,ok:true,redirected:false,
+   headers:{get:k=>k==='content-type'?'application/json':null},
+   text:async()=>JSON.stringify(history)})},
+  g53ChatSendHttpOptions:{...options,fetchImpl:async(_url,init)=>{
+   posted.push(JSON.parse(init.body));
+   return {status:200,ok:true,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify(posted.length===1
+     ?{error:'ack-corrupt'}
+     :{conversationId:quoteId,serviceId:trip,requestKey:key,
+      messageId:b,senderRole:'passenger',body:'Estoy aquí',
+      createdAt:now-100,revision:8,serverStored:true})};
+  }}
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await api.sendChat({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ assert.equal(api.snapshot().chat.pendingSend,true);
+ assert.equal((await api.retryChat()).ok,true);
+ assert.deepEqual(posted,[{requestKey:key,body:'Estoy aquí'},
+  {requestKey:key,body:'Estoy aquí'}]);
+ assert.equal(api.snapshot().chat.pendingSend,false);
+ assert.equal(api.snapshot().chat.messages.length,1);
+});
