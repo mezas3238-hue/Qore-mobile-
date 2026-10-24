@@ -6,7 +6,7 @@
  */
 import {createClientExperience} from './client-experience.mjs';
 export const PASSENGER_CHAT_PRODUCTION_ENABLED=false;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN=/^[A-Za-z0-9._~+/-]{20,8192}={0,2}$/;
 const isObj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const valid=x=>Number.isSafeInteger(x)&&x>=0;
