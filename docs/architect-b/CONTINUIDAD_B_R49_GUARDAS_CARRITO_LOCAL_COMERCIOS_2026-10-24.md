@@ -24,3 +24,6 @@ Sin cambios a Driver/backend A, PostgreSQL, pagos, PSP, despacho, stock transacc
 
 ## Continuidad R50
 Prioridad B: consistencia visual y accesibilidad de navegación de comercios, pruebas adversariales de cambio de sesión/reanudación, integración Buyer solo después del contrato HTTPS STAGING real validado por A (issue #9). Se mantiene PR #8 DRAFT, sin merge, LIVE, deploy ni datos reales.
+
+## Incidencia QA y corrección R49
+El primer HEAD documental `6d3b46cc` dio **FAIL** en la suite Cliente (8 fallos en las 10 pruebas R49 nuevas; el resto de 658 tests precedentes siguió pasando). Diagnóstico del job `movete-cliente typecheck and export` de aislamiento #40097102012: `COMMERCE_SESSION_CHANGED` en fixtures Passenger válidos. Causa: expresión UUID nueva incompleta, faltaba el grupo de cuatro dígitos antes del sufijo de doce. No correspondía relajar tests ni permisos. Se corrigió el patrón a cinco grupos UUID en el código R49, commit `ea500546a97347e25d8c1cea9f085df716f520ff`. El nuevo commit documental exige otra CI en su propio SHA: los éxitos de R48 no son resultados de R49.
