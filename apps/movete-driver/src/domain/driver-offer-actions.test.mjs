@@ -162,3 +162,68 @@ test('G63B cannot be constructed without trusted callback or with LIVE',()=>{
   {liveEnabled:true},{decide:null},{makeRequestKey:null},{now:null}
  ])assert.throws(()=>fixture(wrong));
 });
+
+test('G64 outcome lookup recovers original acceptance after lost ACK; never resends',async()=>{
+ const calls={send:[],reconcile:[]};
+ const x=fixture({
+  decide:async args=>{calls.send.push(args);throw Error('HTTP lost after COMMIT');},
+  reconcile:async args=>{calls.reconcile.push(args);
+   return {...receipt(),serverPersisted:true};}
+ });
+ ready(x.c);
+ assert.equal((await x.c.decide({offerId:offer,action:'accept'}))
+  .decisions[0].phase,'uncertain');
+ x.c.setOffers([],{currentLicenseApproved:true});
+ const result=await x.c.reconcilePending(offer);
+ assert.equal(result.decisions[0].phase,'confirmed');
+ assert.deepEqual(result.offers,[]);
+ assert.equal(calls.send.length,1);
+ assert.equal(calls.reconcile.length,1);
+ assert.deepEqual(calls.reconcile[0],{
+  accessToken:bearer,offerId:offer,kind:'AUTO_RIDE',
+  requestKey:key,action:'accept'
+ });
+ assert(!JSON.stringify(result).includes(bearer));
+ assert(!JSON.stringify(result).includes(key));
+ await x.c.reconcilePending(offer);
+ assert.equal(calls.reconcile.length,1);
+});
+test('G64 unknown/untrusted reconciliation leaves decision uncertain and key intact',async()=>{
+ for(const answer of [
+  async()=>{throw Error('NOT_YET_OBSERVED')},
+  async()=>({...receipt(),serverPersisted:false}),
+  async()=>({...receipt(),serverPersisted:true,kind:'DELIVERY'}),
+  async()=>({...receipt(),serverPersisted:true,action:'decline'}),
+  async()=>({...receipt(),serverPersisted:true,receiptId:'invalid'}),
+  async()=>({...receipt(),serverPersisted:true,pushDelivered:true})
+ ]){
+  const calls=[];
+  const x=fixture({
+   decide:async()=>{throw Error('lost')},
+   reconcile:async args=>{calls.push(args);return answer();}
+  });
+  ready(x.c);
+  await x.c.decide({offerId:offer,action:'accept'});
+  assert.equal((await x.c.reconcilePending(offer)).decisions[0].phase,'uncertain');
+  assert.equal((await x.c.reconcilePending(offer)).decisions[0].phase,'uncertain');
+  assert.equal(calls.length,2);
+  assert.equal(calls[0].requestKey,key);
+  assert.equal(calls[1].requestKey,key);
+ }
+});
+test('G64 logout while reconciliation pending cannot restore old Driver decision',async()=>{
+ let resolve;
+ const wait=new Promise(done=>{resolve=done});
+ const x=fixture({
+  decide:async()=>{throw Error('lost')},
+  reconcile:async()=>wait
+ });
+ ready(x.c);
+ await x.c.decide({offerId:offer,action:'accept'});
+ const flight=x.c.reconcilePending(offer);
+ x.c.clear();
+ resolve({...receipt(),serverPersisted:true});
+ await flight;
+ assert.equal(x.c.current().phase,'signed-out');
+ assert.deepEqual(x.c.current().decisions,[]);
+});
