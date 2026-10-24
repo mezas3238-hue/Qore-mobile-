@@ -17,7 +17,7 @@ AS $fn$
 DECLARE t public.mobility_stage_g50_chat_threads%ROWTYPE;
  receipt jsonb; persisted record;
 BEGIN
- IF _kind NOT IN('RIDE','DELIVERY','MERCHANT_ORDER') OR _service IS NULL
+ IF _kind IS NULL OR _kind NOT IN('RIDE','DELIVERY','MERCHANT_ORDER') OR _service IS NULL
  OR _conversation IS NULL OR _actor IS NULL OR _session IS NULL
  OR _iat IS NULL OR _request IS NULL OR _body IS NULL
  THEN RAISE EXCEPTION 'G53 invalid send contract' USING ERRCODE='G5302'; END IF;
