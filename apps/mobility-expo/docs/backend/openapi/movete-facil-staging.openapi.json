@@ -3411,6 +3411,78 @@
           }
         }
       }
+    },
+    "/v1/staging/driver/chat/conversations": {
+      "get": {
+        "operationId": "listScopedDriverChatInboxG56B",
+        "tags": [
+          "private-chat"
+        ],
+        "summary": "Future isolated Driver inbox (not mounted)",
+        "description": "Exclusive authenticated Driver, G42 session lock and live assignment per conversation. HMAC cursor is actor/session/iat/revision scoped; no raw keyset or passenger identity/phone/PII. No total record cap. QA-only until Auth gateway and real mobile certified.",
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Isolated QA Driver inbox response. HTTP is not mounted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverChatInboxPageG56B"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7407,6 +7479,128 @@
             "maxLength": 2048
           }
         }
+      },
+      "DriverChatInboxRowG56B": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceId",
+          "serviceKind",
+          "counterpartRole",
+          "state",
+          "assignmentVerified",
+          "canSend",
+          "revision",
+          "unreadCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "counterpartRole": {
+            "type": "string",
+            "const": "passenger"
+          },
+          "state": {
+            "type": "string",
+            "const": "ACTIVE"
+          },
+          "assignmentVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "canSend": {
+            "type": "boolean",
+            "const": true
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "DriverChatInboxPageG56B": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ownerId",
+          "revision",
+          "generatedAt",
+          "expiresAt",
+          "items",
+          "nextCursor",
+          "productionEnabled",
+          "qaOnly"
+        ],
+        "properties": {
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DriverChatInboxRowG56B"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },
@@ -7428,5 +7622,6 @@
   "x-qore-g49-qa-issuer-and-grants-synthetic-only": true,
   "x-qore-g54-scoped-inbox-read-runtime-wired": false,
   "x-qore-g55-server-issued-read-marker-runtime-wired": false,
-  "x-qore-g56-driver-chat-runtime-wired": false
+  "x-qore-g56-driver-chat-runtime-wired": false,
+  "x-qore-g56b-driver-inbox-runtime-wired": false
 }
