@@ -354,3 +354,61 @@ test('R57 an inconclusive read is not rollback permission',async()=>{
  assert.equal(client.prepareRide(ride()).code,'RECONCILE_BEFORE_NEW_REQUEST');
  assert.equal(posts,1);assert.equal(reads,1);
 });
+
+test('R58 ClientSnapshot gates booking read by certified contract and logout',async()=>{
+ const blank=createClientExperience();
+ assert.equal(blank.snapshot().bookingRecovery.readReady,false);
+ let session={subject,role:'passenger',token,expiresAt:T+120000};
+ const client=createClientExperience({now:()=>T,
+  authProvider:{readSession:async()=>session,signOut:async()=>{}},
+  bookingHttpOptions:{...base(),reconciliationContractCertified:true,
+   reconciliationRead:async()=>({ok:true,status:200,data:receipt()})}
+ });
+ assert.equal(client.snapshot().bookingRecovery.readReady,false);
+ assert.equal((await client.refreshSession()).ok,true);
+ assert.equal(client.snapshot().bookingRecovery.readReady,true);
+ assert.equal(client.snapshot().bookingRecovery.productionEnabled,false);
+ assert.equal((await client.signOut()).ok,true);
+ assert.equal(client.snapshot().bookingRecovery.readReady,false);
+});
+test('R58 unknown reconciliation shows in-flight and remains locked',async()=>{
+ let release;
+ const pending=new Promise(resolve=>{release=resolve;});
+ const client=createClientExperience({now:()=>T,
+  authProvider:{readSession:async()=>({
+   subject,role:'passenger',token,expiresAt:T+120000
+  }),signOut:async()=>{}},
+  bookingHttpOptions:{...base(),reconciliationContractCertified:true,
+   reconciliationRead:async()=>pending,
+   fetchImpl:async()=>response({tripId:trip})}
+ });
+ await client.refreshSession();
+ client.prepareRide(ride());
+ assert.equal((await client.submit()).code,'BOOKING_RECEIPT_NOT_CERTIFIED');
+ const task=client.reconcileBooking();
+ assert.equal(client.snapshot().mutation.phase,'in_flight');
+ assert.equal((await client.reconcileBooking()).code,'NO_BOOKING_TO_RECONCILE');
+ await Promise.resolve();await Promise.resolve();
+ release({ok:false,status:404,code:'NOT_YET_OBSERVED'});
+ assert.equal((await task).code,'BOOKING_RECONCILIATION_UNKNOWN');
+ assert.equal(client.snapshot().mutation.phase,'failed');
+ assert.equal((await client.retry()).code,'NO_READY_REQUEST');
+});
+test('R58 revoking read certification hides consultation but preserves fail-closed request',async()=>{
+ const client=createClientExperience({now:()=>T,
+  authProvider:{readSession:async()=>({
+   subject,role:'passenger',token,expiresAt:T+120000
+  }),signOut:async()=>{}},
+  bookingHttpOptions:{...base(),
+   reconciliationContractCertified:false,
+   reconciliationRead:async()=>{throw Error('MUST NOT READ');},
+   fetchImpl:async()=>{throw Error('Possible commit, lost ACK');}}
+ });
+ await client.refreshSession();
+ assert.equal(client.snapshot().bookingRecovery.readReady,false);
+ client.prepareDelivery(shipment());
+ assert.equal((await client.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal((await client.reconcileBooking()).code,'BOOKING_RECONCILIATION_NOT_CERTIFIED');
+ assert.equal(client.snapshot().mutation.phase,'failed');
+ assert.equal(client.snapshot().bookingRecovery.readReady,false);
+});
