@@ -91,7 +91,7 @@ BEGIN
  OR NOT public.mobility_stage_g42_lock_session(_actor,_session,_iat)
  THEN RAISE EXCEPTION 'G50 session denied' USING ERRCODE='G5001'; END IF;
  SELECT * INTO thread FROM public.mobility_stage_g50_chat_threads
- WHERE conversation_id=_conversation FOR SHARE;
+ WHERE conversation_id=_conversation;
  IF NOT FOUND OR thread.state<>'ACTIVE'
  THEN RAISE EXCEPTION 'G50 conversation not active' USING ERRCODE='G5004'; END IF;
  expected_role:=CASE WHEN _actor=thread.passenger_id THEN 'passenger'
@@ -106,6 +106,14 @@ BEGIN
  IF NOT FOUND OR src.passenger_id IS DISTINCT FROM thread.passenger_id
  OR src.driver_id IS DISTINCT FROM thread.driver_id
  THEN RAISE EXCEPTION 'G50 stale assignment' USING ERRCODE='G5003'; END IF;
+ -- Acquire assignment source lock before thread lock (same order as OPEN),
+ -- then re-check thread to prevent close/rotate between both reads.
+ SELECT * INTO thread FROM public.mobility_stage_g50_chat_threads
+  WHERE conversation_id=_conversation FOR SHARE;
+ IF NOT FOUND OR thread.state<>'ACTIVE'
+ OR src.passenger_id IS DISTINCT FROM thread.passenger_id
+ OR src.driver_id IS DISTINCT FROM thread.driver_id
+ THEN RAISE EXCEPTION 'G50 conversation rotated' USING ERRCODE='G5004'; END IF;
  IF _write AND NOT src.can_send
  THEN RAISE EXCEPTION 'G50 terminal service read-only' USING ERRCODE='G5004'; END IF;
  RETURN thread;
@@ -165,12 +173,12 @@ BEGIN
  IF _request IS NULL OR _body IS NULL OR char_length(_body) NOT BETWEEN 1 AND 500
  OR octet_length(_body)>2000 OR btrim(_body)='' OR
  _body ~ '[[:cntrl:]]' OR
- _body ~* '(https?://|www\\.|[[:alnum:]_.+%-]+@[[:alnum:].-]+\\.[[:alpha:]]{2,})' OR
+ _body ~* '(https?://|www\.|[[:alnum:]_.+%-]+@[[:alnum:].-]+\.[[:alpha:]]{2,})' OR
  _body ~ '([0-9][[:space:]().-]*){7,}' OR
  EXISTS(SELECT 1 FROM pg_catalog.generate_series(8234,8238) AS code
-  WHERE pg_catalog.position(pg_catalog.chr(code) IN _body)>0) OR
+  WHERE pg_catalog.strpos(_body,pg_catalog.chr(code))>0) OR
  EXISTS(SELECT 1 FROM pg_catalog.generate_series(8294,8297) AS code
-  WHERE pg_catalog.position(pg_catalog.chr(code) IN _body)>0)
+  WHERE pg_catalog.strpos(_body,pg_catalog.chr(code))>0)
  THEN RAISE EXCEPTION 'G50 invalid message' USING ERRCODE='G5002'; END IF;
  thread:=public.mobility_stage_g50_authorize(_conversation,_actor,_session,_iat,true);
  INSERT INTO public.mobility_stage_g50_chat_messages(
