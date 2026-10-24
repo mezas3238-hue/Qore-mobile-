@@ -52,3 +52,27 @@ export function passengerChatPrivateViewKey({sessionRevision,
    ?threadId:'INVALID_THREAD';
  return `${rev}:${kind}:${id}:${thread}`;
 }
+
+
+/**
+ * R24: volver al MISMO hilo pendiente si la persona navega a otro servicio.
+ * Este enlace solo recupera la pantalla de conciliación; nunca autoriza
+ * POST ni sustituye la verificación server-side antes de retryPending().
+ */
+export function passengerPendingRecoveryRoute({
+ authenticated=false,contractReady=false,pendingSend=false,
+ pendingServiceId=null,pendingServiceKind=null,pendingConversationId=null,
+ currentServiceId=null,currentServiceKind=null,currentConversationId=null
+}={}){
+ if(authenticated!==true||contractReady!==true||pendingSend!==true
+  ||typeof pendingServiceId!=='string'||!UUID.test(pendingServiceId)
+  ||!KINDS.has(pendingServiceKind)
+  ||typeof pendingConversationId!=='string'
+  ||!UUID.test(pendingConversationId))return null;
+ if(currentServiceId===pendingServiceId
+  &&currentServiceKind===pendingServiceKind
+  &&(currentConversationId===null
+   ||currentConversationId===pendingConversationId))return null;
+ return Object.freeze({serviceId:pendingServiceId,
+  serviceKind:pendingServiceKind,conversationId:pendingConversationId});
+}
