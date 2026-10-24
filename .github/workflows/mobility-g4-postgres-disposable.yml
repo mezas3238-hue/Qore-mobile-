@@ -45,6 +45,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G55_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G56_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G56B_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G57_*'
+      - 'apps/mobility-expo/server/g57-*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
       - 'apps/mobility-expo/server/g54-*'
@@ -399,3 +401,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G56B race two PostgreSQL delegated inbox readers, revision writes and G42 revocation
         run: python3 apps/mobility-expo/server/g56b-driver-private-inbox-concurrency-ci.py
+      - name: G57 issue per-visible Driver-message marker and require ordered Passenger confirmation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57_ORDERED_VISIBLE_RECEIPTS_POSTGRES_CI_ONLY.sql
+      - name: G57 verify PostgreSQL delegated ordered read receipts with earlier-unread skip rejected
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57_ORDERED_VISIBLE_RECEIPTS_ASSERT_POSTGRES_CI_ONLY.sql
