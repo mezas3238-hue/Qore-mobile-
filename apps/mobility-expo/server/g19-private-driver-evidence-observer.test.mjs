@@ -117,3 +117,18 @@ test('G19 accepts PNG only when magic and declared extension/type all agree',asy
  await assert.rejects(()=>createVerifiedPrivateDriverEvidenceObserver(spoof)(
   {driverId:driver,kind:'licencia',objectKey:key}));
 });
+
+test('G19 supports all eight owner-scoped document keys with mandatory external scan',async()=>{
+ const kinds=['licencia','identidad_frente','identidad_dorso','cedula_verde',
+  'habilitacion','seguro','inspeccion','rostro_selfie'];
+ for(const kind of kinds){
+  const key=driver+'/'+kind+'-abcdefghijklmnop.jpg';
+  const meta={...metadata,objectKey:key};
+  const f=fixture({first:meta,second:meta});
+  const observer=createVerifiedPrivateDriverEvidenceObserver(f);
+  const result=await observer({driverId:driver,kind,objectKey:key});
+  assert.equal(result.objectKey,key);
+  assert.equal(result.sha256Hex,sha(jpeg));
+  assert.equal(f.steps.filter(x=>x[0]==='scan').length,1);
+ }
+});

@@ -72,15 +72,28 @@ test('G19 rejects incorrect owner, changed revision and malware before G17 persi
   assert.equal(calls.filter(x=>x[0]==='persist').length,0);
  }
 });
-test('G17 cannot observe any file if role was revoked or bucket category not yet granted',async()=>{
+test('G17 cannot observe any file if role revoked or evidence type is unknown',async()=>{
  const unauthorized=fixture({allowDriver:false});
  assert.equal((await unauthorized.handler(request)).status,403);
  assert.deepEqual(unauthorized.calls,[]);
  const unsupported=fixture();
  const other={...request,body:{
-  requestKey,kind:'identidad_frente',
-  objectKey:driver+'/identidad_frente-abcdefghijklmnop.jpg'
+  requestKey,kind:'identidad_extranjera',
+  objectKey:driver+'/identidad_extranjera-abcdefghijklmnop.jpg'
  }};
  assert.equal((await unsupported.handler(other)).status,400);
  assert.deepEqual(unsupported.calls,[]);
+});
+
+test('G19 scanned selfie can register a pending G17 reference but cannot claim face verified',async()=>{
+ const faceKey=driver+'/rostro_selfie-abcdefghijklmnop.jpg';
+ const {handler,calls}=fixture({metadata:{...base,objectKey:faceKey}});
+ const response=await handler({...request,body:{requestKey,kind:'rostro_selfie',objectKey:faceKey}});
+ assert.equal(response.status,202);
+ assert.equal(response.body.status,'pending');
+ assert.equal(response.body.evidenceAuthenticityVerified,false);
+ assert.equal(response.body.driverEligible,false);
+ assert.equal(calls.at(-1)[0],'persist');
+ assert.equal(calls.at(-1)[1].kind,'rostro_selfie');
+ assert(!JSON.stringify(response).includes(faceKey));
 });
