@@ -95,6 +95,12 @@ BEGIN
  denied:=false;
  BEGIN
   PERFORM public.mobility_stage_g53_passenger_send_owner_qa(
+   NULL,service,t,p,ps,at_ms,key1,'Tipo ausente');
+ EXCEPTION WHEN SQLSTATE 'G5302' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G53 null serviceKind bypassed boundary'; END IF;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g53_passenger_send_owner_qa(
    'RIDE','53530000-0000-4353-8353-000000000999',t,p,ps,at_ms,key1,'Incorrecto');
  EXCEPTION WHEN SQLSTATE 'G5304' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G53 wrong serviceId succeeded'; END IF;
