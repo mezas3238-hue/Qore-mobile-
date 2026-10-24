@@ -48,9 +48,9 @@
       "reason": "PostgreSQL16 disposable CI no equivale a persistencia remota, respaldo y recuperación demostrada",
       "requiredEvidence": [
         "DOMAIN_CI",
-        "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY"
       ],
       "evidence": []
     },
@@ -64,7 +64,9 @@
         "DOMAIN_CI",
         "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
       ],
       "evidence": []
     },
@@ -78,7 +80,9 @@
         "DOMAIN_CI",
         "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
       ],
       "evidence": []
     },
@@ -92,7 +96,10 @@
         "DOMAIN_CI",
         "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
       ],
       "evidence": []
     },
@@ -106,7 +113,8 @@
         "DOMAIN_CI",
         "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "PSP_RECONCILIATION"
       ],
       "evidence": []
     },
@@ -117,10 +125,9 @@
       "status": "BLOCKED",
       "reason": "Sin certificación real de cifrado documental, control de acceso, retención y eliminación",
       "requiredEvidence": [
-        "DOMAIN_CI",
-        "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "LEGAL_REVIEW"
       ],
       "evidence": []
     },
@@ -131,10 +138,11 @@
       "status": "BLOCKED",
       "reason": "Sin ensayo SOS con operador y escalamiento en campo ni protocolos de respuesta aceptados",
       "requiredEvidence": [
-        "DOMAIN_CI",
-        "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "OPS_EXERCISE"
       ],
       "evidence": []
     },
@@ -145,10 +153,10 @@
       "status": "BLOCKED",
       "reason": "GPS, permisos, reconexión, spoof y navegación sin evidencia física Android/iOS",
       "requiredEvidence": [
-        "DOMAIN_CI",
-        "API_CONTRACT",
-        "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "NEGATIVE_SECURITY"
       ],
       "evidence": []
     },
@@ -159,10 +167,12 @@
       "status": "BLOCKED",
       "reason": "Pedidos y entregas comerciales sin inventario, autorización de stock, custodia ni E2E real",
       "requiredEvidence": [
-        "DOMAIN_CI",
         "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
       ],
       "evidence": []
     },
@@ -174,9 +184,10 @@
       "reason": "Transportes de chat QA existentes sin entrega bidireccional y push comprobados entre dos móviles",
       "requiredEvidence": [
         "DOMAIN_CI",
-        "API_CONTRACT",
         "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
       ],
       "evidence": []
     },
@@ -202,9 +213,9 @@
       "reason": "Sin AAB/APK e IPA firmados verificados con permisos y actualizaciones en teléfonos físicos",
       "requiredEvidence": [
         "DOMAIN_CI",
-        "API_CONTRACT",
-        "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "NEGATIVE_SECURITY"
       ],
       "evidence": []
     },
@@ -215,10 +226,8 @@
       "status": "BLOCKED",
       "reason": "Permisos, seguros, política privacidad y acuerdos de Paraguay pendientes de validación profesional",
       "requiredEvidence": [
-        "DOMAIN_CI",
-        "API_CONTRACT",
-        "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "LEGAL_REVIEW",
+        "OWNER_SIGNOFF"
       ],
       "evidence": []
     },
@@ -229,9 +238,7 @@
       "status": "BLOCKED",
       "reason": "Faltan alertas 24/7, guardias, escalamiento, telemetría y pruebas de recuperación operativa",
       "requiredEvidence": [
-        "DOMAIN_CI",
-        "API_CONTRACT",
-        "NEGATIVE_SECURITY",
+        "OPS_EXERCISE",
         "STAGING_E2E"
       ],
       "evidence": []
@@ -243,10 +250,9 @@
       "status": "BLOCKED",
       "reason": "No existe acta explícita de Owner que autorice merge, despliegue, PSP y lanzamiento",
       "requiredEvidence": [
-        "DOMAIN_CI",
-        "API_CONTRACT",
-        "NEGATIVE_SECURITY",
-        "STAGING_E2E"
+        "OWNER_SIGNOFF",
+        "OPS_EXERCISE",
+        "LEGAL_REVIEW"
       ],
       "evidence": []
     }
