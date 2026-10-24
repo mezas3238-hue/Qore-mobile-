@@ -4,6 +4,7 @@ export type ClientSnapshot={
  privateViewRevision:number;
  account:{subject:string;role:'passenger'}|null;
  mutation:{phase:string;operation:string|null;requestKey:string|null;error:string|null};
+ bookingRecovery:{readReady:boolean;productionEnabled:false};
  tracking:{
   tripId:string|null;revision:number;state:string;
   assignedDriver:{name:string;plate:string}|null;
