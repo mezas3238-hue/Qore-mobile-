@@ -71,7 +71,8 @@ export function createMerchantCaseQueryFlow({
    if(direction==='next'){
     if(!current.hasNext)return fail('NO_ADDITIONAL_PAGE');
     cursor=page.nextCursor;index=pageIndex+1;
-    if(cursors.includes(cursor)){
+    const knownPosition=cursors.indexOf(cursor);
+    if(knownPosition!==-1&&knownPosition!==index){
      clear();return fail('REPEATED_MERCHANT_CASE_CURSOR');
     }
    }else{
@@ -86,8 +87,9 @@ export function createMerchantCaseQueryFlow({
   try{
    raw=await readPage(Object.freeze({cursor,direction}));
   }catch{
-   if(ticket===generation)clear();
-   return fail(ticket===generation?'MERCHANT_CASE_READ_FAILED':'STALE_QUERY_RESPONSE');
+   const current=ticket===generation;
+   if(current)clear();
+   return fail(current?'MERCHANT_CASE_READ_FAILED':'STALE_QUERY_RESPONSE');
   }
   if(ticket!==generation)return fail('STALE_QUERY_RESPONSE');
   const after=access();
@@ -105,7 +107,10 @@ export function createMerchantCaseQueryFlow({
   }
   const nextCursors=direction==='refresh'?[null]:
    direction==='next'?[...cursors.slice(0,pageIndex+1),cursor]:cursors;
-  if(projected.nextCursor!==null&&nextCursors.includes(projected.nextCursor)){
+  // A previously visited future cursor is legal on "previous"; a
+  // cursor pointing back to this or any earlier page is a loop.
+  if(projected.nextCursor!==null
+   &&nextCursors.slice(0,index+1).includes(projected.nextCursor)){
    clear();return fail('REPEATED_MERCHANT_CASE_CURSOR');
   }
   cursors=nextCursors;pageIndex=index;page=projected;
