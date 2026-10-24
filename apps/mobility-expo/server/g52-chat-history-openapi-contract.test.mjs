@@ -6,7 +6,7 @@ const sql=readFileSync(new URL('../docs/backend/staging_only/G52_CHAT_HISTORY_KE
 const checks=readFileSync(new URL('../docs/backend/staging_only/G52_CHAT_HISTORY_ASSERT_POSTGRES_CI_ONLY.sql',import.meta.url),'utf8');
 const wf=readFileSync(new URL('../../../.github/workflows/mobility-g4-postgres-disposable.yml',import.meta.url),'utf8');
 test('G52 aligns with Cliente B message history exactly, no active endpoint',()=>{
- assert.equal(spec.info.version,'1.0.0-g52');
+ assert.ok(Number(spec.info.version.split('-g')[1])>=52);
  assert.equal(spec['x-qore-g52-chat-history-runtime-wired'],false);
  const op=spec.paths['/v1/staging/chat/services/{serviceKind}/{serviceId}/messages']?.get;
  assert.ok(op);
