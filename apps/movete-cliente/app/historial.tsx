@@ -1,4 +1,4 @@
-import React,{useEffect,useRef} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {router} from 'expo-router';
 import {FlatList,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
@@ -20,7 +20,8 @@ const safeMessage:Record<string,string>={
 export default function ClientHistory(){
  const {client,view}=useClientView();
  const lastCursor=useRef<string|null>(null);
- useEffect(()=>{lastCursor.current=null;},[view.account?.subject]);
+ const [resumeMessage,setResumeMessage]=useState('');
+ useEffect(()=>{lastCursor.current=null;setResumeMessage('');},[view.account?.subject]);
  const list=view.authenticated?view.history?.items??[]:[];
  function atListEnd(){
   const cursor=view.history?.nextCursor??null;
@@ -37,6 +38,29 @@ export default function ClientHistory(){
  function nextManual(){
   lastCursor.current=view.history?.nextCursor??null;
   void client.loadHistoryPage();
+ }
+ async function resumeOwnRide(tripId:string,revision:number){
+  const latest=client.snapshot();
+  const row=latest.history?.items.find(x=>x.kind==='RIDE'&&x.serviceId===tripId);
+  if(!view.authenticated||!latest.authenticated||!latest.rideHistoryRecovery.readReady
+   ||latest.rideHistoryRecovery.busy||latest.tracking.subscriptionActive
+   ||latest.account?.subject!==view.account?.subject
+   ||latest.privateViewRevision!==view.privateViewRevision
+   ||latest.history?.ownerId!==view.history?.ownerId
+   ||!row||row.revision!==revision
+   ||!['searching','assigned','in_progress'].includes(row.status))return;
+  setResumeMessage('');
+  const result=await client.resumeRideFromHistory({tripId,expectedHistoryRevision:revision});
+  const after=client.snapshot();
+  if(after.privateViewRevision!==view.privateViewRevision
+   ||after.account?.subject!==view.account?.subject)return;
+  if(result.ok&&after.tracking.subscriptionActive
+   &&after.tracking.tripId===tripId&&after.rideContinuation.canVerify
+   &&after.rideContinuation.tripId===tripId){
+   router.push('/seguimiento');
+  }else{
+   setResumeMessage('No se pudo recuperar el viaje desde el servidor. Consultá el historial actualizado; no se abrió seguimiento.');
+  }
  }
  return <FlatList
   contentInsetAdjustmentBehavior="automatic"
@@ -71,6 +95,13 @@ export default function ClientHistory(){
     <Text style={styles.text}>Estado: {item.status}</Text>
     <Text style={styles.small}>Registrado: {new Date(item.createdAt).toLocaleString('es-PY')} · Revisión {item.revision}</Text>
     <Text style={styles.small}>El comprobante y el total no se inventan ni se calculan en esta vista.</Text>
+    {item.kind==='RIDE'&&view.rideHistoryRecovery.readReady
+     &&!view.tracking.subscriptionActive
+     &&['searching','assigned','in_progress'].includes(item.status)&&
+     <Action label={view.rideHistoryRecovery.busy?'Verificando viaje…':'Recuperar seguimiento de mi viaje'}
+      disabled={view.rideHistoryRecovery.busy}
+      hint="Consulta privada de solo lectura; no crea viajes ni asigna conductor."
+      onPress={()=>{void resumeOwnRide(item.serviceId,item.revision);}}/>}
     {item.kind==='DELIVERY'&&view.senderCustody.readReady&&
      <Action label={view.senderCustody.loading?'Verificando entrega…':'Consultar custodia de mi envío'}
       disabled={view.senderCustody.loading}
@@ -113,6 +144,7 @@ export default function ClientHistory(){
      <Text style={styles.small}>La conversación estará disponible solo cuando el servidor verifique la asignación del conductor o repartidor.</Text>}
    </Panel>}
   ListFooterComponent={<Panel>
+    {resumeMessage!==''&&<Text accessibilityRole="alert" style={styles.small}>{resumeMessage}</Text>}
     <Text style={styles.small}>{view.historyConfigured
       ?'Consulta segura habilitada para esta sesión de prueba.'
       :'Lectura no disponible hasta certificar la API y permisos del pasajero.'}</Text>
