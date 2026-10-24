@@ -749,3 +749,25 @@ test('expirar sin envío ambiguo invalida también un GET anterior en vuelo',asy
  assert.equal((await pending).code,'STALE_RESPONSE_IGNORED');
  assert.equal(flow.snapshot().messages.length,0);
 });
+
+
+// R20 — rechazar una página antigua si caduca el cursor durante el transporte.
+test('GET antiguo no hereda autorización tras caducar el cursor durante espera',async()=>{
+ let clock=now,reads=0,release;
+ const waiting=new Promise(resolve=>{release=resolve;});
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({readMessages:async()=>{
+   reads++;
+   return reads===1?{ok:true,data:page('RIDE','t'.repeat(44))}:waiting;
+  }})});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ const old=flow.open({serviceId,serviceKind:'RIDE',older:true});
+ await Promise.resolve();await Promise.resolve();
+ clock+=60001;
+ release({ok:true,data:{...page('RIDE'),
+  generatedAt:clock-1000,expiresAt:clock+60000}});
+ assert.equal((await old).code,'CHAT_AUTHORIZATION_EXPIRED');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().hasOlder,false);
+ assert.equal(reads,2);
+});
