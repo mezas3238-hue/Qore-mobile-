@@ -48,6 +48,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G57_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G57B_*'
       - 'apps/mobility-expo/server/g57-*'
+      - 'apps/mobility-expo/server/g58-*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
       - 'apps/mobility-expo/server/g54-*'
@@ -414,3 +415,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G57B race two delegated Driver read receipts, first unread and G42 revocation
         run: python3 apps/mobility-expo/server/g57b-driver-ordered-concurrency-ci.py
+      - name: G58 verify chat SQL Driver Passenger NOLOGIN roles and forbidden owner mint
+        run: python3 apps/mobility-expo/server/g58-delegated-role-isolation-ci.py
