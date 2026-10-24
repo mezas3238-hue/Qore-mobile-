@@ -152,3 +152,33 @@ test('F1 JWT rotation erases quote-bound proof and rejects a stale tracking requ
  assert.equal((await f.c.continueVerifiedRide()).code,'RIDE_CONTINUATION_NOT_CERTIFIED');
  assert.equal(f.gets(),0);
 });
+
+test('A G72 local quote DTO cannot masquerade as certified route-attested B prequote',async()=>{
+ const g72={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:passenger,
+  quoteId,requestKey:quoteKey,fareMode:'AUTO',service:'economico',
+  originTag:'PANTEON',destinationTag:'AEROPUERTO',zoneTag:'ASUNCION_FIXTURE',
+  amountGs:19000,subtotalGs:19000,commissionGs:1900,providerGs:17100,
+  fareVersion:'g72-qa-auto-v1',expiresAt:new Date(t+120000).toISOString(),
+  serverPriced:true,serverPersisted:true,bookingId:null};
+ const f=setup({quoteReply:()=>({ok:true,status:201,data:g72})});
+ await f.c.refreshSession();
+ const prep=f.c.prepareAutoPrequote({ownerId:passenger,routeId,
+  quoteRequestKey:quoteKey,service:'economico',
+  sessionRevision:f.c.snapshot().privateViewRevision});
+ assert.equal(prep.ok,true);
+ assert.equal((await f.c.loadAutoPrequote()).code,'PREQUOTE_NOT_VERIFIED');
+ assert.equal(f.c.snapshot().autoPrequote.quote,null);
+ assert.equal(f.c.snapshot().rideContinuation.canVerify,false);
+ assert.equal(f.posts(),0);assert.equal(f.gets(),0);
+});
+test('A G72 old nine-field SQL/HTTP receipt is not the strict quote-bound ten-field proof',async()=>{
+ const aG72={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+  ownerId:passenger,requestKey:bookingKey,operation:'rideRequest',
+  serviceId:tripId,revision:1,serverPersisted:true,status:'ACCEPTED_QA'};
+ const f=setup({bookReply:()=>({ok:true,status:201,data:aG72})});
+ assert.equal((await book(f)).code,'BOOKING_RECONCILIATION_REQUIRED');
+ assert.equal(f.c.snapshot().autoPrequote.tripId,null);
+ assert.equal(f.c.snapshot().rideContinuation.canVerify,false);
+ assert.equal((await f.c.continueVerifiedRide()).code,'RIDE_CONTINUATION_NOT_CERTIFIED');
+ assert.equal(f.posts(),1);assert.equal(f.gets(),0);
+});
