@@ -1,4 +1,5 @@
 import {createClientSessionController} from './client-session.mjs';
+import {createPassengerBookingStagingGateway} from './passenger-booking-staging-gateway.mjs';
 import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
@@ -31,7 +32,8 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  * autenticación real, autorización, revisión, precios y acceso a terceros.
  */
 const fail=code=>({ok:false,code});
-export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+export function createClientExperience({authProvider=null,gateway=null,
+ bookingHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -230,7 +232,21 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
    ?statusGateway.fetchStatus(args?.id)
    :gateway?.send?.(operation,args)??fail('GATEWAY_UNAVAILABLE')
  }:gateway;
- mutations=createClientMutationController({gateway,getSession:async()=>actorSession()});
+ // R56: real HTTP booking is opt-in and checked against a STRICT G11 QA
+ // receipt. Generic 201 never certifies an actual trip or delivery.
+ // No booking is wired in the default ClientRuntimeProvider.
+ const bookingGateway=bookingHttpOptions?createPassengerBookingStagingGateway({
+  ...bookingHttpOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ mutations=createClientMutationController({
+  gateway:bookingGateway??gateway,getSession:async()=>actorSession()
+ });
  tracking=createRiderPollingCoordinator({
   gateway:trackGateway,getSession:async()=>actor(),store:riderStore,now
  });
