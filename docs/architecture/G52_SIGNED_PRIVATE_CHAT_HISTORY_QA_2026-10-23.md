@@ -15,6 +15,8 @@ G52 crea ese contrato sin reescribir G50 ni habilitar falsamente una conexión. 
 - `apps/mobility-expo/server/g52-chat-history-qa.mjs`: gateway solo Node QA. El cursor HMAC-SHA256 cifra **no** el contenido; **firma** la identidad, sesión, token `iat`, tipo e ID del servicio, ID de conversación, revisión del hilo, secuencia anterior y expiración. Esto hace detectable la manipulación, pero no convierte chat en E2E encryption. `G50_open_owner_qa` se usa solamente para resolver el hilo de primera página; `G52_history_owner_qa` comprueba los permisos de nuevo dentro de PostgreSQL.
 - `g52-chat-history-qa.test.mjs`: pruebas Node de actor/sesión distinto, firma rota, cursor caducado, rotación de asignación, DTO contaminado, mensajes fuera de orden, PII, identidad de confianza, rol y limitador.
 - `g52-chat-history-openapi-contract.test.mjs`: compara el contrato exacto de B y verifica que el backend continúa deshabilitado.
+- `apps/mobility-expo/server/g52-chat-history-concurrency-ci.py`: dos conexiones PostgreSQL independientes comprueban que un historial leído con `FOR SHARE` bloquee la actualización concurrente de versión, y que el replay idempotente no altere la revisión ni acepte cursores vencidos.
+- G50 endurecido para coincidir con el filtro Cliente B: rechaza espacios al inicio/final, signos HTML `<` y `>` y marcadores Unicode bidi U+200E/U+200F, tanto en Node como en SQL, con pruebas negativas.
 - `.github/workflows/mobility-g4-postgres-disposable.yml`: instala G52 después de G51 y ejecuta sus pruebas PostgreSQL 16 locales. OpenAPI versión `1.0.0-g52`.
 
 ## Reglas importantes
