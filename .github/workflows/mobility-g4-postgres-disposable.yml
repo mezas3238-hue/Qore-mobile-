@@ -51,6 +51,8 @@ on:
       - 'apps/mobility-expo/server/g58-*'
       - 'apps/mobility-expo/server/g58f-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G58F_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G59_*'
+      - 'apps/mobility-expo/server/g59-*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
       - 'apps/mobility-expo/server/g54-*'
@@ -427,3 +429,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G58F_MIN_PRIVILEGE_TICKET_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G58F race two delegated connections, one-use proof, revocation and denied roles
         run: python3 apps/mobility-expo/server/g58f-scoped-ticket-exchange-race-ci.py
+      - name: G59 install owner-only authoritative receipt reconciliation on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59_UNKNOWN_COMMIT_RECONCILIATION_POSTGRES_CI_ONLY.sql
+      - name: G59 assert denied direct SDK, service and gateway execution grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G59_UNKNOWN_COMMIT_RECONCILIATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G59 PostgreSQL source of truth after lost ACK, rollback, newer revision and revocation
+        run: python3 apps/mobility-expo/server/g59-uncertain-commit-reconciliation-ci.py
