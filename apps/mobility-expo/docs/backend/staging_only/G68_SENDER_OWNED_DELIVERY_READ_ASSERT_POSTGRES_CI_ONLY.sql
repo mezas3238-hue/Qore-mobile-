@@ -16,7 +16,7 @@ DECLARE
  own_session uuid:='68010000-0000-4680-8680-000000000011';
  other_session uuid:='68010000-0000-4680-8680-000000000012';
  d uuid:='68010000-0000-4680-8680-000000000020';
- issued bigint; dto jsonb; blocked boolean;
+ issued bigint; dto jsonb; blocked boolean; role_name text;
 BEGIN
  FOR role_name IN SELECT unnest(ARRAY['anon','authenticated','service_role'])
  LOOP
@@ -39,7 +39,7 @@ BEGIN
   (id,request_key,sender_id,requested_vehicle_kind,category,grams,
    length_cm,width_cm,height_cm,pickup_tag,delivery_tag)
  VALUES(d,'68010000-0000-4680-8680-000000000030',actor,'MOTO',
-  'PARCEL',700,9,9,9,'CENTRO_G68','LAMBRARE_G68');
+  'PARCEL',700,9,9,9,'CENTRO_QA','LAMBRARE_QA');
  INSERT INTO public.mobility_stage_g42_provider_session_grants
   (user_id,session_id,provider_confirmed_at,token_allowed_from,
    valid_until,evidence_kind)
@@ -53,7 +53,7 @@ BEGIN
  issued:=(extract(epoch FROM clock_timestamp())*1000)::bigint;
  dto:=public.mobility_stage_g68_sender_custody_owner_qa(
   actor,own_session,issued,d);
- IF pg_catalog.jsonb_object_length(dto)<>11
+ IF (SELECT count(*) FROM pg_catalog.jsonb_object_keys(dto))<>11
  OR dto->>'ownerId'<>actor::text OR dto->>'deliveryId'<>d::text
  OR dto->>'state'<>'requested' OR (dto->>'revision')::integer<>1
  OR dto->>'vehicleKind'<>'MOTO'
