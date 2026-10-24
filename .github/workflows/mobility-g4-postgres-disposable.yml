@@ -55,6 +55,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G59B_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G60C_*'
       - 'apps/mobility-expo/server/g60c-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G64_*'
+      - 'apps/mobility-expo/server/g64-*'
       - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
       - 'apps/mobility-expo/server/g56-*'
@@ -451,3 +453,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G60C_DRIVER_MIN_PRIVILEGE_WRITE_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G60C two PostgreSQL connections exchange once only, preserve original ACK and lock revoked sessions
         run: python3 apps/mobility-expo/server/g60c-driver-write-exchange-race-ci.py
+      - name: G64 install owner-only historical Driver offer decision receipt lookup
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G64_DRIVER_OFFER_DECISION_RECOVERY_POSTGRES_CI_ONLY.sql
+      - name: G64 verify immutable AUTO and DELIVERY receipts, unknown, two DB sessions and G42 revoke fence
+        run: python3 apps/mobility-expo/server/g64-driver-offer-decision-recovery-ci.py
