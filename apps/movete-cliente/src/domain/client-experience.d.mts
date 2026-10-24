@@ -128,6 +128,12 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ bookingHttpOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  qaReceiptContractCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  chatInboxGateway?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   isConfigured?:()=>boolean;cancelInbox?:()=>void;
