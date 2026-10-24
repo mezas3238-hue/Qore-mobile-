@@ -34,7 +34,7 @@ const HEADER=['conversationId','serviceId','serviceKind','ownerId',
 const MESSAGE=['messageId','senderRole','body','createdAt','revision'];
 const ACK=['conversationId','serviceId','requestKey','messageId',
  'senderRole','body','createdAt','revision','serverStored'];
-const blank=()=>({header:null,messages:[],nextCursor:null,
+const blank=()=>({header:null,sessionRevision:null,messages:[],nextCursor:null,
  seenCursor:new Set(),seenIds:new Set(),pageNumber:0,error:null,pending:null,
  readCount:0,evictedCount:0});
 function validateMessage(row,now){
@@ -153,6 +153,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
   }else if(!validId(serviceId)||!TYPES.has(serviceKind))
    return fail('INVALID_SERVICE');
   const cursor=older?state.nextCursor:null;
+  // El hilo y sus cursores quedan ligados a la revisión de la sesión
+  // que autorizó la primera página. Un JWT nuevo exige GET desde cero.
+  const previousHeader=older?null:state.header;
+  const previousSessionRevision=state.sessionRevision;
   if(older&&state.seenCursor.has(cursor)){clear();return fail('CURSOR_REPEATED');}
   const started=++generation;loading=true;state.error=null;
   try{
@@ -160,7 +164,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
    if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!actorOk(before)){clear();return fail('AUTH_REQUIRED');}
-   if(older&&state.header.ownerId!==before.subject){clear();return fail('STALE_SESSION_RESPONSE');}
+   if(older&&(state.header.ownerId!==before.subject
+    ||state.sessionRevision!==before.sessionRevision)){
+    clear();return fail('STALE_SESSION_RESPONSE');
+   }
    if(!older)state=blank();
    let result;
    try{result=await gateway.readMessages({
@@ -181,7 +188,12 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     serviceId,serviceKind,ownerId:before.subject,now:now(),
     conversationId:older?state.header.conversationId:expectedConversationId
    });
-   if(!verified||older&&verified.revision!==state.header.revision){
+   if(!verified||older&&verified.revision!==state.header.revision
+    ||!older&&previousHeader&&previousHeader.ownerId===before.subject
+      &&previousSessionRevision===before.sessionRevision
+      &&previousHeader.conversationId===verified?.conversationId
+      &&verified.revision<previousHeader.revision){
+    // Un refresco antiguo no puede reactivar permisos de este mismo hilo.
     clear();state.error='INVALID_CHAT_PAGE';return fail('INVALID_CHAT_PAGE');
    }
    if(older){
@@ -206,7 +218,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     ||state.seenCursor.has(verified.nextCursor))){
     clear();return fail('CURSOR_REPEATED');
    }
-   state.header=verified;state.nextCursor=verified.nextCursor;
+   state.header=verified;state.sessionRevision=before.sessionRevision;
+   state.nextCursor=verified.nextCursor;
    return Object.freeze({ok:true,pageNumber:state.pageNumber,
     hasOlder:state.nextCursor!==null});
   }finally{if(started===generation)loading=false;}
@@ -228,6 +241,9 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
    if(!actorOk(before)||before.subject!==state.header.ownerId){
     clear();return fail('AUTH_REQUIRED');
+   }
+   if(before.sessionRevision!==state.sessionRevision){
+    clear();return fail('STALE_SESSION_RESPONSE');
    }
    const currentHeader=state.header;
    let result;
@@ -298,6 +314,9 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     if(!actorOk(before)||before.subject!==prior.ownerId){
      clear();return fail('AUTH_REQUIRED');
     }
+    if(before.sessionRevision!==state.sessionRevision){
+     clear();return fail('STALE_SESSION_RESPONSE');
+    }
     let response;
     try{response=await gateway.readMessages({
      serviceId:prior.serviceId,serviceKind:prior.serviceKind,cursor:null,
@@ -320,7 +339,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
      serviceId:prior.serviceId,serviceKind:prior.serviceKind,
      ownerId:before.subject,conversationId:prior.conversationId,now:now()
     });
-    if(!verified){
+    if(!verified||verified.revision<prior.revision){
+     // No reautorizar un mensaje ambiguo desde un snapshot regresivo.
      clear();state.error='INVALID_CHAT_PAGE';return fail('INVALID_CHAT_PAGE');
     }
     state.header=verified;state.messages=[...verified.messages];
