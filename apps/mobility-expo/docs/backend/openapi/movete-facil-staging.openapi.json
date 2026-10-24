@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g52",
+    "version": "1.0.0-g53",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
@@ -2887,6 +2887,94 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ChatHistoryPageG52"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/services/{serviceKind}/{serviceId}/conversations/{conversationId}/messages": {
+      "post": {
+        "operationId": "sendPersistedPassengerChatMessageG53",
+        "tags": [
+          "private-chat"
+        ],
+        "summary": "Future Passenger chat send with exact server-persisted B ACK",
+        "description": "QA-only contract. Verified provider JWT, G42 locked session, exclusive Passenger, current service assignment and idempotent requestKey. Not wired to HTTP.",
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatPassengerSendRequestG53"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed message ACK from PostgreSQL, future no mounted server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatPassengerStoredAckG53"
                 }
               }
             }
@@ -6490,6 +6578,81 @@
             "const": false
           }
         }
+      },
+      "ChatPassengerSendRequestG53": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "body"
+        ],
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "ChatPassengerStoredAckG53": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceId",
+          "requestKey",
+          "messageId",
+          "senderRole",
+          "body",
+          "createdAt",
+          "revision",
+          "serverStored"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderRole": {
+            "type": "string",
+            "const": "passenger"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 2
+          },
+          "serverStored": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },
@@ -6504,5 +6667,6 @@
   "x-qore-g50-chat-runtime-wired": false,
   "x-qore-g50-private-chat-qa-only": true,
   "x-qore-g51-chat-inbox-runtime-wired": false,
-  "x-qore-g52-chat-history-runtime-wired": false
+  "x-qore-g52-chat-history-runtime-wired": false,
+  "x-qore-g53-passenger-chat-send-runtime-wired": false
 }
