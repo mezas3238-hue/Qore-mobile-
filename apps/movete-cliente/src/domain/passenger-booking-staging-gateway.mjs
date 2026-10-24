@@ -129,7 +129,8 @@ export function createPassengerBookingStagingGateway({
   finally{busy=false;}
  }
  return Object.freeze({
-  isConfigured:()=>Boolean(ready),send,reconcile,
+  isConfigured:()=>Boolean(ready),
+  reconciliationConfigured:()=>Boolean(canReconcile),send,reconcile,
   bookingReconciliationRequired:true,productionEnabled:false
  });
 }
