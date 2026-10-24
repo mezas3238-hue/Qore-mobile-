@@ -58,6 +58,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G64_*'
       - 'apps/mobility-expo/server/g64-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G68_*'
+      - 'apps/mobility-expo/server/g68-*'
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
@@ -467,4 +469,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_DELIVERY_PROOF_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G67 test real two-session COMMIT proof and revocation race, UUID forgery and rollback
         run: python3 apps/mobility-expo/server/g67-delivery-proof-atomic-race-ci.py
-
+      - name: G68 install private sender-owned delivery custody (disposable PG16)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G68_SENDER_OWNED_DELIVERY_READ_POSTGRES_CI_ONLY.sql
+      - name: G68 assert owned DTO, disjoint Passenger roles and G42 revocation in PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G68_SENDER_OWNED_DELIVERY_READ_ASSERT_POSTGRES_CI_ONLY.sql
