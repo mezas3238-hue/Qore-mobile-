@@ -141,3 +141,78 @@ test('R55 transport faults cannot invent delivery or payment',async()=>{
  assert.equal(x.experience.snapshot().chat.sendReady,true);
  assert.equal(x.experience.snapshot().chat.messages.length,0);
 });
+
+test('R55 integrated G51 inbox -> G52 assigned chat -> G53 durable ACK synthetic QA',async()=>{
+ const serviceId=id(2),conversationId=id(3),requestKey=id(4);
+ const inbox={ownerId:id(1),generatedAt:time-1000,expiresAt:time+60000,
+  revision:7,productionEnabled:false,nextCursor:null,items:[{
+   conversationId,serviceId,serviceKind:'RIDE',state:'ACTIVE',
+   assignmentVerified:true,counterpartRole:'driver',revision:7,
+   unreadCount:0,updatedAt:time-1000,canSend:true
+  }]};
+ const page={conversationId,serviceId,serviceKind:'RIDE',ownerId:id(1),
+  counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:7,generatedAt:time-1000,expiresAt:time+60000,
+  messages:[{messageId:id(6),senderRole:'driver',
+   body:'En camino',createdAt:time-2000,revision:7}],
+  nextCursor:null,canSend:true,productionEnabled:false};
+ const ack={conversationId,serviceId,requestKey,messageId:id(7),
+  senderRole:'passenger',body:'Estoy aqui',createdAt:time-500,
+  revision:9,serverStored:true};
+ const paths=[],requests=[];
+ const json=x=>({status:200,ok:true,redirected:false,
+  headers:{get:name=>name==='content-type'?'application/json':null},
+  text:async()=>JSON.stringify(x)});
+ const x=createPassengerChatStagingComposition({...base(),
+  fetchImpl:async(url,init)=>{
+   paths.push(url);requests.push(init);
+   if(init.method==='GET'&&url.endsWith('/conversations?limit=100'))
+    return json(inbox);
+   if(init.method==='GET'&&url.includes('/messages?limit=100'))
+    return json(page);
+   if(init.method==='POST'&&url.endsWith('/messages')){
+    assert.deepEqual(JSON.parse(init.body),{requestKey,body:'Estoy aqui'});
+    return json(ack);
+   }
+   throw Error('Unexpected route: '+url);
+  }
+ });
+ assert.equal((await x.experience.refreshSession()).ok,true);
+ assert.equal((await x.experience.loadChatInbox()).ok,true);
+ assert.equal(x.experience.snapshot().chatInbox.items.length,1);
+ assert.equal((await x.experience.openChat({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(x.experience.snapshot().chat.messages.length,1);
+ assert.equal((await x.experience.sendChat({body:'Estoy aqui',requestKey})).ok,true);
+ assert.equal(x.experience.snapshot().chat.messages.length,2);
+ assert.equal(x.experience.snapshot().chat.pendingSend,false);
+ assert.equal(paths.length,3);
+ assert.ok(paths.every(path=>path.startsWith('https://qa.staging.example.invalid/v1/staging/chat/')));
+ assert.ok(requests.every(req=>req.credentials==='omit'&&req.redirect==='error'&&req.cache==='no-store'));
+});
+test('R55 an uncertain G53 POST never becomes a duplicate or durable receipt',async()=>{
+ const serviceId=id(2),conversationId=id(3),requestKey=id(4);
+ let postCount=0;
+ const page={conversationId,serviceId,serviceKind:'RIDE',ownerId:id(1),
+  counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:7,generatedAt:time-1000,expiresAt:time+60000,
+  messages:[],nextCursor:null,canSend:true,productionEnabled:false};
+ const x=createPassengerChatStagingComposition({...base(),
+  fetchImpl:async(url,init)=>{
+   if(init.method==='GET')return {status:200,ok:true,redirected:false,
+    headers:{get:name=>name==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify(page)};
+   postCount++;throw Error('Lost ACK after possible SQL COMMIT');
+  }
+ });
+ await x.experience.refreshSession();
+ assert.equal((await x.experience.openChat({serviceId,serviceKind:'RIDE'})).ok,true);
+ const first=await x.experience.sendChat({body:'Estoy aqui',requestKey});
+ assert.equal(first.ok,false);
+ assert.equal(first.code,'CHAT_NETWORK_OR_TIMEOUT');
+ assert.equal(x.experience.snapshot().chat.pendingSend,true);
+ assert.equal(x.experience.snapshot().chat.messages.length,0);
+ const second=await x.experience.sendChat({body:'Segundo intento',requestKey:id(5)});
+ assert.equal(second.ok,false);
+ assert.equal(second.code,'PENDING_MESSAGE_RECONCILIATION');
+ assert.equal(postCount,1);
+});
