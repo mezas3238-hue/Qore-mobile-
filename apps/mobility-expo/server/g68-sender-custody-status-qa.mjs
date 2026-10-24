@@ -25,8 +25,10 @@ export function createG68SenderCustodyStatusQa({
  throw Error('G68 requires trusted disabled-by-default STAGING sources');
  return async({method,path,headers,body}={})=>{
   const m=typeof path==='string'?ROUTE.exec(path):null;
-  if(method!=='GET'||!m||!UUID.test(m[1])||(body!==undefined&&body!==null))
-   return fail(404,'G68_ROUTE_INVALID');
+  if(method!=='GET')return fail(404,'G68_METHOD_INVALID');
+  if(!m)return fail(404,'G68_ROUTE_PATH_INVALID');
+  if(!UUID.test(m[1]))return fail(404,'G68_ROUTE_UUID_INVALID');
+  if(body!==undefined&&body!==null)return fail(404,'G68_GET_BODY_INVALID');
   const match=typeof headers?.authorization==='string'
    &&headers.Authorization===undefined&&headers.cookie===undefined
    ?TOKEN.exec(headers.authorization):null;
