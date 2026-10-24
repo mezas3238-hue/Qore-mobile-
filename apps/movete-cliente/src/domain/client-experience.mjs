@@ -4,6 +4,7 @@ import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
 import {createSenderCustodyFlow} from './sender-custody-flow.mjs';
+import {createSenderCustodyHttpGateway} from './sender-custody-http-gateway.mjs';
 import {createClientHistoryGateway} from './client-history-gateway.mjs';
 import {createRiderStatusGateway} from './ride-status-gateway.mjs';
 import {createFareQuoteGateway} from './fare-quote-gateway.mjs';
@@ -34,7 +35,7 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,senderCustodyOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -75,10 +76,27 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
- // G66 Courier status is Driver-private. Sender gets a DIFFERENT
- // read-only participant contract, disabled until A certifies it.
+ // G68 is Passenger/sender-only; G66 remains strictly Driver-private.
+ // A G68 has ONLY a Node/SQL QA handler, not deployed HTTPS. The gateway
+ // requires separately verified opt-ins and is never wired by default.
+ const senderCustodyHttp=senderCustodyHttpOptions?createSenderCustodyHttpGateway({
+  ...senderCustodyHttpOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),user=actor();
+   return privateSession&&user?{...privateSession,subject:user.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ // Two competing injection paths are a configuration error: fail closed.
+ const custodyConfig=senderCustodyHttpOptions
+  ?(!senderCustodyOptions&&senderCustodyHttp?.isConfigured()?{
+    enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+    readOwnDelivery:senderCustodyHttp.readOwnDelivery
+   }:{})
+  :(senderCustodyOptions??{});
  senderCustody=createSenderCustodyFlow({
-  ...senderCustodyOptions,now,
+  ...custodyConfig,now,
   getSession:()=>{
    const privateSession=session.getSessionForGateway(),user=actor();
    return privateSession&&user?{...privateSession,role:'passenger',
