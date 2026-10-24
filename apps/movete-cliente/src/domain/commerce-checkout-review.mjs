@@ -46,7 +46,8 @@ export function reviewCommerceBasket(snapshot,{authenticated=false,now=Date.now(
   return fail('INVALID_BASKET');
  const index=new Map();
  for(const item of snapshot.catalogItems){
-  if(!sameKeys(item,CATALOG_ROW)||!UUID.test(item.itemId)
+  if(!sameKeys(item,CATALOG_ROW)||typeof item.itemId!=='string'
+   ||!UUID.test(item.itemId)||typeof item.itemTag!=='string'
    ||!TAG.test(item.itemTag)||!permittedKind.has(item.itemClass)
    ||typeof item.active!=='boolean'
    ||!integer(item.stockUnits)||item.stockUnits>1000000
@@ -58,16 +59,15 @@ export function reviewCommerceBasket(snapshot,{authenticated=false,now=Date.now(
  let subtotal=0;
  const rows=[],seen=new Set();
  for(const row of snapshot.items){
-  if(!sameKeys(row,CART_ROW)||!UUID.test(row.itemId)
+  if(!sameKeys(row,CART_ROW)||typeof row.itemId!=='string'
+   ||!UUID.test(row.itemId)
    ||seen.has(row.itemId)||!integer(row.quantity)
    ||row.quantity<1||row.quantity>999
-   ||!TAG.test(row.itemTag)
+   ||typeof row.itemTag!=='string'||!TAG.test(row.itemTag)
    ||!integer(row.unitPricePyg)||!integer(row.lineSubtotalPyg))
    return fail('INVALID_BASKET_ROW');
   const item=index.get(row.itemId);
   if(!item||item.active!==true)return fail('ITEM_UNAVAILABLE');
-  if(item.itemClass==='PHARMACY_OTC'&&snapshot.vehicleKind!=='AUTO'
-   &&snapshot.vehicleKind!=='MOTO')return fail('INVALID_VEHICLE');
   if(row.quantity>item.stockUnits)return fail('STOCK_CHANGED');
   if(row.itemTag!==item.itemTag||row.unitPricePyg!==item.unitPricePyg)
    return fail('PRICE_OR_CATALOG_CHANGED');
