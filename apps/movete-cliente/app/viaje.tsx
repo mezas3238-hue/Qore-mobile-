@@ -9,6 +9,7 @@ import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experie
 import {validateRideDraft} from '../src/domain/capabilities.mjs';
 import {prepareLocalRideRequest} from '../src/domain/client-request-preparation.mjs';
 import {projectRideDraftUi} from '../src/domain/ride-draft-ui-policy.mjs';
+import {projectAutoPrequoteScreen} from '../src/domain/f1-auto-prequote-screen-policy.mjs';
 import {emptyLocalRouteDraft,editLocalRouteDraft,reviewLocalRouteDraft,
  canPrepareCurrentRideContract,MAX_LOCAL_STOPS} from '../src/domain/client-route-editor.mjs';
 import type {LocalRouteEdit,LocalRouteDraft} from '../src/domain/client-route-editor.mjs';
@@ -35,7 +36,14 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const lock=useRef(false);
  const consultationLock=useRef(false);
  const [consulting,setConsulting]=useState(false);
+ const [quoteBusy,setQuoteBusy]=useState(false);
+ const quoteLock=useRef(false);
+ const bookingKey=useRef<string|null>(null);
  const mutation=view.mutation;
+ const quoted=projectAutoPrequoteScreen({
+  prequote:view.autoPrequote,authenticated:view.authenticated,
+  mutationPhase:mutation.phase,now:Date.now()
+ });
  const ui=projectRideDraftUi({
   phase:mutation.phase,operation:mutation.operation,
   authenticated:view.authenticated,validated,
@@ -43,7 +51,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  });
  // Unknown phase, different outstanding operation or a sent request
  // must never leave the vehicle type or route editor unlocked.
- const free=ui.ok&&ui.editable;
+ const free=ui.ok&&ui.editable&&quoted.canEditRoute;
  const myDraft=ui.ok&&ui.canDiscard;
  // Las direcciones son datos privados de la pantalla, ajenos al snapshot Auth.
  function changeRoute(change:LocalRouteEdit){
@@ -103,6 +111,60 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     router.push('/seguimiento');
    }else setFeedback('No se pudo verificar el viaje desde el servidor. No hay seguimiento confirmado.');
   }finally{consultationLock.current=false;setConsulting(false);}
+ }
+ function acceptVerifiedFare(){
+  if(quoteLock.current||!quoted.canAccept||!quoted.quote)return;
+  const current=client.snapshot();
+  if(current.privateViewRevision!==view.privateViewRevision)return;
+  quoteLock.current=true;
+  try{
+   const fare=quoted.quote;
+   const result=client.acceptAutoPrequote({
+    quoteId:fare.quoteId,amountGs:fare.amountGs,fareVersion:fare.fareVersion
+   });
+   setFeedback(result.ok?
+    'Tarifa aceptada para esta cotización QA. Todavía no hay conductor, viaje ni cobro.':
+    'La cotización ya no puede aceptarse. Consultá nuevamente al servidor.');
+  }finally{quoteLock.current=false;}
+ }
+ async function reserveVerifiedFare(){
+  if(quoteLock.current||!quoted.canReserve)return;
+  const before=client.snapshot();
+  if(before.privateViewRevision!==view.privateViewRevision
+   ||before.autoPrequote.phase!=='accepted'||before.mutation.phase!=='idle')return;
+  quoteLock.current=true;setQuoteBusy(true);
+  // A missing ACK must be recovered with this SAME key, not a second POST.
+  const requestKey=bookingKey.current??Crypto.randomUUID();
+  bookingKey.current=requestKey;
+  try{
+   const result=await client.reserveQuotedAuto({requestKey});
+   if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+   setFeedback(result.ok?
+    'Reserva registrada solo para QA. Falta verificar estado real con el servidor.':
+    result.code==='BOOKING_RECONCILIATION_REQUIRED'?
+     'El resultado de la reserva es incierto. No se reenviará: comprobá el estado con el servidor.':
+     'No se pudo verificar la reserva. No se inició otro despacho.');
+  }finally{quoteLock.current=false;setQuoteBusy(false);}
+ }
+ async function reconcileQuotedRide(){
+  if(quoteLock.current||!quoted.canReconcile)return;
+  if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+  quoteLock.current=true;setQuoteBusy(true);
+  try{
+   const result=await client.reconcileQuotedAuto();
+   if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+   setFeedback(result.ok?
+    'La reserva se encontró por lectura independiente QA. Verificá el viaje antes de seguir.':
+    'La reserva sigue sin confirmación. No se hará otra solicitud automáticamente.');
+  }finally{quoteLock.current=false;setQuoteBusy(false);}
+ }
+ function discardVerifiedFare(){
+  if(quoteLock.current||!quoted.canDiscard)return;
+  if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+  const result=client.clearAutoPrequote();
+  if(result.ok){bookingKey.current=null;
+   setValidated(false);setFeedback('Cotización descartada sin solicitar conductor.');
+  }else setFeedback('No se puede descartar una reserva pendiente de conciliación.');
  }
  function discard(){
   if(!myDraft||!mutation.requestKey||lock.current)return;
@@ -211,10 +273,41 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     onPress={()=>{void consultVerifiedRide();}}/>
   </Panel>}
   <Panel>
-   <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Cotización y conductor</Text>
-   <Action label="Aceptar tarifa y buscar conductor — pendiente de backend" disabled
-    hint="Se habilitará cuando el servidor certifique cotización y despacho" onPress={()=>{}}/>
-   <Text style={styles.small}>No se cobrará ni iniciará búsqueda. Falta el contrato A de precotización sin despacho, Auth Passenger real, verificación de zona y confirmación del importe en Gs.</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Cotización y consentimiento</Text>
+   {!view.autoPrequote.quoteAvailable&&<View>
+    <Action label="Consultar tarifa oficial — pendiente de backend" disabled
+     hint="Requiere resolución de ruta, precotización PYG y contrato certificado de A" onPress={()=>{}}/>
+    <Text style={styles.small}>No hay tarifa vigente. El backend debe verificar ruta y cobertura y emitir un precio en Gs antes de solicitar un conductor. La revisión local no es una cotización.</Text>
+   </View>}
+   {quoted.quote&&<View>
+    <Text style={styles.small}>Importe calculado por el servidor (QA, sin cobro)</Text>
+    <Text accessibilityLiveRegion="polite" style={styles.heading}>{quoted.amountLabel}</Text>
+    <Text style={styles.small}>Cotización vigente hasta {new Date(quoted.quote.expiresAt).toLocaleTimeString('es-PY')}. Aceptar el precio no envía todavía una reserva.</Text>
+    {quoted.canAccept&&<Action label="Acepto esta tarifa en guaraníes"
+     hint="Aceptación explícita de importe y versión exactos; sin despacho ni cobro"
+     onPress={acceptVerifiedFare}/>}
+   </View>}
+   {quoted.phase==='accepted'&&<Action
+    label={quoteBusy?'Registrando reserva QA…':'Confirmar reserva de automóvil — QA'}
+    busy={quoteBusy} disabled={!quoted.canReserve}
+    hint="Un solo POST de reserva ligado a esta tarifa, sin pago real"
+    onPress={()=>{void reserveVerifiedFare();}}/>}
+   {quoted.phase==='ambiguous'&&<View>
+    <Text accessibilityLiveRegion="polite" style={styles.small}>Resultado de reserva pendiente de conciliación. La app no repetirá el POST ni cambiará la clave de solicitud.</Text>
+    <Action label={quoteBusy?'Comprobando…':'Consultar reserva sin volver a solicitar'}
+     busy={quoteBusy} disabled={!quoted.canReconcile}
+     hint="Solo lectura privada en el servidor con la misma requestKey"
+     onPress={()=>{void reconcileQuotedRide();}}/>
+   </View>}
+   {quoted.phase==='confirmed'&&<Text accessibilityLiveRegion="polite" style={styles.small}>
+    Reserva confirmada en QA. Esto no demuestra conductor asignado, ruta GPS, pago ni viaje comercial. El seguimiento requiere otra consulta autenticada al servidor.
+   </Text>}
+   {quoted.canDiscard&&<Action label="Descartar cotización sin solicitar viaje"
+    secondary disabled={quoteBusy} onPress={discardVerifiedFare}/>}
+   {quoted.locked&&<Text style={styles.small}>
+    Origen, destino y categoría permanecen bloqueados mientras esta cotización o reserva exista. Para cambiar la ruta, descartá la cotización antes de enviar; nunca se descartará un POST ambiguo.
+   </Text>}
+   <Text style={styles.small}>Sin contratos certificados de A, los controles permanecen deshabilitados. No se estima tarifa, GPS, disponibilidad ni cobro desde el teléfono.</Text>
   </Panel>
  </ScrollView>;
 }
