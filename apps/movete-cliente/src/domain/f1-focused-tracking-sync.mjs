@@ -51,10 +51,11 @@ export function createF1FocusedTrackingSync({
  async function refresh(){
   if(!active)return fail('TRACKING_NOT_FOCUSED');
   if(busy)return fail('TRACKING_READ_IN_FLIGHT');
-  let current=null;
-  try{current=scopeOf(readSnapshot());}catch{stop();return fail('TRACKING_SCOPE_UNVERIFIED');}
+  let current=null,view=null;
+  try{view=readSnapshot();current=scopeOf(view);}
+  catch{stop();return fail('TRACKING_SCOPE_UNVERIFIED');}
   if(!same(current,scope)){stop();return fail('TRACKING_SCOPE_CHANGED');}
-  if(readSnapshot().tracking.syncing)return fail('TRACKING_READ_IN_FLIGHT');
+  if(view.tracking.syncing)return fail('TRACKING_READ_IN_FLIGHT');
   busy=true;
   const captured=++generation;
   let result;
