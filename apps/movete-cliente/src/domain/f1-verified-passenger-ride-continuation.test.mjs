@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createClientExperience} from './client-experience.mjs';
+import {createF1FocusedTrackingSync} from './f1-focused-tracking-sync.mjs';
 
 const clock=1800000000000;
 const id=n=>'f1000000-0000-4100-8100-'+String(n).padStart(12,'0');
@@ -220,4 +221,50 @@ test('F1 ClientExperience rejects old Driver SQL status after an already complet
  assert.equal((await f.client.syncTracking()).code,'TRIP_STATE_CONFLICT');
  assert.equal(f.client.snapshot().tracking.state,'completed');
  assert.equal(f.client.snapshot().tracking.position,null);
+});
+
+test('F1 integrated: Passenger booking → tracking → foreground refresh → completed → stop HTTP reads',async()=>{
+ let latest=status(),callback=null,clearCount=0;
+ const f=setup({statusReply:async()=>response(latest)});
+ assert.equal((await request(f)).ok,true);
+ assert.equal((await f.client.continueVerifiedRide()).ok,true);
+ assert.equal(f.reads(),1);
+ const loop=createF1FocusedTrackingSync({
+  readSnapshot:()=>f.client.snapshot(),
+  syncTracking:()=>f.client.syncTracking(),
+  schedule:(fn,ms)=>{assert.equal(ms,12000);callback=fn;return 1;},
+  cancel:()=>{clearCount++;}
+ });
+ assert.equal(loop.start().ok,true);
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ assert.equal(f.reads(),2);
+ const assigned={
+  name:'Conductor Sintético',vehicleKind:'AUTO',model:'Toyota',
+  color:'blanco',plate:'QA-777',rating:4.8
+ };
+ latest=status({state:'assigned',revision:2,assignmentPersisted:true,
+  driver:{verified:true,displayName:assigned.name},
+  vehicle:{kind:'AUTO',plate:assigned.plate},
+  event:{source:'server',tripId:trip,passengerId:subject,serverRevision:2,
+   trackingSequence:1,status:'accepted',acceptedDriver:assigned,tracking:null}
+ });
+ callback();
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ assert.equal(f.client.snapshot().tracking.state,'assigned');
+ assert.equal(f.client.snapshot().tracking.assignedDriver?.plate,'QA-777');
+ latest=status({state:'completed',revision:5,assignmentPersisted:true,
+  event:{source:'server',tripId:trip,passengerId:subject,serverRevision:5,
+   trackingSequence:4,status:'completed',acceptedDriver:null,tracking:null}
+ });
+ callback();
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ assert.equal(f.client.snapshot().tracking.state,'completed');
+ assert.equal(f.client.snapshot().tracking.assignedDriver,null);
+ assert.equal(loop.isActive(),false);
+ assert.equal(clearCount,1);
+ const last=f.reads();
+ callback();
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(f.reads(),last,'no background HTTP after terminal status');
+ assert.equal(f.posts(),1,'foreground cannot create another booking');
 });
