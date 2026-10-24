@@ -44,6 +44,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G54_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G55_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G56_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G56B_*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
       - 'apps/mobility-expo/server/g54-*'
@@ -392,3 +393,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56_DRIVER_SCOPED_CHAT_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G56 two PostgreSQL sessions race one Driver ticket and lock against revocation
         run: python3 apps/mobility-expo/server/g56-driver-scoped-chat-concurrency-ci.py
+      - name: G56B install Driver-only inbox pagination and activity revisions
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_POSTGRES_CI_ONLY.sql
+      - name: G56B test 205 Driver conversations, private unread, current assignment and scoped role
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_ASSERT_POSTGRES_CI_ONLY.sql
