@@ -38,11 +38,11 @@ export type DriverMessagingAdapters=Readonly<{
  readInbox:(request:{bearer:string;cursor:string|null;limit:number})=>Promise<{
   status:number;body:unknown;
  }>;
- readHistory:(request:{bearer:string;serviceKind:string;serviceId:string;
+ readHistory:(request:{bearer:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';serviceId:string;
   conversationId:string;cursor:string|null;limit:number})=>Promise<QaReply>;
- send:(request:{bearer:string;serviceKind:string;serviceId:string;
+ send:(request:{bearer:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';serviceId:string;
   conversationId:string;requestKey:string;body:string})=>Promise<QaReply>;
- reconcile:(request:{bearer:string;serviceKind:string;serviceId:string;
+ reconcile:(request:{bearer:string;serviceKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';serviceId:string;
   conversationId:string;requestKey:string;body:string})=>Promise<QaReply>;
  markVisible:(request:{bearer:string;conversationId:string;messageId:string;
   marker:string})=>Promise<QaReply>;
