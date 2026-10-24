@@ -19,15 +19,36 @@ export function canShowPassengerServiceChat({authenticated=false,
  * React debe desmontar INMEDIATAMENTE el borrador local al cambiar de
  * servicio (incluso con el mismo pasajero/JWT). No depender de useEffect.
  */
-/** @param {{sessionRevision?:number,serviceId?:string|null,serviceKind?:string|null,conversationId?:string|null}} [options] */
+/**
+ * La URL de "historial" no tiene conversationId. En ese caso incluir el
+ * hilo autorizado por el backend en la clave React, para desmontar el borrador
+ * si se reasigna el conductor sin cambiar serviceId ni JWT.
+ *
+ * No confiar en un hilo de otro servicio, en una sesión no autenticada ni
+ * en la vista de una autorización caducada.
+ *
+ * @param {{sessionRevision?:number,serviceId?:string|null,
+ * serviceKind?:string|null,conversationId?:string|null,
+ * authorizedConversationId?:string|null,authorizedServiceId?:string|null,
+ * authorizedServiceKind?:string|null,authorized?:boolean}} [options]
+ */
 export function passengerChatPrivateViewKey({sessionRevision,
- serviceId=null,serviceKind=null,conversationId=null}={}){
+ serviceId=null,serviceKind=null,conversationId=null,
+ authorizedConversationId=null,authorizedServiceId=null,
+ authorizedServiceKind=null,authorized=false}={}){
  const rev=Number.isSafeInteger(sessionRevision)&&sessionRevision>=0
   ?sessionRevision:'UNAUTHORIZED';
  const id=typeof serviceId==='string'&&UUID.test(serviceId)?serviceId:'NO_SERVICE';
  const kind=KINDS.has(serviceKind)?serviceKind:'NO_KIND';
- const thread=conversationId===null?'NO_THREAD'
-  :typeof conversationId==='string'&&UUID.test(conversationId)
-   ?conversationId:'INVALID_THREAD';
+ const resolved=conversationId===null&&authorized===true&&rev!=='UNAUTHORIZED'
+  &&id!=='NO_SERVICE'&&kind!=='NO_KIND'
+  &&authorizedServiceId===serviceId&&authorizedServiceKind===serviceKind
+  &&typeof authorizedConversationId==='string'
+  &&UUID.test(authorizedConversationId)
+  ?authorizedConversationId:null;
+ const threadId=conversationId===null?resolved:conversationId;
+ const thread=threadId===null?'NO_THREAD'
+  :typeof threadId==='string'&&UUID.test(threadId)
+   ?threadId:'INVALID_THREAD';
  return `${rev}:${kind}:${id}:${thread}`;
 }
