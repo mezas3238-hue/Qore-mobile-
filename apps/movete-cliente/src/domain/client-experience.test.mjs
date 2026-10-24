@@ -1154,3 +1154,59 @@ test('hint rechazado durante revocación purga caché anterior aun sin snapshot'
  enabled=true;
  assert.equal(api.snapshot().chatHints.length,0);
 });
+
+
+// R25 G51: composer Cliente opt-in, nunca una API de chat montada por defecto.
+test('R25 cliente compone gateway G51 OFF sin crear tráfico en red',async()=>{
+ let hits=0;
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g51ChatInboxHttpOptions:{
+   origin:'https://qa-chat.example.invalid',
+   pinnedOrigin:'https://qa-chat.example.invalid',
+   enabled:false,contractCertified:true,stagingRuntimeVerified:true,
+   fetchImpl:async()=>{hits++;throw Error('not configured');}
+  }
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().chatInbox.readReady,false);
+ assert.equal((await api.loadChatInbox({next:false})).code,
+  'CHAT_INBOX_CONTRACT_NOT_CERTIFIED');
+ assert.equal(hits,0);
+});
+test('R25 Cliente integra DTO G51 con token de sesión y solo la bandeja propia',async()=>{
+ let captured;
+ const dto={ownerId:a,generatedAt:now-1000,expiresAt:now+60000,
+  revision:9,productionEnabled:false,nextCursor:null,items:[{
+   conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+   state:'ACTIVE',assignmentVerified:true,counterpartRole:'driver',
+   revision:9,unreadCount:123,updatedAt:now-2000,canSend:true
+  }]};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g51ChatInboxHttpOptions:{
+   origin:'https://qa-chat.example.invalid',
+   pinnedOrigin:'https://qa-chat.example.invalid',
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   fetchImpl:async(url,init)=>{
+    captured={url,init};
+    return {status:200,ok:true,redirected:false,
+     headers:{get:x=>x==='content-type'?'application/json':null},
+     text:async()=>JSON.stringify(dto)};
+   }
+  }
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().chatInbox.readReady,true);
+ assert.equal((await api.loadChatInbox({next:false})).ok,true);
+ const view=api.snapshot();
+ assert.equal(view.chatInbox.items.length,1);
+ assert.equal(view.chatInbox.items[0].unreadCount,123);
+ assert.equal(view.chatInbox.phoneNumbersExposed,false);
+ assert.equal(view.chatInbox.messageBodiesExposed,false);
+ assert.equal(captured.url,
+  'https://qa-chat.example.invalid/v1/staging/chat/conversations?limit=100');
+ assert.equal(captured.init.headers.Authorization,
+  'Bearer '+fakeSession().token);
+ assert.equal(view.chat.contractReady,false);
+});
