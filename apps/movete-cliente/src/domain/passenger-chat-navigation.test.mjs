@@ -58,3 +58,55 @@ test('cambiar conversación del mismo servicio desmonta editor privado',()=>{
  assert.notEqual(one,another);
  assert.notEqual(one,fromHistory);
 });
+
+
+// R23 — el editor montado desde historial debe seguir al hilo autorizado.
+test('R23 ruta de historial desmonta borrador tras reasignación del mismo servicio y JWT',()=>{
+ const common={sessionRevision:4,serviceId:id,serviceKind:'RIDE',
+  authorized:true,authorizedServiceId:id,authorizedServiceKind:'RIDE'};
+ const oldThread=passengerChatPrivateViewKey({
+  ...common,authorizedConversationId:id
+ });
+ const newThread=passengerChatPrivateViewKey({
+  ...common,authorizedConversationId:other
+ });
+ assert.notEqual(oldThread,newThread);
+ assert.notEqual(oldThread,passengerChatPrivateViewKey({
+  ...common,authorized:false,authorizedConversationId:id
+ }));
+});
+test('R23 ignora hilo resuelto de otro servicio, tipo o autorización revocada',()=>{
+ const base={sessionRevision:4,serviceId:id,serviceKind:'DELIVERY'};
+ const empty=passengerChatPrivateViewKey(base);
+ for(const patch of [
+  {authorized:false,authorizedServiceId:id,
+   authorizedServiceKind:'DELIVERY',authorizedConversationId:other},
+  {authorized:true,authorizedServiceId:other,
+   authorizedServiceKind:'DELIVERY',authorizedConversationId:other},
+  {authorized:true,authorizedServiceId:id,
+   authorizedServiceKind:'RIDE',authorizedConversationId:other},
+  {authorized:true,authorizedServiceId:id,
+   authorizedServiceKind:'DELIVERY',authorizedConversationId:'tampered'}
+ ])assert.equal(passengerChatPrivateViewKey({...base,...patch}),empty);
+});
+test('R23 hilo fijado por URL no puede ser sustituido por un resolvedId ajeno',()=>{
+ const base={sessionRevision:4,serviceId:id,serviceKind:'DELIVERY',
+  conversationId:id};
+ assert.equal(passengerChatPrivateViewKey({
+  ...base,authorized:true,authorizedServiceId:id,
+  authorizedServiceKind:'DELIVERY',authorizedConversationId:other
+ }),passengerChatPrivateViewKey(base));
+ assert.notEqual(passengerChatPrivateViewKey({
+  ...base,conversationId:'../../../driver',authorized:true,
+  authorizedServiceId:id,authorizedServiceKind:'DELIVERY',
+  authorizedConversationId:other
+ }),passengerChatPrivateViewKey(base));
+});
+test('R23 un hilo sin sesión válida no resucita el borrador privado',()=>{
+ const base={sessionRevision:-1,serviceId:id,serviceKind:'RIDE',
+  authorized:true,authorizedServiceId:id,
+  authorizedServiceKind:'RIDE',authorizedConversationId:other};
+ assert.equal(passengerChatPrivateViewKey(base),passengerChatPrivateViewKey({
+  sessionRevision:-1,serviceId:id,serviceKind:'RIDE'
+ }));
+});
