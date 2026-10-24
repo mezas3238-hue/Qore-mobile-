@@ -7,6 +7,8 @@ import {createG42PinnedJwtVerifier,createG42ProviderSessionAdapters}
  from './g42-provider-pinned-jwt-auth-qa.mjs';
 import {createG58DelegatedChatSqlQa}
  from './g58-delegated-chat-sql-qa.mjs';
+import {createG58CLocalChatRateGateQa}
+ from './g58c-local-chat-rate-gate-qa.mjs';
 import {createG58ChatLoopbackTransportQa}
  from './g58-chat-loopback-transport-qa.mjs';
 import {createG56BDriverPrivateInboxQa}
@@ -47,8 +49,11 @@ export function createG58BLocalAuthChainQa({
   return role;
  }
  const sql=createG58DelegatedChatSqlQa({...QA,openConnection});
+ const budget=createG58CLocalChatRateGateQa({...QA,now});
+ const guardedRequest=scope=>
+  allowRequest(scope)===true&&budget.allowRequest(scope)===true;
  const common={...QA,...auth,resolveExclusiveRole,
-  allowRequest,mintOwnerTicket:issueSyntheticTicket,
+  allowRequest:guardedRequest,mintOwnerTicket:issueSyntheticTicket,
   executeScopedTicket:sql.executeScopedTicket,cursorSecret,now};
  const inbox=createG56BDriverPrivateInboxQa(common);
  const driverHistory=createG57BDriverHistoryWithOrderedMarkersQa(common);
