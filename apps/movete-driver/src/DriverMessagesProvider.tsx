@@ -13,6 +13,7 @@ type MessagesContextValue={
  state:DriverMessagesView;configured:boolean;
  refreshInbox:()=>Promise<void>;loadMoreInbox:()=>Promise<void>;
  open:(conversationId:string)=>Promise<void>;loadOlder:()=>Promise<void>;
+ refreshConversation:()=>Promise<void>;
  backToInbox:()=>void;sendMessage:(body:string)=>Promise<void>;
  reconcilePending:()=>Promise<void>;confirmVisible:(id:string)=>Promise<void>;
  clear:()=>void;
@@ -43,23 +44,25 @@ export function DriverMessagesProvider({
    return;
   }
   let active=true;
+  let epoch=0;
   setState(controller.current());
   const unlisten=controller.subscribe(next=>{if(active)setState(next);});
   const synchronize=async()=>{
+   const nonce=++epoch;
    controller.clear(); // immediate logout/actor-change privacy purge
    try{
     const identity=await authAdapter.getSession();
-    if(!active)return;
+    if(!active||nonce!==epoch)return;
     controller.setSession(identity);
     if(identity!==null)await controller.refreshInbox();
-   }catch{if(active)controller.invalidate();}
+   }catch{if(active&&nonce===epoch)controller.invalidate();}
   };
   let stop:undefined|(()=>void);
   try{stop=authAdapter.subscribe?.(()=>{void synchronize();});}
   catch{controller.invalidate();}
   void synchronize();
   return ()=>{
-   active=false;stop?.();unlisten();controller.clear();
+   active=false;epoch++;stop?.();unlisten();controller.clear();
   };
  },[controller,authAdapter]);
  const value=useMemo<MessagesContextValue>(()=>({
@@ -68,6 +71,7 @@ export function DriverMessagesProvider({
   loadMoreInbox:async()=>{await controller?.loadMoreInbox();},
   open:async id=>{await controller?.open(id);},
   loadOlder:async()=>{await controller?.loadOlder();},
+  refreshConversation:async()=>{await controller?.refreshConversation();},
   backToInbox:()=>{controller?.backToInbox();},
   sendMessage:async body=>{await controller?.sendMessage(body);},
   reconcilePending:async()=>{await controller?.reconcilePending();},
