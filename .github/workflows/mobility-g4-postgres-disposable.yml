@@ -42,6 +42,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G52_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G53_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G54_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G55_*'
+      - 'apps/mobility-expo/server/g55-*'
       - 'apps/mobility-expo/server/g54-*'
       - 'apps/mobility-expo/server/g53-*'
       - 'apps/mobility-expo/server/g52-*'
@@ -375,3 +377,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G54 two-connection delegated role consumes one read receipt then fences concurrent revocation
         run: python3 apps/mobility-expo/server/g54-scoped-chat-inbox-read-concurrency-ci.py
+
+      - name: G55 install G52 page-bound opaque read marker and no-op activity fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G55_SERVER_ISSUED_READ_MARKERS_POSTGRES_CI_ONLY.sql
+      - name: G55 assert exact authorized Driver message marker, two bound capabilities and revoked-role rejection
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G55_SERVER_ISSUED_READ_MARKERS_ASSERT_POSTGRES_CI_ONLY.sql
