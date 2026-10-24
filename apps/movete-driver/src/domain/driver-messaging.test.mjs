@@ -193,3 +193,43 @@ test('G60A missing adapters and LIVE always fail initialization',()=>{
   assert.throws(()=>setup(bad));
  }
 });
+
+test('G60A logout while requestKey generator is pending never resurrects or sends',async()=>{
+ let resolveKey;
+ const gate=new Promise(resolve=>{resolveKey=resolve;});
+ const f=setup({makeRequestKey:async()=>gate});
+ await connected(f.ctl);
+ const flight=f.ctl.sendMessage(ack.body);
+ // Yield for the independently verified driving-state promise.
+ await Promise.resolve();await Promise.resolve();
+ f.ctl.clear();
+ resolveKey(key);
+ await flight;
+ assert.equal(f.ctl.current().phase,'signed-out');
+ assert.equal(f.calls.send.length,0);
+ assert.equal(f.calls.reconcile.length,0);
+});
+test('G60A paginates older history only with matching server revision, no global cap',async()=>{
+ const row1=message(m2,'driver',3,'Estoy llegando');
+ const row2=message(m1,'passenger',2,'Estoy en la entrada');
+ const f=setup({readHistory:async req=>
+  req.cursor===null?readPage([row1],'signed-older-cursor'):
+  readPage([row2],null)});
+ await connected(f.ctl);
+ assert.equal(f.ctl.current().messages.length,1);
+ assert.equal(f.ctl.current().hasOlder,true);
+ await f.ctl.loadOlder();
+ assert.equal(f.ctl.current().phase,'connected');
+ assert.equal(f.ctl.current().messages.length,2);
+ assert.equal(f.ctl.current().hasOlder,false);
+ assert.equal(JSON.stringify(f.ctl.current()).includes('signed-older-cursor'),false);
+});
+test('G60A explicit refresh preserves the active conversation without read auto ACK',async()=>{
+ const f=setup();
+ await connected(f.ctl);
+ await f.ctl.refreshConversation();
+ assert.equal(f.ctl.current().conversation.conversationId,conversation);
+ assert.equal(f.ctl.current().phase,'connected');
+ assert.equal(f.calls.history.length,2);
+ assert.equal(f.calls.mark.length,0);
+});
