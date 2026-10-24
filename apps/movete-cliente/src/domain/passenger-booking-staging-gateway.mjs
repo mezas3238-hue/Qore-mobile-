@@ -51,6 +51,7 @@ export function createPassengerBookingStagingGateway({
    let actor;
    try{actor=await getSession();}catch{return fail('AUTH_UNAVAILABLE');}
    if(!object(actor)||actor.role!=='passenger'||!validId(actor.subject)
+    ||!validId(expectedSubject)||actor.subject!==expectedSubject
     ||!Number.isSafeInteger(actor.sessionRevision)
     ||actor.sessionRevision!==expectedSessionRevision)
     return fail('STALE_SESSION_RESPONSE');
