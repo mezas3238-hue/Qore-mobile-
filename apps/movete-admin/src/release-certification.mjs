@@ -29,7 +29,19 @@ export const EVIDENCE_KINDS=Object.freeze([
 ]);
 const SHA=/^[0-9a-f]{40}$/;
 const OWNER_REPO='mezas3238-hue/Qore-mobile-';
-const RELEASE_DECISIONS=new Set(['NO_GO','READY_FOR_INDEPENDENT_AUDIT']);
+const REQUIRED_ENV=Object.freeze({
+ DOMAIN_CI:['CI_QA'],
+ API_CONTRACT:['CI_QA','STAGING'],
+ NEGATIVE_SECURITY:['CI_QA','STAGING','ANDROID_PHYSICAL','IOS_PHYSICAL'],
+ STAGING_E2E:['STAGING'],
+ ANDROID_DEVICE:['ANDROID_PHYSICAL'],
+ IOS_DEVICE:['IOS_PHYSICAL'],
+ POSTGRES_DURABILITY:['STAGING','PRODUCTION_READINESS_REVIEW'],
+ LEGAL_REVIEW:['PRODUCTION_READINESS_REVIEW'],
+ OPS_EXERCISE:['STAGING','PRODUCTION_READINESS_REVIEW'],
+ PSP_RECONCILIATION:['STAGING','PRODUCTION_READINESS_REVIEW'],
+ OWNER_SIGNOFF:['PRODUCTION_READINESS_REVIEW']
+});
 const STATUSES=new Set(['BLOCKED','QA_ONLY','CERTIFIED']);
 const SOURCE_STATES=new Set(['blocked','qa-only']);
 const isObj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -53,8 +65,7 @@ function evidenceValid(e){
  if(!EVIDENCE_KINDS.includes(e.kind)||e.result!=='PASS'
   ||typeof e.commitSha!=='string'||!SHA.test(e.commitSha)
   ||typeof e.environment!=='string'
-  ||!['CI_QA','STAGING','ANDROID_PHYSICAL','IOS_PHYSICAL',
-   'PRODUCTION_READINESS_REVIEW'].includes(e.environment)
+  ||!REQUIRED_ENV[e.kind]?.includes(e.environment)
   ||typeof e.verifiedBy!=='string'
   ||!/^[A-Za-z0-9_.-]{3,60}$/.test(e.verifiedBy)
   ||typeof e.executedAt!=='string'
@@ -145,7 +156,8 @@ export function assessMoveteReleaseRegistry(registry){
   if(f?.status==='CERTIFIED'&&!proofComplete(f))
    problems.push('UNSUPPORTED_FLOW_CERTIFICATION');
   if(f?.status==='CERTIFIED'&&Array.isArray(f.requiredGates)
-   &&f.requiredGates.some(g=>registry?.gates?.find(x=>x.id===g)?.status!=='CERTIFIED'))
+   &&f.requiredGates.some(g=>!Array.isArray(registry?.gates)
+    ||registry.gates.find(x=>x?.id===g)?.status!=='CERTIFIED'))
    problems.push('FLOW_DEPENDS_ON_UNCERTIFIED_GATE');
  }
  // Even complete local evidence is not an independent review of external
