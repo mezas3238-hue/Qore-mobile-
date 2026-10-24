@@ -3,6 +3,7 @@ import {createPassengerBookingStagingGateway} from './passenger-booking-staging-
 import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
+import {createSenderCustodyFlow} from './sender-custody-flow.mjs';
 import {createClientHistoryGateway} from './client-history-gateway.mjs';
 import {createRiderStatusGateway} from './ride-status-gateway.mjs';
 import {createFareQuoteGateway} from './fare-quote-gateway.mjs';
@@ -33,7 +34,7 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,senderCustodyOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -43,7 +44,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
  let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox;
- let mutations,tracking,cancellation,fareFlow,incidentFlow;
+ let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null;
  let historyLoading=false,historyLoadError=null;
  const seenCursors=new Set();
  const observers=new Set();
@@ -54,6 +55,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(cancellation)cancellation.clear();
   if(fareFlow)fareFlow.clear();
   if(incidentFlow)incidentFlow.clear();
+  if(senderCustody)senderCustody.clear();
   if(commerceFlow)commerceFlow.clear();
   if(commercePager)commercePager.clear();
   if(branchDirectory)branchDirectory.clear();
@@ -71,6 +73,16 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
+ // G66 Courier status is Driver-private. Sender gets a DIFFERENT
+ // read-only participant contract, disabled until A certifies it.
+ senderCustody=createSenderCustodyFlow({
+  ...senderCustodyOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),user=actor();
+   return privateSession&&user?{...privateSession,role:'passenger',
+    subject:user.subject,sessionRevision:session.privacyRevision()}:null;
+  }
+ });
  // Chat Cliente ↔ Driver/MOTO delivery, sujeto a asignación certificada por A.
  // No hay transporte habilitado hasta que A implemente Auth + conversaciones.
  // El reader G52 se inyecta SOLO por configuración STAGING explícita.
@@ -378,6 +390,8 @@ export function createClientExperience({authProvider=null,gateway=null,
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
+    senderCustody:Object.freeze({...senderCustody.snapshot(),
+     readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
     cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
     incidentReport:incidentFlow.snapshot(),commerce:commerceFlow.snapshot(),
@@ -395,6 +409,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    tracking:tracking.snapshot(),
    quote:quote.current(),
    history:history.current(user.subject),
+   senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
    cancellation:cancellation.snapshot(),fareRequest:fareFlow.snapshot(),
@@ -484,6 +499,22 @@ export function createClientExperience({authProvider=null,gateway=null,
   acceptQuote:dto=>{const result=acceptQuote(dto);notify();return result;},
   acceptHistory:(dto,options)=>{const result=acceptHistory(dto,options);notify();return result;},
   loadHistoryPage,
+  readOwnDeliveryCustody:async deliveryId=>{
+   const user=actor();
+   if(!user)return fail('AUTH_REQUIRED');
+   const page=history.current(user.subject);
+   if(!page||!page.items.some(item=>
+    item.kind==='DELIVERY'&&item.serviceId===deliveryId))
+    return fail('SENDER_DELIVERY_NOT_IN_OWN_HISTORY');
+   const subject=user.subject,rev=session.privacyRevision();
+   const operation=senderCustody.refresh(deliveryId,subject,rev);
+   notify();
+   const result=await operation;
+   const latest=actor();
+   if(!latest||latest.subject!==subject||session.privacyRevision()!==rev)
+    return fail('STALE_CUSTODY_RESPONSE');
+   notify();return result;
+  },
   prepareCancelRide:args=>{const result=prepareCancelRide(args);notify();return result;},
   submitCancelRide:async()=>{
    const result=await cancellation.submit();notify();
