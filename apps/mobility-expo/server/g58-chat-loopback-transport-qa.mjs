@@ -21,11 +21,34 @@ const JSON_HEADERS=Object.freeze({
  'content-security-policy':"default-src 'none'"
 });
 const fail=(code,status=503)=>({status,body:{code,qaOnly:true}});
+const PRIVATE_KEYS=new Set(['authorization','bearer','accessToken',
+ 'refreshToken','serviceRoleKey','password','privateKey','tokenIatMs',
+ 'sessionId','actorId','throughSeq','beforeSeq','nextPosition',
+ 'email','phone','sql','databaseUrl']);
+function hasPrivateKey(data){
+ const pending=[data];let count=0;
+ while(pending.length){
+  if(++count>10000)return true;
+  const part=pending.pop();
+  if(part===null||typeof part!=='object')continue;
+  if(Array.isArray(part)){
+   for(const item of part)pending.push(item);
+  }else{
+   for(const [key,value] of Object.entries(part)){
+    if(PRIVATE_KEYS.has(key))return true;
+    pending.push(value);
+   }
+  }
+ }
+ return false;
+}
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;
 const exact=(o,k)=>plain(o)&&Object.keys(o).length===k.length&&k.every(n=>Object.hasOwn(o,n));
 function send(res,output){
- const status=[200,400,401,403,404,409,413,415,429,503].includes(output?.status)?output.status:503;
- const body=plain(output?.body)?output.body:{code:'G58_UNAVAILABLE',qaOnly:true};
+ const requested=[200,400,401,403,404,409,413,415,429,503].includes(output?.status)?output.status:503;
+ const body=plain(output?.body)&&!hasPrivateKey(output.body)?
+  output.body:{code:'G58_UNTRUSTED_OUTPUT',qaOnly:true};
+ const status=body.code==='G58_UNTRUSTED_OUTPUT'?503:requested;
  const safe=JSON.stringify(body);
  if(safe.length>750000){res.writeHead(503,JSON_HEADERS);res.end('{"code":"G58_UNAVAILABLE","qaOnly":true}');return;}
  res.writeHead(status,JSON_HEADERS);res.end(safe);
