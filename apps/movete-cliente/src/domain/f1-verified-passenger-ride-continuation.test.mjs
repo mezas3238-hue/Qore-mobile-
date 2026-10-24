@@ -248,23 +248,20 @@ test('F1 integrated: Passenger booking → tracking → foreground refresh → c
   event:{source:'server',tripId:trip,passengerId:subject,serverRevision:2,
    trackingSequence:1,status:'accepted',acceptedDriver:assigned,tracking:null}
  });
- callback();
- await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ await callback();
  assert.equal(f.client.snapshot().tracking.state,'assigned');
  assert.equal(f.client.snapshot().tracking.assignedDriver?.plate,'QA-777');
  latest=status({state:'completed',revision:5,assignmentPersisted:true,
   event:{source:'server',tripId:trip,passengerId:subject,serverRevision:5,
    trackingSequence:4,status:'completed',acceptedDriver:null,tracking:null}
  });
- callback();
- await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ await callback();
  assert.equal(f.client.snapshot().tracking.state,'completed');
  assert.equal(f.client.snapshot().tracking.assignedDriver,null);
  assert.equal(loop.isActive(),false);
  assert.equal(clearCount,1);
  const last=f.reads();
- callback();
- await Promise.resolve();await Promise.resolve();
+ await callback();
  assert.equal(f.reads(),last,'no background HTTP after terminal status');
  assert.equal(f.posts(),1,'foreground cannot create another booking');
 });
