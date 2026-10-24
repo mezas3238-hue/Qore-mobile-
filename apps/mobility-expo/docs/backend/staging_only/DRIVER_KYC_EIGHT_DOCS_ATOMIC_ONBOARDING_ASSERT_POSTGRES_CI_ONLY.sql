@@ -21,6 +21,8 @@ BEGIN
  'public.mobility_stage_kyc_atomic_approve_owner_qa(uuid,uuid,uuid,bigint,uuid)','EXECUTE')
  OR has_table_privilege('service_role',
  'public.mobility_stage_kyc_verified_evidence_qa','SELECT')
+ OR has_function_privilege('service_role',
+ 'public.mobility_stage_kyc_current_onboarding_owner_qa(uuid,uuid)','EXECUTE')
  OR has_table_privilege('authenticated',
  'public.mobility_stage_kyc_verified_evidence_qa','INSERT')
  THEN RAISE EXCEPTION 'KYC private SQL privileges leaked'; END IF;
@@ -103,6 +105,8 @@ BEGIN
  IF (SELECT count(*) FROM public.mobility_stage_kyc_onboarding_decisions_qa
  WHERE driver_id=d AND vehicle_id=v)<>1
  THEN RAISE EXCEPTION 'KYC duplicate autoapproval inserted'; END IF;
+ IF NOT public.mobility_stage_kyc_current_onboarding_owner_qa(d,v)
+ THEN RAISE EXCEPTION 'KYC current valid dossier unexpectedly false'; END IF;
  -- After certification, expiry/revocation prevents future confirmation.
  UPDATE public.mobility_stage_kyc_verified_evidence_qa
  SET valid_until=pg_catalog.clock_timestamp()-interval '1 second',
@@ -114,6 +118,8 @@ BEGIN
  EXCEPTION WHEN SQLSTATE 'P7105' THEN bad:=true;
  END;
  IF NOT bad THEN RAISE EXCEPTION 'KYC stale approval bypassed expired document'; END IF;
+ IF public.mobility_stage_kyc_current_onboarding_owner_qa(d,v)
+ THEN RAISE EXCEPTION 'KYC historical approval remained valid after expiry'; END IF;
  UPDATE public.mobility_stage_kyc_verified_evidence_qa
  SET valid_until=pg_catalog.clock_timestamp()+interval '1 day',
  evidence_revision=evidence_revision+1
