@@ -8,6 +8,8 @@ export type DriverOffer=Readonly<{
 export type DriverInboxReadOptions={
  apiOrigin:string;
  accessToken:string;
+ approvedStagingHost?:string|null;
+ allowedByOwner?:boolean;
  request?:(url:string,init:RequestInit)=>Promise<{status:number;json():Promise<unknown>}>;
  now?:()=>number;
 };
