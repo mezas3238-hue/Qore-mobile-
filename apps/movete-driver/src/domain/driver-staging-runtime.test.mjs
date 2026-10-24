@@ -6,6 +6,8 @@ import {createDriverWorkspaceController}
  from './driver-workspace.mjs';
 import {createDriverMessagingController}
  from './driver-messaging.mjs';
+import {createDriverOfferActionsController}
+ from './driver-offer-actions.mjs';
 const id=n=>'62620000-0000-4262-8262-'+String(n).padStart(12,'0');
 const driver=id(1),second=id(2),service=id(3),conversation=id(4),
  offer=id(5),incoming=id(6),sent=id(7),readProof=id(8),requestKey=id(9);
@@ -15,6 +17,7 @@ const url='https://api-staging.movetefacil.example';
 function fixture(){
  const calls=[],grants=new Map([[driver,true],[second,true]]);
  let actor=driver,active=true,notify,network=true,lostAck=false;
+ let lostOfferAck=false;
  const auth={
   async getSession(){return {error:null,data:{session:active?{
    user:{id:actor},access_token:token,
@@ -54,6 +57,16 @@ function fixture(){
    mode:'STAGING_DEMO_ONLY',currentLicenseApproved:true,
    driverEligible:false,liveOperationsEnabled:false,
    verificationScope:'CURRENT_LICENSE_REVIEW_ONLY'});
+  if(u===url+'/v1/staging/driver/offers/accept'){
+   if(lostOfferAck)throw Error('Decision response lost after COMMIT');
+   return reply(200,{mode:'STAGING_DEMO_ONLY',
+    commercialRidesEnabled:false,outcome:'accepted',
+    eventId:sent,pushDelivered:false});
+  }
+  if(u===url+'/v1/staging/driver/offers/decline')
+   return reply(200,{mode:'STAGING_DEMO_ONLY',
+    commercialRidesEnabled:false,outcome:'declined',
+    offerId:offer,pushDelivered:false});
   if(u===url+'/v1/staging/driver/chat/conversations?limit=50')
    return reply(200,{
     ownerId:actor,revision:3,generatedAt:now,
@@ -110,6 +123,7 @@ function fixture(){
   now:()=>now});
  return {runtime,workspace,messenger,calls,grants,
   loseAck:()=>{lostAck=true;},
+  loseOfferAck:()=>{lostOfferAck=true;},
   outage:()=>{network=false;},
   logout:()=>{active=false;notify?.();},
   switchAccount:()=>{actor=second;grants.set(second,false);notify?.();}
@@ -225,4 +239,46 @@ test('G62 requires complete explicitly authorized STAGING configuration; no defa
    now:()=>now,allowedByOwner:true,liveEnabled:false};
   assert.throws(()=>createDriverStagingRuntime({...base,...changes}));
  }
+});
+
+test('G63 Driver accepted private HTTPS offer only from same verified runtime',async()=>{
+ const f=fixture();
+ const ws=await f.workspace.refresh();
+ const verified=await f.runtime.authAdapter.getSession();
+ const actions=createDriverOfferActionsController(f.runtime.offerActions);
+ actions.setSession(verified);
+ actions.setOffers(ws.offers,{currentLicenseApproved:ws.currentLicenseApproved});
+ const result=await actions.decide({offerId:offer,action:'accept'});
+ assert.equal(result.decisions.length,1);
+ assert.equal(result.decisions[0].phase,'confirmed');
+ assert.equal(result.offers.length,0);
+ const posts=f.calls.filter(x=>x.url.endsWith('/offers/accept'));
+ assert.equal(posts.length,1);
+ assert.equal(posts[0].url,url+'/v1/staging/driver/offers/accept');
+ assert.equal(posts[0].authorization,'Bearer '+token);
+ assert.equal(posts[0].method,'POST');
+ assert.deepEqual(JSON.parse(posts[0].body),{offerId:offer,requestKey});
+ assert(!JSON.stringify(result).includes(token));
+ assert(!JSON.stringify(result).includes(driver));
+});
+test('G63 lost Driver accept acknowledgment stays uncertain and never auto-posts twice',async()=>{
+ const f=fixture();const ws=await f.workspace.refresh();
+ const actions=createDriverOfferActionsController(f.runtime.offerActions);
+ actions.setSession(await f.runtime.authAdapter.getSession());
+ actions.setOffers(ws.offers,{currentLicenseApproved:true});
+ f.loseOfferAck();
+ const result=await actions.decide({offerId:offer,action:'accept'});
+ assert.equal(result.decisions[0].phase,'uncertain');
+ await actions.decide({offerId:offer,action:'accept'});
+ await actions.decide({offerId:offer,action:'decline'});
+ assert.equal(f.calls.filter(x=>x.url.endsWith('/offers/accept')).length,1);
+ assert.equal(f.calls.filter(x=>x.url.endsWith('/offers/decline')).length,0);
+ actions.clear();
+ assert.equal(actions.current().decisions.length,0);
+});
+test('G63 Driver offer decision remains unavailable without real approved runtime',()=>{
+ assert.equal(fixture().runtime.offerActions.liveEnabled,false);
+ const controller=createDriverOfferActionsController(fixture().runtime.offerActions);
+ assert.equal(controller.current().phase,'signed-out');
+ assert.equal(controller.current().productionEnabled,false);
 });
