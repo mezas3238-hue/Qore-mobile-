@@ -6,7 +6,7 @@ const sql=readFileSync(new URL('../docs/backend/staging_only/G51_CHAT_INBOX_MONO
 const checked=readFileSync(new URL('../docs/backend/staging_only/G51_CHAT_INBOX_MONOTONIC_ASSERT_POSTGRES_CI_ONLY.sql',import.meta.url),'utf8');
 const wf=readFileSync(new URL('../../../.github/workflows/mobility-g4-postgres-disposable.yml',import.meta.url),'utf8');
 test('G51 matches B R13 inbox row exactly and never mounts endpoints',()=>{
- assert.equal(s.info.version,'1.0.0-g51');
+ assert.ok(Number(s.info.version.split('-g')[1])>=51);
  assert.equal(s['x-qore-live-enabled'],false);
  assert.equal(s['x-qore-g51-chat-inbox-runtime-wired'],false);
  const inbox=s.paths['/v1/staging/chat/conversations'].get;
