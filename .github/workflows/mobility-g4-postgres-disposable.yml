@@ -496,3 +496,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G71_KYC_DISPATCH_ATOMIC_FENCE_POSTGRES_CI_ONLY.sql
       - name: G71 verify SQL guard, expiry, renewal, suspension, pending replacement and grants
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G71_KYC_DISPATCH_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G71 race two PostgreSQL sessions against pending upload and verified dispatch
+        run: python3 apps/mobility-expo/server/g71-kyc-dispatch-race-ci.py

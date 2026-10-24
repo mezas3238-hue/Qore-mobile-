@@ -30,7 +30,7 @@ BEGIN
  IF NOT FOUND THEN RAISE EXCEPTION 'Unknown role owner' USING ERRCODE='P7401'; END IF;
  RETURN NEW;
 END $f$;
-CREATE TRIGGER a00_g71_role_insert BEFORE INSERT ON public.user_roles
+CREATE TRIGGER a00_g71_role_insert BEFORE INSERT OR UPDATE OF user_id ON public.user_roles
  FOR EACH ROW EXECUTE FUNCTION public.mobility_stage_g71_role_insert_lock();
 
 CREATE FUNCTION public.mobility_stage_g71_valid_locked_dossier(uuid,uuid)
