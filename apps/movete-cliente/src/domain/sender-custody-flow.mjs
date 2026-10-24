@@ -59,6 +59,8 @@ export function createSenderCustodyFlow({
    ||!Number.isSafeInteger(expectedSessionRevision)
    ||expectedSessionRevision<0)return fail('INVALID_SENDER_CUSTODY_SCOPE');
   if(busy)return fail('SENDER_CUSTODY_READ_IN_FLIGHT');
+  // Never expose a previous proof while another GET may replace its scope.
+  const prior=record;record=null;
   const generation=++epoch;busy=true;error=null;
   try{
    let before;
@@ -89,7 +91,7 @@ export function createSenderCustodyFlow({
     return fail(error);
    }
    const dto=response.data;
-   if(record!==null&&record.deliveryId===deliveryId&&dto.revision<record.revision){
+   if(prior!==null&&prior.deliveryId===deliveryId&&dto.revision<prior.revision){
     record=null;error='SENDER_CUSTODY_STALE_REVISION';
     return fail(error);
    }
