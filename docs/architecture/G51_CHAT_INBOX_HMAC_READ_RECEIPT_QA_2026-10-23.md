@@ -22,7 +22,7 @@ La interfaz B ya dispone de lógica local de control de caché y caducidad; el b
 
 1. `assignmentVerified:true` se calcula solo cuando el origen G3/G5/G6 confirma conductor/repartidor actual y servicio activo; una conversación obsoleta deja de salir en inbox.
 2. `unreadCount` proviene de mensajes persistidos posteriores al `through_seq` propio. La marca nunca puede exceder un mensaje realmente persistido y nunca retrocede.
-3. `revision` es el máximo evento monótono **de ese pasajero**, incluyendo sus conversaciones cerradas. Los mensajes de otros clientes no cambian su cursor ni filtran actividad global. Nueva actividad propia revoca la navegación con revisión anterior y exige refresco.
+3. `revision` se almacena en el registro privado `mobility_stage_g51_inbox_revisions` **por pasajero**. Los mensajes de otras personas no alteran su revisión, cursor ni exponen una secuencia global; el valor no requiere recorrer todos sus eventos. Nueva actividad propia incrementa la revisión y exige refresco.
 4. `limit=100` es máximo POR PÁGINA; 205 filas prueban lectura total sin límite global y cursor estable. No inferir que hay solo 100 clientes.
 5. Operaciones usan `mobility_stage_g42_lock_session` dentro de PG, jamás confiar solo en una validación HTTP separada. El cursor está ligado al usuario, sesión, token iat, revisión y vencimiento efectivo de sesión.
 6. Contratos G50 y G51 no son socket/realtime, cifrado de extremo a extremo, push físico ni consentimiento para usar datos de producción.
