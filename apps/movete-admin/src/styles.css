@@ -68,3 +68,18 @@
 .kyc-record small{display:block;color:#607f91;font-size:12px;margin-top:5px}
 @media(max-width:680px){.kyc-record{flex-direction:column;align-items:flex-start}
 .kyc-record .muted-tag{white-space:normal}}
+
+/* R45: skip link visible to keyboard users, clear form focus, reduced motion. */
+.skip-link{position:fixed;top:8px;left:8px;z-index:100;
+ padding:11px 16px;border-radius:9px;background:#10283d;color:#fff;
+ font-weight:750;transform:translateY(-180%)}
+.skip-link:focus,.skip-link:focus-visible{transform:translateY(0);
+ outline:3px solid #61b2ed;outline-offset:2px}
+select:focus-visible,input:focus-visible,textarea:focus-visible,
+a:focus-visible,.nav-item:focus-visible{
+ outline:3px solid #348aca;outline-offset:3px}
+#admin-main-content:focus,#admin-main-content h1:focus{outline:none}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{scroll-behavior:auto!important;
+  transition-duration:0.01ms!important;animation-duration:0.01ms!important}
+}
