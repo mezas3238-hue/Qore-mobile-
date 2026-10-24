@@ -21,7 +21,7 @@ La trayectoria G57A confirma mensajes entrantes del **Driver leídos por el Clie
 - `apps/mobility-expo/server/g57b-driver-ordered-visible-qa.mjs`: adapter independiente, reusa validación de G56 HISTORY y conserva el DTO G56 sellado; verifica que cada mensaje Passenger en la página tenga exactamente un marcador.
 - `apps/mobility-expo/server/g57b-driver-ordered-visible-qa.test.mjs`: pruebas JWT, scope, cobertura de marcadores, roles, PII y rechazo de ACK falso.
 - `apps/mobility-expo/server/g57b-driver-ordered-visible-openapi-contract.test.mjs`: endpoint OFF, tipos exactos y permisos SQL.
-- `apps/mobility-expo/docs/backend/openapi/movete-facil-staging.openapi.json`: versión `1.0.0-g57b`, endpoints FUTUROS Driver `history-with-ordered-markers` y `mark-visible-ordered`.
+- `apps/mobility-expo/docs/backend/openapi/movete-facil-staging.openapi.json`: versión `1.0.0-g57` con extensión `x-qore-g57b`, endpoints FUTUROS Driver `history-with-ordered-markers` y `mark-visible-ordered`.
 - `.github/workflows/mobility-g4-postgres-disposable.yml`: aplicar G57B después de G57A, probar grants reales y sentencias PostgreSQL.
 
 ## Qué NO está terminado
