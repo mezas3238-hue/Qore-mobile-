@@ -1,3 +1,4 @@
+import type {DriverChatInboxPage} from './driver-chat-inbox.mjs';
 export declare const DRIVER_MESSAGING_LIVE_ENABLED:false;
 export type DriverConversation=Readonly<{
  conversationId:string;serviceId:string;
@@ -35,7 +36,9 @@ export type DriverMessagingSession=Readonly<{
 }>;
 export type QaReply={status:number;body:unknown};
 export type DriverMessagingAdapters=Readonly<{
- readInbox:(request:{bearer:string;cursor:string|null;limit:number})=>Promise<QaReply>;
+ readInbox:(request:{bearer:string;cursor:string|null;limit:number})=>Promise<{
+  status:number;body:DriverChatInboxPage|Readonly<{code:string}>;
+ }>;
  readHistory:(request:{bearer:string;serviceKind:string;serviceId:string;
   conversationId:string;cursor:string|null;limit:number})=>Promise<QaReply>;
  send:(request:{bearer:string;serviceKind:string;serviceId:string;
