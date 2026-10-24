@@ -390,3 +390,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56_DRIVER_SCOPED_CHAT_POSTGRES_CI_ONLY.sql
       - name: "G56 delegated Driver open/send/history: role isolation, assignment, replay and session revocation"
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56_DRIVER_SCOPED_CHAT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G56 two PostgreSQL sessions race one Driver ticket and lock against revocation
+        run: python3 apps/mobility-expo/server/g56-driver-scoped-chat-concurrency-ci.py
