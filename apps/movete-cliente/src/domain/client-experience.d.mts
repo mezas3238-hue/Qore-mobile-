@@ -120,7 +120,7 @@ export type ClientExperience={
  acceptAutoPrequote(args:{quoteId:string;amountGs:number;fareVersion:string}):ClientResult;
  reserveQuotedAuto(args:{requestKey:string}):Promise<ClientResult>;
  reconcileQuotedAuto():Promise<ClientResult>;
- clearAutoPrequote():void;
+ clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
  prepareDelivery(body:unknown):ClientResult;

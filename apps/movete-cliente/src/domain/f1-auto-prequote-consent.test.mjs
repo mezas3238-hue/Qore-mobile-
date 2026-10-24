@@ -168,3 +168,15 @@ test('quote, booking and reconciliation require distinct certification independe
  assert.equal((await noGet.gate.reconcile()).code,'RECONCILIATION_NOT_CERTIFIED');
  assert.equal(noGet.gate.snapshot().requiresReconciliation,true);
 });
+
+test('an ambiguous dispatch cannot be discarded locally to generate a new booking key',async()=>{
+ let posts=0;
+ const f=setup({bookingGateway:async()=>{posts++;return {ok:false,status:503};}});
+ await accepted(f);
+ assert.equal((await f.gate.reserve({requestKey:bookingKey})).code,
+  'BOOKING_RECONCILIATION_REQUIRED');
+ assert.equal(f.gate.discard().code,'BOOKING_RECONCILIATION_REQUIRED');
+ assert.equal(f.gate.prepare({...scope,quoteRequestKey:ID(13)}).code,
+  'PREQUOTE_ALREADY_ACTIVE');
+ assert.equal(posts,1);
+});

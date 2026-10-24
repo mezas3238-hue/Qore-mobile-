@@ -51,6 +51,12 @@ export function createF1AutoPrequoteConsent({
   &&typeof reconciliationGateway==='function';
  let state={phase:'idle'},generation=0;
  function clear(){generation++;state={phase:'idle'};}
+ function discard(){
+  if(['sending','ambiguous'].includes(state.phase))
+   return fail('BOOKING_RECONCILIATION_REQUIRED');
+  if(state.phase==='confirmed')return fail('BOOKING_ALREADY_CONFIRMED');
+  clear();return Object.freeze({ok:true});
+ }
  function expire(){
   if(['quoted','accepted'].includes(state.phase)
    &&state.quote?.expiresAt<=now()){state={...state,phase:'expired',quote:null};}
@@ -58,7 +64,7 @@ export function createF1AutoPrequoteConsent({
  function snapshot(){
   expire();
   return Object.freeze({phase:state.phase,
-   quote:state.quote?Object.freeze({quoteId:state.quote.quoteId,
+   quote:state.quote&&state.quote.expiresAt>now()?Object.freeze({quoteId:state.quote.quoteId,
     amountGs:state.quote.amountGs,currency:'PYG',
     fareVersion:state.quote.fareVersion,expiresAt:state.quote.expiresAt}):null,
    quoteAvailable:quoteReady,bookingAvailable:bookReady,
@@ -170,5 +176,5 @@ export function createF1AutoPrequoteConsent({
  }
  return Object.freeze({isQuoteConfigured:()=>quoteReady,
   isBookingConfigured:()=>bookReady,snapshot,prepare,load,accept,
-  reserve,reconcile,clear,productionEnabled:false});
+  reserve,reconcile,discard,clear,productionEnabled:false});
 }
