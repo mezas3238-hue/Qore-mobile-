@@ -22,3 +22,7 @@ Certificar siempre los **tres workflows del mismo SHA final**: Architect B owner
 ## Continuidad autónoma R51
 
 Avanzar en Cliente con accesibilidad y consistencia de carrito y mensaje de caducidad sin pisar Driver/backend de A. Mantener issue #9 para los contratos comerciales y sesiones reales. NO MERGE, NO LIVE, NO DEPLOY, NO PSP, NO datos reales sin orden Owner. Continuar sin detenerse salvo bloqueo auténtico.
+
+## Incidencia de certificación y corrección QA
+
+El primer commit documental `4ad86f5427d3593a74086d47b3d19d50082fc4e4` no aprobó aislamiento Cliente/Driver (#40097957077): 9 de las 10 pruebas nuevas de R50 fallaron en Cliente (el resto de la suite continuó). El fallo era la regex de UUID declarada en el nuevo guard, con **seis segmentos**, que rechazaba incluso sujetos Passenger y branchId válidos con cinco segmentos. Se corrigió exclusivamente a UUID canónico `8-4-4-4-12` en el commit `901a19383319e056a166fccdb142dc7d23edff4d`. Verificación adicional aislada: **10/10 nuevas pruebas** correctas tras el cambio. La certificación oficial debe confirmarse en el SHA final del nuevo commit documental; no atribuir el éxito de una etapa anterior.
