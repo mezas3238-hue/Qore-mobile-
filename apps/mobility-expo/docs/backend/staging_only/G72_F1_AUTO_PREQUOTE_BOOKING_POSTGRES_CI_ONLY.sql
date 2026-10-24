@@ -82,7 +82,7 @@ BEGIN
  WHERE mode='AUTO' AND zone_tag=_zone_tag AND active=true
  AND valid_from<=pg_catalog.clock_timestamp() AND valid_until>pg_catalog.clock_timestamp();
  IF NOT FOUND THEN RAISE EXCEPTION 'G72 no approved AUTO price rule' USING ERRCODE='P7201'; END IF;
- subtotal:=pg_catalog.greatest(rule.minimum_pyg,
+ subtotal:=GREATEST(rule.minimum_pyg,
   rule.base_pyg::bigint+(_distance_meters::bigint*rule.per_km_pyg+500)/1000
   +(_duration_seconds::bigint*rule.per_minute_pyg+30)/60);
  total:=subtotal+_tolls_pyg;
