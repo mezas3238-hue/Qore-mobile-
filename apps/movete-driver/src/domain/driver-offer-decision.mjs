@@ -50,3 +50,55 @@ export async function decidePrivateDriverOffer({
   // Persisted decision != arrival of a push or passenger notification.
   pushDelivered:false});
 }
+
+/**
+ * G64: separate read-only consultation of a possibly committed offer action.
+ * Never calls the original accept/decline endpoint and never accepts an
+ * absent/unknown row as proof that a retry is safe.
+ */
+export async function reconcilePrivateDriverOffer({
+ apiOrigin,approvedStagingHost=null,allowedByOwner=false,
+ accessToken,kind,offerId,requestKey,action,request=fetch
+}={}){
+ if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||
+  !BEARER.test(accessToken)||!Object.hasOwn(route,kind)||
+  typeof offerId!=='string'||!UUID.test(offerId)||
+  typeof requestKey!=='string'||!UUID.test(requestKey)||
+  !['accept','decline'].includes(action)||typeof request!=='function')
+  throw Error('G64 invalid Driver decision reconciliation request');
+ const origin=resolveDriverStatusOrigin({
+  apiOrigin,approvedStagingHost,allowedByOwner});
+ let response;
+ try{
+  response=await request(origin+route[kind]+'reconcile',{
+   method:'POST',redirect:'error',credentials:'omit',cache:'no-store',
+   headers:{authorization:'Bearer '+accessToken,
+    accept:'application/json','content-type':'application/json'},
+   body:JSON.stringify({offerId,requestKey,action})
+  });
+ }catch{throw Error('G64 decision outcome unknown; do not repeat original action');}
+ if(response?.status!==200)
+  throw Error('G64 decision not authoritatively confirmed; do not retry');
+ let value;
+ try{value=await response.json();}catch{
+  throw Error('G64 decision receipt invalid; do not retry');
+ }
+ const keys=['mode','state','kind','action','offerId','requestKey',
+  'outcome','receiptId','serverPersisted','liveEnabled','pushDelivered',
+  'qaOnly','productionEnabled','retrySafe'];
+ if(!obj(value)||Object.keys(value).length!==keys.length||
+  !keys.every(k=>Object.hasOwn(value,k))||
+  value.mode!=='STAGING_DEMO_ONLY'||value.state!=='COMMITTED'||
+  value.kind!==kind||value.action!==action||value.offerId!==offerId||
+  value.requestKey!==requestKey||
+  value.outcome!==(action==='accept'?'accepted':'declined')||
+  typeof value.receiptId!=='string'||!UUID.test(value.receiptId)||
+  (action==='decline'&&value.receiptId!==offerId)||
+  value.serverPersisted!==true||value.liveEnabled!==false||
+  value.pushDelivered!==false||value.qaOnly!==true||
+  value.productionEnabled!==false||value.retrySafe!==false)
+  throw Error('G64 untrusted decision receipt; do not retry');
+ return Object.freeze({kind,action,outcome:value.outcome,
+  receiptId:value.receiptId,serverPersisted:true,
+  liveEnabled:false,pushDelivered:false});
+}
