@@ -492,3 +492,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_EXPIRY_RENEWAL_STATUS_POSTGRES_CI_ONLY.sql
       - name: Driver KYC expiry/renewal test with owner-only SQL, suspension and advance warning
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_EXPIRY_RENEWAL_STATUS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G71 enforce current KYC at AUTO and delivery offer and acceptance inside SQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G71_KYC_DISPATCH_ATOMIC_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G71 verify SQL guard, expiry, renewal, suspension, pending replacement and grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G71_KYC_DISPATCH_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
