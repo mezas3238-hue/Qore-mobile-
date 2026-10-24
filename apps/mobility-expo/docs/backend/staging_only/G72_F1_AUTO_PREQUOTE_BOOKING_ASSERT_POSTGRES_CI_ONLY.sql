@@ -78,7 +78,8 @@ RESET ROLE;
 
 -- Owner modifies only disposable clock data; service_role has no table UPDATE.
 UPDATE public.mobility_stage_g72_auto_prequotes
-SET expires_at=pg_catalog.clock_timestamp()-interval '1 second'
+SET quoted_at=pg_catalog.clock_timestamp()-interval '10 minutes',
+    expires_at=pg_catalog.clock_timestamp()-interval '1 second'
 WHERE request_key IN ('72720000-0000-4727-8727-000000000010',
                        '72720000-0000-4727-8727-000000000012');
 SET ROLE service_role;
