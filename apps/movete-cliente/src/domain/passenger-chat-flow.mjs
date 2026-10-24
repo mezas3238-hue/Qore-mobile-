@@ -109,11 +109,19 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  }
  function snapshot(){
   if(!ready()&&(state.header||state.pending||loading||sending))clear();
-  // TTL vencido sin envío incierto: eliminar físicamente texto privado,
-  // no solo ocultarlo en la vista. Una clave idempotente pendiente conserva
-  // su contexto mínimo y obliga a revalidar antes de cualquier reintento.
-  if(state.header&&!state.pending&&!loading&&!sending
-   &&state.header.expiresAt<=now())clear();
+  // TTL vencido: no retener físicamente mensajes privados en memoria.
+  // Si hay envío incierto, guardar SOLAMENTE la clave/cuerpo pendiente y
+  // el identificador del hilo para reconciliarlo con la misma solicitud.
+  if(state.header&&state.header.expiresAt<=now()){
+   if(!state.pending)clear();
+   else{
+    state.messages=[];
+    state.nextCursor=null;
+    state.seenIds.clear();
+    state.seenCursor.clear();
+    state.pageNumber=0;state.readCount=0;state.evictedCount=0;
+   }
+  }
   const valid=ready()&&state.header&&state.header.expiresAt>now();
   // Un mensaje incierto conserva contexto para reconciliar la MISMA clave,
   // pero las filas caducadas nunca vuelven a exponerse al dispositivo.
