@@ -56,9 +56,9 @@ export function createG50PrivateChatQa({
     typeof request.body!=='string'||request.body.trim()===''||
     request.body.length>500||request.body.length<1||
     Buffer.byteLength(request.body,'utf8')>2000||
-    /[\\u0000-\\u001f\\u007f\\u202a-\\u202e\\u2066-\\u2069]/u.test(request.body)||
-    /https?:\\/\\/|www\\.|[\\w.+%-]+@[\\w.-]+\\.[a-z]{2,}/iu.test(request.body)||
-    /(?:\\d[\\s().-]*){7,}/u.test(request.body))
+    /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(request.body)||
+    /https?:\/\/|www\.|[\w.+%-]+@[\w.-]+\.[a-z]{2,}/iu.test(request.body)||
+    /(?:\d[\s().-]*){7,}/u.test(request.body))
     return response(400,'INVALID_MESSAGE');
    args={_conversation:request.conversationId,
     _request:request.requestKey,_body:request.body};
