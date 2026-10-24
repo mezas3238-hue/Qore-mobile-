@@ -79,7 +79,11 @@ export function createF1AutoPrequoteConsent({
   return obj(actor)&&actor.role==='passenger'
    &&actor.subject===scope.ownerId&&uuid(actor.subject)
    &&Number.isSafeInteger(actor.sessionRevision)
-   &&actor.sessionRevision===scope.sessionRevision;
+   &&actor.sessionRevision===scope.sessionRevision
+   // A valid-looking owner/revision is insufficient if the Passenger lease
+   // expired or will expire before network work is safe to begin.
+   &&Number.isSafeInteger(actor.expiresAt)
+   &&actor.expiresAt>now()+1000;
  }
  function prepare({routeId,service,quoteRequestKey,ownerId,sessionRevision}={}){
   if(!quoteReady)return fail('PREQUOTE_BACKEND_NOT_CERTIFIED');
