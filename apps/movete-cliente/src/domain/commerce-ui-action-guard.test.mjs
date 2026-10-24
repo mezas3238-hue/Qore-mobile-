@@ -9,7 +9,7 @@ const make=(change={})=>({
  authenticated:true,account:{subject:id(1),role:'passenger'},
  privateViewRevision:4,
  commerce:{branchId:id(2),catalogVersion:'v8',
-  catalogExpiresAt:T+30000,generation:6,
+  catalogExpiresAt:T+30000,vehicleKind:'MOTO',generation:6,
   catalogReadReady:true,stage:'SERVER_CATALOG',
   catalogLoading:false,catalogError:null,
   checkoutEnabled:false,paymentEnabled:false,
@@ -38,7 +38,7 @@ test('R49 versions, branches, revisions and catalog expiry cannot race a tap',()
  const original=make();
  for(const changed of [
   {branchId:id(9)},{catalogVersion:'v9'},
-  {generation:7},{catalogExpiresAt:T+45000}
+  {generation:7},{vehicleKind:'AUTO'},{catalogExpiresAt:T+45000}
  ])assert.equal(guard(original,make(changed)).code,'COMMERCE_SCOPE_CHANGED');
  assert.equal(guardCommerceUiAction(original,original,{now:T+30000}).code,
   'COMMERCE_CATALOG_EXPIRED');
