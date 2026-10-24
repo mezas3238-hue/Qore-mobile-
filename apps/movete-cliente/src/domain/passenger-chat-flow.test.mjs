@@ -814,3 +814,46 @@ test('header compacto R21 permite reconciliar envío incierto solo tras GET auto
  assert.equal(flow.snapshot().messages[0].messageId,messageId);
  assert.equal(flow.snapshot().pendingSend,false);
 });
+
+
+// R22 — la paginación cronológica no puede inyectar mensajes "anteriores" más nuevos.
+test('R22 rechaza página internamente desordenada sin mostrar sus mensajes',async()=>{
+ const flow=make(flags({readMessages:async()=>({ok:true,data:{
+  ...page(),messages:[
+   {...row(1),createdAt:now-4000},
+   {...row(2),createdAt:now-2000}
+  ]
+ }})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,
+  'INVALID_CHAT_PAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().conversationId,null);
+});
+test('R22 no admite página antigua que contiene mensajes posteriores al último visto',async()=>{
+ let calls=0;
+ const flow=make(flags({readMessages:async()=>({ok:true,data:calls++===0
+  ?{...page('RIDE','v'.repeat(44)),messages:[{
+   ...row(1),createdAt:now-4000
+  }]}:{...page('RIDE'),messages:[{
+   ...row(2),createdAt:now-3000
+  }]}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).code,
+  'CHAT_MESSAGE_ORDER_VIOLATION');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().hasOlder,false);
+});
+test('R22 admite páginas válidas con tiempo decreciente o igual, sin límite global',async()=>{
+ let calls=0;
+ const flow=make(flags({readMessages:async()=>({ok:true,data:calls++===0
+  ?{...page('RIDE','w'.repeat(44)),messages:[
+   {...row(1),createdAt:now-1000},{...row(2),createdAt:now-2000}
+  ]}:{...page('RIDE'),messages:[
+   {...row(3),createdAt:now-2000},{...row(4),createdAt:now-4000}
+  ]}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).ok,true);
+ assert.deepEqual(flow.snapshot().messages.map(x=>x.messageId),[
+  row(1).messageId,row(2).messageId,row(3).messageId,row(4).messageId
+ ]);
+});
