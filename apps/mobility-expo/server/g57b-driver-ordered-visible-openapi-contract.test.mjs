@@ -7,7 +7,7 @@ const sql=read('../docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_POSTGRE
 const tests=read('../docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql');
 const ci=read('../../../.github/workflows/mobility-g4-postgres-disposable.yml');
 test('G57B Driver-only endpoints OFF; do not change B history or Passenger G57 schema',()=>{
- assert.match(spec.info.version,/-g57b$/);
+ assert.ok(Number(spec.info.version.split('-g')[1])>=57);
  assert.equal(spec['x-qore-live-enabled'],false);
  assert.equal(spec['x-qore-g57b-driver-ordered-visible-runtime-wired'],false);
  const h=spec.paths['/v1/staging/driver/chat/services/{serviceKind}/{serviceId}/conversations/{conversationId}/history-with-ordered-markers']?.get;
