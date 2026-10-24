@@ -397,3 +397,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_POSTGRES_CI_ONLY.sql
       - name: G56B test 205 Driver conversations, private unread, current assignment and scoped role
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56B_DRIVER_SCOPED_INBOX_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G56B race two PostgreSQL delegated inbox readers, revision writes and G42 revocation
+        run: python3 apps/mobility-expo/server/g56b-driver-private-inbox-concurrency-ci.py
