@@ -180,3 +180,31 @@ test('an ambiguous dispatch cannot be discarded locally to generate a new bookin
   'PREQUOTE_ALREADY_ACTIVE');
  assert.equal(posts,1);
 });
+
+
+test('late 201 after tariff expiry stays ambiguous until owner-scoped GET',async()=>{
+ let entered,release,posts=0;
+ const enteredPost=new Promise(resolve=>{entered=resolve;});
+ const pending=new Promise(resolve=>{release=resolve;});
+ const f=setup({bookingGateway:async()=>{
+  posts++;entered();return pending;
+ }});
+ await accepted(f);
+ const task=f.gate.reserve({requestKey:bookingKey});
+ await enteredPost;
+ // The original 201 can arrive after the displayed accepted fare is stale.
+ f.advance(120000);
+ release({ok:true,status:201,data:receipt()});
+ assert.equal((await task).code,'BOOKING_RECONCILIATION_REQUIRED');
+ assert.equal(f.gate.snapshot().requiresReconciliation,true);
+ assert.equal(f.gate.snapshot().tripId,null);
+ assert.equal(posts,1);
+ // It might already have been committed while the quote was valid.
+ // Only the independently certified GET resolves that ambiguity.
+ const recovered=await f.gate.reconcile();
+ assert.equal(recovered.ok,true);
+ assert.equal(recovered.recoveredWithoutPost,true);
+ assert.equal(recovered.tripId,tripId);
+ assert.equal(posts,1);
+ assert.equal((await f.gate.reserve({requestKey:ID(99)})).ok,false);
+});
