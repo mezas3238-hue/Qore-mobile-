@@ -189,7 +189,10 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
    let result;
    try{result=await gateway.readMessages({
     serviceId,serviceKind,cursor,subject:before.subject,
-    sessionRevision:before.sessionRevision
+    sessionRevision:before.sessionRevision,
+    // Fijar hilo autorizado al paginar para que A pueda revocar de inmediato.
+    expectedConversationId:older?state.header.conversationId
+     :expectedConversationId
    });}catch{result=fail('CHAT_NETWORK_OR_TIMEOUT');}
    if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
    if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
@@ -355,7 +358,9 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     let response;
     try{response=await gateway.readMessages({
      serviceId:prior.serviceId,serviceKind:prior.serviceKind,cursor:null,
-     subject:before.subject,sessionRevision:before.sessionRevision
+     subject:before.subject,sessionRevision:before.sessionRevision,
+     // Un intento incierto debe revalidar la misma conversación inmutable.
+     expectedConversationId:prior.conversationId
     });}catch{response=fail('CHAT_NETWORK_OR_TIMEOUT');}
     if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
    if(revoked())return fail('CHAT_CONTRACT_NOT_CERTIFIED');
