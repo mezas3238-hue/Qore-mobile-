@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/DriverUI';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
+import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
 import {router} from 'expo-router';
 
 /**
@@ -11,6 +12,7 @@ import {router} from 'expo-router';
  */
 export default function DriverOffers(){
  const {state,refresh}=useDriverWorkspace();
+ const {state:actions,enabled,decide}=useDriverOfferActions();
  const [clock,setClock]=useState(()=>Date.now());
  useEffect(()=>{
   if(state.phase!=='connected')return;
@@ -33,7 +35,29 @@ export default function DriverOffers(){
      available.map(offer=><View key={offer.kind+offer.offerId} style={{gap:5}}>
       <Text style={styles.heading}>{offer.kind==='AUTO_RIDE'?'Viaje en automóvil':'Envío / reparto'}</Text>
       <Text style={styles.text}>Oferta privada de prueba · vence en {Math.max(0,Math.ceil((offer.expiresAtMs-clock)/1000))} s</Text>
-      <Text style={styles.small}>La aceptación exige volver a validar documentación, vehículo, ubicación y disponibilidad en el servidor. No habilitada en este prototipo.</Text>
+      <Text style={styles.small}>La aceptación exige volver a validar documentación, vehículo, ubicación y disponibilidad en el servidor. Ninguna respuesta de prueba habilita viajes comerciales.</Text>
+      {(()=>{
+       const decision=actions.decisions.find(x=>x.offerId===offer.offerId);
+       const allowed=enabled&&actions.phase==='ready'&&
+        state.currentLicenseApproved&&actions.offers.some(x=>x.offerId===offer.offerId)&&
+        !decision&&!actions.busy&&offer.expiresAtMs>clock+3000;
+       return <>
+        {decision&&<Text style={styles.text}>
+         {decision.phase==='confirmed'?'Decisión confirmada por el servidor de pruebas.':
+          decision.phase==='sending'?'Guardando la decisión en el servidor…':
+          decision.phase==='uncertain'?'Resultado incierto: el servidor podría haber guardado la decisión. No volvemos a enviarla automáticamente. Actualizá el estado y consultá soporte.':
+          'No se pudo verificar una clave segura para esta decisión.'}
+        </Text>}
+        {allowed&&<>
+         <Action label="Aceptar oferta de prueba" onPress={()=>{
+          void decide(offer.offerId,'accept');
+         }}/>
+         <Action label="Rechazar oferta de prueba" secondary onPress={()=>{
+          void decide(offer.offerId,'decline');
+         }}/>
+        </>}
+       </>;
+      })()}
      </View>)
     }
    </>:<Text style={styles.text}>
