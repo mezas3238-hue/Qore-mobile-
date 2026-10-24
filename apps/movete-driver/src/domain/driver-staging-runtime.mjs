@@ -12,7 +12,8 @@ import {createDriverChatHttpsStagingAdapters}
 import {readDriverPrivateInbox} from './driver-inbox.mjs';
 import {readDriverDocumentStatuses} from './driver-documents.mjs';
 import {readDriverLicenseReadiness} from './driver-license-readiness.mjs';
-import {decidePrivateDriverOffer} from './driver-offer-decision.mjs';
+import {decidePrivateDriverOffer,reconcilePrivateDriverOffer}
+ from './driver-offer-decision.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -64,6 +65,11 @@ export function createDriverStagingRuntime({
   makeRequestKey:chatAdapters.makeRequestKey,
   now,
   liveEnabled:false,
+  reconcile:({accessToken,kind,offerId,requestKey,action})=>
+   reconcilePrivateDriverOffer({
+    apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+    accessToken,kind,offerId,requestKey,action,request
+   }),
   decide:({accessToken,kind,offerId,requestKey,action})=>
    decidePrivateDriverOffer({
     apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
