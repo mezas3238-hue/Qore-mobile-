@@ -76,8 +76,9 @@ export function createF1FocusedTrackingSync({
   active=true;scope=own;generation++;
   try{timer=schedule(()=>refresh(),intervalMs);}
   catch{stop();return fail('TRACKING_TIMER_UNAVAILABLE');}
-  // First actual GET is still guarded and deduped by ClientExperience.
-  void refresh();
+  // The Passenger already received a certified first GET through
+  // continueVerifiedRide(). Do not issue a duplicate on screen focus.
+  // Scheduled updates remain one at a time and stop at terminal states.
   return Object.freeze({ok:true});
  }
  return Object.freeze({start,stop,refresh,isActive:()=>active});
