@@ -20,7 +20,7 @@ const receipt=(x={})=>({
 });
 function setup(overrides={}){
  time=1800000000000;
- let actor={role:'passenger',subject:owner,sessionRevision:1};
+ let actor={role:'passenger',subject:owner,sessionRevision:1,expiresAt:time+3600000};
  let quotes=0,posts=0,reads=0;
  const gate=createF1AutoPrequoteConsent({
   enabled:true,quoteContractCertified:true,bookingContractCertified:true,
@@ -207,4 +207,29 @@ test('late 201 after tariff expiry stays ambiguous until owner-scoped GET',async
  assert.equal(recovered.tripId,tripId);
  assert.equal(posts,1);
  assert.equal((await f.gate.reserve({requestKey:ID(99)})).ok,false);
+});
+
+
+test('expired Passenger lease cannot load a quote or start quote-bound dispatch',async()=>{
+ const f=setup();
+ assert.equal(f.gate.prepare(scope).ok,true);
+ f.setActor({role:'passenger',subject:owner,sessionRevision:1,expiresAt:time-1});
+ assert.equal((await f.gate.load()).code,'SESSION_CHANGED');
+ assert.equal(f.quotes(),0);
+ assert.equal(f.gate.snapshot().quote,null);
+ const g=setup();await accepted(g);
+ g.setActor({role:'passenger',subject:owner,sessionRevision:1,expiresAt:time+500});
+ assert.equal((await g.gate.reserve({requestKey:bookingKey})).code,'SESSION_CHANGED');
+ assert.equal(g.posts(),0);
+ assert.equal(g.gate.snapshot().tripId,null);
+});
+
+test('renewed or revoked session lease must be independently checked before reconciliation',async()=>{
+ const f=setup({bookingGateway:async()=>({ok:false,status:503})});
+ await accepted(f);
+ assert.equal((await f.gate.reserve({requestKey:bookingKey})).code,'BOOKING_RECONCILIATION_REQUIRED');
+ f.setActor({role:'passenger',subject:owner,sessionRevision:1,expiresAt:time-1});
+ assert.equal((await f.gate.reconcile()).code,'SESSION_CHANGED');
+ assert.equal(f.reads(),0);
+ assert.equal(f.gate.snapshot().tripId,null);
 });
