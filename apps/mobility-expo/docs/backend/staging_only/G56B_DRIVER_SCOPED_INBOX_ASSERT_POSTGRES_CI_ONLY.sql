@@ -95,7 +95,7 @@ INSERT INTO public.mobility_stage_g50_chat_messages(
 SELECT t.conversation_id,t.passenger_id,pg_catalog.gen_random_uuid(),txt.body
  FROM public.mobility_stage_g50_chat_threads t
  CROSS JOIN (VALUES('Hola Driver'),('Estoy esperando')) txt(body)
- WHERE t.service_id=(SELECT min(id) FROM public.mobility_stage_g56b_fixture_source);
+ WHERE t.service_id=(SELECT id FROM public.mobility_stage_g56b_fixture_source ORDER BY id LIMIT 1);
 DO $baseline$
 BEGIN
  IF (SELECT count(*) FROM public.mobility_stage_g50_chat_threads
@@ -223,7 +223,7 @@ END $foreign$;
 -- Source reassignment hides a conversation before OPEN rotates the thread.
 UPDATE public.mobility_stage_g56b_fixture_source
  SET driver_id='56561200-0000-4656-8656-000000000003'
- WHERE id=(SELECT min(id) FROM public.mobility_stage_g56b_fixture_source);
+ WHERE id=(SELECT id FROM public.mobility_stage_g56b_fixture_source ORDER BY id LIMIT 1);
 SELECT public.mobility_stage_g56_inbox_mint_owner_qa(
  '56561200-0000-4656-8656-000000000002',
  '56561200-0000-4656-8656-000000000102',
@@ -237,7 +237,7 @@ DO $shifted$
 DECLARE v jsonb:=pg_catalog.current_setting('qore.g56b_shifted')::jsonb;
 BEGIN
  IF EXISTS(SELECT 1 FROM pg_catalog.jsonb_array_elements(v->'items') e
-  WHERE e->>'serviceId'=(SELECT min(id)::text FROM public.mobility_stage_g56b_fixture_source))
+  WHERE e->>'serviceId'=(SELECT id::text FROM public.mobility_stage_g56b_fixture_source ORDER BY id LIMIT 1))
  THEN RAISE EXCEPTION 'G56B leaked reassigned service'; END IF;
 END $shifted$;
 
@@ -246,7 +246,7 @@ INSERT INTO public.mobility_stage_g50_chat_messages(
  conversation_id,sender_id,request_key,body)
 SELECT t.conversation_id,t.passenger_id,pg_catalog.gen_random_uuid(),'Mensaje nuevo'
  FROM public.mobility_stage_g50_chat_threads t
- WHERE service_id=(SELECT max(id) FROM public.mobility_stage_g56b_fixture_source);
+ WHERE service_id=(SELECT id FROM public.mobility_stage_g56b_fixture_source ORDER BY id DESC LIMIT 1);
 SELECT public.mobility_stage_g56_inbox_mint_owner_qa(
  '56561200-0000-4656-8656-000000000002',
  '56561200-0000-4656-8656-000000000102',
