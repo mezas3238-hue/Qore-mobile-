@@ -159,7 +159,7 @@ test('G49 scope/cursor/raw actor forgery and body PII never reach ticket mint',a
 test('G49 rejects untrusted mint or forged DB receipts and never switches to LIVE',async()=>{
  for(const badMint of [
   {...minted,qaOnly:false},{...minted,productionEnabled:true},
-  {...minted,operation:'CHAT_HISTORY'},{...minted,ticket:foreign},
+  {...minted,operation:'CHAT_HISTORY'},{...minted,ticket:'forged-invalid-ticket'},
   {...minted,expiresAtMs:issued+21000},
   {...minted,expiresAtMs:issued},
   {...minted,clientRole:'admin'}
