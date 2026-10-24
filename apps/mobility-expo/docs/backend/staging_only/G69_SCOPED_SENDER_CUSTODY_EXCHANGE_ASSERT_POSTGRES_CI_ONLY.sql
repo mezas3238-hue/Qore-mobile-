@@ -15,7 +15,9 @@ BEGIN
  IF NOT EXISTS(
   SELECT 1 FROM pg_catalog.pg_proc
   WHERE oid='public.mobility_stage_g69_sender_exchange_qa(uuid)'::regprocedure
-  AND prosecdef AND proconfig @> ARRAY['search_path=']::text[]
+  AND prosecdef AND EXISTS(
+    SELECT 1 FROM pg_catalog.unnest(proconfig) AS setting(value)
+    WHERE setting.value IN ('search_path=','search_path=""'))
  ) THEN RAISE EXCEPTION 'G69 definer search_path is not empty'; END IF;
  IF (SELECT rolcanlogin FROM pg_catalog.pg_roles
   WHERE rolname='mobility_g69_execute_ci') IS DISTINCT FROM false
