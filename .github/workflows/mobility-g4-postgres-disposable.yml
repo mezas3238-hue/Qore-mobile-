@@ -373,3 +373,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_POSTGRES_CI_ONLY.sql
       - name: G54 test actual NOLOGIN SET ROLE, inbox unread, read watermark, ticket replay and revocation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G54 two-connection delegated role consumes one read receipt then fences concurrent revocation
+        run: python3 apps/mobility-expo/server/g54-scoped-chat-inbox-read-concurrency-ci.py
