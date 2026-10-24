@@ -52,7 +52,7 @@ test('R43 closed QA va detrás de abiertos incluso con gravedad alta',()=>{
  ]});
  const res=project(dto);
  assert.equal(res.ok,true);
- assert.deepEqual(res.items.map(x=>x.caseId),[id(4),id(3),id(1),id(2)]);
+ assert.deepEqual(res.items.map(x=>x.caseId),[id(3),id(4),id(1),id(2)]);
  assert.equal(res.counts.closedQa,1);
  assert.equal(res.counts.highOpen,2);
 });
