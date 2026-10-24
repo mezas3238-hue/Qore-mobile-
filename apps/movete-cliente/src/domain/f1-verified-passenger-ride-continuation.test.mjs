@@ -207,15 +207,15 @@ test('F1 ClientExperience rejects old Driver SQL status after an already complet
  let payload=status();
  const f=setup({statusReply:async()=>response(payload)});
  await request(f);await f.client.continueVerifiedRide();
- payload=status({state:'completed',revision:4,
+ payload=status({state:'completed',revision:5,
   event:{source:'server',tripId:trip,passengerId:subject,
-   serverRevision:4,trackingSequence:3,status:'completed',
+   serverRevision:5,trackingSequence:4,status:'completed',
    acceptedDriver:null,tracking:null}});
  assert.equal((await f.client.syncTracking()).ok,true);
  assert.equal(f.client.snapshot().tracking.state,'completed');
- payload=status({state:'assigned',revision:5,assignmentPersisted:true,
+ payload=status({state:'assigned',revision:6,assignmentPersisted:true,
   event:{source:'server',tripId:trip,passengerId:subject,
-   serverRevision:5,trackingSequence:4,status:'accepted',
+   serverRevision:6,trackingSequence:5,status:'accepted',
    acceptedDriver:null,tracking:null}});
  assert.equal((await f.client.syncTracking()).code,'TRIP_STATE_CONFLICT');
  assert.equal(f.client.snapshot().tracking.state,'completed');
