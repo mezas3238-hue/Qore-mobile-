@@ -12,7 +12,7 @@ import {router} from 'expo-router';
  */
 export default function DriverOffers(){
  const {state,refresh}=useDriverWorkspace();
- const {state:actions,enabled,decide}=useDriverOfferActions();
+ const {state:actions,enabled,decide,reconcilePending}=useDriverOfferActions();
  const [clock,setClock]=useState(()=>Date.now());
  useEffect(()=>{
   if(state.phase!=='connected')return;
@@ -48,6 +48,11 @@ export default function DriverOffers(){
           decision.phase==='uncertain'?'Resultado incierto: el servidor podría haber guardado la decisión. No volvemos a enviarla automáticamente. Actualizá el estado y consultá soporte.':
           'No se pudo verificar una clave segura para esta decisión.'}
         </Text>}
+        {decision?.phase==='uncertain'&&enabled&&
+         state.phase==='connected'&&<Action
+          label="Consultar comprobante del servidor"
+          secondary disabled={actions.busy}
+          onPress={()=>{void reconcilePending(offer.offerId);}}/>}
         {allowed&&<>
          <Action label="Aceptar oferta de prueba" onPress={()=>{
           void decide(offer.offerId,'accept');
