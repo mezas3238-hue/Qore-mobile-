@@ -5,6 +5,9 @@ export type ClientSnapshot={
  account:{subject:string;role:'passenger'}|null;
  mutation:{phase:string;operation:string|null;requestKey:string|null;error:string|null};
  bookingRecovery:{readReady:boolean;productionEnabled:false};
+ senderCustody:{readReady:boolean;loading:boolean;deliveryId:string|null;
+  revision:number;state:string|null;vehicleKind:string|null;
+  proofVerified:boolean;error:string|null;qaOnly:true;productionEnabled:false};
  tracking:{
   tripId:string|null;revision:number;state:string;
   assignedDriver:{name:string;plate:string}|null;
@@ -122,6 +125,7 @@ export type ClientExperience={
  acceptQuote(dto:unknown):boolean;
  acceptHistory(dto:unknown,options?:{append?:boolean}):boolean;
  loadHistoryPage(options?:{reset?:boolean}):Promise<ClientResult>;
+ readOwnDeliveryCustody(deliveryId:string):Promise<ClientResult>;
  prepareCancelRide(args:{tripId:string;requestKey:string}):ClientResult;
  submitCancelRide():Promise<ClientResult>;
  retryCancelRide():Promise<ClientResult>;
@@ -130,6 +134,11 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ senderCustodyOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  readOwnDelivery?:(scope:Readonly<{deliveryId:string;ownerId:string;
+   sessionRevision:number;bearer:string}>)=>Promise<unknown>|unknown;
+ }|null;
  bookingHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   qaReceiptContractCertified?:boolean;reconciliationContractCertified?:boolean;
