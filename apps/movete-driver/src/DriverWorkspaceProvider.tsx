@@ -1,7 +1,8 @@
 import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {createDriverWorkspaceController} from './domain/driver-workspace.mjs';
 import type {
- DriverAuthSessionAdapter,DriverWorkspaceSnapshot,DriverWorkspaceController
+ DriverAuthSessionAdapter,DriverWorkspaceSnapshot,DriverWorkspaceController,
+ DriverWorkspaceControllerOptions
 } from './domain/driver-workspace.mjs';
 
 /**
@@ -19,18 +20,24 @@ const Context=createContext<DriverWorkspaceContextValue|null>(null);
 
 export function DriverWorkspaceProvider({
  children,authAdapter=null,apiOrigin=null,
- approvedStagingHost=null,allowedByOwner=false
+ approvedStagingHost=null,allowedByOwner=false,
+ readInbox,readDocuments,readLicense
 }:{
  children:React.ReactNode;
  authAdapter?:DriverAuthSessionAdapter|null;
  apiOrigin?:string|null;
  approvedStagingHost?:string|null;
  allowedByOwner?:boolean;
+ readInbox?:DriverWorkspaceControllerOptions['readInbox'];
+ readDocuments?:DriverWorkspaceControllerOptions['readDocuments'];
+ readLicense?:DriverWorkspaceControllerOptions['readLicense'];
 }){
  const controller:DriverWorkspaceController=useMemo(
   ()=>createDriverWorkspaceController({
-    authAdapter,apiOrigin,approvedStagingHost,allowedByOwner
-  }),[authAdapter,apiOrigin,approvedStagingHost,allowedByOwner]
+    authAdapter,apiOrigin,approvedStagingHost,allowedByOwner,
+    readInbox,readDocuments,readLicense
+  }),[authAdapter,apiOrigin,approvedStagingHost,allowedByOwner,
+    readInbox,readDocuments,readLicense]
  );
  const [state,setState]=useState<DriverWorkspaceSnapshot>(()=>controller.current());
  useEffect(()=>{
