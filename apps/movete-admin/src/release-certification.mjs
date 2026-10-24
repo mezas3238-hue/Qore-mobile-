@@ -43,7 +43,7 @@ const REQUIRED_ENV=Object.freeze({
  OWNER_SIGNOFF:['PRODUCTION_READINESS_REVIEW']
 });
 const STATUSES=new Set(['BLOCKED','QA_ONLY','CERTIFIED']);
-const SOURCE_STATES=new Set(['blocked','qa-only']);
+const SOURCE_STATES=new Set(['blocked','qa-only','certified']);
 const isObj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const keys=(items)=>new Set(items);
 const exactIdSet=(entries,ids)=>{
@@ -133,6 +133,8 @@ export function assessMoveteReleaseRegistry(registry){
   else if(g?.status==='CERTIFIED')gateCounts.certified++;
   if(g?.status==='CERTIFIED'&&!proofComplete(g))
    problems.push('UNSUPPORTED_GATE_CERTIFICATION');
+  if(g?.status==='CERTIFIED'&&g.sourceStatus!=='certified')
+   problems.push('SOURCE_GATE_NOT_CERTIFIED');
  }
  const flowCounts={blocked:0,qaOnly:0,certified:0};
  if(Array.isArray(registry?.flows))for(const f of registry.flows){
