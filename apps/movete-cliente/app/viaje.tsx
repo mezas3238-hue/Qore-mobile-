@@ -6,6 +6,9 @@ import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {validateRideDraft} from '../src/domain/capabilities.mjs';
 import {prepareLocalRideRequest} from '../src/domain/client-request-preparation.mjs';
+import {emptyLocalRouteDraft,editLocalRouteDraft,reviewLocalRouteDraft,
+ canPrepareCurrentRideContract,MAX_LOCAL_STOPS} from '../src/domain/client-route-editor.mjs';
+import type {LocalRouteEdit,LocalRouteDraft} from '../src/domain/client-route-editor.mjs';
 
 type Service='economico'|'confort'|'xl';
 const OPTIONS:{code:Service;title:string;description:string}[]=[
@@ -21,8 +24,8 @@ export default function RideRequest(){
  return <PrivateRideForm key={view.privateViewRevision} client={client} view={view}/>;
 }
 function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnapshot}){
- const [pickup,setPickup]=useState('');
- const [destination,setDestination]=useState('');
+ const [route,setRoute]=useState<LocalRouteDraft>(()=>emptyLocalRouteDraft());
+ const pickup=route.origin,destination=route.destination;
  const [service,setService]=useState<Service>('economico');
  const [validated,setValidated]=useState(false);
  const [feedback,setFeedback]=useState('');
@@ -31,26 +34,35 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const myDraft=mutation.phase==='ready'&&mutation.operation==='rideRequest';
  const free=mutation.phase==='idle';
  // Las direcciones son datos privados de la pantalla, ajenos al snapshot Auth.
- function editPickup(value:string){
-  if(myDraft)return;
-  setPickup(value);setValidated(false);setFeedback('');
+ function changeRoute(change:LocalRouteEdit){
+  if(!free||lock.current)return;
+  const next=editLocalRouteDraft(route,change);
+  if(!next.ok){setFeedback(next.reason);return;}
+  setRoute(next.route);setValidated(false);setFeedback('');
  }
- function editDestination(value:string){
-  if(myDraft)return;
-  setDestination(value);setValidated(false);setFeedback('');
- }
+ function editPickup(value:string){changeRoute({type:'origin',value});}
+ function editDestination(value:string){changeRoute({type:'destination',value});}
  function selectService(next:Service){
   if(myDraft)return;
   setService(next);setValidated(false);setFeedback('');
  }
  function validate(){
   if(!free||lock.current)return;
+  const local=reviewLocalRouteDraft(route);
+  if(!local.ok){setValidated(false);setFeedback(local.reason);return;}
   const result=validateRideDraft({pickup,destination,vehicleKind:'AUTO'});
   setValidated(result.ok);
-  setFeedback(result.ok?'Ruta revisada localmente. No hay conductor, zona ni tarifa confirmados.':result.reason);
+  if(!result.ok){setFeedback(result.reason);return;}
+  setFeedback(route.stops.length>0
+   ?'Ruta con paradas revisada como borrador local. No se puede solicitar ni cotizar hasta que el backend admita paradas.'
+   :'Ruta revisada localmente. No hay conductor, zona ni tarifa confirmados.');
  }
  function prepare(){
   if(!free||!validated||lock.current||!view.authenticated)return;
+  const compatibility=canPrepareCurrentRideContract(route);
+  if(!compatibility.ok){
+   setValidated(false);setFeedback(compatibility.reason);return;
+  }
   lock.current=true;
   try{
    const result=prepareLocalRideRequest({pickup,destination,service},()=>Crypto.randomUUID());
@@ -83,13 +95,36 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    <Text accessibilityRole="header" style={styles.heading}>Paso 1 · Tu ruta</Text>
    <Text style={styles.text}>Origen</Text>
    <TextInput style={styles.field} value={pickup} onChangeText={editPickup}
-    editable={!myDraft} maxLength={120} placeholder="Ej.: Centro de San Lorenzo"
+    editable={free} maxLength={120} placeholder="Ej.: Centro de San Lorenzo"
     accessibilityLabel="Origen del viaje"/>
    <Text style={styles.text}>Destino</Text>
    <TextInput style={styles.field} value={destination} onChangeText={editDestination}
-    editable={!myDraft} maxLength={120} placeholder="Ej.: Villa Morra, Asunción"
+    editable={free} maxLength={120} placeholder="Ej.: Villa Morra, Asunción"
     accessibilityLabel="Destino del viaje"/>
-   <Text style={styles.small}>Estas direcciones aún no se geocodifican ni comprueban en el mapa; distancia, cobertura y disponibilidad requieren evidencia del backend.</Text>
+   <Action label="Invertir origen y destino" secondary disabled={!free}
+    onPress={()=>changeRoute({type:'swap'})}/>
+   <Text accessibilityRole="header" style={styles.heading}>Paradas adicionales · borrador local</Text>
+   {route.stops.map((stop,index)=><View key={index}>
+    <Text style={styles.text}>Parada {index+1}</Text>
+    <TextInput style={styles.field} value={stop} maxLength={120}
+     editable={free} accessibilityLabel={'Dirección de parada '+(index+1)}
+     placeholder="Dirección o lugar de parada"
+     onChangeText={value=>changeRoute({type:'stop',index,value})}/>
+    <View style={styles.row}>
+     <Action label={'Subir parada '+(index+1)} secondary
+      disabled={!free||index===0}
+      onPress={()=>changeRoute({type:'move-stop',index,direction:-1})}/>
+     <Action label={'Bajar parada '+(index+1)} secondary
+      disabled={!free||index===route.stops.length-1}
+      onPress={()=>changeRoute({type:'move-stop',index,direction:1})}/>
+     <Action label={'Quitar parada '+(index+1)} secondary disabled={!free}
+      onPress={()=>changeRoute({type:'remove-stop',index})}/>
+    </View>
+   </View>)}
+   <Action label="Agregar parada al borrador" secondary
+    disabled={!free||route.stops.length>=MAX_LOCAL_STOPS}
+    onPress={()=>changeRoute({type:'add-stop'})}/>
+   <Text style={styles.small}>Las paradas son privadas y temporales. Todavía no se pueden cotizar ni solicitar; no se envían en un viaje simple. No se comprueban en el mapa. La distancia, cobertura y disponibilidad requieren evidencia del backend.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 2 · Tipo de automóvil</Text>
@@ -105,10 +140,13 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    <Text accessibilityRole="header" style={styles.heading}>Paso 3 · Revisá antes de continuar</Text>
    <Action label="Revisar ruta y servicio" disabled={!free} onPress={validate}/>
    {validated&&<View>
-    <Text style={styles.text}>Ruta: {pickup.trim()} → {destination.trim()}</Text>
+    <Text style={styles.text}>Ruta: {[pickup,...route.stops,destination].map(s=>s.trim()).join(' → ')}</Text>
     <Text style={styles.text}>Servicio: {OPTIONS.find(o=>o.code===service)?.title}</Text>
+    {route.stops.length>0&&<Text style={styles.small}>
+     Esta ruta con paradas no puede convertirse en solicitud hasta la certificación del servidor.
+    </Text>}
    </View>}
-   {view.authenticated&&free&&validated&&
+   {view.authenticated&&free&&validated&&route.stops.length===0&&
     <Action label="Preparar solicitud segura (sin enviarla)" onPress={prepare}/>}
    {!view.authenticated&&<Text style={styles.small}>
     Para guardar una solicitud necesitarás iniciar sesión como pasajero. La revisión local no crea ninguna reserva.
