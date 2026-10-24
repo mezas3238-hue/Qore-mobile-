@@ -3,6 +3,7 @@ import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
 import {DriverTripProvider} from './DriverTripProvider';
+import {DriverCustodyProvider} from './DriverCustodyProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
 
 /**
@@ -33,11 +34,15 @@ export function DriverApplicationProviders({
   <DriverTripProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.tripActions??null}>
+  <DriverCustodyProvider
+   authAdapter={runtime?.authAdapter??null}
+   qaAdapters={runtime?.custodyActions??null}>
   <DriverMessagesProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.chatAdapters??null}>
    {children}
   </DriverMessagesProvider>
+  </DriverCustodyProvider>
   </DriverTripProvider>
   </DriverOfferActionsProvider>
  </DriverWorkspaceProvider>;
