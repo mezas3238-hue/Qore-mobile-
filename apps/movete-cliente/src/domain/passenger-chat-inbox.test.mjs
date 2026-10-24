@@ -296,3 +296,27 @@ test('timeout al paginar mantiene vista verificada pero no permite seguir pagina
  assert.equal(inbox.snapshot().hasNext,false);
  assert.equal((await inbox.load({next:true})).code,'CHAT_INBOX_NEXT_UNAVAILABLE');
 });
+
+
+// R20 — la bandeja jamás revalida con TTL nuevo un cursor viejo expirado.
+test('página de bandeja atrasada se rechaza si caducó cursor durante GET',async()=>{
+ let clock=now,calls=0,release;
+ const waiting=new Promise(resolve=>{release=resolve;});
+ const cursor='p'.repeat(44);
+ const inbox=createPassengerChatInbox({
+  gateway:flags({readInbox:async()=>{
+   calls++;return calls===1?{ok:true,data:page([row(1)],cursor)}:waiting;
+  }}),
+  getActor:async()=>actor(),now:()=>clock
+ });
+ assert.equal((await inbox.load()).ok,true);
+ const next=inbox.load({next:true});
+ await Promise.resolve();await Promise.resolve();
+ clock+=60001;
+ release({ok:true,data:{...page([row(2)]),
+  generatedAt:clock-1000,expiresAt:clock+60000}});
+ assert.equal((await next).code,'CHAT_INBOX_CURSOR_EXPIRED');
+ assert.equal(inbox.snapshot().items.length,0);
+ assert.equal(inbox.snapshot().hasNext,false);
+ assert.equal(calls,2);
+});
