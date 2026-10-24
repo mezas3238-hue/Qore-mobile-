@@ -41,7 +41,8 @@ BEGIN
   'public.mobility_stage_g67_revoke_proof_owner_qa(uuid,uuid)'::regprocedure,
   'public.mobility_stage_g67_enforce_delivery_proof()'::regprocedure
  ) AND (NOT p.prosecdef OR p.proconfig IS NULL OR
-  NOT (p.proconfig @> ARRAY['search_path=']::text[])))
+  NOT EXISTS(SELECT 1 FROM pg_catalog.unnest(p.proconfig) AS setting(value)
+   WHERE setting.value IN ('search_path=','search_path=""'))))
  THEN RAISE EXCEPTION 'G67 owner functions must have SECURITY DEFINER with search_path empty'; END IF;
  RAISE NOTICE 'G67 PASS: RLS, trigger, owner-only registry and forbidden roles';
 END $guard$;
