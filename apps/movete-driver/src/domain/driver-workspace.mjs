@@ -88,7 +88,7 @@ export function createDriverWorkspaceController({
     ]);
     if(nonce!==epoch)return current;
     if(!Array.isArray(offers)||offers.length>10||
-       !Array.isArray(documents)||documents.length>7||
+       !Array.isArray(documents)||documents.length>8||
        !isObject(license)||typeof license.currentLicenseApproved!=='boolean'||
        license.driverEligible!==false||license.liveEnabled!==false)
      throw Error('Invalid private Driver state');
@@ -106,7 +106,7 @@ export function createDriverWorkspaceController({
     const safeDocs=documents.map(doc=>{
      if(!isObject(doc)||typeof doc.kind!=='string'||
        !['licencia','identidad_frente','identidad_dorso','cedula_verde',
-        'seguro','inspeccion','habilitacion'].includes(doc.kind)||
+        'seguro','inspeccion','habilitacion','rostro_selfie'].includes(doc.kind)||
        !['pending','approved','rejected'].includes(doc.status)||
        !Number.isSafeInteger(doc.submittedAtMs)||
        !(doc.reviewedAtMs===null||Number.isSafeInteger(doc.reviewedAtMs)))
