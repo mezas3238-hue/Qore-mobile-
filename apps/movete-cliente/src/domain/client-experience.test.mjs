@@ -1529,3 +1529,104 @@ test('R32 abrir historial G52 no altera el unreadCount confirmado ni crea read-r
  assert.equal(api.snapshot().chat.sendReady,false);
  assert.deepEqual(methods,['GET','GET']);
 });
+
+
+// R33: bandeja G51 autentica una nueva conversación sobre el MISMO servicio.
+// Nunca inferir revocación por ausencia de una fila en página parcial.
+function r33Env({rows=null,invalidInbox=false,ambiguousSend=false}={}){
+ const origin='https://qa-chat.example.invalid',posts=[];
+ const base={enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin,pinnedOrigin:origin};
+ const oldHistory={conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+  ownerId:a,counterpartRole:'driver',assignmentVerified:true,state:'ACTIVE',
+  revision:9,generatedAt:now-1000,expiresAt:now+60000,
+  messages:[{messageId:key,senderRole:'driver',body:'En camino',
+   createdAt:now-2000,revision:9}],nextCursor:null,
+  canSend:true,productionEnabled:false};
+ const row=(conversationId=quoteId,serviceId=trip,serviceKind='RIDE')=>({
+  conversationId,serviceId,serviceKind,state:'ACTIVE',assignmentVerified:true,
+  counterpartRole:'driver',revision:9,unreadCount:3,
+  updatedAt:now-2000,canSend:true
+ });
+ const data={ownerId:a,generatedAt:now-1000,expiresAt:now+60000,
+  revision:9,productionEnabled:false,items:rows??[row(b)],nextCursor:null};
+ const answer=payload=>({
+  status:200,ok:true,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':null},
+  text:async()=>JSON.stringify(payload)
+ });
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g52ChatHistoryHttpOptions:{...base,fetchImpl:async()=>answer(oldHistory)},
+  g51ChatInboxHttpOptions:{...base,
+   fetchImpl:async()=>answer(invalidInbox?{}:data)},
+  ...(ambiguousSend?{g53ChatSendHttpOptions:{...base,fetchImpl:async(_url,init)=>{
+   posts.push(JSON.parse(init.body));
+   return answer({incompleteAck:true});
+  }}}:{})
+ });
+ return {api,row,posts};
+}
+test('R33 G51 verified reassignment purges old private messages and conversation ID',async()=>{
+ const {api}=r33Env();
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE',
+  expectedConversationId:quoteId})).ok,true);
+ assert.equal(api.snapshot().chat.messages.length,1);
+ assert.equal((await api.loadChatInbox()).ok,true);
+ const state=api.snapshot();
+ assert.equal(state.chatInbox.items[0].conversationId,b);
+ assert.equal(state.chat.messages.length,0);
+ assert.equal(state.chat.active,false);
+ assert.equal(state.chat.conversationId,null);
+ assert.equal(state.chat.pendingSend,false);
+ assert.equal(state.chatHints.length,0);
+});
+test('R33 G51 mismo hilo no borra chat, y ausencia de fila no simula revocación',async()=>{
+ const same=r33Env({rows:[]});
+ assert.equal((await same.api.refreshSession()).ok,true);
+ assert.equal((await same.api.openChat({serviceId:trip,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await same.api.loadChatInbox()).ok,true);
+ assert.equal(same.api.snapshot().chat.messages.length,1);
+ const differentService=r33Env({rows:[{
+  conversationId:b,serviceId:key,serviceKind:'DELIVERY',state:'ACTIVE',
+  assignmentVerified:true,counterpartRole:'driver',revision:9,
+  unreadCount:0,updatedAt:now-2000,canSend:true
+ }]});
+ await differentService.api.refreshSession();
+ assert.equal((await differentService.api.openChat({
+  serviceId:trip,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await differentService.api.loadChatInbox()).ok,true);
+ assert.equal(differentService.api.snapshot().chat.conversationId,quoteId);
+ const matching=r33Env({rows:[{
+  conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',state:'ACTIVE',
+  assignmentVerified:true,counterpartRole:'driver',revision:9,
+  unreadCount:0,updatedAt:now-2000,canSend:true
+ }]});
+ await matching.api.refreshSession();
+ assert.equal((await matching.api.openChat({serviceId:trip,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await matching.api.loadChatInbox()).ok,true);
+ assert.equal(matching.api.snapshot().chat.messages.length,1);
+});
+test('R33 página malformada no autoriza borrar chat vigente',async()=>{
+ const {api}=r33Env({invalidInbox:true});
+ await api.refreshSession();
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await api.loadChatInbox()).ok,false);
+ assert.equal(api.snapshot().chat.messages.length,1);
+});
+test('R33 nueva asignación bloquea POST pendiente que ya tuvo ACK ambiguo',async()=>{
+ const {api,posts}=r33Env({ambiguousSend:true});
+ await api.refreshSession();
+ assert.equal((await api.openChat({serviceId:trip,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await api.sendChat({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ assert.equal(api.snapshot().chat.pendingSend,true);
+ assert.equal(posts.length,1);
+ assert.equal((await api.loadChatInbox()).ok,true);
+ const state=api.snapshot();
+ assert.equal(state.chat.pendingSend,false);
+ assert.equal(state.chat.conversationId,null);
+ assert.equal((await api.retryChat()).code,'NO_PENDING_MESSAGE');
+ assert.equal(posts.length,1);
+});
