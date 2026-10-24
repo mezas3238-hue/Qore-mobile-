@@ -7,6 +7,25 @@ import {validateClientOperation} from './client-gateway.mjs';
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MUTATIONS=new Set(['rideRequest','deliveryRequest','fareQuote','paymentAuthorize']);
+/**
+ * R59 — never publish an arbitrary transport/server error in ClientSnapshot.
+ * Codes are stable protocol identifiers, never human text or free-form details.
+ * Keep unknown failures terminal for ordinary operations and unconfirmed for
+ * bookings. Do not echo URLs, JWTs, request bodies or phone numbers.
+ */
+const SAFE_CODES=new Set([
+ 'AUTH_REQUIRED','AUTH_UNAVAILABLE','FORBIDDEN','SESSION_CHANGED',
+ 'STALE_SESSION_RESPONSE','REQUEST_REJECTED','BAD_REQUEST',
+ 'CONFLICT_RECONCILE','DEDICATED_GATEWAY_REQUIRED','NOT_CONFIGURED',
+ 'OPERATION_DENIED','REQUEST_IN_FLIGHT','NETWORK_OR_TIMEOUT',
+ 'RATE_LIMITED','SERVICE_UNAVAILABLE','BOOKING_STAGING_NOT_CERTIFIED',
+ 'BOOKING_RECEIPT_NOT_CERTIFIED','BOOKING_IN_FLIGHT',
+ 'BOOKING_RECONCILIATION_NOT_CERTIFIED','BOOKING_RECONCILIATION_UNKNOWN',
+ 'INVALID_BOOKING_REQUEST','INVALID_RECONCILIATION_SCOPE',
+ 'STALE_RESPONSE_IGNORED'
+]);
+const safeCode=(candidate,fallback)=>
+ typeof candidate==='string'&&SAFE_CODES.has(candidate)?candidate:fallback;
 const fail=(code)=>({ok:false,code});
 function copy(value){return JSON.parse(JSON.stringify(value));}
 export function createClientMutationController({gateway,getSession,clearSensitive=()=>{}}={}){
@@ -70,7 +89,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    // No se guardan DTOs no certificados ni datos privados del servidor.
    return {ok:true,requestKey:state.requestKey,status:reply.status};
   }
-  const code=typeof reply?.code==='string'?reply.code:'REQUEST_REJECTED';
+  const code=safeCode(reply?.code,'REQUEST_REJECTED');
   if(['AUTH_REQUIRED','FORBIDDEN','SESSION_CHANGED'].includes(code)){
    clear();return fail(code);
   }
@@ -125,7 +144,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
     qaOnly:true,productionEnabled:false});
   }
   state.phase='failed';
-  state.error=reply?.code??'BOOKING_RECONCILIATION_UNKNOWN';
+  state.error=safeCode(reply?.code,'BOOKING_RECONCILIATION_UNKNOWN');
   return fail(state.error);
  }
  return Object.freeze({prepare,submit:()=>run(false),retry:()=>run(true),
