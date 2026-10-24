@@ -11,6 +11,7 @@ import {reviewCommerceBasket} from '../src/domain/commerce-checkout-review.mjs';
 import {createCommerceSubstitutionDraft} from '../src/domain/commerce-substitution-draft.mjs';
 import type {SubstitutionChoice} from '../src/domain/commerce-substitution-draft.mjs';
 import {createCommerceUiReadFence} from '../src/domain/commerce-ui-read-fence.mjs';
+import {guardCommerceUiAction} from '../src/domain/commerce-ui-action-guard.mjs';
 import {isCommercePageFresh} from '../src/domain/commerce-ttl-refresh.mjs';
 import {useCommerceExpiryClock} from '../src/useCommerceExpiryClock';
 export default function Commerce(){
@@ -130,12 +131,38 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
  const preferences=substitutionFlow.snapshot(commerce,actor);
  const summary=review?.ok
   ?review.estimatedSubtotalPyg.toLocaleString('es-PY')+' Gs.':'—';
+ const validateAction=(itemId:string|null=null,requestedQuantity:number|null=null,
+  requireInBasket=false)=>{
+  const current=client.snapshot();
+  const authorized=guardCommerceUiAction(view,current,{
+   itemId,requestedQuantity,requireInBasket,now:Date.now()
+  });
+  if(!authorized.ok){
+   substitutionFlow.clear();
+   setMessage('Cambió tu sesión, carrito o catálogo. Volvé a verificar precios y stock.');
+  }
+  return authorized.ok?current:null;
+ };
  const edit=(id:string,quantity:number)=>{
-  client.setCommerceQuantity(id,quantity);
+  if(!validateAction(id,quantity))return;
+  const result=client.setCommerceQuantity(id,quantity);
+  if(!result.ok)setMessage('El carrito cambió. Actualizá el catálogo antes de seguir.');
+  setChoiceRevision(r=>r+1);
+ };
+ const selectDelivery=(vehicle:'AUTO'|'MOTO')=>{
+  if(!validateAction())return;
+  const result=client.selectCommerceVehicle(vehicle);
+  if(!result.ok)setMessage('No se pudo actualizar la preferencia de reparto.');
   setChoiceRevision(r=>r+1);
  };
  const chooseSubstitution=(itemId:string,choice:SubstitutionChoice|null)=>{
-  const result=substitutionFlow.choose(commerce,actor,{itemId,choice});
+  const current=validateAction(itemId,null,true);
+  if(!current)return;
+  const currentActor={
+   authenticated:current.authenticated,subject:current.account?.subject??null,
+   sessionRevision:current.privateViewRevision
+  };
+  const result=substitutionFlow.choose(current.commerce,currentActor,{itemId,choice});
   if(!result.ok)setMessage('El carrito cambió o venció. Revisá el catálogo antes de elegir.');
   setChoiceRevision(r=>r+1);
  };
@@ -189,10 +216,10 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
    <Text accessibilityRole="header" style={styles.heading}>Entrega preferida</Text>
    <Action label="Moto de carga" selected={commerce.vehicleKind==='MOTO'}
     secondary={commerce.vehicleKind!=='MOTO'}
-    disabled={busy} onPress={()=>client.selectCommerceVehicle('MOTO')}/>
+    disabled={busy} onPress={()=>selectDelivery('MOTO')}/>
    <Action label="Automóvil de carga" selected={commerce.vehicleKind==='AUTO'}
     secondary={commerce.vehicleKind!=='AUTO'}
-    disabled={busy} onPress={()=>client.selectCommerceVehicle('AUTO')}/>
+    disabled={busy} onPress={()=>selectDelivery('AUTO')}/>
    <Text accessibilityRole="header" style={styles.heading}>Revisión de tu carrito</Text>
    {!review?.ok&&<Text style={styles.small}>
     Agregá artículos disponibles para consultar un subtotal estimado; todavía no es un pedido ni una reserva.
