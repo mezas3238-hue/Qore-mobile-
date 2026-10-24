@@ -115,6 +115,44 @@ BEGIN
    driver,driver_session,at_ms,NULL,NULL,NULL,10);
  EXCEPTION WHEN SQLSTATE 'G5103' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G51 Driver read passenger inbox'; END IF;
+ -- Another passenger's traffic MUST NOT invalidate this owner's cursor.
+ INSERT INTO auth.users(id) VALUES
+  ('51510000-0000-4151-8151-000000000003'),
+  ('51510000-0000-4151-8151-000000000004');
+ DELETE FROM public.user_roles
+  WHERE user_id='51510000-0000-4151-8151-000000000004'
+   AND role='passenger'::public.app_role;
+ INSERT INTO public.user_roles(user_id,role)
+  VALUES('51510000-0000-4151-8151-000000000004','driver'::public.app_role);
+ INSERT INTO public.mobility_stage_g42_provider_session_grants(
+  user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind
+ ) VALUES
+  ('51510000-0000-4151-8151-000000000003',
+   '51510000-0000-4151-8151-000000000103',
+   clock_timestamp()-interval '1 day',clock_timestamp()-interval '1 minute',
+   clock_timestamp()+interval '1 hour','QA_SYNTHETIC_PROVIDER_SESSION_ONLY'),
+  ('51510000-0000-4151-8151-000000000004',
+   '51510000-0000-4151-8151-000000000104',
+   clock_timestamp()-interval '1 day',clock_timestamp()-interval '1 minute',
+   clock_timestamp()+interval '1 hour','QA_SYNTHETIC_PROVIDER_SESSION_ONLY');
+ INSERT INTO public.mobility_stage_g50_race_source(id,passenger_id,driver_id,can_send)
+ VALUES('51510000-0000-4151-8151-000000001300',
+  '51510000-0000-4151-8151-000000000003',
+  '51510000-0000-4151-8151-000000000004',true);
+ r:=public.mobility_stage_g50_open_owner_qa(
+  'RIDE','51510000-0000-4151-8151-000000001300',
+  '51510000-0000-4151-8151-000000000003',
+  '51510000-0000-4151-8151-000000000103',at_ms);
+ r:=public.mobility_stage_g50_send_owner_qa(
+  (r->>'conversationId')::uuid,
+  '51510000-0000-4151-8151-000000000004',
+  '51510000-0000-4151-8151-000000000104',at_ms,
+  '51510000-0000-4151-8151-000000006000','Otro usuario');
+ pg:=public.mobility_stage_g51_passenger_inbox_owner_qa(
+  owner_id,owner_session,at_ms,rev,after_ms,after_id,100);
+ IF (pg->>'revision')::bigint<>rev
+ THEN RAISE EXCEPTION 'G51 leaked cross-tenant activity into revision'; END IF;
+
  -- A new message invalidates the entire old signed snapshot revision.
  r:=public.mobility_stage_g50_send_owner_qa(
   first_conversation,driver,driver_session,at_ms,
