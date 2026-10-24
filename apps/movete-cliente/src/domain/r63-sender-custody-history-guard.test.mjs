@@ -128,3 +128,21 @@ test('R63 an unauthorised delivery read cannot preserve a prior success',async()
  assert.equal(outcome.code,'SENDER_DELIVERY_NOT_IN_OWN_HISTORY');
  assert.equal(f.api.snapshot().senderCustody.state,null);
 });
+
+test('R63 concurrent request for other delivery cannot re-anchor an earlier in-flight GET',async()=>{
+ let release,started;
+ const waiting=new Promise(resolve=>release=resolve);
+ const arrived=new Promise(resolve=>started=resolve);
+ const f=fixture({readOwnDelivery:async scope=>{
+  if(scope.deliveryId===delivery){started();return waiting;}
+  throw Error('unexpected second transport');
+ }});
+ await authenticated(f,[delivery,second]);
+ const initial=f.api.readOwnDeliveryCustody(delivery);await arrived;
+ const blocked=await f.api.readOwnDeliveryCustody(second);
+ assert.equal(blocked.code,'SENDER_CUSTODY_READ_IN_FLIGHT');
+ release(reply(delivery));
+ assert.equal((await initial).ok,true);
+ assert.equal(f.api.snapshot().senderCustody.deliveryId,delivery);
+ assert.equal(f.api.snapshot().senderCustody.proofVerified,true);
+});
