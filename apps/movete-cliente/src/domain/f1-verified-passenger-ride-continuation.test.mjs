@@ -161,3 +161,63 @@ test('F1 a response with extra proof, Driver identity or altered requestKey cann
   assert.equal(f.reads(),0);
  }
 });
+
+
+test('F1 real ClientExperience view follows Server Driver lifecycle and hides Driver at completion',async()=>{
+ const vocabulary={searching:'searching',assigned:'accepted',
+  arriving:'at_pickup',in_progress:'in_progress',completed:'completed'};
+ const states=['searching','assigned','arriving','in_progress','completed'];
+ let stage=0;
+ const makeStatus=()=>{
+  const state=states[stage],revision=stage+1;
+  const active=['assigned','arriving','in_progress'].includes(state);
+  const driver=active?{verified:true,displayName:'Conductor Sintético'}:null;
+  const vehicle=active?{kind:'AUTO',plate:'QA-777'}:null;
+  const eventDriver=active?{name:'Conductor Sintético',vehicleKind:'AUTO',
+   model:'Toyota',color:'blanco',plate:'QA-777',rating:4.8}:null;
+  return status({state,revision,assignmentPersisted:stage>0,
+   driver,vehicle,
+   event:{source:'server',tripId:trip,passengerId:subject,
+    serverRevision:revision,trackingSequence:stage,
+    status:vocabulary[state],acceptedDriver:eventDriver,tracking:null}});
+ };
+ const f=setup({statusReply:async()=>response(makeStatus())});
+ assert.equal((await request(f)).ok,true);
+ assert.equal((await f.client.continueVerifiedRide()).ok,true);
+ assert.equal(f.client.snapshot().tracking.state,'searching');
+ assert.equal(f.client.snapshot().tracking.assignedDriver,null);
+ for(let i=1;i<states.length;i++){
+  stage=i;
+  assert.equal((await f.client.syncTracking()).ok,true,states[i]);
+  const shown=f.client.snapshot().tracking;
+  assert.equal(shown.state,states[i]);
+  assert.equal(shown.revision,i+1);
+  if(i<4){assert.equal(shown.assignedDriver.plate,'QA-777');}
+ }
+ const finished=f.client.snapshot().tracking;
+ assert.equal(finished.state,'completed');
+ assert.equal(finished.assignedDriver,null);
+ assert.equal(finished.etaMinutes,null);
+ assert.equal(finished.position,null);
+ assert.equal(f.client.snapshot().quote,null);
+ assert.equal(f.posts(),1);
+ assert.equal(f.reads(),5);
+});
+test('F1 ClientExperience rejects old Driver SQL status after an already completed ride',async()=>{
+ let payload=status();
+ const f=setup({statusReply:async()=>response(payload)});
+ await request(f);await f.client.continueVerifiedRide();
+ payload=status({state:'completed',revision:4,
+  event:{source:'server',tripId:trip,passengerId:subject,
+   serverRevision:4,trackingSequence:3,status:'completed',
+   acceptedDriver:null,tracking:null}});
+ assert.equal((await f.client.syncTracking()).ok,true);
+ assert.equal(f.client.snapshot().tracking.state,'completed');
+ payload=status({state:'assigned',revision:5,assignmentPersisted:true,
+  event:{source:'server',tripId:trip,passengerId:subject,
+   serverRevision:5,trackingSequence:4,status:'accepted',
+   acceptedDriver:null,tracking:null}});
+ assert.equal((await f.client.syncTracking()).code,'TRIP_STATE_CONFLICT');
+ assert.equal(f.client.snapshot().tracking.state,'completed');
+ assert.equal(f.client.snapshot().tracking.position,null);
+});
