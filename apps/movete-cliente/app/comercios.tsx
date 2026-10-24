@@ -13,6 +13,8 @@ import type {SubstitutionChoice} from '../src/domain/commerce-substitution-draft
 import {createCommerceUiReadFence} from '../src/domain/commerce-ui-read-fence.mjs';
 import {guardCommerceUiAction} from '../src/domain/commerce-ui-action-guard.mjs';
 import {guardCommerceBranchSelection} from '../src/domain/commerce-branch-selection-guard.mjs';
+import {projectCommerceItemAccessible,projectCommercePageAccessible}
+ from '../src/domain/commerce-accessible-summary.mjs';
 import {isCommercePageFresh} from '../src/domain/commerce-ttl-refresh.mjs';
 import {useCommerceExpiryClock} from '../src/useCommerceExpiryClock';
 export default function Commerce(){
@@ -124,6 +126,10 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
  const verifiedMatches=fresh?filterVerifiedCatalogPage(commerce.catalogItems,
   {query,verified:true}):null;
  const visibleItems=verifiedMatches?.ok?verifiedMatches.items:[];
+ const pageA11y=projectCommercePageAccessible({
+  verified:fresh&&verifiedMatches?.ok===true,loading:busy,
+  pageNumber:1,visibleCount:visibleItems.length,kind:'CATALOG'
+ });
  const review=fresh?reviewCommerceBasket(commerce,{
   authenticated:view.authenticated,now:verifiedNow
  }):null;
@@ -194,6 +200,9 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
     onPress={()=>{const branch=commerce.branchId;if(branch){
      setBranchInput(branch);void load(branch);
     }}}/>
+   {pageA11y.ok&&<Text accessibilityLiveRegion="polite" style={styles.small}>
+    {pageA11y.summary}
+   </Text>}
    {verifiedMatches?.ok&&visibleItems.length===0&&<Text style={styles.small}>
     Sin coincidencias en este catálogo verificado. No significa que el artículo esté agotado en otros comercios.
    </Text>}
@@ -202,15 +211,21 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
    </Text>}
    {visibleItems.map(item=>{
     const count=commerce.items.find(row=>row.itemId===item.itemId)?.quantity??0;
+    const a11y=projectCommerceItemAccessible(item,{verified:fresh,quantity:count});
+    if(!a11y.ok)return null;
     return <View key={item.itemId} style={styles.card}>
      <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>
      <Text style={styles.text}>{item.itemClass==='PHARMACY_OTC'?'Farmacia sin receta':'Artículo general'}</Text>
-     <Text style={styles.text}>{item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock informado: {item.stockUnits}</Text>
-     <Text style={styles.text}>Cantidad seleccionada: {count}</Text>
+     <Text style={styles.text} accessibilityLabel={a11y.description}>
+      {item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock informado: {item.stockUnits}
+     </Text>
+     <Text style={styles.text} accessibilityLiveRegion="polite">Cantidad seleccionada: {count}</Text>
      <Action label={'Agregar una unidad de '+item.itemTag.replaceAll('_',' ')}
+      hint={a11y.addHint}
       disabled={busy||count>=item.stockUnits||count>=999}
       onPress={()=>edit(item.itemId,count+1)}/>
      <Action label={'Quitar una unidad de '+item.itemTag.replaceAll('_',' ')}
+      hint={a11y.removeHint}
       secondary disabled={busy||count===0} onPress={()=>edit(item.itemId,count-1)}/>
     </View>;
    })}
@@ -299,6 +314,10 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
  const matchedCatalog=!pager.loading&&pager.pageNumber>0&&matchingBranch&&pageFresh
   ?filterVerifiedCatalogPage(pager.visibleItems,{query,verified:true}):null;
  const visibleItems=matchedCatalog?.ok?matchedCatalog.items:[];
+ const pageA11y=projectCommercePageAccessible({
+  verified:pageFresh&&matchedCatalog?.ok===true,loading:pager.loading,
+  pageNumber:pager.pageNumber,visibleCount:visibleItems.length,kind:'CATALOG'
+ });
  const load=async(next=false,previous=false)=>{
   if(pager.loading||readFence.isBusy())return;
   const input=(next||previous)?pager.branchId:branchInput;
@@ -334,17 +353,22 @@ function ReadOnlyCatalogPager({client,view,preferredBranch,query}:{client:Client
    </Text>}
   {!pager.loading&&pager.pageNumber>0&&matchingBranch&&pageFresh&&<>
    <Text style={styles.small}>Página {pager.pageNumber} · {pager.visibleItems.length} productos en esta página, no el total de la plataforma. Versión {pager.version}.</Text>
+   {pageA11y.ok&&<Text accessibilityLiveRegion="polite" style={styles.small}>{pageA11y.summary}</Text>}
    {matchedCatalog?.ok&&visibleItems.length===0&&<Text style={styles.small}>
     No hay productos coincidentes en esta página; usá los controles de paginación para seguir explorando.
    </Text>}
    {matchedCatalog&&!matchedCatalog.ok&&<Text accessibilityRole="alert" style={styles.small}>
     La búsqueda o la página no pudo verificarse.
    </Text>}
-   {visibleItems.map(item=><View key={item.itemId} style={styles.card}>
-    <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>
-    <Text style={styles.text}>{item.itemClass==='PHARMACY_OTC'?'Artículo de farmacia sin receta':'Artículo general'} · {item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock reportado: {item.stockUnits}</Text>
-    <Text style={styles.small}>Solo consulta. El precio final y la compra requieren una transacción de servidor.</Text>
-   </View>)}
+   {visibleItems.map(item=>{
+    const a11y=projectCommerceItemAccessible(item,{verified:pageFresh,quantity:0});
+    if(!a11y.ok)return null;
+    return <View key={item.itemId} style={styles.card}>
+     <Text style={styles.heading}>{item.itemTag.replaceAll('_',' ')}</Text>
+     <Text style={styles.text} accessibilityLabel={a11y.description}>{item.itemClass==='PHARMACY_OTC'?'Artículo de farmacia sin receta':'Artículo general'} · {item.unitPricePyg.toLocaleString('es-PY')} Gs. · Stock reportado: {item.stockUnits}</Text>
+     <Text style={styles.small}>Solo consulta. El precio final y la compra requieren una transacción de servidor.</Text>
+    </View>;
+   })}
    <Action label="Página anterior" secondary
     disabled={!pager.hasPrevious||!pageFresh||pager.loading||readFence.isBusy()}
     onPress={()=>void load(false,true)}/>
@@ -379,6 +403,10 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
   &&directory.pageNumber>0&&sameQuery
   ?filterVerifiedBranchPage(directory.items,{vertical:selectedVertical,verified:true}):null;
  const visibleBranches=matchingCategory?.ok?matchingCategory.items:[];
+ const pageA11y=projectCommercePageAccessible({
+  verified:directoryFresh&&matchingCategory?.ok===true,loading:directory.loading,
+  pageNumber:directory.pageNumber,visibleCount:visibleBranches.length,kind:'BRANCHES'
+ });
  const browse=async(next=false,previous=false)=>{
   if(directory.loading||readFence.isBusy())return;
   setMessage('');
@@ -423,6 +451,7 @@ function CertifiedBranchDirectory({client,view,onSelect,selectedVertical}:{
   {!directory.loading&&directory.pageNumber>0&&sameQuery&&directoryFresh&&<>
    <Text style={styles.small}>Página {directory.pageNumber} · {directory.items.length} sucursales en esta página. Total global desconocido.</Text>
    <Text style={styles.small}>Categoría: {selectCommerceVertical(selectedVertical)?.label}. El filtro aplica solo a esta página: una lista vacía no implica ausencia de comercios en la zona.</Text>
+   {pageA11y.ok&&<Text accessibilityLiveRegion="polite" style={styles.small}>{pageA11y.summary}</Text>}
    {visibleBranches.length===0&&matchingCategory?.ok&&<Text style={styles.small}>
     Sin sucursales de esta categoría en esta página. Podés consultar las siguientes.
    </Text>}
