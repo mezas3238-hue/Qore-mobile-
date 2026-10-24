@@ -46,6 +46,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox;
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null;
  let historyLoading=false,historyLoadError=null;
+ let custodyAnchor=null;
  const seenCursors=new Set();
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
@@ -56,6 +57,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(fareFlow)fareFlow.clear();
   if(incidentFlow)incidentFlow.clear();
   if(senderCustody)senderCustody.clear();
+  custodyAnchor=null;
   if(commerceFlow)commerceFlow.clear();
   if(commercePager)commercePager.clear();
   if(branchDirectory)branchDirectory.clear();
@@ -321,10 +323,29 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(!user){quote.clear();return false;}
   return quote.show(dto,user.subject);
  }
+ // Custody is only visible while the exact delivery remains in an unexpired,
+ // owner-scoped history window and at the revision that authorized its read.
+ // Rejecting an anchor also invalidates outstanding async custody GETs.
+ function guardCustodyScope(){
+  if(!custodyAnchor)return true;
+  const user=actor(),page=user?history.current(user.subject):null;
+  const item=page?.items.find(x=>x.kind==='DELIVERY'
+   &&x.serviceId===custodyAnchor.deliveryId);
+  if(!user||user.subject!==custodyAnchor.subject
+   ||!item||item.revision!==custodyAnchor.historyRevision){
+   senderCustody.clear();custodyAnchor=null;return false;
+  }
+  return true;
+ }
  function acceptHistory(dto,{append=false}={}){
   const user=actor();
-  if(!user){history.clear();return false;}
-  return history.consume(dto,user.subject,{append});
+  if(!user){history.clear();senderCustody.clear();custodyAnchor=null;return false;}
+  // Replacing the server page revokes previous proof, even for the same ID.
+  if(!append){senderCustody.clear();custodyAnchor=null;}
+  const accepted=history.consume(dto,user.subject,{append});
+  if(!accepted){senderCustody.clear();custodyAnchor=null;}
+  else guardCustodyScope();
+  return accepted;
  }
  async function loadHistoryPage({reset=false}={}){
   const user=actor();
@@ -337,6 +358,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(!current){seenCursors.clear();}
   if(!reset&&current&&current.nextCursor===null)return fail('NO_ADDITIONAL_PAGE');
   const cursor=reset?null:current?.nextCursor??null;
+  if(reset){senderCustody.clear();custodyAnchor=null;}
   if(cursor!==null&&seenCursors.has(cursor))return fail('CURSOR_REPEATED');
   const capturedEpoch=session.revision(),capturedSubject=user.subject;
   historyLoading=true;historyLoadError=null;notify();
@@ -355,6 +377,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     if(historyLoadError==='INVALID_OR_EXPIRED_CURSOR'){
      history.clear();seenCursors.clear();
     }
+    senderCustody.clear();custodyAnchor=null;
     notify();
     return fail(historyLoadError);
    }
@@ -366,11 +389,13 @@ export function createClientExperience({authProvider=null,gateway=null,
    }
    const accepted=history.consume(answer.data,capturedSubject,{append:!reset&&current!==null});
    if(!accepted){
-    seenCursors.clear();historyLoadError='INVALID_HISTORY_DTO';notify();
+    seenCursors.clear();historyLoadError='INVALID_HISTORY_DTO';
+    senderCustody.clear();custodyAnchor=null;notify();
     return fail('INVALID_HISTORY_DTO');
    }
    if(reset)seenCursors.clear();
    if(cursor!==null)seenCursors.add(cursor);
+   guardCustodyScope();
    historyLoadError=null;notify();
    return {ok:true,hasNext:next!==null,loaded:answer.data.items.length};
   }finally{
@@ -381,6 +406,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  }
  function snapshot(){
   const user=actor();
+  guardCustodyScope();
   // Revocación de la certificación de chat invalida también hints
   // previamente aceptados, no solo la conversación. No reanimar avisos.
   const chatCertified=chatFlow.isConfigured();
@@ -503,16 +529,22 @@ export function createClientExperience({authProvider=null,gateway=null,
    const user=actor();
    if(!user)return fail('AUTH_REQUIRED');
    const page=history.current(user.subject);
-   if(!page||!page.items.some(item=>
-    item.kind==='DELIVERY'&&item.serviceId===deliveryId))
+   const item=page?.items.find(x=>x.kind==='DELIVERY'&&x.serviceId===deliveryId);
+   if(!item){
+    senderCustody.clear();custodyAnchor=null;notify();
     return fail('SENDER_DELIVERY_NOT_IN_OWN_HISTORY');
+   }
    const subject=user.subject,rev=session.privacyRevision();
+   custodyAnchor=Object.freeze({deliveryId,subject,historyRevision:item.revision});
    const operation=senderCustody.refresh(deliveryId,subject,rev);
    notify();
    const result=await operation;
    const latest=actor();
-   if(!latest||latest.subject!==subject||session.privacyRevision()!==rev)
+   if(!latest||latest.subject!==subject||session.privacyRevision()!==rev){
+    senderCustody.clear();custodyAnchor=null;notify();
     return fail('STALE_CUSTODY_RESPONSE');
+   }
+   if(!guardCustodyScope()){notify();return fail('SENDER_CUSTODY_HISTORY_REVOKED');}
    notify();return result;
   },
   prepareCancelRide:args=>{const result=prepareCancelRide(args);notify();return result;},
