@@ -127,13 +127,16 @@ test('R40 clear/dispose impide reutilizar borrador en misma sesión',()=>{
 });
 test('R40 rechaza variaciones de UUID inválidas y texto fuera de política',()=>{
  const g=createMerchantSupportGuide();
- const ids=['',id(5).toUpperCase(),id(5).replaceAll('-',''),
-  'https://example.com', 'a'.repeat(37),'abc\u202e123'];
- for(const entry of ids){
+ const accepted=['',id(5).toUpperCase(),id(5).replaceAll('-','')];
+ for(const entry of accepted){
   const updated=g.update(actor,{orderId:entry});
-  if(entry.length<=36&&!entry.includes('\u202e')){
-   assert.equal(updated.ok,true);
-   assert.equal(updated.canReview,false);
-  } else assert.equal(updated.ok,false);
+  assert.equal(updated.ok,true);
+  assert.equal(updated.canReview,false);
+ }
+ const rejected=['https://example.com','a'.repeat(37),'abc\u202e123',
+  'Teléfono 0981','123\nXYZ'];
+ for(const entry of rejected){
+  const updated=g.update(actor,{orderId:entry});
+  assert.equal(updated.ok,false);
  }
 });
