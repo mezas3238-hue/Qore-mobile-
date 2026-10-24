@@ -6,6 +6,7 @@ import {useClientView} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {validateRideDraft} from '../src/domain/capabilities.mjs';
 import {prepareLocalRideRequest} from '../src/domain/client-request-preparation.mjs';
+import {projectRideDraftUi} from '../src/domain/ride-draft-ui-policy.mjs';
 import {emptyLocalRouteDraft,editLocalRouteDraft,reviewLocalRouteDraft,
  canPrepareCurrentRideContract,MAX_LOCAL_STOPS} from '../src/domain/client-route-editor.mjs';
 import type {LocalRouteEdit,LocalRouteDraft} from '../src/domain/client-route-editor.mjs';
@@ -31,8 +32,15 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const [feedback,setFeedback]=useState('');
  const lock=useRef(false);
  const mutation=view.mutation;
- const myDraft=mutation.phase==='ready'&&mutation.operation==='rideRequest';
- const free=mutation.phase==='idle';
+ const ui=projectRideDraftUi({
+  phase:mutation.phase,operation:mutation.operation,
+  authenticated:view.authenticated,validated,
+  stopsCount:route.stops.length,service
+ });
+ // Unknown phase, different outstanding operation or a sent request
+ // must never leave the vehicle type or route editor unlocked.
+ const free=ui.ok&&ui.editable;
+ const myDraft=ui.ok&&ui.canDiscard;
  // Las direcciones son datos privados de la pantalla, ajenos al snapshot Auth.
  function changeRoute(change:LocalRouteEdit){
   if(!free||lock.current)return;
@@ -43,7 +51,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  function editPickup(value:string){changeRoute({type:'origin',value});}
  function editDestination(value:string){changeRoute({type:'destination',value});}
  function selectService(next:Service){
-  if(myDraft)return;
+  if(!free||lock.current)return;
   setService(next);setValidated(false);setFeedback('');
  }
  function validate(){
@@ -58,7 +66,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    :'Ruta revisada localmente. No hay conductor, zona ni tarifa confirmados.');
  }
  function prepare(){
-  if(!free||!validated||lock.current||!view.authenticated)return;
+  if(!ui.ok||!ui.canPrepare||lock.current)return;
   const compatibility=canPrepareCurrentRideContract(route);
   if(!compatibility.ok){
    setValidated(false);setFeedback(compatibility.reason);return;
@@ -91,6 +99,13 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Pedí un automóvil</Text>
    <Text style={styles.heroSub}>Preparación de viaje con revisión de ruta. La cotización y búsqueda requieren autorización del servidor.</Text>
   </View>
+  <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>Estado del borrador de viaje</Text>
+   <Text accessibilityLiveRegion="polite" style={styles.small}>
+    {ui.ok?ui.status:'No se puede verificar el estado de este borrador. Edición bloqueada.'}
+   </Text>
+   <Text style={styles.small}>Tu ruta es privada y temporal. Revisar o preparar no inicia búsqueda de conductor, cotización ni cobro.</Text>
+  </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 1 · Tu ruta</Text>
    <Text style={styles.text}>Origen</Text>
@@ -131,14 +146,16 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    {OPTIONS.map(option=><View key={option.code}>
     <Action label={option.title} secondary={service!==option.code}
      selected={service===option.code}
-     disabled={myDraft} onPress={()=>selectService(option.code)}/>
+     disabled={!free} onPress={()=>selectService(option.code)}/>
     <Text style={styles.small}>{option.description}. Disponibilidad y tarifa pendientes del servidor.</Text>
    </View>)}
    <Text style={styles.small}>No hay motos de pasajeros. Motocicletas solo para envíos habilitados.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 3 · Revisá antes de continuar</Text>
-   <Action label="Revisar ruta y servicio" disabled={!free} onPress={validate}/>
+   <Action label="Revisar ruta y servicio" disabled={!free}
+    hint="Revisión del borrador solamente. No solicita automóvil ni cotiza."
+    onPress={validate}/>
    {validated&&<View>
     <Text style={styles.text}>Ruta: {[pickup,...route.stops,destination].map(s=>s.trim()).join(' → ')}</Text>
     <Text style={styles.text}>Servicio: {OPTIONS.find(o=>o.code===service)?.title}</Text>
@@ -146,8 +163,10 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
      Esta ruta con paradas no puede convertirse en solicitud hasta la certificación del servidor.
     </Text>}
    </View>}
-   {view.authenticated&&free&&validated&&route.stops.length===0&&
-    <Action label="Preparar solicitud segura (sin enviarla)" onPress={prepare}/>}
+   {ui.ok&&ui.canPrepare&&
+    <Action label="Preparar solicitud segura (sin enviarla)"
+     hint="Guarda un borrador en esta sesión; no busca conductor ni envía la solicitud."
+     onPress={prepare}/>}
    {!view.authenticated&&<Text style={styles.small}>
     Para guardar una solicitud necesitarás iniciar sesión como pasajero. La revisión local no crea ninguna reserva.
    </Text>}
@@ -158,7 +177,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    {!free&&!myDraft&&<Text style={styles.small}>
     Hay otra operación preparada, recibida o sin conciliar. No se puede generar otra solicitud sin resolverla de forma segura.
    </Text>}
-   {feedback!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive"
+   {feedback!==''&&<Text accessibilityLiveRegion="polite"
     style={[styles.text,{color:palette.primary}]}>{feedback}</Text>}
   </Panel>
   <Panel>
