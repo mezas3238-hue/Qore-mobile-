@@ -53,3 +53,7 @@ export type DriverChatHttpsStagingAdapters=Readonly<{
 export declare function createDriverChatHttpsStagingAdapters(
  opts:DriverChatHttpsStagingOptions
 ):DriverChatHttpsStagingAdapters;
+
+export declare function assertDriverApprovedStagingOrigin(input:{
+ apiOrigin:string;approvedStagingHost:string;
+}):string;
