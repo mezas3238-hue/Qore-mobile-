@@ -9,6 +9,21 @@ import {createRiderStatusStore} from './rider-status.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid=x=>typeof x==='string'&&UUID.test(x);
 const fail=code=>({ok:false,code});
+/**
+ * R61: errors can cross an injected network boundary and later render in
+ * Tracking. Never publish an untrusted code containing PII/HTML/JWT.
+ */
+const SAFE_STATUS_CODES=new Set([
+ 'AUTH_REQUIRED','AUTH_UNAVAILABLE','FORBIDDEN','SESSION_CHANGED',
+ 'STALE_SESSION_RESPONSE','NETWORK_OR_TIMEOUT','RATE_LIMITED',
+ 'SERVICE_UNAVAILABLE','STATUS_UNAVAILABLE','STATUS_CONTRACT_PENDING',
+ 'TRIP_NOT_FOUND','INVALID_TRIP_ID','UNTRUSTED_REDIRECT',
+ 'BAD_SERVER_RESPONSE','BAD_CONTENT_TYPE','RESPONSE_TOO_LARGE',
+ 'INVALID_SERVER_SNAPSHOT','STATUS_READ_IN_FLIGHT','OFFLINE',
+ 'GATEWAY_UNAVAILABLE','SERVER_UNAVAILABLE','STALE_SERVER_REVISION'
+]);
+const safeStatusCode=x=>
+ typeof x==='string'&&SAFE_STATUS_CODES.has(x)?x:'SERVER_UNAVAILABLE';
 export function createRiderPollingCoordinator({
  gateway,getSession,store=createRiderStatusStore(),now=()=>Date.now()
 }={}){
@@ -65,7 +80,7 @@ export function createRiderPollingCoordinator({
    catch{reply=fail('NETWORK_OR_TIMEOUT');}
    if(seq!==version||active!==captured)return fail('STALE_RESPONSE_IGNORED');
    if(!reply||reply.ok!==true){
-    const code=typeof reply?.code==='string'?reply.code:'SERVER_UNAVAILABLE';
+    const code=safeStatusCode(reply?.code);
     if(code==='AUTH_REQUIRED'||code==='FORBIDDEN'){
      reset();return fail(code);
     }
@@ -80,6 +95,14 @@ export function createRiderPollingCoordinator({
      ||!Number.isSafeInteger(data.revision)){
     store.networkLost();lastFetchedAt=null;lastError='INVALID_SERVER_SNAPSHOT';
     return fail('INVALID_SERVER_SNAPSHOT');
+   }
+   const current=store.current();
+   // A server snapshot older than a persisted revision MUST NOT count as
+   // a successful refresh or reset the freshness clock.
+   if(current.tripId===captured.tripId&&data.revision<current.revision){
+    store.networkLost();lastFetchedAt=null;
+    lastError='STALE_SERVER_REVISION';
+    return fail('STALE_SERVER_REVISION');
    }
    const accepted=store.ingest(data,captured.subject);
    if(!accepted&&store.current().tripId!==captured.tripId){
