@@ -23,9 +23,13 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const audit=createAuditFeedStore({now});
  const pages=createPageNavigator();
  let session,globalTriage;
+ // No second KYC decision after an unknown/accepted POST until an
+ // authoritative NEWER server page has been read for the same Admin.
+ let reviewInFlight=false,reviewNeedsReconciliation=false,reviewRevisionFloor=-1;
  const listeners=new Set();
  const notify=()=>{for(const callback of listeners){try{callback();}catch{/* no filtrar secretos */}}};
- const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();globalTriage?.clear();};
+ const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();globalTriage?.clear();
+  reviewInFlight=false;reviewNeedsReconciliation=false;reviewRevisionFloor=-1;};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
  const readGateway=readGatewayOptions?createAdminReadGateway({
   ...readGatewayOptions,
@@ -161,6 +165,15 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
     store.clear();pages.clear(operation);notify();
     return fail('INVALID_READ_DTO');
    }
+   if(operation==='kyc'&&reviewNeedsReconciliation){
+    // A stale GET, even from the same account, cannot resolve a lost ACK.
+    if(!Number.isSafeInteger(result.data?.revision)
+     ||result.data.revision<=reviewRevisionFloor){
+     store.clear();pages.clear(operation);notify();
+     return fail('KYC_REVIEW_REVISION_NOT_ADVANCED');
+    }
+    reviewNeedsReconciliation=false;reviewRevisionFloor=-1;
+   }
    notify();
    return Object.freeze({ok:true});
   }finally{reading.delete(operation);}
@@ -172,22 +185,35 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   if(current.role!=='admin')return fail('FORBIDDEN');
   if(!gateway||typeof gateway.isConfigured!=='function'||gateway.isConfigured()!==true
    ||typeof gateway.reviewVehicle!=='function')return fail('ADMIN_CONTRACT_PENDING');
+  if(reviewInFlight)return fail('ADMIN_REVIEW_IN_FLIGHT');
+  if(reviewNeedsReconciliation)return fail('KYC_REVIEW_RECONCILIATION_REQUIRED');
   const sessionRevision=session.revision();
+  const baseline=queue.current()?.revision??-1;
+  // Mark in flight BEFORE invoking any async transport.
+  reviewInFlight=true;
   let response;
   try{response=await gateway.reviewVehicle(dto);}
   catch{response=fail('NETWORK_OR_TIMEOUT');}
   const after=session.publicSession();
-  // Un ACK viejo de una cuenta ya cerrada o sustituida no puede confirmar
-  // una operación administrativa sobre la nueva sesión.
-  if(!after||after.subject!==current.subject||after.role!==current.role||session.revision()!==sessionRevision){
-   clearPrivate();notify();return fail('STALE_SESSION_RESPONSE');
+  // The session controller already purges on logout/token rotation.
+  // A late ACK must not purge a newer Admin's valid private state.
+  if(!after||after.subject!==current.subject||after.role!==current.role
+   ||session.revision()!==sessionRevision){
+   notify();return fail('STALE_SESSION_RESPONSE');
   }
-  // Ningún resultado de revisión se refleja optimistamente en lista.
-  // Se requiere nueva lectura servidor con revisión más reciente.
-  queue.clear();
+  reviewInFlight=false;
+  reviewNeedsReconciliation=true;
+  reviewRevisionFloor=baseline;
+  // Receipt, timeout, 409, and unknown outcome all require a newer
+  // read from the authoritative server; never repeat the POST blindly.
+  queue.clear();pages.clear('kyc');
   if(!response||response.ok!==true){
-   if(response?.code==='AUTH_REQUIRED'||response?.code==='FORBIDDEN')session.clear();
-   notify();return fail(response?.code||'REVIEW_NOT_CONFIRMED');
+   if(response?.code==='AUTH_REQUIRED'||response?.code==='FORBIDDEN'){
+    session.clear();notify();return fail(response.code);
+   }
+   const known=new Set(['NETWORK_OR_TIMEOUT','CONFLICT','RATE_LIMITED',
+    'SERVICE_UNAVAILABLE','REVIEW_NOT_CONFIRMED']);
+   notify();return fail(known.has(response?.code)?response.code:'REVIEW_NOT_CONFIRMED');
   }
   notify();return {ok:true,refreshRequired:true};
  }
