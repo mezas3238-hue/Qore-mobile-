@@ -8,6 +8,10 @@ import {createSupportDraftSession} from '../src/domain/support-draft-session.mjs
 import {prepareG40IncidentIntent,INCIDENT_SERVICE_OPTIONS,
  INCIDENT_CATEGORY_OPTIONS,INCIDENT_SEVERITY_OPTIONS} from '../src/domain/client-incident-intent.mjs';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
+import {MERCHANT_SUPPORT_REASONS,createMerchantSupportGuide}
+ from '../src/domain/merchant-support-guide.mjs';
+import type {MerchantSupportUpdate,MerchantSupportSeverity}
+ from '../src/domain/merchant-support-guide.mjs';
 
 export default function Support(){
  const {client,view}=useClientView();
@@ -47,6 +51,8 @@ function PrivateSupportDraft({client,view}:{client:ClientExperience;view:ClientS
     style={[styles.text,{color:palette.primary}]}>{draft.feedback}</Text>}
    <Text style={styles.small}>Estado: NO ENVIADO. La validación local no crea, transmite ni confirma ningún incidente.</Text>
   </Panel>
+  {view.authenticated&&view.account&&
+   <MerchantOrderHelp view={view}/>}
   {view.authenticated&&view.incidentReport.contractReady&&
    <StructuredQaIncident client={client} view={view}/>}
   <Panel><Text accessibilityRole="header" style={styles.heading}>Privacidad del borrador</Text>
@@ -150,5 +156,76 @@ function StructuredQaIncident({client,view}:{client:ClientExperience;view:Client
   </>}
   {feedback!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive"
    style={[styles.text,{color:palette.primary}]}>{feedback}</Text>}
+ </Panel>;
+}
+
+/**
+ * R40: guía privada de clasificación de un problema comercial.
+ * Ni el botón Revisar ni el estado UI ejecutan submit o HTTP.
+ * G40 mantiene un formulario QA SEPARADO, bajo Auth/contrato propios.
+ */
+function MerchantOrderHelp({view}:{view:ClientSnapshot}){
+ const [guide]=useState(()=>createMerchantSupportGuide());
+ const [,setRevision]=useState(0);
+ const [feedback,setFeedback]=useState('');
+ useEffect(()=>()=>{guide.dispose();},[guide]);
+ const actor=view.account&&view.authenticated?{
+  role:'passenger' as const,subject:view.account.subject,
+  sessionRevision:view.privateViewRevision
+ }:null;
+ const snapshot=guide.snapshot(actor);
+ const edit=(patch:MerchantSupportUpdate)=>{
+  const result=guide.update(actor,patch);
+  setFeedback(result.ok?'':'Entrada inválida. Comprobá el pedido y el motivo.');
+  setRevision(n=>n+1);
+ };
+ const review=()=>{
+  const result=guide.review(actor);
+  setFeedback(result.ok
+   ?'Guía revisada localmente. NO se envió un caso, un mensaje ni un aviso al comercio. Para atención real se requiere el servicio certificado.'
+   :'Faltan el identificador UUID del pedido, el motivo y la gravedad. No se envió ninguna solicitud.');
+ };
+ const severities:{code:MerchantSupportSeverity;label:string}[]=[
+  {code:'LOW',label:'Baja'}, {code:'MEDIUM',label:'Media'},
+  {code:'HIGH',label:'Alta (NO SOS)'}
+ ];
+ return <Panel>
+  <Text accessibilityRole="header" style={styles.heading}>
+   Ayuda con pedidos de supermercados, farmacias y restaurantes
+  </Text>
+  <Text style={styles.small}>
+   Esta guía es un borrador local y NO contacta comerciantes,
+   repartidores, agentes ni emergencias. No sirve para solicitar ayuda urgente.
+  </Text>
+  <Text style={styles.text}>Identificador del pedido propio (UUID)</Text>
+  <TextInput style={styles.field} value={snapshot.orderId}
+   editable={snapshot.ok} maxLength={36}
+   onChangeText={orderId=>edit({orderId})}
+   placeholder="UUID de un pedido existente"
+   accessibilityLabel="Identificador UUID del pedido comercial"/>
+  <Text style={styles.text}>¿Qué sucedió?</Text>
+  {MERCHANT_SUPPORT_REASONS.map(item=><Action key={item.code}
+   label={item.label} secondary={snapshot.reason!==item.code}
+   selected={snapshot.reason===item.code}
+   disabled={!snapshot.ok}
+   onPress={()=>edit({reason:item.code})}/>)}
+  <Text style={styles.text}>Gravedad del problema (NO SOS)</Text>
+  {severities.map(item=><Action key={item.code}
+   label={item.label} secondary={snapshot.severity!==item.code}
+   selected={snapshot.severity===item.code}
+   disabled={!snapshot.ok}
+   onPress={()=>edit({severity:item.code})}/>)}
+  <Action label="Revisar guía local sin enviar" disabled={!snapshot.canReview}
+   onPress={review}/>
+  <Action label="Borrar guía local" secondary
+   onPress={()=>{guide.clear();setFeedback('Guía local borrada.');
+    setRevision(n=>n+1);}}/>
+  {feedback!==''&&<Text accessibilityRole="alert" accessibilityLiveRegion="polite"
+   style={styles.text}>{feedback}</Text>}
+  <Text style={styles.small}>
+   Sin comprobación de propiedad del pedido, número de caso ni respuesta del servidor.
+   Si hay peligro inmediato, utilizá los canales oficiales de emergencia.
+   No ingreses nombres, teléfonos, direcciones, datos de pago ni documentos.
+  </Text>
  </Panel>;
 }
