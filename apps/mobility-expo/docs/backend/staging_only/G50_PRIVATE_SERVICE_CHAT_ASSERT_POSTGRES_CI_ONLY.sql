@@ -37,8 +37,8 @@ INSERT INTO public.user_roles(user_id,role) VALUES
  ('50500000-0000-4050-8050-000000000004','driver');
 INSERT INTO public.mobility_stage_g42_provider_session_grants(
  user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind
-) SELECT u.id,'50500000-0000-4050-8050-'||
- lpad((100+row_number() OVER(ORDER BY u.id))::text,12,'0')::text::uuid,
+) SELECT u.id,('50500000-0000-4050-8050-' ||
+ lpad((100+row_number() OVER(ORDER BY u.id))::text,12,'0'))::uuid,
  pg_catalog.clock_timestamp()-interval '1 day',
  pg_catalog.clock_timestamp()-interval '1 minute',
  pg_catalog.clock_timestamp()+interval '1 hour',
