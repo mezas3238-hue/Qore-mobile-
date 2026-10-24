@@ -1,0 +1,129 @@
+{
+  "project": "QORE Mobile / Movete Fácil",
+  "reviewedAt": "2026-10-24",
+  "decision": "NO_GO",
+  "source": "GitHub PR #7 DRAFT Architect A and PR #8 DRAFT Architect B",
+  "evidenceScope": "Local PostgreSQL16 QA, Node CI, Expo web export; not a live service",
+  "ownerGoLiveAuthorization": false,
+  "blockers": [
+    {
+      "id": "IDP_BACKEND_AUTH",
+      "owner": "A",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "No authorized managed IdP/JWKS and verified server-side provider session in deployed HTTPS"
+    },
+    {
+      "id": "HTTPS_BACKEND",
+      "owner": "A",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "G60B/D localhost only; no approved mobile-accessible HTTPS staging/production service"
+    },
+    {
+      "id": "POSTGRES_PERSISTENCE",
+      "owner": "A",
+      "priority": "P0",
+      "status": "qa-only",
+      "evidence": "G60C tested PostgreSQL16 disposable, no authorized remote production DB backup/restore validation"
+    },
+    {
+      "id": "DRIVER_ONBOARDING",
+      "owner": "A",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Driver app has no connected real signup/login/KYC upload/approval process"
+    },
+    {
+      "id": "DRIVER_LIVE_TRIPS",
+      "owner": "A",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Driver screen offers QA read-only, no real accept/navigation/start/finish workflow on devices"
+    },
+    {
+      "id": "CLIENT_LIVE_BOOKINGS",
+      "owner": "B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "No end-to-end certified live booking against authorized shared backend in Cliente Expo"
+    },
+    {
+      "id": "PAYMENT_SETTLEMENT",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "No authorized PSP, idempotent real capture/refund/ledger reconciliation evidence"
+    },
+    {
+      "id": "PRIVACY_KYC",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Real document retention/encryption/reviewer/access/deletion and owner acceptance pending"
+    },
+    {
+      "id": "EMERGENCY_SAFETY",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "No certified physical emergency flow and staffed operator escalation"
+    },
+    {
+      "id": "MAPS_GPS_DEVICE",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Location permissions, accuracy/reconnect/navigation/tamper on Android/iOS physically unverified"
+    },
+    {
+      "id": "DELIVERY_MERCHANTS",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Merchant inventory/order fulfillment, dispatch, custody and customer support lack real E2E"
+    },
+    {
+      "id": "CHAT_PHYSICAL",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "qa-only",
+      "evidence": "G60/G61 Driver transport QA; no real bidirectional chat+push/read on physical devices"
+    },
+    {
+      "id": "ADMIN_OPERATIONS",
+      "owner": "B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Admin web not accepted with live KYC, incidents, zones, refunds, audit and permissions"
+    },
+    {
+      "id": "NATIVE_RELEASES",
+      "owner": "A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Expo web export CI only, no signed Android AAB/iOS IPA/device release & app store testing"
+    },
+    {
+      "id": "LEGAL_COMPLIANCE",
+      "owner": "Owner",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Paraguay permits, insurance, consumer/privacy terms, merchant agreements & policies not approved"
+    },
+    {
+      "id": "OPS_24_7_MONITORING",
+      "owner": "Owner/A/B",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Production telemetry, alerting, incident on-call, business-hours escalation and cost controls missing"
+    },
+    {
+      "id": "PROD_GO_NOGO",
+      "owner": "Owner",
+      "priority": "P0",
+      "status": "blocked",
+      "evidence": "Explicit Owner authorization for merge, production, PSP, deployment and rollout is absent"
+    }
+  ]
+}
