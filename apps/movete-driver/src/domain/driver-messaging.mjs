@@ -196,6 +196,7 @@ export function createDriverMessagingController({
    return loadPage();
   },
   loadOlder:()=>loadPage(true),
+  refreshConversation:()=>loadPage(false),
   backToInbox(){
    generation++;room=null;cursor=null;marks.clear();pending=null;
    const state=inbox.current();
@@ -219,6 +220,8 @@ export function createDriverMessagingController({
       now()-safety.observedAtMs>5000)
       throw Error('Driving state not certified');
     key=await makeRequestKey();
+    // Session may have changed while the UUID generator was pending.
+    if(nonce!==generation||identity===null||room!==selected)return snapshot;
     if(!id(key)||seenKeys.has(key))throw Error('Request key not unique');
     seenKeys.add(key);
     // Freeze the original requestKey and body until reconciled.
