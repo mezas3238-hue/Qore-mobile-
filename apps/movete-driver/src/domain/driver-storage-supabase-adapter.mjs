@@ -5,7 +5,7 @@
  */
 export const DRIVER_PRIVATE_STORAGE_LIVE_ENABLED=false;
 const BUCKET='mobility-staging-driver-evidence';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KINDS=new Set(['licencia','identidad_frente','identidad_dorso',
  'cedula_verde','habilitacion','seguro','inspeccion','rostro_selfie']);
 export function createDriverSupabasePrivateStorageAdapter({
