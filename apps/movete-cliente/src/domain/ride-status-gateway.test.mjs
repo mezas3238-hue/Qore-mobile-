@@ -167,3 +167,60 @@ test('límite status se aplica sobre bytes reales y no caracteres',async()=>{
   fetchImpl:async()=>result({...data(),extra:'á'.repeat(600)})});
  assert.equal((await gw.fetchStatus(trip)).code,'RESPONSE_TOO_LARGE');
 });
+
+test('R61 reject contradictory server event status for displayed Passenger state',async()=>{
+ for(const [state,eventStatus] of [
+  ['assigned','searching'],['assigned','completed'],
+  ['arriving','accepted'],['in_progress','at_pickup'],
+  ['completed','in_progress'],['cancelled','accepted']
+ ]){
+  const original=data();
+  const dto={...original,state,event:{...event,status:eventStatus},
+   driver:['completed','cancelled'].includes(state)?null:original.driver,
+   vehicle:['completed','cancelled'].includes(state)?null:original.vehicle,
+   location:null,locationVisible:false,etaMinutes:null,
+   etaVerified:false,gpsConsent:false};
+  const gw=createRiderStatusGateway({...config,
+   fetchImpl:async()=>result(dto)});
+  assert.equal((await gw.fetchStatus(trip)).code,'INVALID_SERVER_SNAPSHOT',
+   state+' '+eventStatus);
+ }
+});
+test('R61 reject mismatched event revision regardless of HTTP 200',async()=>{
+ for(const revision of [0,1,3,1000]){
+  const dto={...data(),event:{...event,serverRevision:revision}};
+  const gw=createRiderStatusGateway({...config,fetchImpl:async()=>result(dto)});
+  assert.equal((await gw.fetchStatus(trip)).code,'INVALID_SERVER_SNAPSHOT');
+ }
+});
+test('R61 no historical Driver or tracking data in unassigned Passenger status',async()=>{
+ const empty={
+  ...data(),state:'searching',assignmentPersisted:false,
+  driver:null,vehicle:null,location:null,etaMinutes:null,
+  gpsConsent:false,etaVerified:false,locationVisible:false,
+  event:{...event,status:'searching'}
+ };
+ assert.equal((await createRiderStatusGateway({...config,
+  fetchImpl:async()=>result(empty)}).fetchStatus(trip)).ok,true);
+ for(const leak of [
+  {event:{...empty.event,acceptedDriver:{name:'QA',vehicleKind:'AUTO',
+   model:'AUTO',color:'AZUL',plate:'TEST-111',rating:5}}},
+  {event:{...empty.event,tracking:{lat:-25.3,lng:-57.6,
+   roadMeters:100,etaSeconds:90,locationUpdatedAtMs:clock-1000,
+   routeUpdatedAtMs:clock-1000,trafficAware:true,fallbackUsed:false}}}
+ ]){
+  const gw=createRiderStatusGateway({...config,fetchImpl:async()=>result({
+   ...empty,...leak
+  })});
+  assert.equal((await gw.fetchStatus(trip)).code,'INVALID_SERVER_SNAPSHOT');
+ }
+});
+test('R61 no consent means neither top-level nor nested event GPS',async()=>{
+ const dto={...data(),gpsConsent:false,location:null,locationVisible:false,
+  etaMinutes:null,etaVerified:false,
+  event:{...event,tracking:{lat:-25.3,lng:-57.6,roadMeters:150,
+   etaSeconds:300,locationUpdatedAtMs:clock-1000,
+   routeUpdatedAtMs:clock-1000,trafficAware:true,fallbackUsed:false}}};
+ const gw=createRiderStatusGateway({...config,fetchImpl:async()=>result(dto)});
+ assert.equal((await gw.fetchStatus(trip)).code,'INVALID_SERVER_SNAPSHOT');
+});
