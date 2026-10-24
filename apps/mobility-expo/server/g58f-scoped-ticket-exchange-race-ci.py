@@ -12,10 +12,10 @@ for key, value in {"PGHOST":"localhost","PGDATABASE":"qore_disposable_chain",
                    "PGAPPNAME":"qore_ci_disposable_chain"}.items():
     assert os.environ.get(key)==value,(key,"must be disposable-local")
 
-PAX="49490000-0000-4949-8949-000000000001"
-PAX_SESSION="49490000-0000-4949-8949-000000000101"
-DRIVER="56560000-0000-4656-8656-000000000002"
-DRIVER_SESSION="56560000-0000-4656-8656-000000000102"
+PAX="58581000-0000-4858-8858-000000000001"
+PAX_SESSION="58581000-0000-4858-8858-000000000101"
+DRIVER="58581000-0000-4858-8858-000000000002"
+DRIVER_SESSION="58581000-0000-4858-8858-000000000102"
 SQL="SELECT public.mobility_stage_g58f_exchange_attestation_qa(%s)"
 ROLE="mobility_g58f_exchange_ci"
 
@@ -59,6 +59,31 @@ def denied(proof,expect,role=ROLE):
         assert err.sqlstate==expect,(expect,err.sqlstate,str(err))
         return
     raise AssertionError("G58F unexpectedly minted a capability")
+
+# Dedicated G58F synthetic actors: older G49/G56 tests deliberately revoke
+# fixture grants, so never rely on their mutable session state.
+with db() as conn:
+    conn.execute("INSERT INTO auth.users(id) VALUES(%s),(%s) ON CONFLICT DO NOTHING",
+                 (PAX,DRIVER))
+    conn.execute("""DELETE FROM public.user_roles WHERE
+      (user_id=%s AND role='driver'::public.app_role)
+      OR (user_id=%s AND role='passenger'::public.app_role)""",(PAX,DRIVER))
+    conn.execute("""INSERT INTO public.user_roles(user_id,role) VALUES
+       (%s,'passenger'::public.app_role),(%s,'driver'::public.app_role)
+       ON CONFLICT DO NOTHING""",(PAX,DRIVER))
+    conn.execute("""INSERT INTO public.mobility_stage_g42_provider_session_grants
+       (user_id,session_id,provider_confirmed_at,token_allowed_from,
+        valid_until,evidence_kind)
+       VALUES
+       (%s,%s,pg_catalog.clock_timestamp()-interval '1 day',
+        pg_catalog.clock_timestamp()-interval '1 hour',
+        pg_catalog.clock_timestamp()+interval '1 hour',
+        'QA_SYNTHETIC_PROVIDER_SESSION_ONLY'),
+       (%s,%s,pg_catalog.clock_timestamp()-interval '1 day',
+        pg_catalog.clock_timestamp()-interval '1 hour',
+        pg_catalog.clock_timestamp()+interval '1 hour',
+        'QA_SYNTHETIC_PROVIDER_SESSION_ONLY')""",
+        (PAX,PAX_SESSION,DRIVER,DRIVER_SESSION))
 
 with db() as conn:
     assert conn.execute("""SELECT EXISTS(
