@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g55",
+    "version": "1.0.0-g56",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
@@ -3142,6 +3142,274 @@
             "BearerAuth": []
           }
         ]
+      }
+    },
+    "/v1/staging/driver/chat/services/{serviceKind}/{serviceId}/conversation": {
+      "post": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "openScopedDriverChatG56",
+        "summary": "Future assigned Driver-only private chat open (not mounted)",
+        "description": "Verified exclusive Driver and current service assignment, short lived one-use SQL G56 ticket. No public endpoint yet.",
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "QA only: committed SQL-derived response; HTTP route NOT mounted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverChatOpenG56"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/driver/chat/services/{serviceKind}/{serviceId}/conversations/{conversationId}/messages": {
+      "get": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "getScopedDriverChatHistoryG56",
+        "summary": "Future Driver-only private message history with HMAC keyset cursor",
+        "description": "Browser/app passes opaque nextCursor only. Server validates JWT, G42, current assignment, page revision, and returns no raw PostgreSQL seq.",
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "QA only: committed SQL-derived response; HTTP route NOT mounted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverChatHistoryG56"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "private-chat"
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "sendScopedDriverChatMessageG56",
+        "summary": "Future Driver-only durable message ACK (not mounted)",
+        "description": "No successful ACK before transactional SQL persistence; requestKey is stable for exact-body replay.",
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverChatSendRequestG56"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "QA only: committed SQL-derived response; HTTP route NOT mounted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverChatStoredAckG56"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     }
   },
@@ -6930,6 +7198,215 @@
             "const": true
           }
         }
+      },
+      "DriverChatOpenG56": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceKind",
+          "serviceId",
+          "serverStored",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serverStored": {
+            "type": "boolean",
+            "const": true
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "DriverChatSendRequestG56": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "body"
+        ],
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "No phone/email/URL/HTML; validated by SQL and Node"
+          }
+        }
+      },
+      "DriverChatStoredAckG56": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceId",
+          "requestKey",
+          "messageId",
+          "senderRole",
+          "body",
+          "createdAt",
+          "revision",
+          "serverStored"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderRole": {
+            "type": "string",
+            "const": "driver"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 2
+          },
+          "serverStored": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "DriverChatHistoryG56": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "serviceId",
+          "serviceKind",
+          "ownerId",
+          "counterpartRole",
+          "assignmentVerified",
+          "state",
+          "revision",
+          "generatedAt",
+          "expiresAt",
+          "messages",
+          "canSend",
+          "productionEnabled",
+          "qaOnly",
+          "nextCursor"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "enum": [
+              "RIDE",
+              "DELIVERY",
+              "MERCHANT_ORDER"
+            ]
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "counterpartRole": {
+            "type": "string",
+            "const": "passenger"
+          },
+          "assignmentVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "state": {
+            "type": "string",
+            "const": "ACTIVE"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "generatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatHistoryMessageG52"
+            }
+          },
+          "canSend": {
+            "type": "boolean",
+            "const": true
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          }
+        }
       }
     }
   },
@@ -6950,5 +7427,6 @@
   "x-qore-g49-scoped-chat-role": "mobility_g49_chat_gateway_ci",
   "x-qore-g49-qa-issuer-and-grants-synthetic-only": true,
   "x-qore-g54-scoped-inbox-read-runtime-wired": false,
-  "x-qore-g55-server-issued-read-marker-runtime-wired": false
+  "x-qore-g55-server-issued-read-marker-runtime-wired": false,
+  "x-qore-g56-driver-chat-runtime-wired": false
 }
