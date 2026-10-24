@@ -1210,3 +1210,73 @@ test('R25 Cliente integra DTO G51 con token de sesión y solo la bandeja propia'
   'Bearer '+fakeSession().token);
  assert.equal(view.chat.contractReady,false);
 });
+
+
+// R27 — recorrido completo Cliente → JWT → HTTPS G51 → store paginado.
+test('R27 G51 gateway y store consumen páginas consecutivas sin límite global',async()=>{
+ const signed='g'.repeat(44),requests=[];
+ const first={conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+  state:'ACTIVE',assignmentVerified:true,counterpartRole:'driver',
+  revision:9,unreadCount:151,updatedAt:now-2000,canSend:true};
+ const second={...first,conversationId:key,serviceId:quoteId,
+  serviceKind:'DELIVERY',unreadCount:0,updatedAt:now-3000};
+ const base={ownerId:a,generatedAt:now-1000,expiresAt:now+60000,
+  revision:9,productionEnabled:false};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>fakeSession(),signOut:async()=>{}},
+  g51ChatInboxHttpOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:'https://qa-chat.example.invalid',
+   pinnedOrigin:'https://qa-chat.example.invalid',
+   fetchImpl:async(url,init)=>{
+    requests.push({url,cursor:init.headers['X-Qore-Chat-Cursor']??null});
+    const dto=init.headers['X-Qore-Chat-Cursor']===signed
+     ?{...base,items:[second],nextCursor:null}
+     :{...base,items:[first],nextCursor:signed};
+    return {status:200,ok:true,redirected:false,
+     headers:{get:k=>k==='content-type'?'application/json':null},
+     text:async()=>JSON.stringify(dto)};
+   }
+  }
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal((await api.loadChatInbox()).ok,true);
+ assert.equal(api.snapshot().chatInbox.hasNext,true);
+ assert.equal((await api.loadChatInbox({next:true})).ok,true);
+ const view=api.snapshot();
+ assert.equal(view.chatInbox.items.length,2);
+ assert.equal(view.chatInbox.items[0].unreadCount,151);
+ assert.equal(view.chatInbox.hasNext,false);
+ assert.equal(view.chatInbox.window.rowsRead,2);
+ assert.deepEqual(requests.map(x=>x.cursor),[null,signed]);
+ assert.equal(requests.every(x=>x.url.endsWith('/v1/staging/chat/conversations?limit=100')),true);
+});
+test('R27 G51 borra bandeja al cambiar de titular y no conserva páginas privadas',async()=>{
+ let active=fakeSession(),count=0;
+ const response={ownerId:a,generatedAt:now-1000,expiresAt:now+60000,
+  revision:9,productionEnabled:false,nextCursor:null,items:[{
+   conversationId:quoteId,serviceId:trip,serviceKind:'RIDE',
+   state:'ACTIVE',assignmentVerified:true,counterpartRole:'driver',
+   revision:9,unreadCount:11,updatedAt:now-2000,canSend:true
+  }]};
+ const api=createClientExperience({now:()=>now,
+  authProvider:{readSession:async()=>active,signOut:async()=>{}},
+  g51ChatInboxHttpOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:'https://qa-chat.example.invalid',
+   pinnedOrigin:'https://qa-chat.example.invalid',
+   fetchImpl:async()=>{count++;return {status:200,ok:true,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify(response)};}
+  }
+ });
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal((await api.loadChatInbox()).ok,true);
+ assert.equal(api.snapshot().chatInbox.items.length,1);
+ active=fakeSession(b);
+ assert.equal((await api.refreshSession()).ok,true);
+ assert.equal(api.snapshot().account.subject,b);
+ assert.equal(api.snapshot().chatInbox.items.length,0);
+ assert.equal(api.snapshot().chatInbox.hasNext,false);
+ assert.equal(count,1);
+});
