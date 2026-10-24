@@ -50,10 +50,13 @@ function validPage(dto,{serviceId,serviceKind,ownerId,now,conversationId=null}){
   ||dto.assignmentVerified!==true||dto.state!=='ACTIVE'
   ||!validInt(dto.revision)||!validInt(dto.generatedAt)
   ||!validInt(dto.expiresAt)||dto.generatedAt>now
+  ||dto.generatedAt<now-300000||dto.expiresAt<=dto.generatedAt
   ||dto.expiresAt<=now||dto.expiresAt>now+300000
   ||dto.canSend!==true||dto.productionEnabled!==false
   ||!Array.isArray(dto.messages)||dto.messages.length>LIMIT
-  ||!validCursor(dto.nextCursor))return null;
+  ||!validCursor(dto.nextCursor)
+  // Una página vacía con continuación puede encadenar cursores sin fin.
+  ||(dto.messages.length===0&&dto.nextCursor!==null))return null;
  const ids=new Set(),rows=[];
  for(const row of dto.messages){
   if(!validateMessage(row,now)||row.revision>dto.revision
@@ -106,6 +109,11 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
  }
  function snapshot(){
   if(!ready()&&(state.header||state.pending||loading||sending))clear();
+  // TTL vencido sin envío incierto: eliminar físicamente texto privado,
+  // no solo ocultarlo en la vista. Una clave idempotente pendiente conserva
+  // su contexto mínimo y obliga a revalidar antes de cualquier reintento.
+  if(state.header&&!state.pending&&!loading&&!sending
+   &&state.header.expiresAt<=now())clear();
   const valid=ready()&&state.header&&state.header.expiresAt>now();
   // Un mensaje incierto conserva contexto para reconciliar la MISMA clave,
   // pero las filas caducadas nunca vuelven a exponerse al dispositivo.
