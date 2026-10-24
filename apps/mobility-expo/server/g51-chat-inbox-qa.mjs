@@ -4,7 +4,7 @@
  * The SQL owner-only functions are NEVER exposed as HTTP endpoints.
  */
 import {createHmac,timingSafeEqual} from 'node:crypto';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid=x=>typeof x==='string'&&UUID.test(x);
 const integer=x=>Number.isSafeInteger(x)&&x>=0;
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;
