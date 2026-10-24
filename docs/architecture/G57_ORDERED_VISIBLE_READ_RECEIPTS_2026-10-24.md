@@ -39,7 +39,7 @@ Estos cambios SQL se aplican **solo** al entorno `qore_disposable_chain` con `ap
 
 ## 4. Trabajos pendientes para terminar mensajería real
 
-**G57B / Driver**: hoy G57 certifica la lectura del **Passenger sobre mensajes Driver**. Falta el equivalente para **Driver sobre mensajes Passenger**, respetando el SQL G56B/G56 exclusivo Driver. Nunca usar el rol Passenger para leer con un Driver.
+**G57B / Driver (QA implementado)**: G57A cubre Passenger sobre mensajes Driver y G57B agrega Driver sobre mensajes Passenger mediante SQL y Node con rol exclusivo Driver, marcadores individuales, primer mensaje no leído y sin raw seq. [Handoff G57B](G57B_DRIVER_INCOMING_PASSENGER_ORDERED_READ_2026-10-24.md). **Aún pendiente** E2E móvil real y carrera de dos conexiones propia de G57B; la carrera PostgreSQL de dos conexiones está probada en G57A.
 
 **Integración B (solo B)**: implementar visibilidad explícita y contigua de mensajes al estar realmente en viewport, limpieza en cambio de cuenta/sesión/asignación, reconexión y expiración, no marcar por GET/push/scroll programático. No alterar contratos G52/G53. Coordinar en issue #9.
 
