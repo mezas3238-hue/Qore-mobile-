@@ -10,9 +10,17 @@ const registry=()=>JSON.parse(readFileSync(new URL(
 const verify=reg=>assessMoveteReleaseRegistry(reg);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const SHA='a631eb8444370f1fafaf8773778ac40505c60f18';
+const envFor=kind=>({
+ DOMAIN_CI:'CI_QA',API_CONTRACT:'STAGING',
+ NEGATIVE_SECURITY:'STAGING',STAGING_E2E:'STAGING',
+ ANDROID_DEVICE:'ANDROID_PHYSICAL',IOS_DEVICE:'IOS_PHYSICAL',
+ POSTGRES_DURABILITY:'STAGING',LEGAL_REVIEW:'PRODUCTION_READINESS_REVIEW',
+ OPS_EXERCISE:'STAGING',PSP_RECONCILIATION:'STAGING',
+ OWNER_SIGNOFF:'PRODUCTION_READINESS_REVIEW'
+})[kind]??'CI_QA';
 const proof=kind=>({kind,result:'PASS',commitSha:SHA,
  url:'https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40107176156',
- environment:'CI_QA',verifiedBy:'independent-auditor',
+ environment:envFor(kind),verifiedBy:'independent-auditor',
  executedAt:'2026-10-24T16:00:00Z'});
 
 test('R60 official P0 inventory: 17 gates, 20 flows and unambiguous NO_GO',()=>{
@@ -89,6 +97,14 @@ test('R60 rejects forged Github links and malformed SHA in evidence',()=>{
  ]){
   const x=registry();x.gates[1].evidence=[{...proof('DOMAIN_CI'),...patch}];
   assert.ok(verify(x).problems.includes('INVALID_GATE_EVIDENCE_OR_STATUS'));
+ }
+});
+test('R60 web CI cannot masquerade as Android, iOS or real STAGING E2E',()=>{
+ for(const kind of ['ANDROID_DEVICE','IOS_DEVICE','STAGING_E2E',
+  'LEGAL_REVIEW','OWNER_SIGNOFF']){
+  const x=registry();
+  x.gates[0].evidence=[{...proof(kind),environment:'CI_QA'}];
+  assert.equal(verify(x).structurallyValid,false);
  }
 });
 test('R60 evidence cannot use undefined categories or string success flags',()=>{
