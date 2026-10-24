@@ -20,6 +20,7 @@ import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
 import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
 import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
 import {createG51ChatInboxHttpGateway} from './g51-chat-inbox-http-gateway.mjs';
+import {createG52ChatHistoryHttpGateway} from './g52-chat-history-http-gateway.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -32,7 +33,8 @@ const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
- g51ChatInboxHttpOptions=null,now=()=>Date.now()}={}){
+ g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
+ now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
@@ -68,7 +70,18 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  };
  // Chat Cliente ↔ Driver/MOTO delivery, sujeto a asignación certificada por A.
  // No hay transporte habilitado hasta que A implemente Auth + conversaciones.
- chatFlow=createPassengerChatFlow({gateway:chatGateway,
+ // El reader G52 se inyecta SOLO por configuración STAGING explícita.
+ // GET no implica permiso de POST: chatFlow mantiene sendReady=false.
+ const g52HistoryHttp=g52ChatHistoryHttpOptions?createG52ChatHistoryHttpGateway({
+  ...g52ChatHistoryHttpOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ chatFlow=createPassengerChatFlow({gateway:chatGateway??g52HistoryHttp,
   getActor:async()=>actorSession(),now});
  // G51 está descrito por A pero NO montado. Solo una configuración
  // explícita de HTTPS, Auth y gates certificados habilita su transporte.
