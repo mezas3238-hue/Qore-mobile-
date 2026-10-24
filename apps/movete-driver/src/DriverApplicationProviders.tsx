@@ -2,6 +2,7 @@ import React from 'react';
 import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
+import {DriverTripProvider} from './DriverTripProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
 
 /**
@@ -29,11 +30,15 @@ export function DriverApplicationProviders({
   <DriverOfferActionsProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.offerActions??null}>
+  <DriverTripProvider
+   authAdapter={runtime?.authAdapter??null}
+   qaAdapters={runtime?.tripActions??null}>
   <DriverMessagesProvider
    authAdapter={runtime?.authAdapter??null}
    qaAdapters={runtime?.chatAdapters??null}>
    {children}
   </DriverMessagesProvider>
+  </DriverTripProvider>
   </DriverOfferActionsProvider>
  </DriverWorkspaceProvider>;
 }
