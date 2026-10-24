@@ -105,6 +105,21 @@ BEGIN
    '50500000-0000-4050-8050-000000000401','tampered');
  EXCEPTION WHEN SQLSTATE 'G5009' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G50 conflicting replay succeeded'; END IF;
+ -- G52 interoperability hardening: Node/SQL/Cliente B must reject the
+ -- same unsafe text rather than storing an unrenderable private message.
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g50_send_owner_qa(thread1,buyer,buyer_session,at_ms,
+   '50500000-0000-4050-8050-000000000450',' <contacto> ');
+ EXCEPTION WHEN SQLSTATE 'G5002' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G52 HTML/whitespace body accepted'; END IF;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g50_send_owner_qa(thread1,buyer,buyer_session,at_ms,
+   '50500000-0000-4050-8050-000000000451',
+   'hola'||pg_catalog.chr(8206)||'fin');
+ EXCEPTION WHEN SQLSTATE 'G5002' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G52 bidi formatting body accepted'; END IF;
  denied:=false;
  BEGIN
   PERFORM public.mobility_stage_g50_page_owner_qa(thread1,foreign_actor,foreign_session,
