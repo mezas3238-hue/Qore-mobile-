@@ -180,9 +180,12 @@ GRANT EXECUTE ON FUNCTION
  public.mobility_stage_g57_history_markers_qa(uuid,bigint,bigint,integer),
  public.mobility_stage_g57_mark_visible_ordered_qa(uuid,uuid)
  TO mobility_g49_chat_gateway_ci;
--- IMPORTANT: Deprecate the old G55 non-contiguous read-confirmation RPC.
--- All future delegated calls MUST use G57's ordered receipt. Older CI tests
--- execute before this G57 migration in a disposable database only.
-REVOKE EXECUTE ON FUNCTION public.mobility_stage_g55_mark_viewed_qa(uuid,uuid)
+-- IMPORTANT: revoke BOTH earlier read bypasses. G55 could skip incoming
+-- Driver messages using a valid marker for a later item, and G54 accepted a raw
+-- through_seq. Neither may remain callable by the delegated gateway after G57.
+-- Earlier historical G54/G55 CI assertions execute BEFORE this migration.
+REVOKE EXECUTE ON FUNCTION
+ public.mobility_stage_g55_mark_viewed_qa(uuid,uuid),
+ public.mobility_stage_g54_mark_read_qa(uuid,bigint)
  FROM mobility_g49_chat_gateway_ci;
 COMMIT;
