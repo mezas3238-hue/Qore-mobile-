@@ -24,3 +24,12 @@ export type DriverOfferDecisionOptions={
 export declare function decidePrivateDriverOffer(
  options:DriverOfferDecisionOptions
 ):Promise<DriverOfferDecision>;
+
+export type PrivateDriverRecovery=Readonly<{
+ kind:PrivateDriverOfferKind;action:DriverOfferDecisionAction;
+ outcome:'accepted'|'declined';receiptId:string;
+ serverPersisted:true;liveEnabled:false;pushDelivered:false;
+}>;
+export declare function reconcilePrivateDriverOffer(
+ options:DriverOfferDecisionOptions
+):Promise<PrivateDriverRecovery>;
