@@ -41,6 +41,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G51_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G52_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G53_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G54_*'
+      - 'apps/mobility-expo/server/g54-*'
       - 'apps/mobility-expo/server/g53-*'
       - 'apps/mobility-expo/server/g52-*'
       - 'apps/mobility-expo/server/g48-*'
@@ -366,3 +368,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G49_SCOPED_CHAT_AUTH_BRIDGE_POSTGRES_CI_ONLY.sql
       - name: G49 assert SQL privilege confinement, ticket scope, assignment revocation and role denial
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G49_SCOPED_CHAT_AUTH_BRIDGE_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G54 install delegated Passenger inbox/read receipt one-use capability
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_POSTGRES_CI_ONLY.sql
+      - name: G54 test actual NOLOGIN SET ROLE, inbox unread, read watermark, ticket replay and revocation
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G54_SCOPED_CHAT_INBOX_READ_ASSERT_POSTGRES_CI_ONLY.sql
