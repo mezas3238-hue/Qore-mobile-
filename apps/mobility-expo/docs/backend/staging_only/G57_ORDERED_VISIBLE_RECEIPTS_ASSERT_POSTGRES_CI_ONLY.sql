@@ -77,6 +77,7 @@ BEGIN
   cid,d,ds,at_ms,'57570000-0000-4757-8757-000000000403','Segundo entrante')->>'messageId')::uuid;
  t:=public.mobility_stage_g49_mint_owner_qa(
   p,ps,at_ms,'CHAT_HISTORY','RIDE',svc,cid);
+ PERFORM pg_catalog.set_config('qore.g57.iat',at_ms::text,true);
  PERFORM pg_catalog.set_config('qore.g57.historyticket',t->>'ticket',true);
  PERFORM pg_catalog.set_config('qore.g57.conversation',cid::text,true);
  PERFORM pg_catalog.set_config('qore.g57.first',m1::text,true);
@@ -120,7 +121,7 @@ DO $skip$
 DECLARE p uuid:='57570000-0000-4757-8757-000000000001';
  ps uuid:='57570000-0000-4757-8757-000000000101';
  cid uuid:=pg_catalog.current_setting('qore.g57.conversation')::uuid;
- at_ms bigint:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
+ at_ms bigint:=pg_catalog.current_setting('qore.g57.iat')::bigint;
  t jsonb; denied boolean:=false;
 BEGIN
  t:=public.mobility_stage_g54_mint_owner_qa(p,ps,at_ms,'CHAT_READ',cid);
@@ -150,7 +151,7 @@ DO $mint_receipts$
 DECLARE p uuid:='57570000-0000-4757-8757-000000000001';
  ps uuid:='57570000-0000-4757-8757-000000000101';
  cid uuid:=pg_catalog.current_setting('qore.g57.conversation')::uuid;
- at_ms bigint:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
+ at_ms bigint:=pg_catalog.current_setting('qore.g57.iat')::bigint;
  t jsonb;
 BEGIN
  t:=public.mobility_stage_g54_mint_owner_qa(p,ps,at_ms,'CHAT_READ',cid);
@@ -190,7 +191,7 @@ DO $stale$
 DECLARE p uuid:='57570000-0000-4757-8757-000000000001';
  ps uuid:='57570000-0000-4757-8757-000000000101';
  cid uuid:=pg_catalog.current_setting('qore.g57.conversation')::uuid;
- at_ms bigint:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
+ at_ms bigint:=pg_catalog.current_setting('qore.g57.iat')::bigint;
  t jsonb; denied boolean:=false;
 BEGIN
  t:=public.mobility_stage_g54_mint_owner_qa(p,ps,at_ms,'CHAT_READ',cid);
@@ -214,7 +215,7 @@ DO $stale2$
 DECLARE p uuid:='57570000-0000-4757-8757-000000000001';
  ps uuid:='57570000-0000-4757-8757-000000000101';
  cid uuid:=pg_catalog.current_setting('qore.g57.conversation')::uuid;
- at_ms bigint:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
+ at_ms bigint:=pg_catalog.current_setting('qore.g57.iat')::bigint;
  old uuid; t jsonb; denied boolean:=false;
 BEGIN
  SELECT (x->>'marker')::uuid INTO old
