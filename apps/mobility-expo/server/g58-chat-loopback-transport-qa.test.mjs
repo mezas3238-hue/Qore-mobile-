@@ -153,3 +153,31 @@ test('G58 cannot be constructed for production or with missing existing trusted 
   }));
  }
 });
+
+test('G58 transport rejects a mistakenly leaking private actor, SQL sequence or bearer from adapters',async()=>{
+ for(const payload of [
+  {qaOnly:true,accessToken:'do-not-echo'},
+  {qaOnly:true,authorization:'Bearer sensitive'},
+  {qaOnly:true,nested:{sessionId:uuid(99)}},
+  {qaOnly:true,items:[{throughSeq:200}]},
+  {qaOnly:true,secret:{privateKey:'bad'}},
+  {qaOnly:true,nextPosition:{beforeSeq:17}}
+ ]){
+  const app=createG58ChatLoopbackTransportQa({...opts,
+   driverInboxHandler:async()=>({status:200,body:payload}),
+   driverHistoryHandler:async()=>({status:503,body:{code:'OFFLINE',qaOnly:true}}),
+   driverVisibleHandler:async()=>({status:503,body:{code:'OFFLINE',qaOnly:true}}),
+   passengerHistoryHandler:async()=>({status:503,body:{code:'OFFLINE',qaOnly:true}}),
+   passengerVisibleHandler:async()=>({status:503,body:{code:'OFFLINE',qaOnly:true}})
+  });
+  const {port}=await app.listen();
+  try{
+   const r=await send(port,'/v1/staging/driver/chat/conversations');
+   assert.equal(r.status,503);
+   assert.equal(r.body.code,'G58_UNTRUSTED_OUTPUT');
+   for(const secret of ['accessToken','authorization','sessionId',
+    'throughSeq','privateKey','beforeSeq'])
+    assert.ok(!JSON.stringify(r.body).includes(secret));
+  }finally{await app.close();}
+ }
+});
