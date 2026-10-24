@@ -114,6 +114,7 @@ export type ClientExperience={
  prepareSimulatedPayment(body:unknown):ClientResult;
  submit():Promise<ClientResult>;
  retry():Promise<ClientResult>;
+ reconcileBooking():Promise<ClientResult>;
  startTracking(tripId:string):ClientResult;
  syncTracking():Promise<ClientResult>;
  connectionLost():void;
@@ -130,7 +131,10 @@ export declare function createClientExperience(options?:{
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
  bookingHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
-  qaReceiptContractCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  qaReceiptContractCertified?:boolean;reconciliationContractCertified?:boolean;
+  reconciliationRead?:(scope:Readonly<{operation:string;requestKey:string;
+   expectedSubject:string;expectedSessionRevision:number;bearer:string}>)=>unknown|Promise<unknown>;
+  origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
   timeoutMs?:number;maxBytes?:number;
  }|null;
