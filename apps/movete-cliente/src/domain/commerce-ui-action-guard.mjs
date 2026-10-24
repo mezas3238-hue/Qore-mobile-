@@ -37,6 +37,8 @@ export function guardCommerceUiAction(displayed,current,{
   ||typeof before.catalogVersion!=='string'
   ||before.catalogVersion.length<1||before.catalogVersion!==after.catalogVersion
   ||before.catalogExpiresAt!==after.catalogExpiresAt
+  ||!['AUTO','MOTO'].includes(before.vehicleKind)
+  ||before.vehicleKind!==after.vehicleKind
   ||!Number.isSafeInteger(before.generation)
   ||before.generation!==after.generation)
   return deny('COMMERCE_SCOPE_CHANGED');
