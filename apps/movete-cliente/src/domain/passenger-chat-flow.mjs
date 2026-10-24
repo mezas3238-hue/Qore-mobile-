@@ -60,7 +60,9 @@ function validPage(dto,{serviceId,serviceKind,ownerId,now,conversationId=null}){
  const ids=new Set(),rows=[];
  for(const row of dto.messages){
   if(!validateMessage(row,now)||row.revision>dto.revision
-   ||ids.has(row.messageId))return null;
+   ||ids.has(row.messageId)
+   // Cada página va newest-first: no aceptar inversión temporal.
+   ||rows.length>0&&row.createdAt>rows[rows.length-1].createdAt)return null;
   ids.add(row.messageId);
   rows.push(Object.freeze({...row}));
  }
@@ -216,6 +218,14 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     clear();state.error='INVALID_CHAT_PAGE';return fail('INVALID_CHAT_PAGE');
    }
    if(older){
+    // El cursor "anteriores" no autoriza insertar filas más recientes
+    // que la última de la ventana; tiempos iguales siguen permitidos.
+    if(verified.messages.length>0&&state.messages.length>0
+     &&verified.messages[0].createdAt>
+       state.messages[state.messages.length-1].createdAt){
+     clear();state.error='CHAT_MESSAGE_ORDER_VIOLATION';
+     return fail('CHAT_MESSAGE_ORDER_VIOLATION');
+    }
     for(const msg of verified.messages)
      if(state.seenIds.has(msg.messageId)){
       clear();state.error='DUPLICATE_CHAT_MESSAGE';return fail('DUPLICATE_CHAT_MESSAGE');
