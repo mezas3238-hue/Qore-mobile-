@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
@@ -421,6 +421,17 @@ function App(){
  const {client,view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
  const [menuOpen,setMenuOpen]=useState(false);
+ const triggerRef=useRef<HTMLButtonElement|null>(null);
+ const firstNavRef=useRef<HTMLButtonElement|null>(null);
+ const pageHeadingRef=useRef<HTMLHeadingElement|null>(null);
+ const focusHeadingOnNavigation=useRef(false);
+ useEffect(()=>{if(menuOpen)firstNavRef.current?.focus();},[menuOpen]);
+ useEffect(()=>{
+  if(focusHeadingOnNavigation.current){
+   pageHeadingRef.current?.focus();
+   focusHeadingOnNavigation.current=false;
+  }
+ },[page]);
  const [refreshing,setRefreshing]=useState(false);
  const [refreshStatus,setRefreshStatus]=useState<{page:Page;description:string}|null>(null);
  const view=sections.find(x=>x.id===page)!;
@@ -445,28 +456,48 @@ function App(){
   }finally{setRefreshing(false);}
  }
  return <div className="shell">
-  <aside className={'sidebar '+(menuOpen?'is-open':'')} aria-label="Navegación administrativa">
+  <a className="skip-link" href="#admin-main-content">Saltar al contenido principal</a>
+  <aside id="admin-sidebar-navigation" className={'sidebar '+(menuOpen?'is-open':'')}
+   aria-label="Navegación administrativa"
+   onKeyDown={event=>{
+    if(event.key==='Escape'&&menuOpen){
+     event.preventDefault();
+     setMenuOpen(false);
+     triggerRef.current?.focus();
+    }
+   }}>
    <div className="brand"><span className="mark">M</span><div><strong>Movete Fácil</strong><small>ADMIN · QA</small></div></div>
    <div className="nav-label">GESTIÓN</div>
-   <nav>{sections.map(item=><button key={item.id}
+   <nav aria-label="Secciones administrativas">{sections.map(item=><button key={item.id}
+    ref={item.id==='resumen'?firstNavRef:undefined}
+    type="button"
     className={'nav-item '+(page===item.id?'active':'')}
     aria-current={page===item.id?'page':undefined}
-    onClick={()=>{setPage(item.id);setMenuOpen(false);}}>
+    onClick={()=>{
+     if(page!==item.id){
+      focusHeadingOnNavigation.current=true;
+      setPage(item.id);
+     }else pageHeadingRef.current?.focus();
+     setMenuOpen(false);
+    }}>
     <span>{item.label}</span><span aria-hidden="true">›</span></button>)}</nav>
    <div className="sidebar-bottom"><div className="dot" /> <span>Servidor sin conexión</span><small>Operaciones deshabilitadas</small></div>
   </aside>
-  <main className="main">
+  <main className="main" id="admin-main-content" tabIndex={-1}>
    <header className="topbar">
-    <button type="button" className="mobile-nav" aria-label="Abrir menú" onClick={()=>setMenuOpen(!menuOpen)}>☰</button>
+    <button type="button" ref={triggerRef} className="mobile-nav"
+     aria-label={menuOpen?'Cerrar menú':'Abrir menú'}
+     aria-controls="admin-sidebar-navigation" aria-expanded={menuOpen}
+     onClick={()=>setMenuOpen(!menuOpen)}>☰</button>
     <span className="topbar-title">Panel de administración</span>
     <span className="environment">MODO QA · NO LIVE</span>
    </header>
    <div className="container">
     <div className="intro"><div><p className="overline">MOVETE FÁCIL · ADMINISTRACIÓN</p>
-     <h1>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión de QA por proveedor (sin backend certificado)':'Sin autenticación administrativa activa'}</p></div>
+     <h1 ref={pageHeadingRef} tabIndex={-1}>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión de QA por proveedor (sin backend certificado)':'Sin autenticación administrativa activa'}</p></div>
      <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
-     <span><strong>Modo demostración técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
+     <span><strong>Entorno de validación técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
     {operation!==null&&<div className="refresh-panel" aria-label="Actualización segura del panel">
      <div>
       <strong>Consulta segura del servidor</strong>
