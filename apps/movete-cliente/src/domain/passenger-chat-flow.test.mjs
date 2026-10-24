@@ -696,3 +696,56 @@ test('ACK invalida cursor emitido antes de escribir; GET fresco recupera paginac
  assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
  assert.equal(flow.snapshot().hasOlder,true);
 });
+
+
+// R18 — la expiración purga de RAM textos anteriores, incluso con ACK incierto.
+test('TTL con ACK ambiguo elimina historial en RAM sin perder la clave pendiente',async()=>{
+ let clock=now,attempts=0;
+ const sentKeys=[];
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({
+   readMessages:async()=>({ok:true,data:{...page(),
+    generatedAt:clock-1000,expiresAt:clock+60000,messages:[row(1)]}}),
+   sendMessage:async args=>{
+    sentKeys.push(args.requestKey);attempts++;
+    return attempts===1?{ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'}:
+     {ok:true,data:{...ack(),createdAt:clock-100}};
+   }
+  })});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal(flow.snapshot().messages.length,1);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ clock+=60001;
+ const expired=flow.snapshot();
+ assert.equal(expired.pendingSend,true);
+ assert.equal(expired.messages.length,0);
+ assert.equal(expired.window.rowsRead,0);
+ assert.equal(expired.hasOlder,false);
+ // Aunque un reloj local retroceda, la caché física purgada no reaparece.
+ clock-=60001;
+ const rollback=flow.snapshot();
+ assert.equal(rollback.messages.length,0);
+ assert.equal(rollback.pendingSend,true);
+ clock+=60001;
+ assert.equal((await flow.retryPending()).ok,true);
+ assert.deepEqual(sentKeys,[key,key]);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
+test('expirar sin envío ambiguo invalida también un GET anterior en vuelo',async()=>{
+ let clock=now,resolve;
+ const deferred=new Promise(r=>{resolve=r;});
+ let count=0;
+ const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
+  gateway:flags({readMessages:async()=>++count===1
+   ?{ok:true,data:page()}:deferred})});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ const pending=flow.open({serviceId,serviceKind:'RIDE',older:false});
+ await Promise.resolve();await Promise.resolve();
+ clock+=60001;
+ assert.equal(flow.snapshot().messages.length,0);
+ resolve({ok:true,data:{...page(),
+  generatedAt:clock-1000,expiresAt:clock+60000}});
+ assert.equal((await pending).code,'STALE_RESPONSE_IGNORED');
+ assert.equal(flow.snapshot().messages.length,0);
+});
