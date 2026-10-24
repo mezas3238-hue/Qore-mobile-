@@ -78,6 +78,13 @@ function validAck(row,header,body,key,now){
    createdAt:row.createdAt,revision:row.revision
   },now);
 }
+// Solo retener datos de autorización. validPage ya proyecta mensajes a
+// state.messages; guardarlos también en header dejaría otra referencia viva
+// a cuerpos privados después de borrar la ventana en un ACK incierto.
+const authorizationHeader=({conversationId,serviceId,serviceKind,ownerId,
+ expiresAt,revision})=>Object.freeze({
+ conversationId,serviceId,serviceKind,ownerId,expiresAt,revision
+});
 export function createPassengerChatFlow({gateway=null,getActor=null,
  now=()=>Date.now(),maxCachedMessages=500}={}){
  let generation=0,loading=false,sending=false,state=blank();
@@ -230,7 +237,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     ||state.seenCursor.has(verified.nextCursor))){
     clear();return fail('CURSOR_REPEATED');
    }
-   state.header=verified;state.sessionRevision=before.sessionRevision;
+   state.header=authorizationHeader(verified);
+    state.sessionRevision=before.sessionRevision;
    state.nextCursor=verified.nextCursor;
    return Object.freeze({ok:true,pageNumber:state.pageNumber,
     hasOlder:state.nextCursor!==null});
@@ -360,7 +368,8 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
      // No reautorizar un mensaje ambiguo desde un snapshot regresivo.
      clear();state.error='INVALID_CHAT_PAGE';return fail('INVALID_CHAT_PAGE');
     }
-    state.header=verified;state.messages=[...verified.messages];
+    state.header=authorizationHeader(verified);
+     state.messages=[...verified.messages];
     state.nextCursor=verified.nextCursor;state.pageNumber=1;
     state.seenIds=new Set(verified.messages.map(item=>item.messageId));
     state.seenCursor=new Set();state.readCount=verified.messages.length;
