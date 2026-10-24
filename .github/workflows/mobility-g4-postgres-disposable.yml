@@ -11,6 +11,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
@@ -481,3 +482,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G69_SCOPED_SENDER_CUSTODY_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G69 two PG connections one-use Passenger read and role-session-revocation denial
         run: python3 apps/mobility-expo/server/g69-sender-custody-scoped-read-race-ci.py
+
+      - name: Driver onboarding install owner-only eight-proof dossier and atomic QA decision
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_EIGHT_DOCS_ATOMIC_ONBOARDING_POSTGRES_CI_ONLY.sql
+      - name: Driver onboarding verify selfie, expired document, replay and G42 session revoke on PostgreSQL16
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_EIGHT_DOCS_ATOMIC_ONBOARDING_ASSERT_POSTGRES_CI_ONLY.sql
