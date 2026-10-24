@@ -25,6 +25,8 @@ BEGIN
  END LOOP;
  IF pg_catalog.has_function_privilege('mobility_g49_chat_gateway_ci',
   'public.mobility_stage_g55_mark_viewed_qa(uuid,uuid)','EXECUTE')
+ OR pg_catalog.has_function_privilege('mobility_g49_chat_gateway_ci',
+  'public.mobility_stage_g54_mark_read_qa(uuid,bigint)','EXECUTE')
  OR pg_catalog.has_table_privilege('mobility_g49_chat_gateway_ci',
   'public.mobility_stage_g57_visible_markers','SELECT')
  THEN RAISE EXCEPTION 'G57 legacy G55 skip bypass still exposed'; END IF;
