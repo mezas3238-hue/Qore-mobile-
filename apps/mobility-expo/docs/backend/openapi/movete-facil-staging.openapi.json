@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g57",
+    "version": "1.0.0-g69",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
+    "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED"
   },
   "servers": [
     {
@@ -3809,6 +3809,69 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/sender/deliveries/{deliveryId}/custody": {
+      "get": {
+        "operationId": "getPrivateSenderOwnedDeliveryCustodyG68",
+        "tags": [
+          "delivery",
+          "sender-private"
+        ],
+        "summary": "Future Passenger-only delivery custody status (G68/G69, not mounted)",
+        "description": "Requires independently verified Passenger JWT, G42 held session lock, delivery AND sender SQL filters, G67 verified proof for terminal states. G69 delegates a single-use opaque owner-attested SQL read to NOLOGIN EXECUTE-only role in isolated PostgreSQL16 CI. No public proof mint, no real IdP, HTTPS provider, storage or deployed route.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "x-qore-g69-delegated-exchange-ready-in-ci": true,
+        "parameters": [
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "QA-only sender-owned SQL custody snapshot. Requires JWT Passenger and G42 session scope; not mounted publicly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SenderOwnedDeliveryCustodyG68"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
             "$ref": "#/components/responses/Error"
           },
           "429": {
@@ -8116,6 +8179,79 @@
             "const": true
           }
         }
+      },
+      "SenderOwnedDeliveryCustodyG68": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "deliveryId",
+          "ownerId",
+          "state",
+          "revision",
+          "vehicleKind",
+          "assignmentPersisted",
+          "proofVerified",
+          "qaOnly",
+          "productionEnabled",
+          "liveDeliveriesEnabled"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "deliveryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "accepted",
+              "picked_up",
+              "delivered",
+              "disputed",
+              "returned",
+              "cancelled"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "vehicleKind": {
+            "type": "string",
+            "enum": [
+              "AUTO",
+              "MOTO"
+            ]
+          },
+          "assignmentPersisted": {
+            "type": "boolean"
+          },
+          "proofVerified": {
+            "type": "boolean"
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "liveDeliveriesEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "description": "Server-verified Passenger-owned delivery status. Exactly 11 fields, no courier identity, proofRef, location, phone or media. Terminal proofVerified originates from G67 atomic SQL custody evidence; no LIVE."
       }
     }
   },
@@ -8140,5 +8276,6 @@
   "x-qore-g56-driver-chat-runtime-wired": false,
   "x-qore-g56b-driver-inbox-runtime-wired": false,
   "x-qore-g57-ordered-visible-runtime-wired": false,
-  "x-qore-g57b-driver-ordered-visible-runtime-wired": false
+  "x-qore-g57b-driver-ordered-visible-runtime-wired": false,
+  "x-qore-g68-sender-custody-runtime-wired": false
 }
