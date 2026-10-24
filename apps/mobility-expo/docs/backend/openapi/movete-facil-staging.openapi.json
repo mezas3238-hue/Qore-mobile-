@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g54",
+    "version": "1.0.0-g55",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G51 signed Passenger chat inbox/read receipt, QA-only, endpoint not mounted"
   },
@@ -3001,6 +3001,93 @@
           },
           "default": {
             "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/services/{serviceKind}/{serviceId}/history-with-read-marker": {
+      "get": {
+        "operationId": "readChatHistoryWithScopedReadMarkerG55",
+        "summary": "Future isolated G52 history page with separate read marker",
+        "description": "Only a server-issued marker for a DRIVER message present in the authorized G52 page; explicit UI visibility confirmation required. No endpoint mounted or production credential.",
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "parameters": [
+          {
+            "name": "serviceKind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RIDE",
+                "DELIVERY",
+                "MERCHANT_ORDER"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sealed history unchanged plus optional marker",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHistoryWithMarkerG55"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/staging/chat/conversations/{conversationId}/mark-visible": {
+      "post": {
+        "operationId": "markExplicitlyVisibleServerIssuedMessageG55",
+        "summary": "Future explicit marker confirmation; server internally resolves message seq",
+        "description": "Client reports explicit confirmed visibility and an opaque marker. Backend independently authorizes G54 CHAT_READ + G55 marker. No raw throughSeq permitted; no route mounted.",
+        "x-qore-runtime-wired": false,
+        "x-qore-qa-only": true,
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatMarkVisibleRequestG55"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted read watermark, internal seq hidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMarkVisibleReceiptG55"
+                }
+              }
+            }
           }
         }
       }
@@ -6693,6 +6780,104 @@
             "minimum": 0
           }
         }
+      },
+      "ChatReadMarkerG55": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "marker",
+          "messageId",
+          "expiresAtMs"
+        ],
+        "properties": {
+          "marker": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expiresAtMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ChatHistoryWithMarkerG55": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "page",
+          "readMarker",
+          "qaOnly",
+          "productionEnabled"
+        ],
+        "properties": {
+          "page": {
+            "$ref": "#/components/schemas/ChatHistoryPageG52"
+          },
+          "readMarker": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ChatReadMarkerG55"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          },
+          "productionEnabled": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "ChatMarkVisibleRequestG55": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "marker"
+        ],
+        "properties": {
+          "marker": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ChatMarkVisibleReceiptG55": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "messageId",
+          "readConfirmed",
+          "qaOnly"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readConfirmed": {
+            "type": "boolean",
+            "const": true
+          },
+          "qaOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },
@@ -6712,5 +6897,6 @@
   "x-qore-g49-provider-chat-bridge-runtime-wired": false,
   "x-qore-g49-scoped-chat-role": "mobility_g49_chat_gateway_ci",
   "x-qore-g49-qa-issuer-and-grants-synthetic-only": true,
-  "x-qore-g54-scoped-inbox-read-runtime-wired": false
+  "x-qore-g54-scoped-inbox-read-runtime-wired": false,
+  "x-qore-g55-server-issued-read-marker-runtime-wired": false
 }
