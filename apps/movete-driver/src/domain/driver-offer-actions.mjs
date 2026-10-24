@@ -18,11 +18,14 @@ function frozen(current){
   qaOnly:true,productionEnabled:false});
 }
 export function createDriverOfferActionsController({
- decide,makeRequestKey,now=Date.now,liveEnabled=false
+ decide,reconcile=null,makeRequestKey,now=Date.now,liveEnabled=false
 }={}){
  if(liveEnabled!==false||[decide,makeRequestKey,now].some(f=>typeof f!=='function'))
   throw Error('G63 requires trusted QA decision and cryptographic key callbacks');
- let epoch=0,identity=null,offers=[],pending=null,usedKeys=new Set(),decisionMap=new Map();
+ if(reconcile!==null&&typeof reconcile!=='function')
+  throw Error('G64 reconciliation must be a trusted function');
+ let epoch=0,identity=null,offers=[],pending=null,usedKeys=new Set(),
+  decisionMap=new Map(),originalRequests=new Map();
  let state=none();
  const listeners=new Set();
  const notify=next=>{
@@ -35,7 +38,7 @@ export function createDriverOfferActionsController({
  });
  const reset=()=>{
   ++epoch;identity=null;offers=[];pending=null;
-  usedKeys.clear();decisionMap.clear();
+  usedKeys.clear();decisionMap.clear();originalRequests.clear();
   return publish('signed-out');
  };
  const validOffer=(offer,at)=>offer&&typeof offer==='object'&&
@@ -98,6 +101,7 @@ export function createDriverOfferActionsController({
      throw Error('G63 unsafe key');
     usedKeys.add(key);
     submitted=true;
+    originalRequests.set(offerId,Object.freeze({offerId,kind,action,requestKey:key}));
     const receipt=await decide({
      accessToken:oldIdentity.accessToken,kind,offerId,
      requestKey:key,action
@@ -109,6 +113,7 @@ export function createDriverOfferActionsController({
      receipt.liveEnabled!==false||receipt.pushDelivered!==false)
      throw Error('G63 untrusted server receipt');
     decisionMap.set(offerId,{offerId,kind,action,phase:'confirmed'});
+    originalRequests.delete(offerId);
     offers=offers.filter(o=>o.offerId!==offerId);
     pending=null;
     return publish('ready');
@@ -117,6 +122,43 @@ export function createDriverOfferActionsController({
     // Any error may follow a COMMIT. Never repeat POST with a new key.
     decisionMap.set(offerId,{offerId,kind,action,
      phase:submitted?'uncertain':'blocked'});
+    pending=null;
+    return publish('ready');
+   }finally{
+    if(stamp===epoch&&pending!==null){pending=null;publish('ready');}
+   }
+  },
+  async reconcilePending(offerId){
+   if(!identity||pending||typeof reconcile!=='function'||!ID.test(offerId)||
+    decisionMap.get(offerId)?.phase!=='uncertain')
+    return state;
+   const original=originalRequests.get(offerId);
+   if(!original||original.offerId!==offerId)return state;
+   const stamp=++epoch,oldIdentity=identity;
+   pending={offerId,action:original.action};
+   // Keep the decision 'uncertain' during network wait; no phantom ACK.
+   publish('ready');
+   try{
+    const receipt=await reconcile({
+     accessToken:oldIdentity.accessToken,...original
+    });
+    if(stamp!==epoch||identity!==oldIdentity)return state;
+    if(!receipt||receipt.kind!==original.kind||
+     receipt.action!==original.action||
+     receipt.outcome!==(original.action==='accept'?'accepted':'declined')||
+     !ID.test(receipt.receiptId)||receipt.serverPersisted!==true||
+     receipt.liveEnabled!==false||receipt.pushDelivered!==false||
+     (original.action==='decline'&&receipt.receiptId!==offerId))
+     throw Error('G64 original SQL receipt invalid');
+    originalRequests.delete(offerId);
+    decisionMap.set(offerId,{offerId,kind:original.kind,
+     action:original.action,phase:'confirmed'});
+    offers=offers.filter(o=>o.offerId!==offerId);
+    pending=null;
+    return publish('ready');
+   }catch{
+    // Failed reconcile remains uncertain and original request key is kept.
+    if(stamp!==epoch||identity!==oldIdentity)return state;
     pending=null;
     return publish('ready');
    }finally{
