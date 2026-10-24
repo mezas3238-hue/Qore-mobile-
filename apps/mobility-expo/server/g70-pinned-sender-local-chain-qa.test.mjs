@@ -148,7 +148,6 @@ test('G70 rejects cookies, Origin, unknown routes, query strings, POST and body,
    {headers:{Cookie:'auth=forged'}},
    {headers:{Referer:'https://evil.example'}},
    {headers:{'content-type':'application/json'}},
-   {headers:{'content-length':'9'}},
    {headers:{Host:'evil.example'}}
   ])assert.notEqual((await get(port,token,path,options)).status,200);
   const post=await get(port,token,path,{method:'POST',body:'{}'});
@@ -157,6 +156,11 @@ test('G70 rejects cookies, Origin, unknown routes, query strings, POST and body,
    authorization:['Bearer '+token,'Bearer '+token]
   }});
   assert.notEqual(duplicated.status,200);
+  assert.equal(f.calls.owner.length,0);
+  const unexpectedBody=await raw(port,{headers:{
+   authorization:'Bearer '+token,'content-length':'1'
+  }});
+  assert.notEqual(unexpectedBody.status,200);
   assert.equal(f.calls.owner.length,0);
  }finally{await f.app.close();}
 });
