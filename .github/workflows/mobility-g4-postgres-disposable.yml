@@ -49,6 +49,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G57B_*'
       - 'apps/mobility-expo/server/g57-*'
       - 'apps/mobility-expo/server/g58-*'
+      - 'apps/mobility-expo/server/g58f-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G58F_*'
       - 'apps/mobility-expo/server/g56-*'
       - 'apps/mobility-expo/server/g55-*'
       - 'apps/mobility-expo/server/g54-*'
@@ -419,3 +421,9 @@ jobs:
         run: python3 apps/mobility-expo/server/g58-delegated-role-isolation-ci.py
       - name: G58D verify SQL transaction deadlines and concurrent lock recovery on disposable PostgreSQL
         run: python3 apps/mobility-expo/server/g58d-disposable-sql-timeouts-ci.py
+      - name: G58F install restricted NOLOGIN attestation exchange (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G58F_MIN_PRIVILEGE_TICKET_EXCHANGE_POSTGRES_CI_ONLY.sql
+      - name: G58F assert dedicated definer, fixed search_path and no caller table or mint privilege
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G58F_MIN_PRIVILEGE_TICKET_EXCHANGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G58F race two delegated connections, one-use proof, revocation and denied roles
+        run: python3 apps/mobility-expo/server/g58f-scoped-ticket-exchange-race-ci.py
