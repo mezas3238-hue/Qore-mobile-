@@ -116,7 +116,7 @@ export default function DriverMessages(){
      onPress={()=>{void reconcilePending();}}/>
    </>}
    {state.phase==='connected'&&<Action label="Actualizar conversación" secondary
-    onPress={()=>{void refreshInbox();}}/>}
+    onPress={()=>{void refreshConversation();}}/>}
   </Panel>}
   <Panel>
    <Text style={styles.heading}>Protección durante los viajes</Text>
