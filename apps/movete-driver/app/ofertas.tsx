@@ -90,6 +90,11 @@ export default function DriverOffers(){
        d.phase==='uncertain'?' resultado aún incierto':
        d.phase==='sending'?' consultando':' bloqueado'}
      </Text>
+     {d.phase==='confirmed'&&d.action==='accept'&&
+      d.kind==='AUTO_RIDE'&&enabled&&<Action
+       label="Abrir estado del viaje"
+       secondary onPress={()=>router.push({pathname:'/viaje',
+        params:{tripId:d.serviceId}})}/>}
      {d.phase==='uncertain'&&enabled&&<Action
       label="Consultar decisión original" secondary
       disabled={actions.busy}
