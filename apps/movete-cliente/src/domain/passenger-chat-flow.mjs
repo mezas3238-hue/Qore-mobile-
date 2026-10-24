@@ -293,6 +293,11 @@ export function createPassengerChatFlow({gateway=null,getActor=null,
     state.readCount++;
     trimWindow(true);
    }
+   // El ACK durable también avanza el high-water mark del hilo. Una
+   // lectura anterior al POST no puede borrar el mensaje confirmado.
+   // Un cursor emitido sobre la revisión previa necesita GET fresco.
+   state.header=Object.freeze({...currentHeader,revision:ack.revision});
+   state.nextCursor=null;state.seenCursor=new Set();
    state.pending=null;state.error=null;
    return Object.freeze({ok:true,serverStored:true});
   }finally{if(started===generation)sending=false;}
