@@ -77,11 +77,11 @@ test('G50 refuses forged fields, body overflow and SQL request key abuse',async(
   {...send,body:'hola https://example.com'},
   {...send,body:'contacto ejemplo@correo.com'},
   {...send,body:'tel 0981 123 456'},
-  {...send,body:'abc\\u202Edef'},
+  {...send,body:'abc'+String.fromCharCode(0x202E)+'def'},
   {...send,body:'x'.repeat(501)},{...send,requestKey:'bad'},
   {...send,actorId:passenger},{...read,actorId:driver},
   {...open,serviceKind:'SHOPPING'},{...open,serviceId:'wrong'}
- ])assert.equal((await f.chat.handle(req)).status,400);
+ ])assert.equal((await f.chat.handle(req)).status,400,JSON.stringify(req));
  assert.equal(f.calls.length,0);
 });
 test('G50 forged token, revoked grant, provider offline, dual role and spam block before SQL',async()=>{
