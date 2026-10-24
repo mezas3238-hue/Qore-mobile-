@@ -50,10 +50,14 @@ test('G58 only executes allowlisted G57A/B functions inside scoped SQL transacti
   assert.deepEqual(await f.api.executeScopedTicket(command),
    {data:{readConfirmed:true,qaOnly:true}});
   assert.deepEqual(f.calls.map(x=>x.sql),[
-   'BEGIN','SET LOCAL ROLE '+role,
+   'BEGIN',
+   "SET LOCAL statement_timeout = '2500ms'",
+   "SET LOCAL lock_timeout = '500ms'",
+   "SET LOCAL idle_in_transaction_session_timeout = '3500ms'",
+   'SET LOCAL ROLE '+role,
    "SELECT current_user AS effective_role, current_database() AS database, current_setting('application_name') AS application_name",
    sql,'COMMIT','RELEASE']);
-  assert.deepEqual(f.calls[3].args,command.operation==='CHAT_OPEN'?
+  assert.deepEqual(f.calls[6].args,command.operation==='CHAT_OPEN'?
    [ticket]:command.operation==='DRIVER_INBOX'?
    [ticket,null,null,null,50]:command.operation.endsWith('MARK_VISIBLE_ORDERED')?
    [ticket,marker]:[ticket,command.expectedRevision,command.beforeSeq,command.limit]);
