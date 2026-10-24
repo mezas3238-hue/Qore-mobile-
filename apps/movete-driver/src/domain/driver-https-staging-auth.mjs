@@ -16,7 +16,8 @@ export function createDriverHttpsStagingAuthAdapter({
  allowedByOwner=false,liveEnabled=false,now=Date.now
 }={}){
  if(allowedByOwner!==true||liveEnabled!==false||
-  !plain(auth)||!['getSession','getUser','onAuthStateChange']
+  (auth===null||typeof auth!=='object')||
+  !['getSession','getUser','onAuthStateChange']
   .every(key=>typeof auth[key]==='function')||
   typeof verifyExclusiveDriverRole!=='function'||
   typeof now!=='function')
