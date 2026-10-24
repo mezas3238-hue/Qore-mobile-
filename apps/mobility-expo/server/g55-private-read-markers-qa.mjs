@@ -37,6 +37,8 @@ export function createG55HistoryWithReadMarkerQa({
   verifySessionNotRevoked,resolveExclusiveRole,allowRequest,
   mintOwnerTicket,executeScopedTicket,now};
  verifyBoundary(opts);
+ if(!Buffer.isBuffer(cursorSecret)||cursorSecret.length<32)
+  throw Error('G55 signed G52 cursor requires >=32 secret bytes');
  // G52 signs cursors and independently authenticates every page; only the
  // database operation is replaced with G49/G55 scoped bearer capabilities.
  return Object.freeze({async handle(req){
