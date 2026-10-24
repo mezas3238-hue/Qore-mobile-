@@ -6668,5 +6668,8 @@
   "x-qore-g50-private-chat-qa-only": true,
   "x-qore-g51-chat-inbox-runtime-wired": false,
   "x-qore-g52-chat-history-runtime-wired": false,
-  "x-qore-g53-passenger-chat-send-runtime-wired": false
+  "x-qore-g53-passenger-chat-send-runtime-wired": false,
+  "x-qore-g49-provider-chat-bridge-runtime-wired": false,
+  "x-qore-g49-scoped-chat-role": "mobility_g49_chat_gateway_ci",
+  "x-qore-g49-qa-issuer-and-grants-synthetic-only": true
 }
