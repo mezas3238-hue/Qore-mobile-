@@ -738,9 +738,9 @@ test('expirar sin envío ambiguo invalida también un GET anterior en vuelo',asy
  let count=0;
  const flow=createPassengerChatFlow({now:()=>clock,getActor:async()=>actor(),
   gateway:flags({readMessages:async()=>++count===1
-   ?{ok:true,data:page()}:deferred})});
+   ?{ok:true,data:page('RIDE','s'.repeat(44))}:deferred})});
  assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
- const pending=flow.open({serviceId,serviceKind:'RIDE',older:false});
+ const pending=flow.open({serviceId,serviceKind:'RIDE',older:true});
  await Promise.resolve();await Promise.resolve();
  clock+=60001;
  assert.equal(flow.snapshot().messages.length,0);
