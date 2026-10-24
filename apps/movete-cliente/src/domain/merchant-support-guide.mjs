@@ -46,7 +46,7 @@ export function createMerchantSupportGuide(){
    ||Object.keys(patch).length!==1)return deny('INVALID_GUIDE_UPDATE');
   if(Object.hasOwn(patch,'orderId')){
    if(typeof patch.orderId!=='string'||patch.orderId.length>36
-    ||/[\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]/u.test(patch.orderId))
+    ||!/^[0-9a-f-]*$/i.test(patch.orderId))
     return deny('INVALID_ORDER_ID');
    state={...state,orderId:patch.orderId};
   }else if(Object.hasOwn(patch,'reason')){
