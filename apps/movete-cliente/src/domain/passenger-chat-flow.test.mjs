@@ -570,3 +570,102 @@ test('ACK demorado bajo JWT rotado no publica texto ni confirma envío',async()=
  assert.equal(flow.snapshot().pendingSend,false);
  assert.equal(flow.snapshot().conversationId,null);
 });
+
+
+// R16 — monotonicidad de permisos por hilo y pin de sesión (QA sintético).
+test('refresco del mismo hilo con revisión anterior no reabre autorización obsoleta',async()=>{
+ let n=0;
+ const flow=make(flags({readMessages:async()=>({
+  ok:true,data:++n===1?page():{...page(),revision:6,
+   messages:[{...row(1),revision:6}]}
+ })}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).code,'INVALID_CHAT_PAGE');
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().conversationId,null);
+});
+test('mismo hilo acepta revisión nueva y purga versión anterior',async()=>{
+ let n=0;
+ const flow=make(flags({readMessages:async()=>({ok:true,data:++n===1
+  ?page():{...page(),revision:8,messages:[{...row(2),revision:8}]}})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.deepEqual(flow.snapshot().messages.map(m=>m.messageId),[row(2).messageId]);
+});
+test('reasignación a un hilo nuevo permite su versión inicial sin reutilizar mensajes',async()=>{
+ let changed=false;
+ const newConversation=id(92);
+ const flow=make(flags({readMessages:async()=>({ok:true,data:changed
+  ?{...page(),conversationId:newConversation,revision:1,messages:[]}
+  :page()})}));
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:conversationId})).ok,true);
+ changed=true;
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',
+  expectedConversationId:newConversation})).ok,true);
+ assert.equal(flow.snapshot().conversationId,newConversation);
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('paginación antigua se invalida tras rotación JWT antes de cualquier GET',async()=>{
+ let identity=actor(),reads=0;
+ const flow=make(flags({readMessages:async()=>{
+  reads++;return {ok:true,data:page('RIDE','c'.repeat(44))};
+ }}),async()=>identity);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ identity={...actor(),sessionRevision:4};
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE',older:true})).code,
+  'STALE_SESSION_RESPONSE');
+ assert.equal(reads,1);
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('sesión JWT rotada después de GET exige autorización nueva antes de POST',async()=>{
+ let identity=actor(),writes=0;
+ const flow=make(flags({sendMessage:async()=>{
+  writes++;return {ok:true,data:ack()};
+ }}),async()=>identity);
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ identity={...actor(),sessionRevision:4};
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'STALE_SESSION_RESPONSE');
+ assert.equal(writes,0);
+ assert.equal(flow.snapshot().pendingSend,false);
+ assert.equal(flow.snapshot().messages.length,0);
+});
+test('reintento de mensaje incierto caducado no usa JWT de otra revisión',async()=>{
+ let identity=actor(),clock=now,reads=0,writes=0;
+ const flow=createPassengerChatFlow({now:()=>clock,
+  getActor:async()=>identity,gateway:flags({
+   readMessages:async()=>{reads++;return {ok:true,data:page()};},
+   sendMessage:async()=>{writes++;return {ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'};}
+  })});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ clock+=60001;
+ identity={...actor(),sessionRevision:4};
+ assert.equal((await flow.retryPending()).code,'STALE_SESSION_RESPONSE');
+ assert.equal(reads,1);assert.equal(writes,1);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
+test('revalidar mensaje incierto no acepta rollback del mismo hilo al vencer TTL',async()=>{
+ let clock=now,reads=0,writes=0;
+ const flow=createPassengerChatFlow({now:()=>clock,
+  getActor:async()=>actor(),gateway:flags({
+   readMessages:async()=>{
+    reads++;
+    return {ok:true,data:reads===1?page():{
+     ...page(),revision:6,messages:[{...row(1),revision:6}],
+     generatedAt:clock-1000,expiresAt:clock+60000
+    }};
+   },
+   sendMessage:async()=>{writes++;return {ok:false,code:'CHAT_NETWORK_OR_TIMEOUT'};}
+  })});
+ assert.equal((await flow.open({serviceId,serviceKind:'RIDE'})).ok,true);
+ assert.equal((await flow.send({body:'Estoy aquí',requestKey:key})).code,
+  'CHAT_NETWORK_OR_TIMEOUT');
+ clock+=60001;
+ assert.equal((await flow.retryPending()).code,'INVALID_CHAT_PAGE');
+ assert.equal(reads,2);assert.equal(writes,1);
+ assert.equal(flow.snapshot().messages.length,0);
+ assert.equal(flow.snapshot().pendingSend,false);
+});
