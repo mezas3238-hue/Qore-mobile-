@@ -18,15 +18,19 @@ type DriverWorkspaceContextValue={
 const Context=createContext<DriverWorkspaceContextValue|null>(null);
 
 export function DriverWorkspaceProvider({
- children,authAdapter=null,apiOrigin=null
+ children,authAdapter=null,apiOrigin=null,
+ approvedStagingHost=null,allowedByOwner=false
 }:{
  children:React.ReactNode;
  authAdapter?:DriverAuthSessionAdapter|null;
  apiOrigin?:string|null;
+ approvedStagingHost?:string|null;
+ allowedByOwner?:boolean;
 }){
  const controller:DriverWorkspaceController=useMemo(
-  ()=>createDriverWorkspaceController({authAdapter,apiOrigin}),
-  [authAdapter,apiOrigin]
+  ()=>createDriverWorkspaceController({
+    authAdapter,apiOrigin,approvedStagingHost,allowedByOwner
+  }),[authAdapter,apiOrigin,approvedStagingHost,allowedByOwner]
  );
  const [state,setState]=useState<DriverWorkspaceSnapshot>(()=>controller.current());
  useEffect(()=>{
