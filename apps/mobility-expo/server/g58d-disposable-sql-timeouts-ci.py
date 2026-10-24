@@ -17,6 +17,7 @@ def connect():
         user=os.environ["PGUSER"],
         password=os.environ["PGPASSWORD"],
         dbname=os.environ["PGDATABASE"],
+        autocommit=True,
         options="-c application_name=qore_ci_disposable_chain"
     )
 
