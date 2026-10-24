@@ -12,6 +12,8 @@ import {MERCHANT_SUPPORT_REASONS,createMerchantSupportGuide}
  from '../src/domain/merchant-support-guide.mjs';
 import type {MerchantSupportUpdate,MerchantSupportSeverity}
  from '../src/domain/merchant-support-guide.mjs';
+import {projectQaIncidentStatusView}
+ from '../src/domain/g40-incident-status-view.mjs';
 
 export default function Support(){
  const {client,view}=useClientView();
@@ -73,6 +75,11 @@ function StructuredQaIncident({client,view}:{client:ClientExperience;view:Client
  const lock=useRef(false),alive=useRef(true);
  useEffect(()=>()=>{alive.current=false;},[]);
  const report=view.incidentReport;
+ // Nunca anunciar el estado bruto de un recibo vencido ni equiparar estados
+ // QA (triaged/investigating/resolved) con una gestión humana.
+ const qaStatus=projectQaIncidentStatusView(report,{
+  authenticated:view.authenticated,now:Date.now()
+ });
  const editable=report.phase==='idle'&&!lock.current;
  const pending=report.phase==='in_flight'||report.phase==='checking';
  function update(action:()=>void){if(!editable)return;action();setFeedback('');}
@@ -147,10 +154,19 @@ function StructuredQaIncident({client,view}:{client:ClientExperience;view:Client
   {report.phase==='failed'&&<Text accessibilityRole="alert" style={styles.text}>
    La respuesta no pudo certificarse. Es necesaria conciliación; no se creará otra clave.</Text>}
   {report.receipt&&<>
-   <Text accessibilityRole="header" style={styles.heading}>Recibo de base QA (NO SOS)</Text>
-   <Text style={styles.text}>Recibo: {report.receipt.receiptId}</Text>
-   <Text style={styles.text}>Estado: {report.receipt.state} · revisión {report.receipt.revision}</Text>
-   <Text style={styles.small}>Persistencia en base de pruebas únicamente. No implica atención humana, notificación ni emergencia.</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Seguimiento de registro · SOLO QA</Text>
+   {qaStatus.verified?<>
+    <Text style={styles.text}>Recibo QA: {qaStatus.receiptId}</Text>
+    <Text style={styles.text}>{qaStatus.label} · revisión {qaStatus.revision}</Text>
+    <Text style={styles.small}>{qaStatus.description}</Text>
+    <Text style={styles.small}>Observado en servidor QA: {qaStatus.observedAt}</Text>
+   </>:<Text accessibilityRole="alert" style={styles.text}>
+    Estado no verificado o vencido. No mostramos información anterior como actual.
+   </Text>}
+   <Text style={styles.small}>
+    Este registro no confirma que un agente o comercio haya recibido la consulta,
+    ni equivale a contacto, resolución real, mensaje enviado o emergencia.
+   </Text>
    {report.phase==='acknowledged'&&<Action label="Consultar estado del recibo QA"
     onPress={()=>void execute('refresh')}/>}
   </>}
