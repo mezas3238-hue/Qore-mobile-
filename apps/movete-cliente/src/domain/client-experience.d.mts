@@ -18,6 +18,9 @@ export type ClientSnapshot={
   locationObservedAt:number|null;subscriptionActive:boolean;syncing:boolean;
   lastFetchedAt:number|null;lastError:string|null;liveEnabled:false;
  };
+ autoPrequote:{phase:string;quote:{quoteId:string;amountGs:number;currency:'PYG';fareVersion:string;expiresAt:number}|null;
+  quoteAvailable:boolean;bookingAvailable:boolean;canAccept:boolean;canReserve:boolean;
+  requiresReconciliation:boolean;tripId:string|null;productionEnabled:false};
  quote:{quoteId:string;subjectId:string;amountGs:number;fareMode:string;
   subjectKind:string;expiresAt:number;fareVersion:string;formattedAmount:string}|null;
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
@@ -111,6 +114,13 @@ export type ClientExperience={
  submitIncidentReport():Promise<ClientResult>;
  retryIncidentReport():Promise<ClientResult>;
  refreshIncidentStatus():Promise<ClientResult>;
+ prepareAutoPrequote(args:{routeId:string;service:'economico'|'confort'|'xl';quoteRequestKey:string;
+  ownerId:string;sessionRevision:number}):ClientResult;
+ loadAutoPrequote():Promise<ClientResult>;
+ acceptAutoPrequote(args:{quoteId:string;amountGs:number;fareVersion:string}):ClientResult;
+ reserveQuotedAuto(args:{requestKey:string}):Promise<ClientResult>;
+ reconcileQuotedAuto():Promise<ClientResult>;
+ clearAutoPrequote():void;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
  prepareDelivery(body:unknown):ClientResult;
@@ -159,6 +169,14 @@ export declare function createClientExperience(options?:{
   origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
   timeoutMs?:number;maxBytes?:number;
+ }|null;
+ // Disabled until A supplies certified route/prequote/booking/readback contracts.
+ autoPrequoteOptions?:{
+  enabled?:boolean;quoteContractCertified?:boolean;bookingContractCertified?:boolean;
+  reconciliationContractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  quoteGateway?:(scope:unknown)=>Promise<unknown>|unknown;
+  bookingGateway?:(scope:unknown)=>Promise<unknown>|unknown;
+  reconciliationGateway?:(scope:unknown)=>Promise<unknown>|unknown;
  }|null;
  bookingHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;

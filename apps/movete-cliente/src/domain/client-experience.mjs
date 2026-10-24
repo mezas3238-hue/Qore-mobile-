@@ -9,6 +9,7 @@ import {createClientHistoryGateway} from './client-history-gateway.mjs';
 import {createRiderStatusGateway} from './ride-status-gateway.mjs';
 import {createFareQuoteGateway} from './fare-quote-gateway.mjs';
 import {createFareQuoteFlow} from './fare-quote-flow.mjs';
+import {createF1AutoPrequoteConsent} from './f1-auto-prequote-consent.mjs';
 import {createRideCancellationGateway,createRideCancellationController} from './ride-cancellation.mjs';
 import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
@@ -35,7 +36,7 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,autoPrequoteOptions=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -45,7 +46,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
  let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox;
- let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null;
+ let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null;
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
@@ -60,6 +61,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(tracking)tracking.stop();
   if(cancellation)cancellation.clear();
   if(fareFlow)fareFlow.clear();
+  if(prequoteAuto)prequoteAuto.clear();
   if(incidentFlow)incidentFlow.clear();
   if(senderCustody)senderCustody.clear();
   custodyAnchor=null;
@@ -80,6 +82,9 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
+ // F1 disabled-by-default: backend A must certify route/prequote/booking/readback.
+ prequoteAuto=createF1AutoPrequoteConsent({...(autoPrequoteOptions??{}),now,
+  getActor:async()=>actorSession()});
  // G68 is Passenger/sender-only; G66 remains strictly Driver-private.
  // A G68 has ONLY a Node/SQL QA handler, not deployed HTTPS. The gateway
  // requires separately verified opt-ins and is never wired by default.
@@ -605,7 +610,8 @@ export function createClientExperience({authProvider=null,gateway=null,
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
-    privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,history:null,
+    privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
+    autoPrequote:prequoteAuto.snapshot(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -627,6 +633,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    completedRideHistory:completedRideHistory(),
    tracking:tracking.snapshot(),
    quote:quote.current(),
+   autoPrequote:prequoteAuto.snapshot(),
    history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
@@ -698,6 +705,12 @@ export function createClientExperience({authProvider=null,gateway=null,
   submitIncidentReport:async()=>{const result=await incidentFlow.submit();notify();return result;},
   retryIncidentReport:async()=>{const result=await incidentFlow.retry();notify();return result;},
   refreshIncidentStatus:async()=>{const result=await incidentFlow.refresh();notify();return result;},
+  prepareAutoPrequote:args=>{const result=prequoteAuto.prepare(args);notify();return result;},
+  loadAutoPrequote:async()=>{const p=prequoteAuto.load();notify();const r=await p;notify();return r;},
+  acceptAutoPrequote:args=>{const result=prequoteAuto.accept(args);notify();return result;},
+  reserveQuotedAuto:async args=>{const p=prequoteAuto.reserve(args);notify();const r=await p;notify();return r;},
+  reconcileQuotedAuto:async()=>{const p=prequoteAuto.reconcile();notify();const r=await p;notify();return r;},
+  clearAutoPrequote:()=>{prequoteAuto.clear();notify();},
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
