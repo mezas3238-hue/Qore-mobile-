@@ -348,3 +348,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_KEYSET_POSTGRES_CI_ONLY.sql
       - name: G52 prove 205 messages in 3 pages, revision, replay, revocation and role denial
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G52_CHAT_HISTORY_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G52 two-connection revision-lock race and replay version gate
+        run: python3 apps/mobility-expo/server/g52-chat-history-concurrency-ci.py
