@@ -155,7 +155,8 @@ export function createF1AutoPrequoteConsent({
   if(result?.ok===true&&result.status===201
    &&s.quote.expiresAt>now()
    &&validReceipt(result.data,s,requestKey)){
-   state={...state,phase:'confirmed',tripId:result.data.tripId};
+   state={...state,phase:'confirmed',tripId:result.data.tripId,
+    serverRevision:result.data.revision};
    return Object.freeze({ok:true,tripId:result.data.tripId,
     qaOnly:true,productionEnabled:false});
   }
@@ -178,11 +179,26 @@ export function createF1AutoPrequoteConsent({
   if(result?.ok!==true||result.status!==200
    ||!validReceipt(result.data,s,s.bookingRequestKey))
    return fail('BOOKING_STILL_UNCONFIRMED');
-  state={...state,phase:'confirmed',tripId:result.data.tripId};
+  state={...state,phase:'confirmed',tripId:result.data.tripId,
+    serverRevision:result.data.revision};
   return Object.freeze({ok:true,tripId:result.data.tripId,
    recoveredWithoutPost:true,qaOnly:true,productionEnabled:false});
  }
+ function verifiedBooking(){
+  // Internal continuation proof only. Nothing from snapshot/UI or an HTTP
+  // status alone qualifies: quote and booking receipts passed owner checks.
+  if(!bookReady||state.phase!=='confirmed'
+   ||!uuid(state.tripId)||!uuid(state.bookingRequestKey)
+   ||!uuid(state.ownerId)||!uuid(state.routeId)
+   ||!uuid(state.quote?.quoteId)
+   ||!Number.isSafeInteger(state.serverRevision)||state.serverRevision<1)
+   return null;
+  return Object.freeze({tripId:state.tripId,subject:state.ownerId,
+   requestKey:state.bookingRequestKey,routeId:state.routeId,
+   quoteId:state.quote.quoteId,serverRevision:state.serverRevision,
+   sessionRevision:state.sessionRevision,qaOnly:true,productionEnabled:false});
+ }
  return Object.freeze({isQuoteConfigured:()=>quoteReady,
-  isBookingConfigured:()=>bookReady,snapshot,prepare,load,accept,
+  isBookingConfigured:()=>bookReady,snapshot,verifiedBooking,prepare,load,accept,
   reserve,reconcile,discard,clear,productionEnabled:false});
 }
