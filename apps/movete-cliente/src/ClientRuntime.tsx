@@ -4,6 +4,16 @@ import {createClientExperience} from './domain/client-experience.mjs';
 import type {ClientExperience,ClientSnapshot} from './domain/client-experience.mjs';
 
 const ExperienceContext=createContext<ClientExperience|null>(null);
+// Preferencia de presentación en RAM: no guarda identidades, rutas ni tokens.
+// No se presenta como una configuración persistida en el servidor.
+const SimpleModeContext=createContext<{
+ simpleMode:boolean;setSimpleMode:(enabled:boolean)=>void;
+}|null>(null);
+export function useClientSimpleMode(){
+ const value=useContext(SimpleModeContext);
+ if(!value)throw new Error('Modo simple requiere ClientRuntimeProvider');
+ return value;
+}
 
 /**
  * Default sin Auth/API: nada se conecta por accidente. El integrador de A
@@ -13,7 +23,11 @@ export function ClientRuntimeProvider({children,experience}:{
  children:React.ReactNode;experience?:ClientExperience;
 }){
  const client=useMemo(()=>experience??createClientExperience(),[experience]);
- return <ExperienceContext.Provider value={client}>{children}</ExperienceContext.Provider>;
+ const [simpleMode,setSimpleMode]=useState(false);
+ const simplePreferences=useMemo(()=>({simpleMode,setSimpleMode}),[simpleMode]);
+ return <ExperienceContext.Provider value={client}>
+  <SimpleModeContext.Provider value={simplePreferences}>{children}</SimpleModeContext.Provider>
+ </ExperienceContext.Provider>;
 }
 export function useClientView(){
  const client=useContext(ExperienceContext);
