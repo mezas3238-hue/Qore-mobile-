@@ -97,3 +97,54 @@ test('G44 no mezcla sucursales de diferentes municipios ni servicios',async()=>{
   'NO_NEXT_PAGE');
  assert.equal(x.snapshot().items.length,1);
 });
+
+test('R48 directorio entrega expiresAt explícito y oculta exactamente a 30 segundos',async()=>{
+ let clock=t;
+ const x=create(async()=>({ok:true,status:200,data:page(1,cursor(1))}),{
+  now:()=>clock
+ });
+ assert.equal((await x.load({municipality,serviceKind})).ok,true);
+ assert.equal(x.snapshot().expiresAt,t+30000);
+ assert.equal(x.snapshot().items.length,1);
+ clock=t+29999;
+ assert.equal(x.snapshot().items.length,1);
+ assert.equal(x.snapshot().hasNext,true);
+ clock=t+30000;
+ assert.equal(x.snapshot().expiresAt,null);
+ assert.equal(x.snapshot().pageNumber,0);
+ assert.equal(x.snapshot().items.length,0);
+ assert.equal(x.snapshot().hasNext,false);
+ assert.equal(x.snapshot().hasPrevious,false);
+ assert.equal((await x.load({municipality,serviceKind,next:true})).code,'NO_NEXT_PAGE');
+});
+test('R48 no expone expiración ni sucursales durante GET pendiente',async()=>{
+ let release;
+ const deferred=new Promise(resolve=>{release=resolve;});
+ let hits=0,clock=t;
+ const x=create(async()=>{
+  hits++;
+  return hits===1?{ok:true,status:200,data:page(1,cursor(1))}:deferred;
+ },{now:()=>clock});
+ await x.load({municipality,serviceKind});
+ const next=x.load({municipality,serviceKind,next:true});
+ const pending=x.snapshot();
+ assert.equal(pending.loading,true);
+ assert.equal(pending.expiresAt,null);
+ assert.equal(pending.items.length,0);
+ clock=t+400;
+ release({ok:true,status:200,data:page(2)});
+ assert.equal((await next).ok,true);
+ assert.equal(x.snapshot().expiresAt,t+30400);
+ assert.equal(x.snapshot().pageNumber,2);
+});
+test('R48 reloj no seguro o retroceso temporal nunca acredita lista vigente',async()=>{
+ let clock=t;
+ const x=create(async()=>({ok:true,status:200,data:page(1)}),{now:()=>clock});
+ await x.load({municipality,serviceKind});
+ for(const bad of [NaN,Infinity,t-1]){
+  clock=bad;
+  assert.equal(x.snapshot().expiresAt,null);
+  assert.equal(x.snapshot().items.length,0);
+  assert.equal(x.snapshot().hasNext,false);
+ }
+});
