@@ -6,6 +6,7 @@ export type ClientSnapshot={
  mutation:{phase:string;operation:string|null;requestKey:string|null;error:string|null};
  bookingRecovery:{readReady:boolean;productionEnabled:false};
  rideContinuation:{canVerify:boolean;tripId:string|null;qaOnly:true;productionEnabled:false};
+ rideHistoryRecovery:{readReady:boolean;busy:boolean;qaOnly:true;productionEnabled:false};
  senderCustody:{readReady:boolean;loading:boolean;deliveryId:string|null;
   revision:number;state:string|null;vehicleKind:string|null;
   proofVerified:boolean;error:string|null;qaOnly:true;productionEnabled:false};
@@ -122,6 +123,9 @@ export type ClientExperience={
  reconcileBooking():Promise<ClientResult>;
  startTracking(tripId:string):ClientResult;
  continueVerifiedRide():Promise<ClientResult & {
+  tripId?:string;serverRevision?:number;qaOnly?:true;productionEnabled?:false
+ }>;
+ resumeRideFromHistory(args:{tripId:string;expectedHistoryRevision:number}):Promise<ClientResult & {
   tripId?:string;serverRevision?:number;qaOnly?:true;productionEnabled?:false
  }>;
  syncTracking():Promise<ClientResult>;
