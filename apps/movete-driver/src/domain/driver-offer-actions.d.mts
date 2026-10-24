@@ -3,7 +3,7 @@ export type OfferKind='AUTO_RIDE'|'DELIVERY';
 export type OfferAction='accept'|'decline';
 export type OfferDecisionPhase='sending'|'confirmed'|'uncertain'|'blocked';
 export type DriverOfferDecisionStatus=Readonly<{
- offerId:string;kind:OfferKind;action:OfferAction;phase:OfferDecisionPhase;
+ offerId:string;serviceId:string;kind:OfferKind;action:OfferAction;phase:OfferDecisionPhase;
 }>;
 export type DriverOfferActionsSnapshot=Readonly<{
  phase:'signed-out'|'authorization-required'|'ready';
