@@ -62,7 +62,7 @@ test('R66 QA HTTP 503 clears visible delivered but cannot reset monotonic floor'
  assert.equal((await f.app.readOwnDeliveryCustody(delivery)).code,'SENDER_CUSTODY_UNVERIFIED');
  assert.equal(f.app.snapshot().senderCustody.state,null);
  f.ok();f.put('picked_up',8);
- assert.equal((await f.app.readOwnDeliveryCustody(delivery)).code,'SENDER_CUSTODY_STATE_CONFLICT');
+ assert.equal((await f.app.readOwnDeliveryCustody(delivery)).code,'SENDER_CUSTODY_STALE_REVISION');
  assert.equal(f.app.snapshot().senderCustody.proofVerified,false);
 });
 test('R66 impossible same-revision status change cannot be displayed',async()=>{
