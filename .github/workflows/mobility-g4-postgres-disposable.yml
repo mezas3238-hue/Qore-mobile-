@@ -417,3 +417,5 @@ jobs:
         run: python3 apps/mobility-expo/server/g57b-driver-ordered-concurrency-ci.py
       - name: G58 verify chat SQL Driver Passenger NOLOGIN roles and forbidden owner mint
         run: python3 apps/mobility-expo/server/g58-delegated-role-isolation-ci.py
+      - name: G58D verify SQL transaction deadlines and concurrent lock recovery on disposable PostgreSQL
+        run: python3 apps/mobility-expo/server/g58d-disposable-sql-timeouts-ci.py
