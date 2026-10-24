@@ -107,8 +107,13 @@ BEGIN
  NOT EXISTS(SELECT 1 FROM public.user_roles
    WHERE user_id=_actor AND role='passenger'::public.app_role)
  THEN RAISE EXCEPTION 'G51 Passenger-only inbox' USING ERRCODE='G5103'; END IF;
- SELECT GREATEST(COALESCE(max(event_seq),0),1) INTO revision
- FROM public.mobility_stage_g51_chat_activity;
+ -- Compute per-owner high-water mark INCLUDING closed threads.
+ -- Never disclose or invalidate cursors due to another customer's traffic.
+ SELECT GREATEST(COALESCE(max(a.event_seq),0),1) INTO revision
+ FROM public.mobility_stage_g51_chat_activity a
+ JOIN public.mobility_stage_g50_chat_threads t
+  ON t.conversation_id=a.conversation_id
+ WHERE t.passenger_id=_actor;
  IF _expected_revision IS NOT NULL AND _expected_revision<>revision
  THEN RAISE EXCEPTION 'G51 inbox changed since cursor' USING ERRCODE='G5109'; END IF;
  at_ms:=floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint;
