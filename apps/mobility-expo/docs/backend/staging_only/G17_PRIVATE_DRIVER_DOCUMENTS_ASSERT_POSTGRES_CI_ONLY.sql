@@ -72,16 +72,18 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.mobility_stage_driver_document_reviews)
  THEN RAISE EXCEPTION 'G17 unreviewed upload created fake admin audit'; END IF;
 
- -- Unapproved evidence types have no G1 private Storage upload policy.
- BEGIN
-  PERFORM public.mobility_stage_register_driver_document(
+ -- Each record stays pending until independent issuer / liveness checks.
+ PERFORM public.mobility_stage_register_driver_document(
    v_driver,'00000000-0000-4000-8000-000000000197','identidad_frente',
    v_driver::text||'/identidad_frente-abcdefghijklmnop.jpg',
-   'image/jpeg',8500,repeat('a',64));
-  RAISE EXCEPTION 'BUG: unsupported Storage category accepted';
- EXCEPTION WHEN OTHERS THEN
-  IF SQLERRM='BUG: unsupported Storage category accepted' THEN RAISE; END IF;
- END;
+   'image/jpeg',8500,repeat('b',64));
+ PERFORM public.mobility_stage_register_driver_document(
+   v_driver,'00000000-0000-4000-8000-000000000198','rostro_selfie',
+   v_driver::text||'/rostro_selfie-abcdefghijklmnop.jpg',
+   'image/jpeg',8500,repeat('c',64));
+ IF (SELECT count(*) FROM public.mobility_stage_read_driver_document_status(v_driver)
+   WHERE kind='rostro_selfie' AND status='pending')<>1
+ THEN RAISE EXCEPTION 'G17 private selfie record not readable as pending'; END IF;
  -- Driver mismatch and key tampering must always fail; test independent
  -- savepoint subtransactions so the rest of CI can continue.
  BEGIN

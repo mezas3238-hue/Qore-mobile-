@@ -6,7 +6,7 @@ export const DRIVER_DOCUMENTS_LIVE_ENABLED=false;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BEARER=/^[A-Za-z0-9._~-]{20,7900}$/;
 const KINDS=new Set(['licencia','identidad_frente','identidad_dorso',
- 'cedula_verde','seguro','inspeccion','habilitacion']);
+ 'cedula_verde','seguro','inspeccion','habilitacion','rostro_selfie']);
 const STATES=new Set(['pending','approved','rejected']);
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
@@ -32,7 +32,7 @@ export async function readDriverDocumentStatuses({
  try{body=await response.json();}catch{throw Error('Invalid private document response');}
  if(!plain(body)||Object.keys(body).length!==3||
     body.mode!=='STAGING_DEMO_ONLY'||body.liveOperationsEnabled!==false||
-    !Array.isArray(body.documents)||body.documents.length>7)
+    !Array.isArray(body.documents)||body.documents.length>8)
   throw Error('Invalid private document response');
  const seen=new Set(),statuses=[];
  for(const item of body.documents){

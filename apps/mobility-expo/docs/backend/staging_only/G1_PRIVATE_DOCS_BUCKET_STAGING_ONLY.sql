@@ -29,7 +29,7 @@ CREATE POLICY mobility_stage_evidence_owner_insert
   AND owner_id=auth.uid()::text
   AND storage.foldername(name)=ARRAY[auth.uid()::text]
   AND name ~ ('^' || auth.uid()::text ||
-    '/licencia-[A-Za-z0-9_-]{12,80}\.(jpg|jpeg|png)$')
+    '/(licencia|identidad_frente|identidad_dorso|cedula_verde|habilitacion|seguro|inspeccion|rostro_selfie)-[A-Za-z0-9_-]{12,80}\.(jpg|jpeg|png)$')
  );
 CREATE POLICY mobility_stage_evidence_owner_select
  ON storage.objects FOR SELECT TO authenticated

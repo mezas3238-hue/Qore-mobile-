@@ -10,14 +10,14 @@ END $guard$;
 BEGIN;
 CREATE TYPE public.mobility_stage_driver_document_kind AS ENUM (
  'licencia','identidad_frente','identidad_dorso','cedula_verde',
- 'seguro','inspeccion','habilitacion');
+ 'seguro','inspeccion','habilitacion','rostro_selfie');
 CREATE TYPE public.mobility_stage_driver_document_status AS ENUM (
  'pending','approved','rejected');
 
 -- This registry stores only synthetic/private STORAGE REFERENCES, never bytes.
 -- A trusted server must observe/verify a stored object BEFORE calling the RPC.
--- Current G1 Storage upload policy supports "licencia" only; adding other
--- kinds here does NOT grant permission to upload them.
+-- Storage permits only approved owner-scoped kinds. A trusted server must
+-- observe private object bytes and scan before calling this reference RPC.
 CREATE TABLE public.mobility_stage_driver_documents (
  id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
  request_key uuid NOT NULL UNIQUE,
@@ -83,7 +83,6 @@ DECLARE existing public.mobility_stage_driver_documents%ROWTYPE;
  result_id uuid;
 BEGIN
  IF _driver_id IS NULL OR _request_key IS NULL OR _kind IS NULL
-  OR _kind<>'licencia'::public.mobility_stage_driver_document_kind
   OR _object_key IS NULL OR _mime_type IS NULL OR _byte_size IS NULL
   OR _sha256_hex IS NULL OR
   _object_key !~ ('^'||_driver_id::text||'/'||_kind::text||
@@ -175,7 +174,7 @@ BEGIN
   SELECT DISTINCT ON (d.kind) d.kind,d.status,d.submitted_at,d.reviewed_at
   FROM public.mobility_stage_driver_documents d WHERE d.driver_id=_driver_id
   ORDER BY d.kind,d.submitted_at DESC,d.id DESC
- ) x ORDER BY x.kind LIMIT 7;
+ ) x ORDER BY x.kind LIMIT 8;
 END $fn$;
 
 REVOKE ALL ON FUNCTION public.mobility_stage_register_driver_document(

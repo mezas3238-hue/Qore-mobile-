@@ -12,7 +12,8 @@ export default function DriverDocuments(){
  const kindLabels:Record<string,string>={
   licencia:'Licencia de conducir',identidad_frente:'Identidad — frente',
   identidad_dorso:'Identidad — dorso',cedula_verde:'Cédula verde',
-  seguro:'Seguro',inspeccion:'Inspección',habilitacion:'Habilitación'
+  seguro:'Seguro',inspeccion:'Inspección',habilitacion:'Habilitación',
+  rostro_selfie:'Foto de rostro (selfie)'
  };
  const statusLabels:Record<string,string>={
   pending:'Pendiente de revisión',approved:'Aprobado por revisión administrativa',
@@ -44,6 +45,7 @@ export default function DriverDocuments(){
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mi documentación privada</Text>
+   <Text style={styles.small}>Expediente obligatorio: licencia, cédula de identidad de ambos lados, cédula verde, habilitación, seguro, inspección y selfie actual con consentimiento y verificación facial. Una foto subida no basta para aprobar la cuenta.</Text>
    {state.phase==='connected'?<>
     <Text style={styles.text}>Último estado del servidor STAGING. No se muestran archivos ni identificaciones personales.</Text>
     {state.documents.length===0?

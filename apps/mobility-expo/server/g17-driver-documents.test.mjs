@@ -12,6 +12,7 @@ const requestKey='55555555-5555-4555-8555-555555555555';
 const reviewId='66666666-6666-4666-8666-666666666666';
 const token='a'.repeat(60);
 const objectKey=driver+'/licencia-abcdefghijklmnop.jpg';
+const selfieKey=driver+'/rostro_selfie-abcdefghijklmnop.jpg';
 const observation={serverObserved:true,malwareScanPassed:true,ownerId:driver,
  storageBucket:'mobility-staging-driver-evidence',objectKey,
  mimeType:'image/jpeg',byteSize:2000,sha256Hex:'a'.repeat(64)};
@@ -141,5 +142,33 @@ test('G17 denied storage, RPC failures, invalid state all fail closed',async()=>
  for(const data of [null,[{kind:'licencia',status:'approved',submittedAtMs:1,reviewedAtMs:null}],
  [{kind:'private',status:'pending',submittedAtMs:1,reviewedAtMs:null}]]){
   assert.equal((await gateway({readStatus:async()=>data}).handle(read)).status,503);
+ }
+});
+
+test('G17 all eight private kinds including selfie are observed safely and stay unverified',async()=>{
+ const kinds=['licencia','identidad_frente','identidad_dorso','cedula_verde',
+  'habilitacion','seguro','inspeccion','rostro_selfie'];
+ for(const kind of kinds){
+  const key=driver+'/'+kind+'-abcdefghijklmnop.jpg';
+  const {handle,calls}=gateway({
+   observePrivateObject:async()=>({...observation,objectKey:key})
+  });
+  const res=await handle({...observe,body:{requestKey,kind,objectKey:key}});
+  assert.equal(res.status,202,kind);
+  assert.equal(res.body.status,'pending');
+  assert.equal(res.body.evidenceAuthenticityVerified,false);
+  assert.equal(res.body.driverEligible,false);
+  assert.equal(calls.at(-1)[0],'register');
+  assert.equal(calls.at(-1)[1].kind,kind);
+  assert.equal(JSON.stringify(res).includes(key),false);
+ }
+ for(const o of [
+  {...observation,objectKey:selfieKey,malwareScanPassed:false},
+  {...observation,objectKey:selfieKey,ownerId:outsider},
+  {...observation,objectKey:selfieKey,serverObserved:false}
+ ]){
+  const {handle}=gateway({observePrivateObject:async()=>o});
+  const res=await handle({...observe,body:{requestKey,kind:'rostro_selfie',objectKey:selfieKey}});
+  assert.equal(res.status,409);
  }
 });

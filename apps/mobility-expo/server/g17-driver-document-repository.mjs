@@ -4,14 +4,14 @@
 export const G17_DOCUMENTS_LIVE_ENABLED=false;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const kinds=new Set(['licencia','identidad_frente','identidad_dorso',
- 'cedula_verde','seguro','inspeccion','habilitacion']);
+ 'cedula_verde','seguro','inspeccion','habilitacion','rostro_selfie']);
 const status=new Set(['pending','approved','rejected']);
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const id=x=>typeof x==='string'&&UUID.test(x);
 const iso=x=>typeof x==='string'&&Number.isSafeInteger(Date.parse(x));
 function rows(response){
  if(!plain(response)||response.error||!Array.isArray(response.data)||
-   response.data.length>7)throw Error('G17 private document status unavailable');
+   response.data.length>8)throw Error('G17 private document status unavailable');
  return Object.freeze(response.data.map(row=>{
   if(!plain(row)||!kinds.has(row.kind)||!status.has(row.status)||
      !iso(row.submitted_at)||!(row.reviewed_at===null||iso(row.reviewed_at)))

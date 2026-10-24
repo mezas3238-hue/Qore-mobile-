@@ -8,7 +8,7 @@ const READ='/v1/staging/driver/documents';
 const OBSERVE='/v1/staging/driver/documents/observe';
 const REVIEW='/v1/staging/admin/driver-documents/review';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const KINDS=new Set(['licencia','identidad_frente','identidad_dorso','cedula_verde','seguro','inspeccion','habilitacion']);
+const KINDS=new Set(['licencia','identidad_frente','identidad_dorso','cedula_verde','seguro','inspeccion','habilitacion','rostro_selfie']);
 const STATUS=new Set(['pending','approved','rejected']);
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
  (Object.getPrototypeOf(x)===Object.prototype||Object.getPrototypeOf(x)===null);
@@ -24,8 +24,8 @@ function token(headers){
 const confirmed=u=>plain(u)&&uuid(u.id)&&u.is_anonymous!==true&&
  (typeof u.email_confirmed_at==='string'||typeof u.phone_confirmed_at==='string');
 function safeObject(userId,kind,key){
- // The currently installed G1 private bucket policy only permits license.
- return uuid(userId)&&kind==='licencia'&&typeof key==='string'&&
+ // G1 private bucket permits only this explicit eight-kind owner allowlist.
+ return uuid(userId)&&KINDS.has(kind)&&typeof key==='string'&&
   key.length<=180&&
   new RegExp('^'+userId+'/'+kind+'-[A-Za-z0-9_-]{12,80}[.](jpg|jpeg|png)$').test(key);
 }
@@ -45,7 +45,7 @@ function verifiedPrivateObservation(observation,userId,kind,key){
  return expected?key.endsWith('.png'):/\.(jpg|jpeg)$/.test(key);
 }
 function statusRows(rows){
- if(!Array.isArray(rows)||rows.length>7)throw Error('Invalid G17 status');
+ if(!Array.isArray(rows)||rows.length>8)throw Error('Invalid G17 status');
  const seen=new Set();
  return rows.map(item=>{
   if(!plain(item)||!KINDS.has(item.kind)||!STATUS.has(item.status)||
