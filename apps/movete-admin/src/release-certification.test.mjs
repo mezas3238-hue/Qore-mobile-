@@ -35,6 +35,29 @@ test('R60 official P0 inventory: 17 gates, 20 flows and unambiguous NO_GO',()=>{
  assert.deepEqual(r.flowCounts,{blocked:20,qaOnly:0,certified:0});
  assert.equal(x.release.ownerGoLiveAuthorization,false);
 });
+test('R60 mirror exactly matches authoritative A gate IDs and source states',()=>{
+ const x=registry();
+ const master=JSON.parse(readFileSync(new URL(
+  '../../../docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json',
+  import.meta.url),'utf8'));
+ assert.equal(master.decision,'NO_GO');
+ assert.equal(master.ownerGoLiveAuthorization,false);
+ assert.equal(master.blockers.length,MANDATORY_GATES.length);
+ for(const gate of x.gates){
+  const official=master.blockers.find(o=>o.id===gate.id);
+  assert.ok(official,'Missing in authoritative A registry: '+gate.id);
+  assert.equal(gate.sourceStatus,official.status);
+  assert.equal(gate.owner,official.owner);
+ }
+});
+test('R60 no CI proofs can override a sovereign blocked gate',()=>{
+ const x=registry();
+ x.gates[0].status='CERTIFIED';
+ x.gates[0].evidence=x.gates[0].requiredEvidence.map(proof);
+ const r=verify(x);
+ assert.ok(r.problems.includes('SOURCE_GATE_NOT_CERTIFIED'));
+ assert.equal(r.decision,'NO_GO');
+});
 test('R60 source inventory uses pinned GitHub commit, no placeholder or LIVE',()=>{
  const x=registry();
  assert.match(x.source.commitSha,/^[0-9a-f]{40}$/);
@@ -135,7 +158,8 @@ test('R60 fake labels and unknown acceptance owners fail closed',()=>{
 test('R60 even all structured proofs do NOT authorize LIVE automatically',()=>{
  const x=registry();
  for(const g of x.gates){
-  g.status='CERTIFIED';g.evidence=g.requiredEvidence.map(proof);
+  g.sourceStatus='certified';g.status='CERTIFIED';
+  g.evidence=g.requiredEvidence.map(proof);
  }
  for(const f of x.flows){
   f.status='CERTIFIED';f.evidence=f.requiredEvidence.map(proof);
