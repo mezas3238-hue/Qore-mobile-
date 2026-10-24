@@ -24,11 +24,11 @@ export interface ContactPreferenceResult {
  readonly submitted?:false
 }
 export declare function createMerchantContactPreference(options?:{now?:()=>number}):{
- snapshot(guide:MerchantGuideReview,actor:MerchantContactActor):ContactPreferenceResult;
- choose(guide:MerchantGuideReview,actor:MerchantContactActor,
+ snapshot(guide:unknown,actor:MerchantContactActor):ContactPreferenceResult;
+ choose(guide:unknown,actor:MerchantContactActor,
   recipient:MerchantContactRecipient):ContactPreferenceResult;
- setConsent(guide:MerchantGuideReview,actor:MerchantContactActor,
+ setConsent(guide:unknown,actor:MerchantContactActor,
   consent:boolean):ContactPreferenceResult;
- review(guide:MerchantGuideReview,actor:MerchantContactActor):ContactPreferenceResult;
+ review(guide:unknown,actor:MerchantContactActor):ContactPreferenceResult;
  clear():void;dispose():void;
 };
