@@ -25,3 +25,7 @@ Validar **en el mismo SHA final**: `Architect B ownership`, `Admin web QA`, `two
 ## Continuidad R59 y prioridades de terminación
 
 Priorizar integración **Cliente→Backend POST→estado persistido→Driver oferta/aceptación→Cliente tracking**, con `requestKey` conciliable y autorización de ambos roles en HTTPS móvil. Depende de A: IdP/JWKS, gateway STAGING accesible, schemas OpenAPI de ACK/GET reconcile y pruebas de concurrencia PostgreSQL. No seguir acumulando UX trivial; al recibir contratos reales, validarlos extremo a extremo en QA antes de solicitar GO/NO_GO al Owner. Mantener 17 gates P0 actuales NO_GO hasta evidencias de certificación.
+
+## Primer CI R58 y reparaciones antes de certificación
+
+El primer SHA `6fd9b7ced8c3bca8fe8a9dce92bb3269ce8b2ad4` **NO pasó** la suite Cliente: cinco archivos de tests/import fallaron por **SyntaxError de una coma omitida** tras `reconcileBooking` en el objeto exportado de `client-experience.mjs`; además una de las 12 pruebas R58 de snapshots inválidos usaba un helper `check(display=view(),current=display)` que sustituía un `undefined` explícito por el default válido. Se corrigió la coma en commit `f19c315fc400a85ae6ec4d7740623e7dd84bfe78` y la prueba para llamar directamente al proyector en `d4375749c02f7b0909dec501ed77c9e328651f33`. La lógica de seguridad no fue relajada. Certificar **únicamente el último SHA** después de estas correcciones; no reutilizar los checks del primer corte.
