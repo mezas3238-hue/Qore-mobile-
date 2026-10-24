@@ -78,7 +78,7 @@
 select:focus-visible,input:focus-visible,textarea:focus-visible,
 a:focus-visible,.nav-item:focus-visible{
  outline:3px solid #348aca;outline-offset:3px}
-#admin-main-content:focus,#admin-main-content h1:focus{outline:none}
+#admin-main-content:focus,#admin-main-content h1:focus{outline:3px solid #348aca;outline-offset:4px}
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{scroll-behavior:auto!important;
   transition-duration:0.01ms!important;animation-duration:0.01ms!important}
