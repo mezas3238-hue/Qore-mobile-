@@ -99,13 +99,24 @@ export function createG70SenderCustodyLoopbackQa({
    const id=match[1].toLowerCase();
    const bearer=h.authorization.slice(7);
    let result;
+   const timeout=Symbol('G70_PRIVATE_READ_TIMEOUT');
+   let timer;
    try{
     // G69 verifies jwt AND provider/G42 session, exclusive Passenger,
     // rate, owner attestation and one-use delegated PostgreSQL exchange.
-    result=await privateSenderRead({accessToken:bearer,deliveryId:id});
+    // Never retry the internal request: a one-use proof could have been spent.
+    result=await Promise.race([
+     Promise.resolve().then(()=>privateSenderRead({
+      accessToken:bearer,deliveryId:id
+     })),
+     new Promise(resolve=>{timer=setTimeout(()=>resolve(timeout),2200);})
+    ]);
+    if(result===timeout){
+     send(res,fault(503,'G70_READ_OUTCOME_UNKNOWN'));return;
+    }
    }catch{
     send(res,fault(503,'G70_AUTHORITY_UNAVAILABLE'));return;
-   }
+   }finally{clearTimeout(timer)}
    if(result?.status!==200){
     send(res,fault(503,'G70_PRIVATE_READ_UNAVAILABLE'));return;
    }
