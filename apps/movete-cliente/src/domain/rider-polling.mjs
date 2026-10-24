@@ -8,6 +8,26 @@ import {createRiderStatusStore} from './rider-status.mjs';
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid=x=>typeof x==='string'&&UUID.test(x);
+/**
+ * F1/G3 PostgreSQL transition rules. The backend remains authoritative.
+ * Valid mobile polls may skip intermediate events but may NEVER reverse
+ * a committed completed/cancelled ride or change state at the same revision.
+ */
+const RIDE_RANK=Object.freeze({
+ searching:0,assigned:1,arriving:2,in_progress:3,completed:4
+});
+function serverStateConsistent(prior,upcoming){
+ if(prior.tripId===null||prior.tripId!==upcoming.tripId)return true;
+ if(upcoming.revision<prior.revision)return false;
+ if(upcoming.revision===prior.revision)return upcoming.state===prior.state;
+ if(prior.state==='completed'||prior.state==='cancelled')return false;
+ if(upcoming.state==='cancelled'){
+  return ['searching','assigned','arriving'].includes(prior.state);
+ }
+ const old=RIDE_RANK[prior.state],next=RIDE_RANK[upcoming.state];
+ return Number.isSafeInteger(old)&&Number.isSafeInteger(next)
+  &&next>old&&upcoming.revision-prior.revision>=next-old;
+}
 const fail=code=>({ok:false,code});
 /**
  * R61: errors can cross an injected network boundary and later render in
@@ -20,7 +40,8 @@ const SAFE_STATUS_CODES=new Set([
  'TRIP_NOT_FOUND','INVALID_TRIP_ID','UNTRUSTED_REDIRECT',
  'BAD_SERVER_RESPONSE','BAD_CONTENT_TYPE','RESPONSE_TOO_LARGE',
  'INVALID_SERVER_SNAPSHOT','STATUS_READ_IN_FLIGHT','OFFLINE',
- 'GATEWAY_UNAVAILABLE','SERVER_UNAVAILABLE','STALE_SERVER_REVISION'
+ 'GATEWAY_UNAVAILABLE','SERVER_UNAVAILABLE','STALE_SERVER_REVISION',
+ 'TRIP_STATE_CONFLICT'
 ]);
 const safeStatusCode=x=>
  typeof x==='string'&&SAFE_STATUS_CODES.has(x)?x:'SERVER_UNAVAILABLE';
@@ -103,6 +124,13 @@ export function createRiderPollingCoordinator({
     store.networkLost();lastFetchedAt=null;
     lastError='STALE_SERVER_REVISION';
     return fail('STALE_SERVER_REVISION');
+   }
+   if(current.tripId===captured.tripId
+    &&!serverStateConsistent(current,data)){
+    store.networkLost();lastFetchedAt=null;
+    lastError=data.revision<current.revision
+     ?'STALE_SERVER_REVISION':'TRIP_STATE_CONFLICT';
+    return fail(lastError);
    }
    const accepted=store.ingest(data,captured.subject);
    if(!accepted&&store.current().tripId!==captured.tripId){
