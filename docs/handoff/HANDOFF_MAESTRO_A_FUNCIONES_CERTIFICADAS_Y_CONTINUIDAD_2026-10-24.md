@@ -257,3 +257,19 @@ Cortes QA G66 (PG #756/Node #1159/Expo #1849/aislamiento #1587), G67 (#786/#1204
 Ninguno por sí solo certifica IdP/STAGING remoto, teléfono físico, transporte real, facial oficial, push, PSP, legalidad ni GO. El manifiesto scripts/check-movete-launch-gates.mjs --require-go **debe fallar** mientras sigan pendientes 17 gates. No intentar SQL marcado POSTGRES_CI_ONLY contra producción ni Supabase remoto.
 
 **No contar commits como progreso.** Reportar cada recorrido: interfaz útil, backend/DB compartido, seguridad y errores, grado QA/STAGING_E2E/DISPOSITIVO/GO, prueba exacta, bloqueo y siguiente paso concreto que lo termina.
+
+---
+
+## 10. TODOS LOS PENDIENTES — ANEXO OPERATIVO OBLIGATORIO
+
+**Abrir y ejecutar [ANEXO A — trabajos pendientes, aceptación y orden de continuidad](./ANEXO_A_TRABAJOS_PENDIENTES_Y_PRIORIDAD_KYC_2026-10-24.md).** Contiene la lista completa ordenada de P0/P1: bloqueo KYC SQL en despacho, alta Driver con selfie/Storage/proveedores, avisos con app cerrada, viajes AUTO Cliente↔Driver, envíos/comercios y proof real, chat, Admin, soporte, infraestructura/seguridad, pagos/legal y 17 gates.
+
+**PRIMERA TAREA CONCRETA DEL SIGUIENTE ARQUITECTO:** encontrar en G4/G10/G36 TODAS las operaciones SQL de asignar/aceptar y exigir vigencia KYC de ocho documentos más selfie, sesión G42, vehículo, zona y ausencia de suspensión **en el mismo COMMIT con locks**. El UI ya bloquea ofertas QA pero no protege universalmente los RPC backend. Probar dos conexiones, caducidad, documento sustituido y renovación verificada. **No sustituir esta tarea por otro handoff o por más commits.**
+
+## 11. CIERRE DE TRANSFERENCIA Y MANDATO
+
+**Hecho y certificado a nivel QA:** G0–G70 infraestructura/motores AUTO y DELIVERY/contratos/SQL/chat, más KYC Driver de ocho documentos, selfie/cámara opt-in, verificación QA, aprobación SQL atómica, cálculo de vencimientos y advertencias Driver con renovación y restauración READY_QA. Último SHA funcional certificado: **2685e478c606a3b2335a90920965460c7e3ddb41**, 4/4 SUCCESS QA.
+
+**Aún no certificado comercialmente:** restricción documental en todos los RPC de despacho; IdP/HTTPS/Storage reales; biometría y documentos oficiales; push OS app cerrada; E2E de dos teléfonos AUTO/envíos/comercios/chat; operación/soporte/PSP/legal Paraguay; GO Owner. **NO_GO.**
+
+**Orden sucesor:** leer este handoff y su anexo, consultar HEAD de PR #7, PR #8 e issue #9, empezar el bloqueo KYC backend, corregir y certificar CI, publicar contrato y **continuar funciones sin detenerse salvo bloqueo real de la acción específica**. No merge ni despliegue ni edición de Cliente/Admin B.
