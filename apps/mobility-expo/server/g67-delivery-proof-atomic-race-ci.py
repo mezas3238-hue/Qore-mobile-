@@ -73,12 +73,12 @@ with db() as con:
   first).fetchone()[0]=='picked_up'
  denied(con,'G6701',MINT,first,COURIER,SESSION,AT,new(),'bad','image/jpeg',512)
  denied(con,'G6701',MINT,first,COURIER,SESSION,AT,new(),SHA,'image/svg+xml',512)
- denied(con,'G6703',MINT,first,SENDER,SESSION,AT,new(),SHA,'image/jpeg',512)
+ denied(con,'G6702',MINT,first,SENDER,SESSION,AT,new(),SHA,'image/jpeg',512)
 p=proof_for(first)
 # Post-approval mutation with a different proof UUID still fails INSIDE G5.
 with db() as con:
  denied(con,'G6704',DELIVER,first,COURIER,new(),new())
- denied(con,'G6704',DELIVER,first,COURIER,new(),p.upper() if False else new())
+ denied(con,'G6704',DELIVER,first,COURIER,new(),new())
  assert sql(con,"SELECT consumed_at FROM public.mobility_stage_g67_delivery_proofs WHERE proof_ref=%s",
   p).fetchone()[0] is None
 # Insert conflicting event revision; G5 row update/trigger runs and consumes
@@ -130,14 +130,16 @@ with db() as con:
   p2,second).fetchone()[0] is True
  denied(con,'G6704',DELIVER,second,COURIER,new(),p2)
  assert sql(con,PROBE,second,COURIER,p2).fetchone()[0] is False
-# Reuse a fresh second proof is intentionally forbidden by unique(delivery).
+# A revoked proof may be replaced with a new independently attested proof;
+# its old UUID stays revoked forever and cannot complete the shipment.
+p2new=proof_for(second)
 with db() as con:
- try:
-  with con.transaction():
-   sql(con,MINT,second,COURIER,SESSION,AT,new(),SHA,'image/jpeg',512)
- except psycopg.Error as e:
-  assert e.sqlstate=='23505',e.sqlstate
- else:raise AssertionError('G67 allowed second proof for one delivery')
+ denied(con,'G6704',DELIVER,second,COURIER,new(),p2)
+ event2=sql(con,DELIVER,second,COURIER,new(),p2new).fetchone()[0]
+ assert event2
+ assert sql(con,PROBE,second,COURIER,p2).fetchone()[0] is False
+ assert sql(con,PROBE,second,COURIER,p2new).fetchone()[0] is True
+ assert sql(con,"SELECT count(*) FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s",COURIER).fetchone()[0]==0
 # Session revocation fence: G42 write cannot complete before delivery TX.
 # The second delivery is unavailable due to revoked proof, so test a read-held
 # G42 lock via a third synthetic delivery after ending second fixture in QA.
