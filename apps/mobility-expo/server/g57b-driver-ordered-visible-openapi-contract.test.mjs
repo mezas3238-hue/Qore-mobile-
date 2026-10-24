@@ -6,6 +6,7 @@ const spec=JSON.parse(read('../docs/backend/openapi/movete-facil-staging.openapi
 const sql=read('../docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_POSTGRES_CI_ONLY.sql');
 const tests=read('../docs/backend/staging_only/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql');
 const ci=read('../../../.github/workflows/mobility-g4-postgres-disposable.yml');
+const race=read('./g57b-driver-ordered-concurrency-ci.py');
 test('G57B Driver-only endpoints OFF; do not change B history or Passenger G57 schema',()=>{
  assert.ok(Number(spec.info.version.split('-g')[1])>=57);
  assert.equal(spec['x-qore-live-enabled'],false);
@@ -59,4 +60,9 @@ test('G57B current Driver assignment, per-Passenger markers and delegated-only r
  assert.match(tests,/G57B stale Driver still confirmed read/);
  assert.match(ci,/G57B_DRIVER_ORDERED_VISIBLE_POSTGRES_CI_ONLY.sql/);
  assert.match(ci,/G57B_DRIVER_ORDERED_VISIBLE_ASSERT_POSTGRES_CI_ONLY.sql/);
+ assert.match(ci,/g57b-driver-ordered-concurrency-ci.py/);
+ assert.match(race,/Barrier\\(2\\)/);
+ assert.match(race,/SET LOCAL ROLE mobility_g56_driver_gateway_ci/);
+ assert.match(race,/G5718/);
+ assert.match(race,/G5711/);
 });
