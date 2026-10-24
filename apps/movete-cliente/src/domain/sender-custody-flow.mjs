@@ -121,10 +121,16 @@ export function createSenderCustodyFlow({
     revision:dto.revision,state:dto.state,vehicleKind:dto.vehicleKind,
     assignmentPersisted:dto.assignmentPersisted,
     proofVerified:dto.proofVerified});
-   if(acceptedFloor!==null&&acceptedFloor.deliveryId===deliveryId
-    &&!compatible(acceptedFloor,next)){
-    record=null;error='SENDER_CUSTODY_STATE_CONFLICT';
-    return fail(error);
+   if(acceptedFloor!==null&&acceptedFloor.deliveryId===deliveryId){
+    // Preserve R62's stable code for a numerically older server answer.
+    if(next.revision<acceptedFloor.revision){
+     record=null;error='SENDER_CUSTODY_STALE_REVISION';
+     return fail(error);
+    }
+    if(!compatible(acceptedFloor,next)){
+     record=null;error='SENDER_CUSTODY_STATE_CONFLICT';
+     return fail(error);
+    }
    }
    acceptedFloor=next;
    record=next;
