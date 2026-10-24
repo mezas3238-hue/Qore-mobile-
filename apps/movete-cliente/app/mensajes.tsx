@@ -71,7 +71,8 @@ function PrivateChat({client,view,serviceId,serviceKind,
   }finally{busy.current=false;}
  };
  const send=async(retry=false)=>{
-  if(busy.current||!serviceId||!matching||!chat.active||chat.loading||chat.sending)return;
+  if(busy.current||!serviceId||!matching||!chat.active||!chat.sendReady
+   ||chat.loading||chat.sending)return;
   busy.current=true;setFeedback('');
   try{
    let result;
@@ -164,19 +165,24 @@ function PrivateChat({client,view,serviceId,serviceKind,
      Se liberaron {chat.window.evictedCount} mensajes vistos para cuidar la memoria del dispositivo. Usá «Actualizar mensajes» para volver a los más recientes.
     </Text>}
     <Text style={styles.small}>La lectura del destinatario no se presume.</Text>
+    {!chat.sendReady&&<Text accessibilityRole="alert" style={styles.text}>
+     Modo solo lectura: podés consultar el historial autorizado, pero el envío de mensajes está deshabilitado hasta certificar escritura y confirmación persistida del servidor.
+    </Text>}
     {chat.pendingSend&&<Text accessibilityRole="alert" style={styles.text}>
      Hay un envío con respuesta pendiente. Para evitar duplicados solo se permite reintentar la misma solicitud después de verificar el permiso.
     </Text>}
-    <TextInput multiline style={styles.field} value={draft} maxLength={500}
-     onChangeText={setDraft} editable={!chat.sending&&!chat.pendingSend}
-     placeholder="Escribí al conductor o repartidor asignado"
-     accessibilityLabel="Mensaje de texto para el conductor o repartidor"/>
-    <Action label={chat.sending?'Enviando…':'Enviar mensaje'}
-     disabled={chat.sending||chat.loading||chat.pendingSend}
-     busy={chat.sending} onPress={()=>void send()}/>
-    {chat.pendingSend&&<Action secondary label="Reintentar el mismo mensaje"
-     busy={chat.sending} disabled={chat.sending||chat.loading}
-     onPress={()=>void send(true)}/>}
+    {chat.sendReady&&<>
+     <TextInput multiline style={styles.field} value={draft} maxLength={500}
+      onChangeText={setDraft} editable={!chat.sending&&!chat.pendingSend}
+      placeholder="Escribí al conductor o repartidor asignado"
+      accessibilityLabel="Mensaje de texto para el conductor o repartidor"/>
+     <Action label={chat.sending?'Enviando…':'Enviar mensaje'}
+      disabled={chat.sending||chat.loading||chat.pendingSend}
+      busy={chat.sending} onPress={()=>void send()}/>
+     {chat.pendingSend&&<Action secondary label="Reintentar el mismo mensaje"
+      busy={chat.sending} disabled={chat.sending||chat.loading}
+      onPress={()=>void send(true)}/>}
+    </>}
    </Panel>}
    {matching&&chat.error&&<Panel>
     <Text accessibilityRole="alert" style={styles.text}>
