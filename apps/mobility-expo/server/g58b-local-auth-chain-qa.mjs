@@ -9,6 +9,8 @@ import {createG58DelegatedChatSqlQa}
  from './g58-delegated-chat-sql-qa.mjs';
 import {createG58CLocalChatRateGateQa}
  from './g58c-local-chat-rate-gate-qa.mjs';
+import {createG58DBoundedSqlLeasesQa}
+ from './g58d-bounded-sql-leases-qa.mjs';
 import {createG58ChatLoopbackTransportQa}
  from './g58-chat-loopback-transport-qa.mjs';
 import {createG56BDriverPrivateInboxQa}
@@ -48,7 +50,10 @@ export function createG58BLocalAuthChainQa({
    throw Error('G58B missing or overlapping roles');
   return role;
  }
- const sql=createG58DelegatedChatSqlQa({...QA,openConnection});
+ const guardedConnections=createG58DBoundedSqlLeasesQa({...QA,openConnection});
+ const sql=createG58DelegatedChatSqlQa({
+  ...QA,openConnection:guardedConnections.openConnection
+ });
  const budget=createG58CLocalChatRateGateQa({...QA,now});
  const guardedRequest=scope=>
   allowRequest(scope)===true&&budget.allowRequest(scope)===true;
