@@ -30,7 +30,7 @@ CREATE TABLE public.mobility_stage_g58f_owner_attestations (
  session_id uuid NOT NULL,
  token_iat_ms bigint NOT NULL CHECK(token_iat_ms BETWEEN 1 AND 9999999999999),
  operation text NOT NULL CHECK(operation IN
-  ('CHAT_OPEN','CHAT_HISTORY','CHAT_READ','DRIVER_INBOX','DRIVER_HISTORY','DRIVER_MARK_VISIBLE')),
+  ('CHAT_OPEN','CHAT_HISTORY','CHAT_INBOX','CHAT_READ','DRIVER_INBOX','DRIVER_HISTORY','DRIVER_MARK_VISIBLE')),
  service_kind text,
  service_id uuid,
  conversation_id uuid,
@@ -49,7 +49,7 @@ CREATE TABLE public.mobility_stage_g58f_owner_attestations (
    AND service_id IS NOT NULL AND conversation_id IS NOT NULL)
   OR (operation IN ('CHAT_READ','DRIVER_MARK_VISIBLE')
    AND service_kind IS NULL AND service_id IS NULL AND conversation_id IS NOT NULL)
-  OR (operation='DRIVER_INBOX'
+  OR (operation IN ('CHAT_INBOX','DRIVER_INBOX')
    AND service_kind IS NULL AND service_id IS NULL AND conversation_id IS NULL)
  )
 );
@@ -98,6 +98,9 @@ BEGIN
    issued:=public.mobility_stage_g49_mint_owner_qa(
     a.actor_id,a.session_id,a.token_iat_ms,a.operation,
     a.service_kind,a.service_id,a.conversation_id);
+  WHEN 'CHAT_INBOX' THEN
+   issued:=public.mobility_stage_g54_mint_owner_qa(
+    a.actor_id,a.session_id,a.token_iat_ms,'CHAT_INBOX',NULL);
   WHEN 'CHAT_READ' THEN
    issued:=public.mobility_stage_g54_mint_owner_qa(
     a.actor_id,a.session_id,a.token_iat_ms,'CHAT_READ',a.conversation_id);
