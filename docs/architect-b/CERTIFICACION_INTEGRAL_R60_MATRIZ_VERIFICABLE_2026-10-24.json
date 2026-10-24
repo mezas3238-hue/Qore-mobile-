@@ -105,7 +105,7 @@
     },
     {
       "id": "PAYMENT_SETTLEMENT",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "Sin PSP autorizado ni reconciliación de capturas, comisiones, devoluciones o liquidaciones",
@@ -120,7 +120,7 @@
     },
     {
       "id": "PRIVACY_KYC",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "Sin certificación real de cifrado documental, control de acceso, retención y eliminación",
@@ -133,7 +133,7 @@
     },
     {
       "id": "EMERGENCY_SAFETY",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "Sin ensayo SOS con operador y escalamiento en campo ni protocolos de respuesta aceptados",
@@ -148,7 +148,7 @@
     },
     {
       "id": "MAPS_GPS_DEVICE",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "GPS, permisos, reconexión, spoof y navegación sin evidencia física Android/iOS",
@@ -162,7 +162,7 @@
     },
     {
       "id": "DELIVERY_MERCHANTS",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "Pedidos y entregas comerciales sin inventario, autorización de stock, custodia ni E2E real",
@@ -178,7 +178,7 @@
     },
     {
       "id": "CHAT_PHYSICAL",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "qa-only",
       "status": "QA_ONLY",
       "reason": "Transportes de chat QA existentes sin entrega bidireccional y push comprobados entre dos móviles",
@@ -207,7 +207,7 @@
     },
     {
       "id": "NATIVE_RELEASES",
-      "owner": "A+B",
+      "owner": "A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "Sin AAB/APK e IPA firmados verificados con permisos y actualizaciones en teléfonos físicos",
@@ -233,7 +233,7 @@
     },
     {
       "id": "OPS_24_7_MONITORING",
-      "owner": "Owner+A+B",
+      "owner": "Owner/A/B",
       "sourceStatus": "blocked",
       "status": "BLOCKED",
       "reason": "Faltan alertas 24/7, guardias, escalamiento, telemetría y pruebas de recuperación operativa",
