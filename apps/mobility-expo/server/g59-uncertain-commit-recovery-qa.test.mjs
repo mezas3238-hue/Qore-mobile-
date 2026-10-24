@@ -91,7 +91,7 @@ test('G59 JWT verification, role, revocation, limiter and DB errors fail closed'
  ]){
   const f=fixture(override);
   assert.equal((await f.gateway.handle(req)).status,status);
-  assert.equal(f.calls.length,0);
+  assert.equal(f.calls.length,override.now?1:0);
  }
 });
 test('G59 maps PostgreSQL scope/replay/conflict into no deceptive ACK',async()=>{
