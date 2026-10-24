@@ -27,7 +27,7 @@ export type ClientSnapshot={
   stage:string;stock:string;generation:number;
   catalogReadReady:boolean;catalogLoading:boolean;catalogError:string|null;
   checkoutEnabled:false;paymentEnabled:false;serverOrderReceipt:null};
- chat:{contractReady:boolean;loading:boolean;sending:boolean;active:boolean;
+ chat:{contractReady:boolean;sendReady:boolean;loading:boolean;sending:boolean;active:boolean;
   serviceId:string|null;serviceKind:string|null;conversationId:string|null;
   pageNumber:number;
   messages:readonly {messageId:string;senderRole:'passenger'|'driver';
