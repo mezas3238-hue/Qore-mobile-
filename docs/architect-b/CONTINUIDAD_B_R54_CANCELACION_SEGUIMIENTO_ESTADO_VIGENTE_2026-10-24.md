@@ -15,3 +15,6 @@ La cancelación requiere contrato y autorización real de backend A; el guard es
 
 ## Certificación y continuación R55
 Validar el **SHA final de R54**: B ownership; Admin QA; two app isolation (Cliente y Driver: tests, TypeScript y Expo export web QA). No confundir web export con teléfono Android/iOS certificado. Pendiente certificar TalkBack/VoiceOver en dispositivos físicos y el contrato STAGING y rollback de cancelaciones cuando A entregue evidencia. Próxima R55: seguridad de feedback de seguimiento y cancelación ante respuestas asíncronas de sesión, más pruebas de regresión, siempre archivos de B.
+
+## Incidencia QA R54 y corrección
+El corte inicial `575a54cd2932fc6500088dc2af5c8d330fb3151b` produjo **FAIL** en CI Cliente #40100122572: 1 test R54 falló (721/722 tests Cliente aprobados). El error era **del propio test**, no del guard: el helper `same(x,y=x)` reemplazaba un argumento `undefined` explícito por la vista válida `x`. La aserción de rechazo de snapshot `undefined` no estaba ejecutando el caso que pretendía. Corregido en `fac8c98ac765f7c12523e5a1ef396f51efcc67b7` llamando directamente a `guardTrackingCancellationUiAction(x,undefined,...)` y viceversa; no se debilitó código de negocio. Se debe verificar la CI del SHA FINAL posterior a esta anotación antes de declarar certificación completa.
