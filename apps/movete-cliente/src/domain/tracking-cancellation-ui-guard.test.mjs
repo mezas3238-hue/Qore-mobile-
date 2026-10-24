@@ -80,8 +80,10 @@ test('R54 unsupported action, missing actor and malformed DTO never authorize',(
   assert.equal(guardTrackingCancellationUiAction(x,x,{action}).ok,false);
  }
  for(const broken of [null,undefined,false,[],{}]) {
-  assert.equal(same(broken,x).ok,false);
-  assert.equal(same(x,broken).ok,false);
+  // Call the guard directly: the convenience helper uses y=x by default,
+  // which otherwise silently replaces an explicitly undefined second DTO.
+  assert.equal(guardTrackingCancellationUiAction(broken,x,{action:'prepare'}).ok,false);
+  assert.equal(guardTrackingCancellationUiAction(x,broken,{action:'prepare'}).ok,false);
  }
 });
 test('R54 stale idle request fields must never bypass the known phase',()=>{
