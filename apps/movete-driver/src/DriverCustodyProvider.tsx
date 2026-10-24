@@ -4,7 +4,7 @@ import type {DriverCustodyController,DriverCustodyAdapters,
  DriverCustodySnapshot} from './domain/driver-custody-controller.mjs';
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 type ContextValue={
- state:DriverCustodySnapshot;enabled:boolean;
+ state:DriverCustodySnapshot;enabled:boolean;hasProofSource:boolean;
  open:(id:string)=>Promise<void>;refresh:()=>Promise<void>;advance:()=>Promise<void>;
 };
 const EMPTY:DriverCustodySnapshot=Object.freeze({
@@ -40,6 +40,7 @@ export function DriverCustodyProvider({
  },[ctl,authAdapter]);
  const value=useMemo<ContextValue>(()=>({
   state,enabled:!!ctl&&!!authAdapter,
+  hasProofSource:typeof qaAdapters?.obtainVerifiedProof==='function',
   open:async id=>{await ctl?.open(id);},
   refresh:async()=>{await ctl?.refresh();},
   advance:async()=>{await ctl?.advance();}
