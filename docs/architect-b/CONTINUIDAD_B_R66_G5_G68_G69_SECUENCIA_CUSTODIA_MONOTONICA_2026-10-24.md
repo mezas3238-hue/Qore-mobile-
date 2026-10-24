@@ -28,3 +28,9 @@
 A: publicar OpenAPI/GET G68 y puente G69 montado en HTTPS seguro, IdP y DB persistente sin credenciales cliente privilegiadas; evidencia G67 proof real, anti-IDOR y 2 dispositivos. B: con contrato autorizado, activar solamente entorno STAGING y certificar relectura after-delivery contra la misma transacción y revisión de DB; continuar KYC/commerce/booking mientras falta infraestructura. Owner debe aprobar infraestructura, pagos, despliegue y COMERCIAL_GO por separado.
 
 **El proyecto sigue NO_GO: 17 gates P0 y 20 recorridos de negocio no certificados funcionalmente.**
+
+## Corrección de CI y estabilidad del protocolo R62
+
+La primera CI integrada de R66, [run 40119416380](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40119416380), detectó 1 fallo entre 856 tests Cliente: el test anterior R62 exigía `SENDER_CUSTODY_STALE_REVISION` para una revisión estrictamente menor; la nueva guardia devolvía `SENDER_CUSTODY_STATE_CONFLICT`. El error se reparó en `sender-custody-flow.mjs` y se ajustaron las dos aserciones R66 que simulaban el mismo caso.
+
+**Códigos contractuales exactos:** `SENDER_CUSTODY_STALE_REVISION` significa revisión numéricamente anterior (sin evidencia visible); `SENDER_CUSTODY_STATE_CONFLICT` significa igual revisión con datos contradictorios o revisión posterior incompatible con G5 (sin evidencia visible). Ninguno rehabilita una entrega ni autoriza otro POST. Se exige un nuevo conjunto de tres workflows SUCCESS sobre el HEAD final; no usar el run fallido como certificación.
