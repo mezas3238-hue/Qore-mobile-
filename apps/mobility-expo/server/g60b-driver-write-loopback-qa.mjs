@@ -6,7 +6,7 @@
  */
 import {createServer} from 'node:http';
 import {once} from 'node:events';
-const UUID='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const UUID='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const id=x=>typeof x==='string'&&new RegExp('^'+UUID+'$','i').test(x);
 const endpoint=new RegExp('^/v1/staging/driver/chat/services/(RIDE|DELIVERY|MERCHANT_ORDER)/('+UUID+')/conversations/('+UUID+')/(send|reconcile)$','i');
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;
