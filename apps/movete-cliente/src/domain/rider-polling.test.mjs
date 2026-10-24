@@ -150,3 +150,76 @@ test('R61 matching revision is not a new event but does not replay a state',asyn
  assert.equal(p.snapshot().revision,4);
  assert.equal(p.snapshot().state,'assigned');
 });
+
+
+test('F1 G3 full verified lifecycle searching→assigned→arriving→in_progress→completed',async()=>{
+ const states=['searching','assigned','arriving','in_progress','completed'];
+ let cursor=0;
+ const p=make(async()=>({ok:true,data:{
+  ...good(cursor+1),state:states[cursor],assignmentPersisted:cursor>0,
+  revision:cursor+1
+ }}));
+ for(let i=0;i<states.length;i++){
+  cursor=i;
+  assert.equal((await p.tick()).ok,true,states[i]);
+  assert.equal(p.snapshot().state,states[i]);
+  assert.equal(p.snapshot().revision,i+1);
+ }
+ assert.equal(p.snapshot().assignedDriver,null);
+ assert.equal(p.snapshot().position,null);
+ assert.equal(p.snapshot().etaMinutes,null);
+ assert.equal(p.snapshot().liveEnabled,false);
+});
+test('F1 G3 never reopens completed/cancelled or rewinds in-progress state',async()=>{
+ for(const [first,next] of [
+  ['completed','searching'],['completed','assigned'],
+  ['cancelled','assigned'],['in_progress','arriving'],
+  ['in_progress','cancelled'],['arriving','searching']
+ ]){
+  let current=good(10);current.state=first;
+  const p=make(async()=>({ok:true,data:current}));
+  assert.equal((await p.tick()).ok,true);
+  current={...good(20),state:next};
+  assert.equal((await p.tick()).code,'TRIP_STATE_CONFLICT',first+'→'+next);
+  assert.equal(p.snapshot().state,first);
+  assert.equal(p.snapshot().lastError,'TRIP_STATE_CONFLICT');
+  assert.equal(p.snapshot().position,null);
+  assert.equal(p.snapshot().etaMinutes,null);
+ }
+});
+test('F1 G3 same revision with contradictory state cannot claim a new event',async()=>{
+ let current=good(3);
+ const p=make(async()=>({ok:true,data:current}));
+ assert.equal((await p.tick()).ok,true);
+ current={...good(3),state:'completed'};
+ assert.equal((await p.tick()).code,'TRIP_STATE_CONFLICT');
+ assert.equal(p.snapshot().state,'assigned');
+ assert.equal(p.snapshot().lastFetchedAt,null);
+});
+test('F1 G3 skip a state only when revision advances enough for SQL transitions',async()=>{
+ let current={...good(1),state:'searching'};
+ const p=make(async()=>({ok:true,data:current}));
+ await p.tick();
+ current={...good(3),state:'arriving'};
+ assert.equal((await p.tick()).ok,true);
+ current={...good(4),state:'completed'};
+ assert.equal((await p.tick()).code,'TRIP_STATE_CONFLICT');
+ assert.equal(p.snapshot().state,'arriving');
+ current={...good(5),state:'completed'};
+ assert.equal((await p.tick()).ok,true);
+ assert.equal(p.snapshot().state,'completed');
+});
+test('F1 G3 cancellation only before pickup remains terminal with no Driver/GPS',async()=>{
+ for(const before of ['searching','assigned','arriving']){
+  let current={...good(2),state:before};
+  const p=make(async()=>({ok:true,data:current}));
+  await p.tick();
+  current={...good(3),state:'cancelled'};
+  assert.equal((await p.tick()).ok,true,before);
+  assert.equal(p.snapshot().state,'cancelled');
+  assert.equal(p.snapshot().assignedDriver,null);
+  assert.equal(p.snapshot().position,null);
+  current={...good(4),state:'assigned'};
+  assert.equal((await p.tick()).code,'TRIP_STATE_CONFLICT');
+ }
+});
