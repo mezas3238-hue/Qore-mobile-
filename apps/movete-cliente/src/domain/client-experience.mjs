@@ -19,6 +19,7 @@ import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
 import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
 import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
 import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
+import {createG51ChatInboxHttpGateway} from './g51-chat-inbox-http-gateway.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -30,7 +31,8 @@ import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
- g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,now=()=>Date.now()}={}){
+ g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
+ g51ChatInboxHttpOptions=null,now=()=>Date.now()}={}){
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
@@ -68,7 +70,18 @@ export function createClientExperience({authProvider=null,gateway=null,historyGa
  // No hay transporte habilitado hasta que A implemente Auth + conversaciones.
  chatFlow=createPassengerChatFlow({gateway:chatGateway,
   getActor:async()=>actorSession(),now});
- chatInbox=createPassengerChatInbox({gateway:chatInboxGateway,
+ // G51 está descrito por A pero NO montado. Solo una configuración
+ // explícita de HTTPS, Auth y gates certificados habilita su transporte.
+ const g51InboxHttp=g51ChatInboxHttpOptions?createG51ChatInboxHttpGateway({
+  ...g51ChatInboxHttpOptions,now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ chatInbox=createPassengerChatInbox({gateway:chatInboxGateway??g51InboxHttp,
   getActor:async()=>actorSession(),now});
  const cancelGateway=cancelGatewayOptions?createRideCancellationGateway({
   ...cancelGatewayOptions,now,
