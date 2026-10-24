@@ -28,3 +28,7 @@ G68 ya expone un DTO del remitente, protegido con G42 rol Passenger y SQL `deliv
 - **G72+:** completar KYC y documentos verdaderos, PSP/reembolsos/comisiones, SOS con operador, GPS real, comercios, soporte, firma de binarios independientes y 17 gates comerciales verificados con aprobación Owner.
 
 **MANDATO:** seguir implementando código y pruebas QA, no detener todo el desarrollo ante un bloqueo parcial externo; no merge, no live, no VPS, no PSP, no secretos ni PII reales sin autorización.
+
+## Contrato OpenAPI compatible con Arquitecto B R65
+
+La especificación `apps/mobility-expo/docs/backend/openapi/movete-facil-staging.openapi.json` se actualizó a `1.0.0-g69`: GET `/v1/staging/sender/deliveries/{deliveryId}/custody`, objeto sellado de exactamente 11 campos que coincide con B R65, respuestas 400/401/403/404/429/503 y Bearer Passenger. El nuevo test `g69-sender-custody-openapi-contract.test.mjs` protege su contrato. Los marcadores `x-qore-runtime-wired:false` y `x-qore-g68-sender-custody-runtime-wired:false` son obligatorios: **no se montó ni certificó una ruta HTTPS real**, y no existe ruta de mint de pruebas hacia teléfonos.
