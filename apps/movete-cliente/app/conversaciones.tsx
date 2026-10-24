@@ -42,7 +42,7 @@ export default function PassengerConversationInbox(){
   renderItem={({item})=><Panel>
    <Text accessibilityRole="header" style={styles.heading}>{LABELS[item.serviceKind]}</Text>
    <Text style={styles.text}>{inbox.stale?'Servicio consultado previamente; pendiente de nueva verificación':'Servicio con asignación verificada'}</Text>
-   <Text style={styles.small}>Mensajes pendientes de leer: {item.unreadCount>=99?'99+':item.unreadCount}</Text>
+   <Text style={styles.small}>Mensajes pendientes de leer: {item.unreadCount}</Text>
    <Action label={inbox.stale?'Actualizar antes de abrir':'Abrir chat autorizado'}
     secondary disabled={inbox.stale||inbox.loading}
     onPress={()=>router.push({pathname:'/mensajes',params:{
@@ -62,6 +62,7 @@ export default function PassengerConversationInbox(){
    {canLoad&&inbox.hasNext&&<Action label={inbox.loading?'Consultando…':'Cargar más conversaciones'}
     disabled={inbox.loading} busy={inbox.loading}
     onPress={()=>load(true)}/>}
+   <Text style={styles.small}>Los contadores son los confirmados por el servidor. Abrir el historial no marca automáticamente los mensajes como leídos: esa operación requiere una secuencia y confirmación de lectura verificadas.</Text>
    <Text style={styles.small}>Solo se conservan páginas verificadas por cuenta. No existe límite global de conversaciones.</Text>
   </Panel>}
  />;
