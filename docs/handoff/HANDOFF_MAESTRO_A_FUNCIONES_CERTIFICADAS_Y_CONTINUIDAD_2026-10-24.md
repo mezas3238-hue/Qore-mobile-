@@ -181,3 +181,79 @@ Documentación requerida desde app Driver: licencia o registro de conducir, céd
 - DriverDocumentUploadProvider.tsx, driver-staging-runtime.mjs y app/documentos.tsx: botones y estado con opt-in, captureEvidence y uploadPrivateObject **ambos o ninguno**; por defecto null y sin subida real.
 - **4/4 QA SHA 37d8c5b772824d8af9b5e18b845b6a547e350f88:** [PG #837](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40135171119), [Node #1275](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40135171115), [Expo #1990](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40135171121), [aislamiento #1814](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40135171114).
 - **FALTA:** conectar SDK de Auth/Storage/escáner externos autorizados y probar cámara/dispositivos físicos. Ninguna imagen personal real se recibió ni se aprobó comercialmente.
+
+
+---
+
+## 6. ÚLTIMO TRABAJO HECHO: documento vencido → bloqueo → aviso → renovación verificada
+
+### Directiva exacta Owner
+Si vence algún documento exigido al conductor, **bloquear automáticamente su elegibilidad para nuevas solicitudes**, mostrar en pantalla el documento vencido e instrucciones de renovación. Una foto renovada sube con status PENDING y **NO desbloquea**. Cuando todas las evidencias nuevas son verificadas independientemente, permitir **reanudación automática documental**, salvo sanción/suspensión administrativa o problema de seguridad.
+
+### 6.1 SQL QA fuente de verdad, consulta por reloj servidor
+- DRIVER_KYC_EXPIRY_RENEWAL_STATUS_POSTGRES_CI_ONLY.sql + ASSERT: función owner-only mobility_stage_kyc_expiry_snapshot_owner_qa(driver,vehicle).
+- Consulta últimas ocho evidencias G17, comparadas contra fechas vigentes de PostgreSQL, no hora del teléfono. Devuelve expiredKinds, renewalRequiredKinds, expiringSoonKinds con aviso de 30 días, nearestExpiryAtMs y accountBlocked.
+- Estados: **BLOCKED_EXPIRED** (caducidad), **BLOCKED_REVIEW** (faltante, reemplazado o pendiente verificación), **SUSPENDED** (sanción/revisión administrativa) y **READY_QA** (todo documental vigente de QA).
+- La foto renovada no desbloquea hasta que un atestador confiable asocia evidencia positiva al último G17. No levanta nunca una suspensión administrativa. commercialDispatchAuthorized sigue SIEMPRE false en esta etapa.
+- Test PostgreSQL16: pendiente bloquea; validación restaurada da READY_QA; licencia vencida bloquea inmediatamente por reloj PG; foto subida pendiente no desbloquea; licencia renovada y verificada restaura READY_QA; habilitación por vencer dispara aviso; suspensión prevalece sobre KYC.
+
+### 6.2 Backend y pantallas Driver
+- server/driver-kyc-expiry-status-qa.mjs + test: auth JWT, G42 sesión, rol Driver exclusivo, vehículo propio y lectura owner-only, DTO sellado sin fotos, teléfonos, documento ni token.
+- apps/movete-driver/src/domain/driver-kyc-expiry.mjs + types/test: GET HTTPS opt-in /v1/staging/driver/kyc/validity, interpreta estados y muestra mensajes españoles.
+- src/DriverKycExpiryProvider.tsx: refresca al iniciar pantalla, volver al primer plano y cada 60s mientras abierta; limpia al cambiar sesión/log out.
+- app/index.tsx, app/ofertas.tsx, app/documentos.tsx: banner de caducidad, aviso «renovar», link a documentos, switch local de disponibilidad y aceptación de oferta QA deshabilitados si la documentación no está READY_QA.
+- driver-staging-runtime.mjs: flag enableKycExpiryStatus=false por defecto; no se conecta a HTTPS sin instancia aprobada. No push OS cuando la app está cerrada.
+
+### CERTIFICACIÓN A más reciente
+- **SHA funcional 2685e478c606a3b2335a90920965460c7e3ddb41**.
+- [PostgreSQL16 #843 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136334678).
+- [Node STAGING #1282 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136334663).
+- [Expo #1999 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136334667).
+- [Driver/Cliente aislados #1823 SUCCESS](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136334723).
+
+### BRECHA P0 QUE NO DEBE OCULTARSE
+**La regla aún NO está integrada en todos los RPC de aceptación/asignación/despacho backend G4/G10/G36 en la misma transacción.** Mostrar bloqueo en app no basta: con app cerrada, cliente viejo o RPC directo aún debe haber rechazo SQL. El siguiente Arquitecto A debe cerrar **ese fence transaccional** antes de declarar cuenta comercial bloqueada/reactivada. La app no hace push cuando está cerrada. Los tests prueban solo QA con datos sintéticos, no proveedor oficial/IdP o App Store.
+
+---
+
+## 7. Problemas descubiertos y corregidos — evitar regresiones
+
+- Prueba G67: SQL G5 aceptaba UUID del proof sin prueba existente; trigger y rol owner-only corregidos, tests de revocación/replay/rollback.
+- PostgreSQL G67/G69: corregidas representaciones de search_path vacío y assertions/carreras sin conceder grants nuevos.
+- G68/G69: validadores UUID incompletos corregidos a cinco segmentos; DTO privado sin identificador de courier o media.
+- G70: test Host spoof usando petición HTTP raw porque fetch normaliza cabecera Host; timeout explícito para incertidumbre, sin reintentos ciegos.
+- KYC: una política Node positiva nunca debe cambiar accountApproved; solo SQL atómico bajo G42 y evidencia actual.
+- SQL KYC: sintaxis EXTRACT, variables de fixture, asociación obligatoria al último G17 y rechazo de documentos reemplazados; CI real PG16.
+- G17/G19: las pruebas heredadas «solo licencia» impedían ocho documentos; actualizadas. Un reemplazo de texto corrompió/duplicó g19-private-driver-evidence-observer.mjs: restaurado desde blob original y editado mínimamente, verificado archivo real y cuatro CI.
+- Cámara/Storage: buffer foto borrado incluso tras rechazo; ruta con UUID propietario completo, sin URL pública ni upsert.
+- Vencimiento: aviso siempre desde servidor, revisión actual, sanciones se mantienen aunque se renueve.
+- **Regla para el sucesor:** antes de decir SUCCESS leer el log del job y comparar SHA exacto, verificar diff del archivo publicado. Test rojo corregible no es motivo para detener el desarrollo.
+
+---
+
+## 8. Estado Arquitecto B y fronteras de integración
+
+**B PR #8:** HEAD observado ac7ad3561972e28ddd3b428ba14038fe627f7fdc, DRAFT, base rama A, QA **3/3 SUCCESS**:
+- [B ownership boundary #521](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136416339).
+- [Admin Web #477](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136416451).
+- [Two app isolation #1824](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40136416399).
+
+**Hecho B en QA:** Cliente Expo independiente con experiencia AUTO, booking/quote/status/cancelación, cotización PYG, envíos, comercios/carrito, historial y chat; Admin Web con KYC, RBAC/MFA contractuales, casos, incidentes, zonas y auditoría. R61–R66 protegen vocabulario AUTO, custodia remitente y state monotónico; **F1** añadió reserva propia confirmada más GET autoritativo antes de seguir viaje. El recorrido real cliente y Driver en el mismo ambiente HTTPS/PostgreSQL duradero NO está certificado. B mantiene **0/20 recorridos comerciales** E2E reales certificados.
+
+**Trabajo B pendiente de coordinar con A:** Admin revisa excepciones de documentación/cara/vehículo mediante MFA real, cola, rechazo, reenvío, apelación, auditoría, razones limitadas y veto administrativo que no se levanta por renovación. No tocar apps/movete-admin ni docs/architect-b desde A; emitir contratos de solo lectura y decisiones autorizadas por issue #9.
+
+---
+
+## 9. Cómo verificar el trabajo y qué significa
+
+Matriz A obligatoria **en un mismo SHA funcional**:
+1. .github/workflows/mobility-g4-postgres-disposable.yml — PostgreSQL16 ephemeral qore_disposable_chain, RLS, DML, roles y carreras 2 conexiones.
+2. .github/workflows/mobility-staging-node-contracts.yml — tests Node adversariales, DTO, JWT, permisos y simulado local.
+3. .github/workflows/mobility-ci.yml — Expo/contratos/QA backend.
+4. .github/workflows/movete-apps-isolation.yml — TypeScript, pruebas y export independiente Driver/Cliente, límites de propiedad.
+
+Cortes QA G66 (PG #756/Node #1159/Expo #1849/aislamiento #1587), G67 (#786/#1204/#1904/#1658), G69 (#802/#1225/#1931/#1693), G70 (#809/#1238/#1944/#1709), KYC SQL (#822/#1255/#1968/#1774), G17/G19 (#829/#1267/#1982/#1794), cámara (#837/#1275/#1990/#1814), vencimiento final **(#843/#1282/#1999/#1823)**.
+
+Ninguno por sí solo certifica IdP/STAGING remoto, teléfono físico, transporte real, facial oficial, push, PSP, legalidad ni GO. El manifiesto scripts/check-movete-launch-gates.mjs --require-go **debe fallar** mientras sigan pendientes 17 gates. No intentar SQL marcado POSTGRES_CI_ONLY contra producción ni Supabase remoto.
+
+**No contar commits como progreso.** Reportar cada recorrido: interfaz útil, backend/DB compartido, seguridad y errores, grado QA/STAGING_E2E/DISPOSITIVO/GO, prueba exacta, bloqueo y siguiente paso concreto que lo termina.
