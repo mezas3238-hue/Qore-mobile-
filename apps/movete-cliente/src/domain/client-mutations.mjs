@@ -27,10 +27,29 @@ const SAFE_CODES=new Set([
 const safeCode=(candidate,fallback)=>
  typeof candidate==='string'&&SAFE_CODES.has(candidate)?candidate:fallback;
 const fail=(code)=>({ok:false,code});
+const UUID_RIDE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** F1: only a strict R56 QA receipt may identify a persisted ride.
+ * Generic HTTP 201, Driver push, or user-entered tripId are NOT evidence. */
+function verifiedBookingReceipt(reply,{operation,requestKey,subject,status}){
+ const d=reply?.data;
+ const fields=['mode','commercialEnabled','ownerId','requestKey','operation',
+  'serviceId','revision','serverPersisted','status'];
+ if(reply?.ok!==true||reply.status!==status
+  ||reply.qaOnly!==true||reply.commercialEnabled!==false
+  ||reply.bookingConfirmedForProduction!==false
+  ||!d||typeof d!=='object'||Array.isArray(d)
+  ||Object.keys(d).length!==fields.length||!fields.every(k=>Object.hasOwn(d,k))
+  ||d.mode!=='STAGING_DEMO_ONLY'||d.commercialEnabled!==false
+  ||d.ownerId!==subject||d.requestKey!==requestKey||d.operation!==operation
+  ||!UUID_RIDE.test(d.serviceId)||!Number.isSafeInteger(d.revision)
+  ||d.revision<1||d.serverPersisted!==true||d.status!=='ACCEPTED_QA')
+  return null;
+ return Object.freeze({serviceId:d.serviceId,revision:d.revision});
+}
 function copy(value){return JSON.parse(JSON.stringify(value));}
 export function createClientMutationController({gateway,getSession,clearSensitive=()=>{}}={}){
  let state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,
-  sessionRevision:null,error:null};
+  sessionRevision:null,error:null,verifiedReceipt:null};
  let generation=0;
  const publicState=()=>Object.freeze({
   phase:state.phase,operation:state.operation,requestKey:state.requestKey,error:state.error
@@ -38,7 +57,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
  function clear(){
   generation++;
   state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,
-   sessionRevision:null,error:null};
+   sessionRevision:null,error:null,verifiedReceipt:null};
   clearSensitive();
  }
  function prepare({operation,body,subject,sessionRevision=null}={}){
@@ -54,7 +73,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   if(state.subject&&state.subject!==subject)clear();
   generation++;
   state={phase:'ready',subject,operation,body:copy(body),requestKey:body.requestKey,
-   sessionRevision,error:null};
+   sessionRevision,error:null,verifiedReceipt:null};
   return {ok:true,requestKey:state.requestKey};
  }
  async function run(retry=false){
@@ -85,6 +104,9 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   catch{reply=fail('NETWORK_OR_TIMEOUT');}
   if(started!==generation||state.subject!==session.subject)return fail('STALE_RESPONSE_IGNORED');
   if(reply&&reply.ok===true){
+   state.verifiedReceipt=verifiedBookingReceipt(reply,{
+    operation,requestKey:state.requestKey,subject:expectedSubject,status:201
+   });
    state.phase='acknowledged';state.error=null;
    // No se guardan DTOs no certificados ni datos privados del servidor.
    return {ok:true,requestKey:state.requestKey,status:reply.status};
@@ -139,6 +161,9 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   }
   if(reply?.ok===true&&reply.recoveredWithoutPost===true
    &&reply.qaOnly===true&&reply.bookingConfirmedForProduction===false){
+   state.verifiedReceipt=verifiedBookingReceipt(reply,{
+    operation,requestKey,subject:expectedSubject,status:200
+   });
    state.phase='acknowledged';state.error=null;
    return Object.freeze({ok:true,requestKey,status:200,
     qaOnly:true,productionEnabled:false});
@@ -147,6 +172,14 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   state.error=safeCode(reply?.code,'BOOKING_RECONCILIATION_UNKNOWN');
   return fail(state.error);
  }
+ function verifiedRide(){
+  const receipt=state.verifiedReceipt;
+  if(state.phase!=='acknowledged'||state.operation!=='rideRequest'
+   ||receipt===null||receipt===undefined)return null;
+  return Object.freeze({tripId:receipt.serviceId,serverRevision:receipt.revision,
+   subject:state.subject,sessionRevision:state.sessionRevision,
+   requestKey:state.requestKey});
+ }
  return Object.freeze({prepare,submit:()=>run(false),retry:()=>run(true),
-  reconcileBooking,clear,publicState});
+  reconcileBooking,verifiedRide,clear,publicState});
 }
