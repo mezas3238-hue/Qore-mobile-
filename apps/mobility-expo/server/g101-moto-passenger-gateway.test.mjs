@@ -177,8 +177,8 @@ test('G101 SQL repository calls only authorized private MOTO RPCs',async()=>{
   _passenger:u,_request:routeKey,_origin:'CENTRO_FIXTURE',
   _destination:'AEROPUERTO',_zone:'MOTO_TEST_ZONE',
   _distance:5000,_seconds:600});
- await assert.rejects(repo.book({actorId:'bad',requestKey:bookingKey,quoteId}));
- await assert.rejects(repo.quote({actorId:u,requestKey:routeKey,route:{
+ assert.throws(()=>repo.book({actorId:'bad',requestKey:bookingKey,quoteId}));
+ assert.throws(()=>repo.quote({actorId:u,requestKey:routeKey,route:{
   ...trusted,originTag:'moto bypass'}}));
 });
 test('G101 real 127.0.0.1 HTTP router: MOTO is not confused with AUTO',async t=>{
