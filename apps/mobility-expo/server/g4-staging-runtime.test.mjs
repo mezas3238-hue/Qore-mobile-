@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {prepareQoreG4StagingRuntime} from './g4-staging-runtime.mjs';
 import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
+import {request as httpRequest} from 'node:http';
 
 const ref='staging1234567890abcd';
 const anonKey='sb_publishable_abcdefghijklmnopqrstuvwxyz';
@@ -758,10 +759,18 @@ test('G65 private API denies revoked or mismatched IdP and forbids GET request b
   status:'accepted',revision:2};
  const runtime=await prepare(m,{driverKycTrust:f.trust});
  await http(runtime,async base=>{
-  const leakedBody=await fetch(base+g65Path,{
-   headers:{authorization:'Bearer '+jwt.driver,'content-length':'2'},
+  // Undici/fetch silently drops Content-Length on bodyless GET. Exercise
+  // actual wire bytes so this is a real HTTP rejection, not a false test.
+  const getBodyStatus=await new Promise((resolve,reject)=>{
+   const request=httpRequest(base+g65Path,{
+    method:'GET',
+    headers:{authorization:'Bearer '+jwt.driver,
+     'content-type':'application/json','content-length':'2'}
+   },response=>{response.resume();response.on('end',()=>resolve(response.statusCode));});
+   request.on('error',reject);
+   request.end('{}');
   });
-  assert.equal(leakedBody.status,400);
+  assert.equal(getBodyStatus,400);
   revoked=true;
   assert.equal((await req(base,g65Path,'driver')).status,401);
  });
