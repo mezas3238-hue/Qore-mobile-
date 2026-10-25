@@ -39,6 +39,27 @@ UPDATE public.mobility_stage_kyc_verified_evidence_qa e
  WHERE e.driver_id='00000000-0000-4000-8000-000000000181'::uuid
  AND e.vehicle_id='71710000-0000-4717-8717-000000000101'::uuid
  AND e.kind=latest.kind;
+-- G71's new dossier vehicle is distinct from the G20 compliance-tested
+-- vehicle. Copy ONLY pre-existing synthetic and independently reviewed
+-- compliance metadata within this ROLLBACK transaction; never spoof a live
+-- insurer, municipality, or passenger trip.
+INSERT INTO public.mobility_vehicle_compliance(
+ vehicle_id,registration_valid_through,registration_verified_at,
+ insurance_valid_through,insurance_verified_at,
+ paid_passenger_insurance_covered,
+ inspection_valid_through,inspection_verified_at,
+ municipal_authorization_valid_through,municipal_authorization_verified_at,
+ moto_helmets_verified,moto_reflective_vests_verified,moto_routes_authorized,
+ reviewed_by,reviewed_at)
+SELECT '71710000-0000-4717-8717-000000000101'::uuid,
+ registration_valid_through,registration_verified_at,
+ insurance_valid_through,insurance_verified_at,paid_passenger_insurance_covered,
+ inspection_valid_through,inspection_verified_at,
+ municipal_authorization_valid_through,municipal_authorization_verified_at,
+ moto_helmets_verified,moto_reflective_vests_verified,moto_routes_authorized,
+ reviewed_by,reviewed_at
+FROM public.mobility_vehicle_compliance
+WHERE vehicle_id='00000000-0000-4000-8000-000000000184'::uuid;
 -- No location is invented: only update timestamp if existing synthetic
 -- fixture is available; eligibility still depends on every preflight.
 UPDATE public.driver_locations SET updated_at=pg_catalog.clock_timestamp()
