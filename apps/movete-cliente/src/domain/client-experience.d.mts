@@ -173,6 +173,14 @@ export declare function createClientExperience(options?:{
   timeoutMs?:number;maxBytes?:number;
  }|null;
  // Disabled until A supplies certified route/prequote/booking/readback contracts.
+ // G73 Node/SQL CI alone never enables a real runtime. All 4 HTTPS ops
+ // require an independently authorized provider, IdP and PostgreSQL STAGING.
+ autoG73HttpOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  routeProviderCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,init:unknown)=>Promise<unknown>|unknown;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  autoRouteIntakeOptions?:{
   enabled?:boolean;routeContractCertified?:boolean;stagingRuntimeVerified?:boolean;
   // A's current G72 /auto/prequote does not provide routeId contract.
