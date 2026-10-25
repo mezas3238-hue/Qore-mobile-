@@ -28,16 +28,16 @@ export function createEncryptedChunkStore({get,put,del,randomUUID,prefix}={}){
  const base=key=>{
   if(typeof key!=='string'||!KEY.test(key))
    throw Error('Invalid auth storage key');
-  return prefix+':'+key;
+  return prefix+'_'+key;
  };
  const readManifest=async name=>{
-  const raw=await get(name+':manifest');
+  const raw=await get(name+'_manifest');
   if(raw===null||raw===undefined)return null;
   let m;try{m=JSON.parse(raw);}catch{throw Error('Corrupt auth manifest');}
   if(!valid(m))throw Error('Invalid auth manifest');
   return m;
  };
- const part=(name,g,i)=>name+':'+g+':'+i;
+ const part=(name,g,i)=>name+'_'+g+'_'+i;
  const cleanup=async(name,m)=>{
   if(!m)return;
   for(let i=0;i<m.n;i++){
@@ -76,7 +76,7 @@ export function createEncryptedChunkStore({get,put,del,randomUUID,prefix}={}){
    try{
     for(let i=0;i<n;i++)
      await put(part(name,g,i),encoded.slice(i*CHUNK,(i+1)*CHUNK));
-    await put(name+':manifest',manifest);
+    await put(name+'_manifest',manifest);
    }catch(error){
     await cleanup(name,{g,n});
     throw error;
@@ -87,7 +87,7 @@ export function createEncryptedChunkStore({get,put,del,randomUUID,prefix}={}){
    const name=base(key),old=await readManifest(name);
    // Removing the manifest FIRST immediately revokes the local session,
    // even if the platform fails to remove an orphaned encrypted part.
-   await del(name+':manifest');
+   await del(name+'_manifest');
    await cleanup(name,old);
   })
  });
