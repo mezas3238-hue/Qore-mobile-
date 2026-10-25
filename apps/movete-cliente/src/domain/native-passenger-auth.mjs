@@ -9,7 +9,7 @@
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=code=>Object.freeze({ok:false,code});
 const validEmail=x=>typeof x==='string'&&x.length>=5&&x.length<=254
- &&x===x.trim()&&!/\s/.test(x)&&/^[^@]+@[^@]+\.[^@]+$/.test(x);
+ &&!/\s/.test(x.trim())&&/^[^@]+@[^@]+\.[^@]+$/.test(x);
 const confirmed=user=>typeof user?.email_confirmed_at==='string'
  ||typeof user?.phone_confirmed_at==='string';
 export function createNativePassengerAuth({supabase,now=()=>Date.now()}={}){
@@ -51,7 +51,7 @@ export function createNativePassengerAuth({supabase,now=()=>Date.now()}={}){
   mutationBusy=true;
   try{
    const {error}=await supabase.auth.signInWithPassword({
-    email:email.toLowerCase(),password
+    email:email.trim().toLowerCase(),password
    });
    if(error)return fail('INVALID_CREDENTIALS_OR_UNAVAILABLE');
    const verified=await readSession();
