@@ -1,5 +1,5 @@
 /** One private SQL witness; browser, Client and Driver cannot use RPC. */
-const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}-[0-9a-f]{12}$/i;
+const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 export function createG75AdminF1Repository(admin){
  if(!admin||typeof admin.rpc!=='function')throw Error('Server SQL client required');
  return Object.freeze({async read({actorId,tripId}={}){
