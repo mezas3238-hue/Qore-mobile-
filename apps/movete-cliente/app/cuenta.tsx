@@ -2,14 +2,33 @@ import React,{useState} from 'react';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,useClientSimpleMode,useNativePassengerAuth} from '../src/ClientRuntime';
+import {createF1StagingConnectivityProbe} from '../src/domain/f1-staging-connectivity.mjs';
 export default function Account(){
  const {client,view}=useClientView();
  const {simpleMode,setSimpleMode}=useClientSimpleMode();
  const auth=useNativePassengerAuth();
+ const connectivity=React.useMemo(()=>createF1StagingConnectivityProbe({
+  origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+  pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
+ }),[]);
+ const [checkingBackend,setCheckingBackend]=useState(false);
+ const [backendMessage,setBackendMessage]=useState('');
  const [email,setEmail]=useState('');
  const [password,setPassword]=useState('');
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState('');
+ async function checkBackend(){
+  if(checkingBackend||!connectivity.isConfigured())return;
+  setCheckingBackend(true);setBackendMessage('');
+  try{
+   const result=await connectivity.check();
+   setBackendMessage(result.ok
+    ?'El servidor STAGING responde por HTTPS. Esto NO certifica todavía la base de datos, rutas, tarifas, conductores ni reservas.'
+    :'No se pudo comprobar el servidor STAGING configurado. No se habilitarán solicitudes ni cobros.');
+  }catch{
+   setBackendMessage('El servidor de pruebas no está disponible; no se habilitarán viajes.');
+  }finally{setCheckingBackend(false);}
+ }
  async function logIn(){
   if(!auth||busy)return;
   const secret=password;
@@ -80,6 +99,18 @@ export default function Account(){
    </Panel>}
   {message!==''&&<Panel><Text accessibilityRole="alert"
    accessibilityLiveRegion="polite" style={styles.text}>{message}</Text></Panel>}
+  <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>Conexión con Movete Fácil</Text>
+   {connectivity.isConfigured()?<>
+    <Text style={styles.small}>Comprobación HTTPS del servidor STAGING autorizado.
+     No envía identidad, contraseña ni ubicación.</Text>
+    <Action label={checkingBackend?'Comprobando…':'Comprobar conexión del servidor'}
+     disabled={checkingBackend} onPress={()=>{void checkBackend();}}/>
+   </>:<Text style={styles.small}>No hay servidor STAGING autorizado y fijado
+    para esta instalación. Las solicitudes siguen deshabilitadas.</Text>}
+   {backendMessage!==''&&<Text accessibilityRole="alert"
+    accessibilityLiveRegion="polite" style={styles.small}>{backendMessage}</Text>}
+  </Panel>
   <Panel>
    <Text style={styles.small}>La autenticación no activa por sí sola viajes, GPS,
     cobros ni despachos. Esas funciones requieren un backend HTTPS y una base
