@@ -22,13 +22,27 @@ const quote=()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
 const booked=()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
  ownerId:owner,requestKey:bookKey,quoteId,routeId,tripId,
  revision:1,serverPersisted:true,status:'ACCEPTED_QA'});
-function build({runtime=true,failBooking=false,foreignQuote=false}={}){
+function build({runtime=true,failBooking=false,foreignQuote=false,
+ dispatchState='RETRY_PENDING',tripState='searching',certifiedStatus=false}={}){
  let actor={role:'passenger',subject:owner,
   token:'signed-qa-jwt-not-real-abcdefghijklmnopqrst',expiresAt:t+600000};
  const calls=[];
  const experience=createClientExperience({
   now:()=>t,
   authProvider:{readSession:async()=>actor,signOut:async()=>{}},
+  statusGatewayOptions:certifiedStatus?{
+   enabled:true,contractCertified:true,origin:'https://qa.example.invalid',
+   pinnedOrigin:'https://qa.example.invalid',
+   fetchImpl:async()=>reply({
+    tripId,ownerId:owner,revision:2,state:'assigned',
+    assignmentPersisted:true,driver:null,vehicle:null,gpsConsent:false,
+    location:null,etaVerified:false,etaMinutes:null,mode:'STAGING_DEMO_ONLY',
+    commercialRidesEnabled:false,
+    event:{source:'server',tripId,passengerId:owner,serverRevision:2,
+     trackingSequence:1,status:'accepted',acceptedDriver:null,tracking:null},
+    locationVisible:false,deliveryConfirmed:false
+   })
+  }:null,
   autoG73HttpOptions:{
    enabled:runtime,contractCertified:true,stagingRuntimeVerified:true,
    routeProviderCertified:true,origin:'https://qa.example.invalid',
@@ -41,8 +55,9 @@ function build({runtime=true,failBooking=false,foreignQuote=false}={}){
      ?{...quote(),ownerId:id(9)}:quote());
     if(path.endsWith('/dispatch'))return reply({
      mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:owner,
-     bookingKey:bookKey,tripId,tripState:'searching',
-     dispatchState:'RETRY_PENDING',attempts:1,offerPendingAcceptance:false});
+     bookingKey:bookKey,tripId,tripState,
+     dispatchState,attempts:1,
+     offerPendingAcceptance:dispatchState==='OFFER_PENDING'});
     if(path.endsWith('/book'))return failBooking?reply({error:'timeout after commit'},503)
      :reply(booked(),201);
     if(path.endsWith('/bookings/'+bookKey))return reply(booked(),200);
@@ -155,4 +170,37 @@ test('R67 rotated JWT revokes G90 private Driver search view',async()=>{
  assert.equal(c.snapshot().autoDispatch.readReady,false);
  assert.equal(c.snapshot().autoDispatch.dispatchState,null);
  assert.equal((await c.refreshAutoDispatch()).code,'DISPATCH_BOOKING_NOT_VERIFIED');
+});
+
+test('R68 a CLOSED accepted dispatch requires owner G4 verification for tracking',async()=>{
+ const f=build({dispatchState:'CLOSED',tripState:'accepted',certifiedStatus:true});
+ const c=f.experience;
+ await c.refreshSession();await c.requestAutoQuote(input);
+ c.acceptAutoPrequote({quoteId,amountGs:17500,fareVersion:'g73-qa-v1'});
+ assert.equal((await c.reserveQuotedAuto({requestKey:bookKey})).ok,true);
+ assert.equal((await c.refreshAutoDispatch()).ok,true);
+ assert.equal(c.snapshot().autoDispatch.needsRideVerification,true);
+ assert.equal(c.snapshot().tracking.tripId,null);
+ assert.equal(c.snapshot().tracking.assignedDriver,null);
+ assert.equal((await c.continueVerifiedRide()).ok,true);
+ assert.equal(c.snapshot().tracking.tripId,tripId);
+ assert.equal(c.snapshot().tracking.state,'assigned');
+ assert.equal(c.snapshot().autoDispatch.needsRideVerification,false);
+ assert.equal(c.snapshot().tracking.assignedDriver,null);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/book')).length,1);
+});
+test('R68 CLOSED cancelled or no independent status contract never suggests assigned Driver',async()=>{
+ for(const opts of [
+  {dispatchState:'CLOSED',tripState:'cancelled',certifiedStatus:true},
+  {dispatchState:'CLOSED',tripState:'accepted',certifiedStatus:false}
+ ]){
+  const f=build(opts),c=f.experience;
+  await c.refreshSession();await c.requestAutoQuote(input);
+  c.acceptAutoPrequote({quoteId,amountGs:17500,fareVersion:'g73-qa-v1'});
+  await c.reserveQuotedAuto({requestKey:bookKey});
+  assert.equal((await c.refreshAutoDispatch()).ok,true);
+  assert.equal(c.snapshot().autoDispatch.needsRideVerification,false);
+  assert.equal(c.snapshot().tracking.tripId,null);
+  assert.equal(c.snapshot().tracking.assignedDriver,null);
+ }
 });

@@ -349,7 +349,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
      dispatch.dispatchState==='OFFER_PENDING'?'Esperando respuesta del conductor':
      dispatch.dispatchState==='RETRY_PENDING'?'Buscando otro conductor':
      dispatch.dispatchState==='SEARCH_EXHAUSTED'?'No se consiguió conductor en los intentos permitidos':
-     dispatch.dispatchState==='CLOSED'?'Búsqueda finalizada según el servidor':
+     dispatch.dispatchState==='CLOSED'?'Búsqueda finalizada; confirmar el estado del viaje':
       'Estado de búsqueda pendiente de consulta'
     }</Text>
     {dispatch.error&&<Text accessibilityRole="alert" style={styles.small}>
@@ -359,7 +359,13 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
      busy={dispatch.busy} disabled={dispatch.busy||quoteBusy}
      hint="Solo lectura privada de la misma reserva G90, sin nuevo pedido ni cobro."
      onPress={()=>{void consultDispatch();}}/>
-    <Text style={styles.small}>No se muestran conductores candidatos ni GPS sin aceptación verificada.</Text>
+    {dispatch.needsRideVerification&&view.rideContinuation.canVerify
+     &&view.rideContinuation.tripId===dispatch.tripId&&
+     <Action label="Verificar viaje y abrir seguimiento"
+      busy={consulting} disabled={consulting||dispatch.busy}
+      hint="GET privado G4 del mismo tripId; G90 no certifica una asignación."
+      onPress={()=>{void consultVerifiedRide();}}/>}
+    <Text style={styles.small}>La búsqueda finalizada no confirma por sí misma un conductor. El estado, GPS y ETA necesitan verificación independiente del servidor.</Text>
    </View>}
    {quoted.phase==='confirmed'&&<Text accessibilityLiveRegion="polite" style={styles.small}>
     Reserva confirmada en QA. Esto no demuestra conductor asignado, ruta GPS, pago ni viaje comercial. El seguimiento requiere otra consulta autenticada al servidor.

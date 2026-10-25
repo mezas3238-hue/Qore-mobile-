@@ -55,7 +55,8 @@ export function createClientExperience({authProvider=null,gateway=null,
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
  const emptyDispatch=()=>Object.freeze({readReady:false,busy:false,error:null,
   tripId:null,tripState:null,dispatchState:null,attempts:null,
-  offerPendingAcceptance:false,productionEnabled:false});
+  offerPendingAcceptance:false,needsRideVerification:false,
+  productionEnabled:false});
  let custodyAnchor=null;
  const seenCursors=new Set();
  const observers=new Set();
@@ -664,12 +665,23 @@ export function createClientExperience({authProvider=null,gateway=null,
    &&dispatch.scope?.tripId===proof.tripId
    &&dispatch.scope?.sessionRevision===proof.sessionRevision;
   const data=own?dispatch.data:null;
+  // G90 CLOSED is queue closure, NOT a verified Driver assignment.
+  // Enable continuation only when this same booked trip has an independent
+  // Passenger-owned G4 status reader. Never infer location/identity from G90.
+  const continuation=rideContinuation(),tracked=tracking.snapshot();
+  const expected={accepted:'assigned',arriving:'arriving',
+   in_progress:'in_progress',completed:'completed'}[data?.tripState];
+  const alreadyVerified=tracked.subscriptionActive===true
+   &&tracked.tripId===proof.tripId&&tracked.state===expected;
+  const needsRideVerification=Boolean(data?.dispatchState==='CLOSED'
+   &&expected&&continuation.canVerify
+   &&continuation.tripId===proof.tripId&&!alreadyVerified);
   return Object.freeze({readReady:true,busy:own&&dispatch.busy,
    error:own?dispatch.error:null,tripId:proof.tripId,
    tripState:data?.tripState??null,dispatchState:data?.dispatchState??null,
    attempts:data?.attempts??null,
    offerPendingAcceptance:data?.offerPendingAcceptance===true,
-   productionEnabled:false});
+   needsRideVerification,productionEnabled:false});
  }
  async function refreshAutoDispatch(){
   const proof=dispatchProof();

@@ -25,7 +25,8 @@ export type ClientSnapshot={
  autoDispatch:{readReady:boolean;busy:boolean;error:string|null;
   tripId:string|null;tripState:string|null;dispatchState:
    'SEARCHING_DRIVER'|'OFFER_PENDING'|'RETRY_PENDING'|'SEARCH_EXHAUSTED'|'CLOSED'|null;
-  attempts:number|null;offerPendingAcceptance:boolean;productionEnabled:false};
+  attempts:number|null;offerPendingAcceptance:boolean;
+  needsRideVerification:boolean;productionEnabled:false};
  quote:{quoteId:string;subjectId:string;amountGs:number;fareMode:string;
   subjectKind:string;expiresAt:number;fareVersion:string;formattedAmount:string}|null;
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
