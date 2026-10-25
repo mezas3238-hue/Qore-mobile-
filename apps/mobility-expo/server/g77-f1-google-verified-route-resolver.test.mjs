@@ -166,3 +166,59 @@ test('G77 source-backed route flows into G73 without local price or invented ava
  assert.equal(result.body.origin,origin);
  assert.equal(f.requests.length,1);
 });
+
+
+test('G77 accepts independent proofs issued DURING asynchronous coverage and toll calls',async()=>{
+ const timeline=[AT,AT+1500,AT+1800,AT+2000];
+ let index=0,paid=0;
+ const resolver=createG77VerifiedAutoRouteResolver({
+  apiKey:'SERVER_ONLY_FAKE_KEY_NEVER_REAL_123456',
+  tagSecret:'G77_QA_HMAC_TESTING_SECRET_PRIVATE_32_BYTES',
+  billableProviderApproved:true,now:()=>timeline[index++],
+  resolveCoveredPlaces:async()=>({...coverage(),verifiedAtMs:AT+1200}),
+  verifyRouteTolls:async()=>toll({verifiedAtMs:AT+1900}),
+  request:async()=>{paid++;return api({routes:[{distanceMeters:5000,duration:'600s'}]});}
+ });
+ const output=await resolver(scope);
+ assert.equal(output.distanceMeters,5000);
+ assert.equal(output.tollsPyg,0);
+ assert.equal(paid,1);
+});
+test('G77 rejects slow coverage BEFORE paid request and slow toll AFTER one request',async()=>{
+ let calls=0;
+ const lateCoverage=createG77VerifiedAutoRouteResolver({
+  apiKey:'SERVER_ONLY_FAKE_KEY_NEVER_REAL_123456',
+  tagSecret:'G77_QA_HMAC_TESTING_SECRET_PRIVATE_32_BYTES',
+  billableProviderApproved:true,
+  now:(()=>{let n=0;return ()=>n++===0?AT:AT+31000;})(),
+  resolveCoveredPlaces:async()=>({...coverage(),verifiedAtMs:AT+200}),
+  verifyRouteTolls:async()=>toll(),
+  request:async()=>{calls++;return api({routes:[{distanceMeters:5000,duration:'600s'}]});}
+ });
+ await assert.rejects(lateCoverage(scope),/Stale route coverage/);
+ assert.equal(calls,0,'No billing after slow coverage');
+ const times=[AT,AT+100,AT+200,AT+31201];
+ let tick=0;
+ const lateToll=createG77VerifiedAutoRouteResolver({
+  apiKey:'SERVER_ONLY_FAKE_KEY_NEVER_REAL_123456',
+  tagSecret:'G77_QA_HMAC_TESTING_SECRET_PRIVATE_32_BYTES',
+  billableProviderApproved:true,now:()=>times[tick++],
+  resolveCoveredPlaces:async()=>coverage(),
+  verifyRouteTolls:async()=>toll({verifiedAtMs:AT+300}),
+  request:async()=>{calls++;return api({routes:[{distanceMeters:5000,duration:'600s'}]});}
+ });
+ await assert.rejects(lateToll(scope),/Toll verification too old/);
+ assert.equal(calls,1,'Tolls cannot be checked until route metrics exist');
+});
+test('G77 rejects non-JSON provider response without trusting route metrics',async()=>{
+ const resolver=createG77VerifiedAutoRouteResolver({
+  apiKey:'SERVER_ONLY_FAKE_KEY_NEVER_REAL_123456',
+  tagSecret:'G77_QA_HMAC_TESTING_SECRET_PRIVATE_32_BYTES',
+  billableProviderApproved:true,now:()=>AT,
+  resolveCoveredPlaces:async()=>coverage(),verifyRouteTolls:async()=>toll(),
+  request:async()=>({ok:true,status:200,redirected:false,
+   headers:{get:k=>k==='content-type'?'text/html':null},
+   text:async()=>JSON.stringify({routes:[{distanceMeters:5000,duration:'600s'}]})})
+ });
+ await assert.rejects(resolver(scope),/MIME/);
+});
