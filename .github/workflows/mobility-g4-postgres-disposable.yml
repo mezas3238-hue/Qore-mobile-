@@ -89,6 +89,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G2_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G3_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G4_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G80_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G5_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
       - 'apps/mobility-expo/server/g67-*'
@@ -519,3 +520,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G75_F1_ADMIN_RIDE_VERIFICATION_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G78 prove real F1 Client booking cannot be hijacked by Driver with no verified KYC
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G78_F1_DENY_UNVERIFIED_DRIVER_ASSIGNMENT_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G80 verify 8-document synthetic Driver still cannot bypass legal zone on same F1 Client and Admin trip
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G80_F1_EIGHT_DOC_KYC_LEGAL_ZONE_DENIAL_ASSERT_POSTGRES_CI_ONLY.sql
