@@ -198,7 +198,20 @@ BEGIN
  THEN RAISE EXCEPTION 'G81 leaked an unaccepted Driver into Admin'; END IF;
  RAISE NOTICE 'G81 PASS: one booked G73 trip, private offer and outbox; KYC and legal fences remain';
 END $verify$;
+-- G85 must observe this already-offered G84/G81 trip, not create a second
+-- offer or mutate Passenger state when the offline worker catches up.
 SET LOCAL ROLE service_role;
+DO $g85_reconcile$
+DECLARE receipt jsonb;
+BEGIN
+ receipt:=public.mobility_stage_g85_run_one_dispatch_qa();
+ IF receipt->>'status'<>'OFFERED' OR receipt->>'commercialEnabled'<>'false'
+ OR NOT EXISTS(
+  SELECT 1 FROM public.mobility_stage_poll_driver_auto_offers(
+   '00000000-0000-4000-8000-000000000181') inbox
+  WHERE inbox.offer_id=(receipt->>'offerId')::uuid)
+ THEN RAISE EXCEPTION 'G85 failed to reconcile original private offer'; END IF;
+END $g85_reconcile$;
 DO $g82$
 DECLARE
  p uuid:='81810000-0000-4818-8818-000000000001';
