@@ -109,7 +109,7 @@ export function createRenderStagingIngress({
   if(!Number.isSafeInteger(at)||at<0){
    json(res,503,{error:'Ingress clock unavailable'},cors);return;
   }
-  // Store only a salted digest (never raw JWT). Bound memory and requests for
+  // Store only a one-way digest (never raw JWT). Bound memory and requests for
   // a single STAGING instance. Distributed protection is a separate GO gate.
   for(const [key,entry] of requests)
    if(entry.until<=at)requests.delete(key);
