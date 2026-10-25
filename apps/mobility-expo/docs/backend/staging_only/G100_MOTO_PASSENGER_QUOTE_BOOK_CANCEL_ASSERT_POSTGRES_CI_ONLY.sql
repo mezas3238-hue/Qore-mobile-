@@ -24,7 +24,8 @@ VALUES('10000000-0000-4100-8100-000000000020','MOTO_RIDE',
  'G100_MOTO_60D_QA','10000000-0000-4100-8100-000000000002',true,
  pg_catalog.transaction_timestamp()-interval '1 hour',
  pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);
-SET LOCAL ROLE service_role;
+-- Inspect source-backed table invariants as disposable CI migration owner;
+-- direct table privileges remain revoked for the service_role.
 DO $demo$
 DECLARE
  p uuid:='10000000-0000-4100-8100-000000000001';
@@ -91,6 +92,18 @@ BEGIN
  THEN RAISE EXCEPTION 'G100 MOTO passenger contaminated AUTO or DELIVERY'; END IF;
  RAISE NOTICE 'G100 PASS: real MOTO passenger quote 12/10/2, immutable book, 4-entry reserve and 4-entry reversal, replay, owner privacy and separate trip';
 END $demo$;
+SET LOCAL ROLE service_role;
+DO $server_only$
+DECLARE result jsonb;
+BEGIN
+ result:=public.mobility_stage_g100_moto_booking_receipt_qa(
+  '10000000-0000-4100-8100-000000000001'::uuid,
+  '10000000-0000-4100-8100-000000000012'::uuid);
+ IF result->>'tripState'<>'cancelled'
+ OR result->>'financialState'<>'VOIDED_QA'
+ THEN RAISE EXCEPTION 'G100 private service RPC failed'; END IF;
+ RAISE NOTICE 'G100 PASS: private service_role can read authorized MOTO receipt';
+END $server_only$;
 RESET ROLE;
 DO $private$
 BEGIN
