@@ -26,6 +26,26 @@ test('G4 CLI blocks missing staging env BEFORE any network request or TCP listen
  assert.match(out.stderr,/isolated staging/);
  assert.doesNotMatch(out.stdout,/listening|enabled|sb_secret/);
 });
+test('G4 CLI denies obsolete isolated_staging value before loading backend SDK',()=>{
+ const out=attempt({
+  QORE_G4_LOCAL_QA_ONLY:'true',
+  QORE_MOBILITY_ENV:'isolated_staging',
+  LIVE_TRIPS_ENABLED:'false'
+ });
+ assert.notEqual(out.status,0);
+ assert.match(out.stderr,/isolated staging/);
+ assert.doesNotMatch(out.stdout,/loopback enabled|listening|sb_secret/);
+});
+test('G4 CLI accepts consistent staging gate but refuses missing provider credentials',()=>{
+ const out=attempt({
+  QORE_G4_LOCAL_QA_ONLY:'true',
+  QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false'
+ });
+ assert.notEqual(out.status,0,'never starts absent Supabase credentials');
+ assert.doesNotMatch(out.stderr,/G4 requires isolated staging and LIVE_TRIPS_ENABLED=false/);
+ assert.doesNotMatch(out.stdout,/loopback enabled|listening|sb_secret/);
+});
 test('G4 CLI blocks LIVE_TRIPS_ENABLED=true even if local QA was explicitly authorized',()=>{
  const out=attempt({
   QORE_G4_LOCAL_QA_ONLY:'true',
