@@ -1,30 +1,28 @@
-# QORE Mobile — G77 F1: ruta real con evidencia del proveedor (NO GO)
+# QORE Mobile / Movete Fácil — G77 proveedor ÚNICO de rutas AUTO
 
-**Fecha:** 2026-10-24 · **Owner:** autorización de facturación NO concedida en este corte · **Arquitecto:** A · **Estado:** módulo servidor QA, no desplegado.
+**Corte:** 24–25 octubre de 2026 · **Responsable:** Arquitecto A · **Estado:** QA, sin despliegue, sin llamadas pagas ni autorización LIVE.
 
-## Cierre técnico
+## Decisión de convergencia A/B
 
-`apps/mobility-expo/server/g77-google-f1-verified-route.mjs` implementa `createG77GoogleF1VerifiedRoute`, un adaptador **solo Node/backend** que produce los diez atributos exactos consumidos por `G73 resolveVerifiedRoute`. El constructor requiere conjuntamente `enabled:true` y `billingApproved:true`; ambos OFF por defecto. En ausencia de credenciales de servidor, secret HMAC separado, servicio `authorizeCoverage` y servicio `verifyTolls`, lanza error **antes de ejecutar cualquier consulta**.
+**Único código operativo:** `apps/mobility-expo/server/g77-f1-google-verified-route-resolver.mjs`, exporta `createG77VerifiedAutoRouteResolver`. La anterior variante geocode-first (`g77-google-f1-verified-route.mjs`) y su test se retiraron de la rama A: consultaba Geocoding y Routes antes de comprobar la elegibilidad zonal, con riesgo de facturación indebida. Las pruebas de cadena `g77-f1-provider-to-g73-chain.test.mjs` fueron migradas al único proveedor; las pruebas unitarias `g77-f1-google-verified-route-resolver.test.mjs` se mantienen como fuente de contrato.
 
-1. Entrada Passenger: `{actorId,origin,destination,service}`; jamás acepta distancia, tarifa, coordenadas, zoneTag ni Place IDs del móvil como autoridad.
-2. Dos consultas Google Geocoding v4 bajo `geocode.googleapis.com` usando llave solo en cabecera `X-Goog-Api-Key`. Respuestas deben ser inequívocas, `postalAddress.regionCode='PY'`, geografía compatible con Paraguay, localización precisa `ROOFTOP`/`RANGE_INTERPOLATED`; de lo contrario 409 por G73.
-3. Ruta Google Routes v2 `directions/v2:computeRoutes` con `DRIVE`, `TRAFFIC_AWARE`, sin alternativas ni `fallbackInfo`, distancia en metros y tiempo recibido del proveedor, nunca números locales estimados.
-4. Cobertura independiente: `authorizeCoverage` debe verificar ambas geocodificaciones, el servicio vigente, geocerca autorizada, la versión y `country='PY'`. **Cobertura no equivale a disponibilidad del Driver**.
-5. Peajes independientes: `verifyTolls` debe devolver evidencia para la misma ruta, Place IDs y zoneTag, incluso cuando confirme que `tollsPyg=0`. Google no garantiza tarifas de peaje paraguayas para todos los tramos: un valor ausente no se convierte en cero.
-6. HMAC-SHA256 privado transforma los Place IDs verificados en tags pseudónimos `LOC_`+32 letras A–P, compatibles con SQL G73. El DTO no expone API key, Place IDs, direcciones ni coordenadas. Persistencia y tarifa siguen gobernadas por SQL G73/G72.
+### Circuito único — autorización antes de consumo
 
-## Integración deliberadamente NO habilitada
+1. El servidor comprueba Passenger JWT, autoriza rol y valida origen, destino y servicio. No acepta distancias, coordenadas, peajes ni zonas como precio del cliente.
+2. El servicio independiente `resolveCoveredPlaces({actorId,origin,destination,service})` debe devolver `source:'INDEPENDENT_COVERAGE_AUTHORITY'`, `coverageVerified:true`, UUID de evidencia, `revision`, sello temporal menor a 60 s, Place IDs de origen/destino distintos y zoneTag válido. **NO se llama Google si esta prueba falta o está vencida.** Por sí sola no implica disponibilidad de autos ni autorización comercial.
+3. Solo con **aprobación expresa del Owner de facturación** y clave restringida del servidor se hace **una solicitud Google Routes v2 ComputeRoutes** con dos Place IDs precomprobados, `DRIVE`, `TRAFFIC_AWARE`, sin alternativas, respuesta JSON acotada, distancia y duración; se rechaza `fallbackInfo`. No se permite un segundo proveedor simultáneo.
+4. Después del cálculo, `verifyRouteTolls` debe confirmar fuente independiente `INDEPENDENT_TOLL_AUTHORITY`, misma evidencia de cobertura y Place IDs, misma distancia y duración, UUID de prueba y peajes en guaraníes, incluso cuando el importe certificado sea cero. Un valor ausente rechaza el viaje.
+5. Los Place IDs respaldados se transforman en etiquetas opacas `LOC_`+32 letras A–P usando HMAC SHA-256 y un secreto **distinto de Google API key**. El resultado contiene exactamente los diez campos esperados por G73: `routingVerified,coverageVerified,trafficAware,fallbackUsed,originTag,destinationTag,zoneTag,distanceMeters,durationSeconds,tollsPyg`. No expone claves, Place IDs, GPS, direcciones personales ni identidades del Driver.
+6. G73 crea cotización del servidor en PYG, exige consentimiento explícito y registra una reserva idempotente. G74 usa el mismo viaje para GET Passenger; G75 usa GET Admin AAL2/rol exclusivo (solo QA). La asignación de Driver exige G71 KYC válido y autorización atómica independiente.
 
-El G4 runtime A ya acepta `verifiedAutoRoute` inyectado. Cuando **existan** certificados, contrato de cobertura de BD versionado y aprobación de gastos por Owner, el backend podrá inyectar la función retornada por `createG77GoogleF1VerifiedRoute` en `prepareQoreG4StagingRuntime({verifiedAutoRoute})`, usando llaves por ambiente desde secret manager, jamás desde Expo/Cliente/Admin/GitHub. No configurar `billingApproved:true` por CI ni pruebas sintéticas; solo con autorización financiera expresa del Owner. No se ha llamado a Google desde este trabajo, no hay costos provocados ni STAGING público certificado.
+### G4 runtime
 
-**Documentación de API:** Geocoding v4 `https://developers.google.com/maps/documentation/geocoding/geocoding` y Routes v2 `https://developers.google.com/maps/documentation/routes/compute_route_directions`. Ambas pueden generar costes por solicitud. El Owner deberá aprobar proveedor y presupuesto/límites antes de llamadas reales.
+El runtime de backend G4 importa el único resolver G77 por inyección `g77RouteOptions`. Su valor por defecto continúa **null**, y `verifiedAutoRoute` no se activa si no existe proveedor. `g77RouteOptions` requiere controles de activación aprobada, llave secreta aislada, secreto de etiquetas, función independiente de cobertura, peajes y transporte. Las pruebas sintéticas pueden inyectar un transporte sin credenciales reales: eso NO constituye aprobación de Google/billing ni certificación del entorno.
 
-## Certificación restante
+### Gate externo NO_GO
 
-- Autoridad de cobertura geográfica y zonificación con polígonos autorizados, control de vigencia y sin fallback.
-- Origen de peajes PYG con evidencia por tramo y vigencia comercial. Tarifas/reglas G7 actualizadas por región y tipo.
-- Configuración de Google Cloud Maps Platform, scopes mínimos, restricciones de claves, presupuestos/alertas y revisión contractual/privacidad; **sin gastos todavía**.
-- Montaje de HTTPS con IdP/AAL2/PG compartido, prueba de **mismo tripId** Cliente G73 → Driver aceptación G65 con documentos vigentes → Cliente GET G4 → Admin GET G75, prueba adversarial de RLS, cancelación, terminal y dos conductores.
-- Pruebas Android/iOS físicas; protección de PII, retención, atención y operación, y aprobación Owner GO/NO_GO separada.
+Faltan datos/Place IDs de origen/destino autorizados por geocercas versión activa; acuerdo/API real para obtención y actualización de Place IDs sin geocodificación anticipada no autorizada; prueba comercial de peajes; autorización Owner para proveedor/billing con límites de coste; HTTPS IdP/MFA PG compartido; dos dispositivos; mismo `tripId` Cliente→Driver→Admin con KYC válido, completado e historial; verificación de leyes y privacidad.
 
-No MERGE / LIVE / DEPLOY / PSP / PII REAL. Todo este corte permanece QA y DRAFT.
+Fuentes API: Google Routes v2 https://developers.google.com/maps/documentation/routes/compute_route_directions y respuesta/fallback https://developers.google.com/maps/documentation/routes/understand-route-response. Rechazar fallback, no presentar ETA sin asignación y GPS certificado.
+
+**Gobierno:** PR #7 y #8 permanecen DRAFT; sin MERGE, LIVE, DEPLOY, PSP, PII real ni costos autorizados de Google por este corte.
