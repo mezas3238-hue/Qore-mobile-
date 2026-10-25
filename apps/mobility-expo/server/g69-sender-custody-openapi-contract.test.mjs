@@ -5,7 +5,8 @@ const base=new URL('../docs/backend/',import.meta.url);
 const spec=JSON.parse(readFileSync(new URL('openapi/movete-facil-staging.openapi.json',base),'utf8'));
 const path='/v1/staging/sender/deliveries/{deliveryId}/custody';
 test('G69 G68 sender status is documented without ever enabling runtime or production',()=>{
- assert.match(spec.info.version,/^1\.0\.0-g(69|[7-9][0-9])$/);
+ assert.match(spec.info.version,/^1\.0\.0-g\d+$/);
+ assert.ok(Number(spec.info.version.split('-g')[1])>=69);
  assert.equal(spec['x-qore-live-enabled'],false);
  assert.equal(spec['x-qore-g68-sender-custody-runtime-wired'],false);
  const endpoint=spec.paths[path]?.get;
