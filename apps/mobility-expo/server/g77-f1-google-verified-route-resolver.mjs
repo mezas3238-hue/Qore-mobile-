@@ -21,7 +21,7 @@ const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const integer=(x,lo,hi)=>Number.isSafeInteger(x)&&x>=lo&&x<=hi;
 const SERVICES=new Set(['economico','confort','xl']);
 const privateTag=(secret,placeId)=>{
- const digest=createHmac('sha256',secret).update('QORE_G77_PLACE_V1\\0')
+ const digest=createHmac('sha256',secret).update('QORE_G77_PLACE_V1\u0000')
   .update(placeId,'utf8').digest('hex').slice(0,32);
  return 'LOC_'+[...digest].map(h=>String.fromCharCode(65+parseInt(h,16))).join('');
 };
@@ -55,7 +55,7 @@ function validateCharges(p,ctx,at){
 }
 /** Bounded text input even when a stub has no readable stream. */
 async function boundedJson(reply,maxBytes=8192){
- if(!/^application\\/json(?:\\s*;|$)/i.test(reply.headers?.get?.('content-type')??''))
+ if(!/^application\/json(?:\s*;|$)/i.test(reply.headers?.get?.('content-type')??''))
   throw Error('Invalid routing response MIME');
  const length=reply.headers?.get?.('content-length');
  if(length!==null&&length!==undefined&&(!/^\d+$/.test(length)||
