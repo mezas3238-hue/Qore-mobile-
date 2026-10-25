@@ -89,5 +89,5 @@ test('G73 foreign receipt, rotated token and malformed quote fail closed',async(
  assert.equal((await missing.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'))).status,404);
  const unauthorized=fixture({authorizePassenger:async()=>false});
  assert.equal((await unauthorized.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'))).status,403);
- assert.equal((await unauthorized.app({method:'GET',path:'/v1/staging/rider/auto/bookings/'+bookKey,headers:{}}))).status,401);
+ assert.equal((await unauthorized.app({method:'GET',path:'/v1/staging/rider/auto/bookings/'+bookKey,headers:{}})).status,401);
 });
