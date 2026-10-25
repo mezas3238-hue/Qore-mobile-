@@ -112,7 +112,7 @@ export function createG77VerifiedAutoRouteResolver({
    coverage?.verifiedAtMs>beforeBillable||
    beforeBillable-coverage?.verifiedAtMs>60000)
    throw Error('Stale route coverage before billable provider');
-  if(!validateCoverage(coverage,ctx,at))
+  if(!validateCoverage(coverage,ctx,beforeBillable))
    throw Error('No independently verified route coverage');
   const body={
    origin:{placeId:coverage.originPlaceId},
@@ -149,7 +149,11 @@ export function createG77VerifiedAutoRouteResolver({
   const tollScope=Object.freeze({coverage:Object.freeze({...coverage}),
    distanceMeters:route.distanceMeters,durationSeconds:seconds});
   const charges=await verifyRouteTolls(tollScope);
-  if(!validateCharges(charges,tollScope,atCharges))
+  const afterTolls=now();
+  if(!validEpoch(afterTolls)||afterTolls<atCharges||
+   afterTolls-atCharges>30000||afterTolls-beforeBillable>60000)
+   throw Error('Toll verification too old');
+  if(!validateCharges(charges,tollScope,afterTolls))
    throw Error('Tolls cannot be independently verified');
   const originTag=privateTag(tagSecret,coverage.originPlaceId),
    destinationTag=privateTag(tagSecret,coverage.destinationPlaceId);
