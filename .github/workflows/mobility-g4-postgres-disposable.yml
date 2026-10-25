@@ -509,3 +509,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G73_F1_ROUTE_QUOTE_BOOKING_POSTGRES_CI_ONLY.sql
       - name: G73 certify private route, prequote, acceptance and recovery in PostgreSQL
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G73_F1_ROUTE_QUOTE_BOOKING_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G73 two PostgreSQL sessions race same quote and same booking
+        run: python3 apps/mobility-expo/server/g73-f1-auto-two-connection-ci.py
