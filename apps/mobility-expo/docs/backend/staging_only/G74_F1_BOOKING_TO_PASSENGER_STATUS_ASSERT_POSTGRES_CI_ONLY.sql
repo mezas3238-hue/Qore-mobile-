@@ -48,9 +48,8 @@ BEGIN
  THEN RAISE EXCEPTION 'G74 G4 persistent status diverged from G73 booking'; END IF;
  IF (SELECT count(*) FROM public.mobility_stage_auto_demo_trips
      WHERE request_key=bookkey)<>1
- OR (SELECT count(*) FROM public.mobility_stage_g72_auto_prequotes
-     WHERE request_key=quotekey AND trip_id=tid AND route_id=rid)<>1
- THEN RAISE EXCEPTION 'G74 phantom trip or duplicate reserve'; END IF;
+ OR public.mobility_stage_g73_quote_receipt(owner_id,qid)->>'routeId'<>rid::text
+ THEN RAISE EXCEPTION 'G74 phantom trip or mismatched private quote'; END IF;
  IF public.mobility_stage_g73_booking_receipt(stranger,bookkey) IS NOT NULL
  THEN RAISE EXCEPTION 'G74 foreign booking reconciliation leaked'; END IF;
  RAISE NOTICE 'G74 PASS: one G73 booked trip is the same private G4 searching row';
@@ -91,8 +90,10 @@ DECLARE
  bookkey uuid:='74740000-0000-4747-8747-000000000012';
  quote_id uuid; tid uuid; receipt jsonb; event_id uuid;
 BEGIN
- SELECT id INTO quote_id FROM public.mobility_stage_g72_auto_prequotes
- WHERE request_key='74740000-0000-4747-8747-000000000011'::uuid;
+ -- Caller never receives direct SELECT on the privileged price table.
+ -- Recover the original quote identity from its private booking receipt.
+ quote_id:=(public.mobility_stage_g73_booking_receipt(owner_id,bookkey)
+  ->>'quoteId')::uuid;
  tid:=public.mobility_stage_g73_book(owner_id,quote_id,bookkey);
  event_id:=public.mobility_stage_auto_demo_transition(
   tid,owner_id,'cancelled','74740000-0000-4747-8747-000000000013'::uuid);
