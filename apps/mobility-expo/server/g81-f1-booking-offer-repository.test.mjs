@@ -35,7 +35,7 @@ test('G81 fails closed on invalid identities, forged trip, TTL and DB failures',
   {...input,ttlSeconds:31},
   {...input,ttlSeconds:0}
  ])await assert.rejects(adapter.offerBookedAuto(args));
- assert.equal(called,true); // valid-looking data reaches SQL; DB refusal is mandatory
+ assert.equal(called,false,'Invalid or extra fields must never reach SQL');
  await assert.rejects(adapter.offerBookedAuto(input),/SQL offer denied/);
  await assert.rejects(createG81BookedAutoOfferRepository({
   rpc:async()=>({data:13,error:null})

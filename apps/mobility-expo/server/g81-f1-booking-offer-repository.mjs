@@ -3,7 +3,7 @@
  * exclusively from the persisted G73 booking key and locks it atomically.
  * No public route, no push-delivery claim, no direct client actor authority.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId=x=>typeof x==='string'&&UUID.test(x);
 export function createG81BookedAutoOfferRepository(client){
  if(!client||typeof client.rpc!=='function')
