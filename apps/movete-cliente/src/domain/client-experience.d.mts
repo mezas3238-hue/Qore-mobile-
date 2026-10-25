@@ -32,7 +32,8 @@ export type ClientSnapshot={
   attempts:number|null;offerPendingAcceptance:boolean;
   needsRideVerification:boolean;productionEnabled:false};
  g95Cancellation:{contractReady:boolean;phase:string;
-  requiresReconciliation:boolean;tripId:string|null;busy:boolean;
+  requiresReconciliation:boolean;canVerify:boolean;
+  independentlyVerified:boolean;tripId:string|null;busy:boolean;
   financialState:string|null;error:string|null;qaOnly:true;productionEnabled:false};
  autoFinance:{readReady:boolean;busy:boolean;error:string|null;
   tripId:string|null;tripState:string|null;tripRevision:number|null;
@@ -147,6 +148,7 @@ export type ClientExperience={
  abandonG95PreparedCancel():ClientResult;
  sendG95Cancel():Promise<ClientResult>;
  reconcileG95Cancel():Promise<ClientResult>;
+ verifyG95Cancellation():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;

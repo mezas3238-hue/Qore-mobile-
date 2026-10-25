@@ -48,6 +48,8 @@ export default function ClientTracking(){
  const [g95Message,setG95Message]=useState('');
  const [g95Busy,setG95Busy]=useState(false);
  const g95Lock=useRef(false);
+ const [g95VerifyBusy,setG95VerifyBusy]=useState(false);
+ const g95VerifyLock=useRef(false);
  const g95ForTrip=g95.tripId===state.tripId&&state.tripId!==null;
  const canG95=view.authenticated&&g95ForTrip&&g95.contractReady
   &&state.subscriptionActive&&!state.syncing&&CANCELLABLE.has(state.state);
@@ -96,6 +98,22 @@ export default function ClientTracking(){
     ?'Anulación recuperada por GET privado. Verificá G4/G94, no hay reembolso.'
     :'El servidor no confirmó la anulación; no se enviará un POST nuevo.');
   }finally{g95Lock.current=false;setG95Busy(false);}
+ }
+ async function verifyG95Ui(){
+  if(g95VerifyLock.current||!g95ForTrip||!g95.canVerify)return;
+  const before=client.snapshot();
+  if(before.privateViewRevision!==view.privateViewRevision
+   ||before.g95Cancellation.tripId!==state.tripId)return;
+  g95VerifyLock.current=true;setG95VerifyBusy(true);
+  try{
+   const response=await client.verifyG95Cancellation();
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.tracking.tripId!==state.tripId)return;
+   setG95Message(response.ok&&after.g95Cancellation.independentlyVerified
+    ?'G4 confirma viaje cancelado y G94 confirma reversión contable en QA. No se efectuó devolución de dinero.'
+    :'La cancelación aún no está comprobada por G4 y G94. El recibo G95 se conserva para nueva verificación.');
+  }finally{g95VerifyLock.current=false;setG95VerifyBusy(false);}
  }
  async function verifyOwnCompletedHistory(){
   if(historyLock.current||!view.completedRideHistory.readReady
@@ -233,8 +251,16 @@ export default function ClientTracking(){
      disabled={g95Busy} busy={g95Busy}
      hint="GET privado sobre la reserva existente, ningún POST adicional."
      onPress={()=>{void reconcileG95Ui();}}/>}
-    {g95ForTrip&&g95.phase==='confirmed'&&<Text style={styles.small}>
-     G95 persistido en QA; consultá GET G4 y G94 para estado/contabilidad, sin reembolso real.
+    {g95ForTrip&&g95.phase==='confirmed'&&<View>
+     <Text style={styles.small}>Recibo G95 persistido en QA. Falta comprobar por separado la cancelación G4 y la reversión contable G94. No hay reembolso real.</Text>
+     {g95.canVerify&&<Action
+      label={g95VerifyBusy?'Verificando G4 y G94…':'Verificar cancelación y contabilidad'}
+      busy={g95VerifyBusy} disabled={g95VerifyBusy||g95.busy}
+      hint="Dos lecturas independientes autenticadas; ningún POST ni devolución."
+      onPress={()=>{void verifyG95Ui();}}/>}
+    </View>}
+    {g95ForTrip&&g95.independentlyVerified&&<Text accessibilityLiveRegion="polite" style={styles.text}>
+      Viaje cancelado confirmado por G4 y reversión de subsidio confirmada por G94 en QA. No es un reembolso bancario.
     </Text>}
     {g95Message!==''&&<Text accessibilityRole="alert" style={styles.small}>{g95Message}</Text>}
     {!view.cancellation.contractReady&&!canG95&&CANCELLABLE.has(state.state)&&

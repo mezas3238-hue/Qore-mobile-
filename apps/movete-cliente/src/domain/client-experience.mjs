@@ -784,33 +784,45 @@ export function createClientExperience({authProvider=null,gateway=null,
   return Object.freeze({ok:true,tripId:s.tripId,
    financialState:result.data.financialState,qaOnly:true,productionEnabled:false});
  }
- function g95Scope(){
-  const proof=dispatchProof(),tracked=tracking.snapshot();
-  if(!proof||autoG73Http?.isCancellationConfigured()!==true
-   ||!tracked.subscriptionActive||tracked.tripId!==proof.tripId
-   ||!Number.isSafeInteger(tracked.revision)
-   ||tracked.revision<proof.serverRevision
-   ||!Number.isSafeInteger(tracked.lastFetchedAt)
-   ||tracked.lastFetchedAt>now()||now()-tracked.lastFetchedAt>60000)return null;
+ function g95BookingScope(){
+  const proof=dispatchProof();
+  if(!proof||autoG73Http?.isCancellationConfigured()!==true)return null;
   return Object.freeze({ownerId:proof.subject,sessionRevision:proof.sessionRevision,
    requestKey:proof.requestKey,tripId:proof.tripId,quoteId:proof.quoteId,
-   serverRevision:proof.serverRevision,tripState:tracked.state});
+   serverRevision:proof.serverRevision});
+ }
+ // Fresh G4 status is required to SEND a cancellation, but once any POST was
+ // attempted the private receipt GET must remain possible if tracking ages.
+ function g95Scope(){
+  const booking=g95BookingScope(),tracked=tracking.snapshot();
+  if(!booking||!tracked.subscriptionActive||tracked.tripId!==booking.tripId
+   ||!Number.isSafeInteger(tracked.revision)
+   ||tracked.revision<booking.serverRevision
+   ||!Number.isSafeInteger(tracked.lastFetchedAt)
+   ||tracked.lastFetchedAt>now()||now()-tracked.lastFetchedAt>60000)return null;
+  return Object.freeze({...booking,tripState:tracked.state});
  }
  function preparedG95Scope(){
-  const s=g95Scope(),a=g95.scope;
+  const s=g95BookingScope(),a=g95.scope;
   return s&&a&&a.ownerId===s.ownerId
    &&a.sessionRevision===s.sessionRevision&&a.requestKey===s.requestKey
    &&a.tripId===s.tripId&&a.quoteId===s.quoteId
    &&a.serverRevision===s.serverRevision?a:null;
  }
  function publicG95(){
-  const s=g95Scope(),same=Boolean(preparedG95Scope());
+  const fresh=g95Scope(),scope=preparedG95Scope(),same=Boolean(scope);
   return Object.freeze({
-   contractReady:Boolean(s&&g95.phase==='idle'
-    &&['searching','assigned','arriving'].includes(s.tripState)),
+   contractReady:Boolean(fresh&&g95.phase==='idle'
+    &&['searching','assigned','arriving'].includes(fresh.tripState)),
    phase:same?g95.phase:'idle',
    requiresReconciliation:same&&g95.phase==='ambiguous',
-   tripId:s?.tripId??null,busy:same&&['sending','reconciling'].includes(g95.phase),
+   canVerify:same&&g95.phase==='confirmed'
+    &&g95.receipt?.financialState==='VOIDED_QA'
+    &&autoG73Http?.isFinancialConfigured()===true
+    &&statusGateway?.isConfigured()===true,
+   independentlyVerified:same&&g95.phase==='verified',
+   tripId:fresh?.tripId??scope?.tripId??null,
+   busy:same&&['sending','reconciling','verifying'].includes(g95.phase),
    financialState:same?g95.receipt?.financialState??null:null,
    error:same?g95.error:null,qaOnly:true,productionEnabled:false});
  }
@@ -868,6 +880,44 @@ export function createClientExperience({authProvider=null,gateway=null,
   }
   g95={...g95,phase:'ambiguous',error:'G95_GET_STILL_UNCONFIRMED'};
   notify();return fail('G95_GET_STILL_UNCONFIRMED');
+ }
+ async function verifyG95Cancellation(){
+  if(g95.phase!=='confirmed'||!g95.receipt)
+   return fail('G95_CANCEL_RECEIPT_NOT_CONFIRMED');
+  const scope=preparedG95Scope(),receipt=g95.receipt;
+  if(!scope||receipt.ownerId!==scope.ownerId||receipt.tripId!==scope.tripId
+   ||receipt.bookingKey!==scope.requestKey||receipt.quoteId!==scope.quoteId)
+   return fail('G95_SCOPE_NOT_VERIFIED');
+  if(receipt.financialState!=='VOIDED_QA'
+   ||autoG73Http?.isFinancialConfigured()!==true
+   ||statusGateway?.isConfigured()!==true)return fail('G95_RECONCILIATION_NOT_CERTIFIED');
+  const epoch=++g95Epoch;
+  g95={...g95,phase:'verifying',error:null};notify();
+  const still=()=>epoch===g95Epoch&&preparedG95Scope()===scope;
+  const uncertain=code=>{
+   if(still()){
+    g95={...g95,phase:'confirmed',error:code};notify();
+   }
+   return fail(code);
+  };
+  const refreshed=await syncTracking();
+  if(!still())return fail('STALE_SESSION_RESPONSE');
+  const ride=tracking.snapshot();
+  if(!refreshed?.ok||!ride.subscriptionActive||ride.tripId!==scope.tripId
+   ||ride.state!=='cancelled'||ride.revision<receipt.tripRevision)
+   return uncertain('G95_G4_CANCEL_NOT_VERIFIED');
+  const financeResult=await refreshAutoFinancialStatus();
+  if(!still())return fail('STALE_SESSION_RESPONSE');
+  const ledger=publicAutoFinance();
+  if(!financeResult?.ok||ledger.tripId!==scope.tripId
+   ||ledger.tripState!=='cancelled'
+   ||ledger.tripRevision<receipt.tripRevision
+   ||ledger.financialState!=='VOIDED_QA'
+   ||ledger.customerPaysGs===null||ledger.pspCollected!==false
+   ||ledger.pspRefunded!==false)return uncertain('G95_G94_REVERSAL_NOT_VERIFIED');
+  g95={...g95,phase:'verified',error:null};notify();
+  return Object.freeze({ok:true,tripId:scope.tripId,verifiedBy:['G4','G94'],
+   qaOnly:true,productionEnabled:false,pspRefunded:false});
  }
  function verifiedAutoSubsidy(){
   const user=actor(),quote=prequoteAuto.snapshot().quote,proof=subsidyReceipt;
@@ -1068,6 +1118,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   refreshAutoDispatch,refreshAutoFinancialStatus,
   prepareG95Cancel,abandonG95PreparedCancel,sendG95Cancel,reconcileG95Cancel,
+  verifyG95Cancellation,
   clearAutoPrequote:()=>{
    const result=prequoteAuto.discard();
    if(result.ok){subsidyEpoch++;subsidyReceipt=null;

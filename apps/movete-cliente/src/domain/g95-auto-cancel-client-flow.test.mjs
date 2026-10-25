@@ -37,17 +37,22 @@ const receipt={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
 const res=(data,http=200)=>({status:http,ok:http>=200&&http<300,
  redirected:false,headers:{get:k=>k==='content-type'?'application/json':null},
  text:async()=>JSON.stringify(data)});
-function setup({lostAck=false,receiptPatch={},cancelEnabled=true,statusEnabled=true}={}){
+function setup({lostAck=false,receiptPatch={},cancelEnabled=true,statusEnabled=true,
+ ledgerPatch={}}={}){
+ let currentTime=now,serverCancelled=false;
  let auth={subject:owner,role:'passenger',
   token:'qa-passenger-jwt-g95-abcdefghijklmnopqrst',expiresAt:now+600000};
  const calls=[];
- const c=createClientExperience({now:()=>now,
+ const c=createClientExperience({now:()=>currentTime,
   authProvider:{readSession:async()=>auth,signOut:async()=>{}},
   statusGatewayOptions:statusEnabled?{enabled:true,contractCertified:true,
    origin:'https://qa.example.invalid',pinnedOrigin:'https://qa.example.invalid',
    fetchImpl:async(url,init)=>{
     calls.push({method:init.method,path:new URL(url).pathname,body:null});
-    return res(status);
+    const next=serverCancelled?{...status,state:'cancelled',revision:3,
+     event:{...status.event,status:'cancelled',serverRevision:3,
+      trackingSequence:2}}:status;
+    return res(next);
    }}:null,
   autoG73HttpOptions:{enabled:true,contractCertified:true,stagingRuntimeVerified:true,
    routeProviderCertified:true,subsidyContractCertified:true,financialContractCertified:true,
@@ -60,13 +65,23 @@ function setup({lostAck=false,receiptPatch={},cancelEnabled=true,statusEnabled=t
     if(path.endsWith('/prequote'))return res(quote);
     if(path.endsWith('/subsidy'))return res(promo);
     if(path.endsWith('/book'))return res(booked,201);
+    if(path.endsWith('/financial-status'))return res({
+     mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:owner,
+     bookingKey,tripId,quoteId,tripState:'cancelled',tripRevision:3,
+     financialState:'VOIDED_QA',customerPaysGs:27000,driverReceivesGs:25500,
+     customerSubsidyGs:3000,platformRetainsGs:1500,
+     originalEntriesBalanced:true,reversalEntriesBalanced:true,
+     pspCollected:false,pspRefunded:false,serverPersisted:true,...ledgerPatch
+    });
     if(path.endsWith('/cancel'))return lostAck?res({error:'maybe committed'},503)
      :res({...receipt,...receiptPatch});
     if(path.endsWith('/cancellation'))return res({...receipt,...receiptPatch});
     throw Error('Unexpected route '+path);
    }}
  });
- return {c,calls,rotate:()=>auth={...auth,token:'rotated-g95-qa-jwt-abcdefghijklmnopqrst'}};
+ return {c,calls,
+  rotate:()=>auth={...auth,token:'rotated-g95-qa-jwt-abcdefghijklmnopqrst'},
+  advance:ms=>{currentTime+=ms;},confirmServerCancel:()=>{serverCancelled=true;}};
 }
 async function setupRide(f){
  await f.c.refreshSession();
@@ -156,4 +171,63 @@ test('G95 cancellation confirmation can be discarded BEFORE any network action',
  assert.equal(g.c.abandonG95PreparedCancel().ok,false);
  assert.equal(g.c.prepareG95Cancel({requestKey:id(20)}).ok,false);
  assert.equal(g.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
+});
+
+test('R74 G95 uncertain cancellation remains GET-recoverable after G4 is stale for 60 seconds',async()=>{
+ const f=setup({lostAck:true});await tracked(f);
+ assert.equal(f.c.prepareG95Cancel({requestKey:cancelKey}).ok,true);
+ assert.equal((await f.c.sendG95Cancel()).ok,false);
+ f.advance(61000);
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'ambiguous');
+ assert.equal(f.c.snapshot().g95Cancellation.requiresReconciliation,true);
+ assert.equal(f.c.snapshot().g95Cancellation.contractReady,false);
+ assert.equal((await f.c.reconcileG95Cancel()).ok,true);
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'confirmed');
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancellation')).length,1);
+});
+test('R74 independently certifies G95 cancellation only with G4 cancelled and G94 balanced reversal',async()=>{
+ const f=setup();await tracked(f);
+ f.c.prepareG95Cancel({requestKey:cancelKey});
+ assert.equal((await f.c.sendG95Cancel()).ok,true);
+ const premature=await f.c.verifyG95Cancellation();
+ assert.equal(premature.ok,false);
+ assert.equal(premature.code,'G95_G4_CANCEL_NOT_VERIFIED');
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'confirmed');
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/financial-status')).length,0);
+ f.confirmServerCancel();
+ const verified=await f.c.verifyG95Cancellation();
+ assert.equal(verified.ok,true);
+ assert.deepEqual(verified.verifiedBy,['G4','G94']);
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'verified');
+ assert.equal(f.c.snapshot().g95Cancellation.independentlyVerified,true);
+ assert.equal(f.c.snapshot().autoFinance.financialState,'VOIDED_QA');
+ assert.equal((await f.c.verifyG95Cancellation()).ok,false);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/financial-status')).length,1);
+});
+test('R74 does not certify a G95 receipt when G94 ledger is mismatched, even if G4 cancelled',async()=>{
+ const f=setup({ledgerPatch:{customerSubsidyGs:2000}});
+ await tracked(f);
+ f.c.prepareG95Cancel({requestKey:cancelKey});
+ await f.c.sendG95Cancel();
+ f.confirmServerCancel();
+ const result=await f.c.verifyG95Cancellation();
+ assert.equal(result.ok,false);
+ assert.equal(result.code,'G95_G94_REVERSAL_NOT_VERIFIED');
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'confirmed');
+ assert.equal(f.c.snapshot().g95Cancellation.independentlyVerified,false);
+ assert.equal(f.c.snapshot().autoFinance.financialState,null);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
+});
+test('R74 changing JWT removes private G95 receipt and forbids stale cancellation verification',async()=>{
+ const f=setup();await tracked(f);
+ f.c.prepareG95Cancel({requestKey:cancelKey});
+ await f.c.sendG95Cancel();
+ f.rotate();
+ await f.c.refreshSession();
+ f.confirmServerCancel();
+ assert.equal((await f.c.verifyG95Cancellation()).ok,false);
+ assert.equal(f.c.snapshot().g95Cancellation.independentlyVerified,false);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/financial-status')).length,0);
 });
