@@ -305,14 +305,15 @@ test('real HTTP with Supabase-like adapters verifies role/JWT and uses server-de
   assert.equal((await req(base,statusPath,'stranger')).status,403);
  });
 });
-test('runtime persists passenger request and driver transition through shared repository',async()=>{
+test('runtime closes unpriced AUTO request but preserves Driver trip transitions',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
  await http(runtime,async base=>{
   const created=await req(base,requestPath,'rider','POST',{
    requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
   });
-  assert.equal(created.status,201);
-  assert.equal(created.body.tripId,ride);
+  assert.equal(created.status,409);
+  assert.equal(created.body.error,'Trip command rejected by persistent state');
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_request'),false);
   assert.equal((await req(base,requestPath,'driver','POST',{
    requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
   })).status,403);

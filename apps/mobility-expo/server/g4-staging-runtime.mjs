@@ -332,9 +332,11 @@ export async function prepareQoreG4StagingRuntime({
  const commands=createQoreTripCommandGateway({
   projectRef:ref,verifyAccessToken:verified,
   resolveRole:id=>singleRole(admin,id),allowRequest,
-  requestTrip:params=>persistence.request({
-   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
-  }),
+  requestTrip:async()=>{
+   // F1 safeguard: the G73 route, server quote and explicit passenger
+   // acceptance are now the only integrated AUTO booking entry point.
+   throw Error('G73 verified route and accepted PYG quote required');
+  },
   transitionTrip:params=>persistence.transition({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
