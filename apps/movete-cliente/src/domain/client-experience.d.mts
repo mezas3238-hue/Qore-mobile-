@@ -148,6 +148,7 @@ export type ClientExperience={
  abandonG95PreparedCancel():ClientResult;
  sendG95Cancel():Promise<ClientResult>;
  reconcileG95Cancel():Promise<ClientResult>;
+ restoreG95Cancellation():Promise<ClientResult>;
  verifyG95Cancellation():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
@@ -202,6 +203,8 @@ export declare function createClientExperience(options?:{
  // Disabled until A supplies certified route/prequote/booking/readback contracts.
  // G73 Node/SQL CI alone never enables a real runtime. All 4 HTTPS ops
  // require an independently authorized provider, IdP and PostgreSQL STAGING.
+ g95RecoveryStore?:{read:()=>Promise<unknown>;write:(value:unknown)=>Promise<void>;
+  clear:()=>Promise<void>}|null;
  autoG73HttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   routeProviderCertified?:boolean;subsidyContractCertified?:boolean;

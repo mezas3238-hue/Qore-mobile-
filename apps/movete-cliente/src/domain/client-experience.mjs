@@ -38,7 +38,7 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -56,7 +56,9 @@ export function createClientExperience({authProvider=null,gateway=null,
  let subsidyReceipt=null,subsidyEpoch=0,subsidyBusy=false;
  let financialAnchor=null,financial={busy:false,data:null,error:null},financialEpoch=0;
  let g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
- let g95Epoch=0;
+ let g95Epoch=0,g95Restored=null,restoringG95=false;
+ const G95_ID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
+ const canSaveG95=Boolean(g95RecoveryStore&&['read','write','clear'].every(k=>typeof g95RecoveryStore[k]==='function'));
  const g93Required=autoG73HttpOptions?.subsidyContractCertified===true;
  const emptyDispatch=()=>Object.freeze({readReady:false,busy:false,error:null,
   tripId:null,tripState:null,dispatchState:null,attempts:null,
@@ -67,6 +69,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
+  g95Restored=null;
   g95Epoch++;g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
   subsidyEpoch++;subsidyReceipt=null;subsidyBusy=false;
   financialEpoch++;financialAnchor=null;financial={busy:false,data:null,error:null};
@@ -785,11 +788,13 @@ export function createClientExperience({authProvider=null,gateway=null,
    financialState:result.data.financialState,qaOnly:true,productionEnabled:false});
  }
  function g95BookingScope(){
-  const proof=dispatchProof();
-  if(!proof||autoG73Http?.isCancellationConfigured()!==true)return null;
-  return Object.freeze({ownerId:proof.subject,sessionRevision:proof.sessionRevision,
+  if(autoG73Http?.isCancellationConfigured()!==true)return null;
+  const proof=dispatchProof(),user=actor();
+  if(proof)return Object.freeze({ownerId:proof.subject,sessionRevision:proof.sessionRevision,
    requestKey:proof.requestKey,tripId:proof.tripId,quoteId:proof.quoteId,
-   serverRevision:proof.serverRevision});
+   routeId:proof.routeId,serverRevision:proof.serverRevision});
+  return user&&g95Restored&&g95Restored.ownerId===user.subject
+   &&g95Restored.sessionRevision===session.privacyRevision()?g95Restored:null;
  }
  // Fresh G4 status is required to SEND a cancellation, but once any POST was
  // attempted the private receipt GET must remain possible if tracking ages.
@@ -831,8 +836,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   const s=g95Scope();
   if(!s||!['searching','assigned','arriving'].includes(s.tripState))
    return fail('G95_VERIFIED_ACTIVE_AUTO_REQUIRED');
-  if(typeof requestKey!=='string'
-   ||!/^([a-f0-9]{8}-)(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(requestKey)
+  if(typeof requestKey!=='string'||!G95_ID.test(requestKey)
    ||requestKey===s.requestKey)return fail('G95_INVALID_REQUEST_KEY');
   g95Epoch++;g95={phase:'ready',requestKey,scope:s,receipt:null,error:null};
   notify();return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
@@ -849,6 +853,21 @@ export function createClientExperience({authProvider=null,gateway=null,
    return fail('G95_FRESH_RIDE_REQUIRED');
   const seq=++g95Epoch,key=g95.requestKey;
   g95={...g95,phase:'sending',error:null};notify();
+  if(g95RecoveryStore&&!canSaveG95){
+   g95={...g95,phase:'ready',error:'G95_SECURE_STORE_UNAVAILABLE'};notify();
+   return fail('G95_SECURE_STORE_UNAVAILABLE');
+  }
+  if(canSaveG95){
+   const record={version:1,createdAt:now(),ownerId:s.ownerId,
+    requestKey:s.requestKey,quoteId:s.quoteId,routeId:s.routeId,
+    tripId:s.tripId,serverRevision:s.serverRevision,cancellationKey:key};
+   try{await g95RecoveryStore.write(record);}
+   catch{
+    if(seq===g95Epoch){g95={...g95,phase:'ready',error:'G95_SECURE_SAVE_FAILED'};notify();}
+    return fail('G95_SECURE_SAVE_FAILED');
+   }
+   if(seq!==g95Epoch||!preparedG95Scope())return fail('STALE_SESSION_RESPONSE');
+  }
   let result;
   try{result=await autoG73Http.cancelAuto({...s,cancellationKey:key});}
   catch{result=fail('NETWORK_OR_TIMEOUT');}
@@ -860,6 +879,51 @@ export function createClientExperience({authProvider=null,gateway=null,
   }
   g95={...g95,phase:'ambiguous',error:'G95_GET_RECONCILIATION_REQUIRED'};
   notify();return fail('G95_GET_RECONCILIATION_REQUIRED');
+ }
+ async function restoreG95Cancellation(){
+  if(!canSaveG95)return fail('G95_RECOVERY_NOT_CONFIGURED');
+  if(restoringG95||g95.phase!=='idle')return fail('G95_RECOVERY_BUSY');
+  const who=actor(),rev=session.privacyRevision();
+  if(!who||autoG73Http?.isCancellationConfigured()!==true)
+   return fail('G95_RECOVERY_AUTH_REQUIRED');
+  restoringG95=true;
+  const epoch=++g95Epoch;
+  try{
+   let saved;
+   try{saved=await g95RecoveryStore.read();}
+   catch{return fail('G95_SECURE_READ_FAILED');}
+   if(epoch!==g95Epoch||actor()?.subject!==who.subject
+    ||session.privacyRevision()!==rev)return fail('STALE_SESSION_RESPONSE');
+   if(saved===null||saved===undefined)return fail('G95_NOT_SAVED');
+   if(!saved||typeof saved!=='object'||Array.isArray(saved)
+    ||Object.keys(saved).length!==9||saved.version!==1
+    ||saved.ownerId!==who.subject
+    ||!['requestKey','quoteId','routeId','tripId','cancellationKey']
+      .every(k=>G95_ID.test(saved[k]??''))
+    ||saved.requestKey===saved.cancellationKey
+    ||!Number.isSafeInteger(saved.createdAt)||saved.createdAt>now()+60000
+    ||saved.createdAt<now()-604800000
+    ||!Number.isSafeInteger(saved.serverRevision)||saved.serverRevision<1)
+    return fail('G95_SAVED_SCOPE_INVALID');
+   const query={ownerId:who.subject,sessionRevision:rev,
+    requestKey:saved.requestKey,routeId:saved.routeId,quoteId:saved.quoteId};
+   let result;
+   try{result=await autoG73Http.reconcile(query);}
+   catch{result=fail('NETWORK_OR_TIMEOUT');}
+   if(epoch!==g95Epoch||actor()?.subject!==who.subject
+    ||session.privacyRevision()!==rev)return fail('STALE_SESSION_RESPONSE');
+   if(result?.ok!==true||result.qaOnly!==true||result.productionEnabled!==false
+    ||result.data.tripId!==saved.tripId
+    ||result.data.revision!==saved.serverRevision)
+    return fail('G95_BOOKING_NOT_REVALIDATED');
+   const restored=Object.freeze({...query,tripId:saved.tripId,
+    serverRevision:saved.serverRevision});
+   g95Restored=restored;
+   g95={phase:'ambiguous',requestKey:saved.cancellationKey,scope:restored,
+    receipt:null,error:null};
+   notify();return Object.freeze({ok:true,tripId:saved.tripId,
+    requiresReconciliation:true,qaOnly:true,productionEnabled:false});
+  }finally{restoringG95=false;}
  }
  async function reconcileG95Cancel(){
   if(g95.phase!=='ambiguous')return fail('G95_NO_AMBIGUITY');
@@ -916,6 +980,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    ||ledger.customerPaysGs===null||ledger.pspCollected!==false
    ||ledger.pspRefunded!==false)return uncertain('G95_G94_REVERSAL_NOT_VERIFIED');
   g95={...g95,phase:'verified',error:null};notify();
+  if(canSaveG95){try{await g95RecoveryStore.clear();}catch{/* backend proof remains authoritative */}}
   return Object.freeze({ok:true,tripId:scope.tripId,verifiedBy:['G4','G94'],
    qaOnly:true,productionEnabled:false,pspRefunded:false});
  }
@@ -996,7 +1061,10 @@ export function createClientExperience({authProvider=null,gateway=null,
  }
  async function signOut(){
   clearPrivate();
-  return session.logout();
+  let purged=!canSaveG95;
+  if(canSaveG95){try{await g95RecoveryStore.clear();purged=true;}catch{}}
+  const result=await session.logout();
+  return purged?result:Object.freeze({...result,g95SecurePurgeUnconfirmed:true});
  }
  return Object.freeze({
   subscribe(listener){
@@ -1118,6 +1186,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   refreshAutoDispatch,refreshAutoFinancialStatus,
   prepareG95Cancel,abandonG95PreparedCancel,sendG95Cancel,reconcileG95Cancel,
+  restoreG95Cancellation,
   verifyG95Cancellation,
   clearAutoPrequote:()=>{
    const result=prequoteAuto.discard();

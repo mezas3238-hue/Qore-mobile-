@@ -38,12 +38,13 @@ const res=(data,http=200)=>({status:http,ok:http>=200&&http<300,
  redirected:false,headers:{get:k=>k==='content-type'?'application/json':null},
  text:async()=>JSON.stringify(data)});
 function setup({lostAck=false,receiptPatch={},cancelEnabled=true,statusEnabled=true,
- ledgerPatch={}}={}){
+ ledgerPatch={},sharedStore=null,bookingOverride=null}={}){
  let currentTime=now,serverCancelled=false;
  let auth={subject:owner,role:'passenger',
   token:'qa-passenger-jwt-g95-abcdefghijklmnopqrst',expiresAt:now+600000};
  const calls=[];
  const c=createClientExperience({now:()=>currentTime,
+  g95RecoveryStore:sharedStore,
   authProvider:{readSession:async()=>auth,signOut:async()=>{}},
   statusGatewayOptions:statusEnabled?{enabled:true,contractCertified:true,
    origin:'https://qa.example.invalid',pinnedOrigin:'https://qa.example.invalid',
@@ -65,6 +66,8 @@ function setup({lostAck=false,receiptPatch={},cancelEnabled=true,statusEnabled=t
     if(path.endsWith('/prequote'))return res(quote);
     if(path.endsWith('/subsidy'))return res(promo);
     if(path.endsWith('/book'))return res(booked,201);
+    if(path==='/v1/staging/rider/auto/bookings/'+bookingKey)
+     return res(bookingOverride??booked);
     if(path.endsWith('/financial-status'))return res({
      mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:owner,
      bookingKey,tripId,quoteId,tripState:'cancelled',tripRevision:3,
@@ -230,4 +233,87 @@ test('R74 changing JWT removes private G95 receipt and forbids stale cancellatio
  assert.equal((await f.c.verifyG95Cancellation()).ok,false);
  assert.equal(f.c.snapshot().g95Cancellation.independentlyVerified,false);
  assert.equal(f.calls.filter(x=>x.path.endsWith('/financial-status')).length,0);
+});
+
+function secureG95Store(){
+ let record=null,writes=0,deletes=0;
+ return {
+  async read(){return record===null?null:JSON.parse(JSON.stringify(record));},
+  async write(value){record=JSON.parse(JSON.stringify(value));writes++;},
+  async clear(){record=null;deletes++;},
+  set(value){record=value;},
+  get(){return record;},stats(){return {writes,deletes};}
+ };
+}
+test('R75 G95 persists only opaque identifiers BEFORE POST; restart reauthenticates G73 and reconciles by GET',async()=>{
+ const store=secureG95Store();
+ const first=setup({lostAck:true,sharedStore:store});
+ await tracked(first);
+ assert.equal(first.c.prepareG95Cancel({requestKey:cancelKey}).ok,true);
+ assert.equal((await first.c.sendG95Cancel()).ok,false);
+ assert.equal(first.c.snapshot().g95Cancellation.phase,'ambiguous');
+ assert.equal(store.stats().writes,1);
+ const saved=store.get();
+ assert.deepEqual(Object.keys(saved).sort(),[
+  'cancellationKey','createdAt','ownerId','quoteId','requestKey',
+  'routeId','serverRevision','tripId','version'].sort());
+ for(const forbidden of ['token','bearer','gps','phone','originalFareGs',
+  'driverReceivesGs','customerPaysGs','password','route']) {
+  assert.equal(JSON.stringify(saved).includes(forbidden),false);
+ }
+ assert.equal(first.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
+ // A separate runtime instance emulates a terminated process + app restart.
+ const reopened=setup({sharedStore:store});
+ await reopened.c.refreshSession();
+ assert.equal(reopened.c.snapshot().g95Cancellation.requiresReconciliation,false);
+ const restored=await reopened.c.restoreG95Cancellation();
+ assert.equal(restored.ok,true);
+ assert.equal(reopened.c.snapshot().g95Cancellation.requiresReconciliation,true);
+ assert.equal(reopened.c.snapshot().g95Cancellation.tripId,tripId);
+ assert.equal(reopened.calls.filter(x=>x.path.endsWith('/'+bookingKey)).length,1);
+ assert.equal(reopened.calls[0].method,'GET');
+ assert.equal((await reopened.c.reconcileG95Cancel()).ok,true);
+ assert.equal(reopened.c.snapshot().g95Cancellation.phase,'confirmed');
+ assert.equal(reopened.c.snapshot().g95Cancellation.financialState,'VOIDED_QA');
+ assert.equal(reopened.calls.filter(x=>x.path.endsWith('/cancel')).length,0);
+ assert.equal(reopened.calls.filter(x=>x.path.endsWith('/cancellation')).length,1);
+ assert.equal((await reopened.c.sendG95Cancel()).ok,false);
+ await reopened.c.signOut();
+ assert.equal(store.get(),null);
+});
+test('R75 refuses cancel POST if encrypted storage write fails before network',async()=>{
+ let writes=0;
+ const store={read:async()=>null,write:async()=>{writes++;throw Error('OS keychain locked');},
+  clear:async()=>{}};
+ const f=setup({sharedStore:store});await tracked(f);
+ assert.equal(f.c.prepareG95Cancel({requestKey:cancelKey}).ok,true);
+ assert.equal((await f.c.sendG95Cancel()).code,'G95_SECURE_SAVE_FAILED');
+ assert.equal(writes,1);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancel')).length,0);
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'ready');
+});
+test('R75 corrupted, expired and cross-owner secure records cannot trigger G95 GET or POST',async()=>{
+ const valid={version:1,createdAt:now,ownerId:owner,requestKey:bookingKey,
+  quoteId,routeId,tripId,serverRevision:1,cancellationKey:cancelKey};
+ const variants=[{...valid,ownerId:other},{...valid,tripId:'bad'},
+  {...valid,createdAt:now-700000000},{...valid,cancellationKey:bookingKey},
+  {...valid,jwt:'forged'},'not a record'];
+ for(const entry of variants){
+  const store=secureG95Store();store.set(entry);
+  const f=setup({sharedStore:store});await f.c.refreshSession();
+  const result=await f.c.restoreG95Cancellation();
+  assert.equal(result.ok,false,JSON.stringify(entry));
+  assert.equal(f.calls.length,0);
+  assert.equal(f.c.snapshot().g95Cancellation.requiresReconciliation,false);
+ }
+});
+test('R75 cannot restore a booking if authenticated G73 disagrees with stored trip',async()=>{
+ const store=secureG95Store();
+ store.set({version:1,createdAt:now,ownerId:owner,requestKey:bookingKey,
+  quoteId,routeId,tripId,serverRevision:1,cancellationKey:cancelKey});
+ const f=setup({sharedStore:store,bookingOverride:{...booked,tripId:other}});
+ await f.c.refreshSession();
+ assert.equal((await f.c.restoreG95Cancellation()).code,'G95_BOOKING_NOT_REVALIDATED');
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'idle');
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancellation')).length,0);
 });

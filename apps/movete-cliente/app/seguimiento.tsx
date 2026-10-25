@@ -194,7 +194,15 @@ export default function ClientTracking(){
    <Text style={styles.heroSub}>Solo se muestra la asignación confirmada y autorizada por el servidor.</Text></View>
   {!view.authenticated||!state.subscriptionActive?
    <Panel><Text accessibilityRole="header" style={styles.heading}>Sin servicio activo</Text>
-    <Text style={styles.text}>No hay sesión de pasajero ni viaje conectado. Nunca mostramos un automóvil o su ubicación sin datos verificados.</Text>
+    <Text style={styles.text}>No hay viaje conectado. Una reserva anterior solo se recupera con una lectura privada del servidor.</Text>
+    {view.authenticated&&g95.requiresReconciliation&&<Action
+     label={g95Busy?'Recuperando…':'Recuperar cancelación AUTO por GET'}
+     disabled={g95Busy} busy={g95Busy}
+     hint="El servidor ya revalidó la reserva propia. No se repite el POST."
+     onPress={()=>{void reconcileG95Ui();}}/>}
+    {view.authenticated&&g95.phase==='confirmed'&&
+     <Text style={styles.small}>Se encontró el recibo G95. Sin seguimiento activo, el estado G4 y la contabilidad G94 aún requieren verificación independiente. No hay devolución confirmada.</Text>}
+    {g95Message!==''&&<Text accessibilityRole="alert" style={styles.small}>{g95Message}</Text>}
    </Panel>:
    <Panel>
     <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.heading}>{LABEL[state.state]??'Estado pendiente'}</Text>
