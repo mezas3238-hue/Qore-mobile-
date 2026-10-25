@@ -23,6 +23,7 @@ import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repo
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
+import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
@@ -150,7 +151,7 @@ export async function prepareQoreG4StagingRuntime({
  projectRef,anonKey,serviceKey,historyCursorSecrets,
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
- verifiedAutoRoute=unavailablePricingContext,
+ verifiedAutoRoute=null,g77RouteOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
@@ -167,9 +168,19 @@ export async function prepareQoreG4StagingRuntime({
    typeof createClient!=='function'||
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
    typeof pricingContext!=='function'||
+   !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
    !(privateEvidenceAdapters===null||
      (typeof privateEvidenceAdapters==='object'&&
       !Array.isArray(privateEvidenceAdapters)))||
+   !(g77RouteOptions===null||(
+     Object.getPrototypeOf(g77RouteOptions)===Object.prototype
+     &&Object.keys(g77RouteOptions).length===7
+     &&['enabled','billableProviderApproved','apiKey','tagSecret',
+       'resolveCoveredPlaces','verifyRouteTolls','request']
+       .every(k=>Object.hasOwn(g77RouteOptions,k))
+     &&g77RouteOptions.enabled===true
+     &&g77RouteOptions.billableProviderApproved===true
+     &&verifiedAutoRoute===null))||
    !(adminF1Trust===null||(Object.getPrototypeOf(adminF1Trust)===Object.prototype
     &&Object.keys(adminF1Trust).length===3
     &&['verifyAdminSession','verifySessionNotRevoked','verifyBackofficeMfa']
@@ -354,10 +365,15 @@ export async function prepareQoreG4StagingRuntime({
    modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ // G79: choose one route provider. No geocode-first alternative is mounted.
+ // All billable routing is OFF unless explicitly approved by Owner.
+ const resolvedAutoRoute=g77RouteOptions===null?
+  (verifiedAutoRoute??unavailablePricingContext):
+  createG77VerifiedAutoRouteResolver({...g77RouteOptions,now});
  const f1Auto=createQoreG73AutoGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
-  resolveVerifiedRoute:params=>verifiedAutoRoute(params),
+  resolveVerifiedRoute:params=>resolvedAutoRoute(params),
   registerRoute:params=>f1AutoPersistence.registerRoute(params),
   loadRoute:params=>f1AutoPersistence.routeReceipt(params),
   quoteRoute:params=>f1AutoPersistence.quote(params),
