@@ -16,6 +16,7 @@ const BOOK='/v1/staging/rider/auto/book';
 const RECON=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})$/i;
 const DISPATCH=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/dispatch$/i;
 const SUBSIDY=/^\/v1\/staging\/rider\/auto\/prequotes\/([a-f0-9-]{36})\/subsidy$/i;
+const FINANCIAL=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/financial-status$/i;
 const respond=(status,body)=>({status,body});
 const bearer=h=>{
  const raw=h?.authorization??h?.Authorization;
@@ -74,6 +75,28 @@ const saneSubsidy=(x,uid,quoteId,now)=>exact(x,subsidyFields)&&
  /^[A-Za-z0-9._-]{1,48}$/.test(x.fareVersion)&&
  Number.isSafeInteger(x.expiresAt)&&x.expiresAt>now&&
  x.expiresAt<=now+3600000&&x.serverPersisted===true;
+// G94 private source-backed financial status. NEVER claim payment or refund.
+const financialFields=['mode','commercialEnabled','ownerId','bookingKey',
+ 'tripId','quoteId','tripState','tripRevision','financialState',
+ 'customerPaysGs','driverReceivesGs','customerSubsidyGs','platformRetainsGs',
+ 'originalEntriesBalanced','reversalEntriesBalanced','pspCollected',
+ 'pspRefunded','serverPersisted'];
+const financialStates=new Set(['RESERVED_QA','VOIDED_QA','COMPLETED_UNSETTLED_QA']);
+const saneFinancial=(x,uid,key)=>exact(x,financialFields)&&
+ x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
+ x.ownerId===uid&&x.bookingKey===key&&id(x.tripId)&&id(x.quoteId)&&
+ rideStates.has(x.tripState)&&Number.isSafeInteger(x.tripRevision)&&
+ x.tripRevision>=1&&financialStates.has(x.financialState)&&
+ money(x.customerPaysGs)&&money(x.driverReceivesGs)&&
+ money(x.customerSubsidyGs)&&money(x.platformRetainsGs)&&
+ x.originalEntriesBalanced===true&&
+ typeof x.reversalEntriesBalanced==='boolean'&&
+ x.pspCollected===false&&x.pspRefunded===false&&x.serverPersisted===true&&
+ (x.tripState==='cancelled'
+   ?x.financialState==='VOIDED_QA'&&x.reversalEntriesBalanced===true
+   :x.tripState==='completed'
+    ?x.financialState==='COMPLETED_UNSETTLED_QA'&&x.reversalEntriesBalanced===false
+    :x.financialState==='RESERVED_QA'&&x.reversalEntriesBalanced===false);
 const saneBook=(x,uid,key)=>exact(x,bookFields)&&
  x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
  x.ownerId===uid&&x.requestKey===key&&id(x.quoteId)&&
@@ -97,14 +120,15 @@ const saneDispatch=(x,uid,key)=>exact(x,dispatchFields)&&
 export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorizePassenger,
  allowRequest,resolveVerifiedRoute,registerRoute,loadRoute,quoteRoute,loadQuote,
  bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,
- readSubsidyPreview=null,now=Date.now}={}){
+ readSubsidyPreview=null,readAutoFinancialState=null,now=Date.now}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
  .every(fn=>typeof fn==='function')||
  !(dispatchBookedAuto===null||typeof dispatchBookedAuto==='function')||
  !(readDispatchStatus===null||typeof readDispatchStatus==='function')||
- !(readSubsidyPreview===null||typeof readSubsidyPreview==='function'))
+ !(readSubsidyPreview===null||typeof readSubsidyPreview==='function')||
+ !(readAutoFinancialState===null||typeof readAutoFinancialState==='function'))
  throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
@@ -113,9 +137,10 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   const match=method==='GET'&&typeof path==='string'?RECON.exec(path):null;
   const dispatchMatch=method==='GET'&&typeof path==='string'?DISPATCH.exec(path):null;
   const subsidyMatch=method==='POST'&&typeof path==='string'?SUBSIDY.exec(path):null;
-  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch&&!subsidyMatch)
+  const financialMatch=method==='GET'&&typeof path==='string'?FINANCIAL.exec(path):null;
+  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch&&!subsidyMatch&&!financialMatch)
    return respond(404,{error:'Not found'});
-  if((match||dispatchMatch||subsidyMatch)&&body!==undefined&&body!==null)
+  if((match||dispatchMatch||subsidyMatch||financialMatch)&&body!==undefined&&body!==null)
    return respond(400,{error:'Read-only GET cannot contain a body'});
   if(isRoute&&(!exact(body,['quoteRequestKey','origin','destination','service'])||
     !id(body.quoteRequestKey)||!human(body.origin)||!human(body.destination)||
@@ -137,7 +162,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   catch{return respond(503,{error:'Role verification unavailable'});}
   try{if(allowRequest({userId:user.id,operation:
     isRoute?'g73_route':isQuote?'g73_quote':isBook?'g73_book':
-    dispatchMatch?'g90_dispatch':subsidyMatch?'g93_subsidy_preview':'g73_reconcile'})!==true)
+    dispatchMatch?'g90_dispatch':subsidyMatch?'g93_subsidy_preview':
+    financialMatch?'g94_financial_status':'g73_reconcile'})!==true)
     return respond(429,{error:'Request rate limited'});}
   catch{return respond(503,{error:'Rate limiter unavailable'});}
   try{
@@ -207,6 +233,18 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
      catch{/* Booking stays persisted/searching; private offer is uncertain. */}
     }
     return respond(201,rec);
+   }
+   if(financialMatch){
+    if(readAutoFinancialState===null)
+     return respond(503,{error:'Private financial status unavailable'});
+    let receipt;
+    try{receipt=await readAutoFinancialState({
+      actorId:user.id,requestKey:financialMatch[1]});}
+    catch{return respond(503,{error:'Private financial status unavailable'});}
+    if(receipt===null)return respond(404,{error:'Unknown or unauthorized financial booking'});
+    if(!saneFinancial(receipt,user.id,financialMatch[1]))
+     return respond(409,{error:'Private financial reconciliation incomplete'});
+    return respond(200,receipt);
    }
    if(dispatchMatch){
     if(readDispatchStatus===null)

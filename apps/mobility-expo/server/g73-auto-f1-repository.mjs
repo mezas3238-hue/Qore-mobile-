@@ -63,6 +63,12 @@ export function createQoreG73AutoRepository(client){
    return rpc(client,'mobility_stage_g93_preview_auto_qa',{
     _passenger_id:p.actorId,_quote_id:p.quoteId});
   },
+  async autoFinancialState(p){
+   if(!p||!id(p.actorId)||!id(p.requestKey))
+    throw Error('G94 invalid Passenger finance scope');
+   return rpc(client,'mobility_stage_g94_auto_financial_state_qa',{
+    _passenger_id:p.actorId,_booking_key:p.requestKey});
+  },
   async autoSubsidySettlement(p){
    if(!p||!id(p.actorId)||!id(p.requestKey))
     throw Error('G93 invalid private booking scope');

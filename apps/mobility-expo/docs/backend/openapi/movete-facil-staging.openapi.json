@@ -2,11 +2,12 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g93",
+    "version": "1.0.0-g94",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED",
     "x-qore-f1-g73-g90-contract-status": "QA_ONLY_NO_EXTERNAL_STAGING",
-    "x-qore-g93-financial-preview": "QA_ONLY_SERVER_ISSUED_NOT_MOUNTED"
+    "x-qore-g93-financial-preview": "QA_ONLY_SERVER_ISSUED_NOT_MOUNTED",
+    "x-qore-g94-void-finance": "QA_ONLY_RESERVED_OR_VOIDED_NOT_PSP"
   },
   "servers": [
     {
@@ -4234,6 +4235,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/G93AutoSubsidyPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/bookings/{bookingKey}/financial-status": {
+      "get": {
+        "operationId": "g94PassengerAutoBookingFinancialStatusQa",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Read private reservation, reversal or unsettled financial status (QA-only)",
+        "description": "Requires authenticated Passenger owner and server-only SQL read; unavailable and corrupt receipts fail closed. No PSP operation, no customer-issued amount or global account read.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped G94 financial state (NOT payment confirmation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G94AutoFinancialState"
                 }
               }
             }
@@ -9074,6 +9139,115 @@
           }
         },
         "description": "Stored Server-only G93 AUTO_RIDE campaign preview before consent; NOT a commercial price, insurance permission, PSP payment or native deployment. MOTO_RIDE needs distinct legally verified route and fare. All financial fields must be verified and reconciled on server."
+      },
+      "G94AutoFinancialState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "bookingKey",
+          "tripId",
+          "quoteId",
+          "tripState",
+          "tripRevision",
+          "financialState",
+          "customerPaysGs",
+          "driverReceivesGs",
+          "customerSubsidyGs",
+          "platformRetainsGs",
+          "originalEntriesBalanced",
+          "reversalEntriesBalanced",
+          "pspCollected",
+          "pspRefunded",
+          "serverPersisted"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "bookingKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripState": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "accepted",
+              "arriving",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "tripRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "financialState": {
+            "type": "string",
+            "enum": [
+              "RESERVED_QA",
+              "VOIDED_QA",
+              "COMPLETED_UNSETTLED_QA"
+            ]
+          },
+          "customerPaysGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "driverReceivesGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "customerSubsidyGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "platformRetainsGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "originalEntriesBalanced": {
+            "type": "boolean",
+            "const": true
+          },
+          "reversalEntriesBalanced": {
+            "type": "boolean"
+          },
+          "pspCollected": {
+            "type": "boolean",
+            "const": false
+          },
+          "pspRefunded": {
+            "type": "boolean",
+            "const": false
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "Private read-only G94 SQL status after G73/G93 booking, including atomic cancellation reversal. Reserved is not paid; completed is not settled. Never claim PSP capture or refund in QA."
       }
     }
   },
