@@ -25,7 +25,10 @@ function fixture(readAutoFinancialState=async()=>reserved,patch={}){
   authorizePassenger:async()=>true,allowRequest:x=>{calls.push(x);return true;},
   resolveVerifiedRoute:async()=>{},registerRoute:async()=>{},loadRoute:async()=>{},
   quoteRoute:async()=>{},loadQuote:async()=>{},bookQuote:async()=>{},
-  reconcileBooking:async()=>{},readAutoFinancialState,...patch
+  reconcileBooking:async()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+   ownerId:owner,requestKey:bookKey,quoteId,routeId:tripId,
+   tripId,revision:1,serverPersisted:true,status:'ACCEPTED_QA'}),
+  readAutoFinancialState,...patch
  });
  return {gw,calls};
 }

@@ -118,6 +118,11 @@ const saneBook=(x,uid,key)=>exact(x,bookFields)&&
  x.ownerId===uid&&x.requestKey===key&&id(x.quoteId)&&
  id(x.routeId)&&id(x.tripId)&&Number.isSafeInteger(x.revision)&&
  x.revision>=1&&x.serverPersisted===true&&x.status==='ACCEPTED_QA';
+// Independent original G73 booking MUST agree with G94/G95 trip and quote.
+// A syntactically valid UUID from a corrupted financial RPC is insufficient.
+const samePersistedF1Trip=(rec,uid,bookingKey,financial)=>
+ saneBook(rec,uid,bookingKey)&&rec.tripId===financial.tripId&&
+ rec.quoteId===financial.quoteId;
 // Exact G90 passenger-only queue status. Never pass an offer/Driver ID.
 const dispatchFields=['mode','commercialEnabled','ownerId','bookingKey','tripId',
  'tripState','dispatchState','attempts','offerPendingAcceptance'];
@@ -273,6 +278,11 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     catch{return respond(503,{error:'Cancellation uncertain; reconcile private GET'});}
     if(!saneCancellation(rec,user.id,cancelMatch[1],body.requestKey))
      return respond(409,{error:'Unverified cancellation receipt; reconcile private GET'});
+    let booking;
+    try{booking=await reconcileBooking({actorId:user.id,requestKey:cancelMatch[1]});}
+    catch{return respond(503,{error:'Original booking reconciliation unavailable'});}
+    if(!samePersistedF1Trip(booking,user.id,cancelMatch[1],rec))
+     return respond(409,{error:'Cancellation disagrees with original booking'});
     return respond(200,rec);
    }
    if(cancelReceiptMatch){
@@ -285,6 +295,11 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     if(rec===null)return respond(404,{error:'No authorized committed cancellation'});
     if(!saneCancellation(rec,user.id,cancelReceiptMatch[1]))
      return respond(409,{error:'Cancellation receipt invalid'});
+    let booking;
+    try{booking=await reconcileBooking({actorId:user.id,requestKey:cancelReceiptMatch[1]});}
+    catch{return respond(503,{error:'Original booking reconciliation unavailable'});}
+    if(!samePersistedF1Trip(booking,user.id,cancelReceiptMatch[1],rec))
+     return respond(409,{error:'Cancellation disagrees with original booking'});
     return respond(200,rec);
    }
    if(financialMatch){
@@ -297,6 +312,11 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     if(receipt===null)return respond(404,{error:'Unknown or unauthorized financial booking'});
     if(!saneFinancial(receipt,user.id,financialMatch[1]))
      return respond(409,{error:'Private financial reconciliation incomplete'});
+    let booking;
+    try{booking=await reconcileBooking({actorId:user.id,requestKey:financialMatch[1]});}
+    catch{return respond(503,{error:'Original booking reconciliation unavailable'});}
+    if(!samePersistedF1Trip(booking,user.id,financialMatch[1],receipt))
+     return respond(409,{error:'Financial state disagrees with original booking'});
     return respond(200,receipt);
    }
    if(dispatchMatch){

@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {request as nodeRequest} from 'node:http';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
@@ -72,7 +73,10 @@ async function makeServer({rpcError=false,forged=false}={}){
   allowRequest:()=>true,
   resolveVerifiedRoute:async()=>null,registerRoute:async()=>null,
   loadRoute:async()=>null,quoteRoute:async()=>null,loadQuote:async()=>null,
-  bookQuote:async()=>null,reconcileBooking:async()=>null,
+  bookQuote:async()=>null,
+  reconcileBooking:async()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+   ownerId:uid,requestKey:bookKey,quoteId,routeId:campaignId,
+   tripId,revision:1,serverPersisted:true,status:'ACCEPTED_QA'}),
   readSubsidyPreview:p=>repository.previewAutoSubsidy(p),
   readAutoFinancialState:p=>repository.autoFinancialState(p),
   cancelBookedAuto:p=>repository.cancelBookedAuto(p),
@@ -95,6 +99,24 @@ async function call(base,path,{method='GET',body,headers={}}={}){
  return {status:r.status,headers:r.headers,body:await r.json()};
 }
 const close=server=>new Promise((resolve,reject)=>server.close(err=>err?reject(err):resolve()));
+// fetch() deliberately forbids GET bodies in Node. Exercise the transport's
+// GET-body rejection using the underlying HTTP protocol instead.
+async function rawGetWithBody(base,path){
+ return new Promise((resolve,reject)=>{
+  const req=nodeRequest(base+path,{
+   method:'GET',headers:{...auth,'content-type':'application/json',
+    'content-length':'2'}
+  },res=>{
+   const chunks=[];res.on('data',part=>chunks.push(part));
+   res.on('end',()=>{
+    try{resolve({status:res.statusCode,body:JSON.parse(Buffer.concat(chunks).toString())});}
+    catch(err){reject(err);}
+   });
+  });
+  req.on('error',reject);
+  req.end('{}');
+ });
+}
 test('G97 actual loopback HTTP routes G93 preview without body and finance + cancel + recovery',async t=>{
  const f=await makeServer();t.after(()=>close(f.server));
  const before=await call(f.base,f1+'/prequotes/'+quoteId+'/subsidy',{method:'POST'});
@@ -130,8 +152,7 @@ test('G97 HTTP fail closed on unsigned, malformed, cross-origin and stale reques
   requestKey:cancelKey,confirmed:true},headers:{origin:'https://evil.example'}})).status,403);
  assert.equal((await call(f.base,f1+'/prequotes/'+quoteId+'/subsidy',{
   method:'POST',body:{priceGs:1}})).status,400);
- assert.equal((await call(f.base,f1+'/bookings/'+bookKey+'/financial-status',{
-  body:{amountGs:0}})).status,400);
+ assert.equal((await rawGetWithBody(f.base,f1+'/bookings/'+bookKey+'/financial-status')).status,400);
  assert.equal((await call(f.base,f1+'/bookings/'+bookKey+'/financial-status?x=1')).status,404);
  assert.equal((await call(f.base,f1+'/bookings/'+bookKey+'/cancellation',{
   headers:{cookie:'fake=1'}})).status,403);

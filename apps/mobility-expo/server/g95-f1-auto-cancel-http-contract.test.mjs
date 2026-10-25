@@ -31,7 +31,9 @@ function app(extra={}){
   allowRequest:x=>{calls.push(x);return true;},
   resolveVerifiedRoute:async()=>{},registerRoute:async()=>{},loadRoute:async()=>{},
   quoteRoute:async()=>{},loadQuote:async()=>{},bookQuote:async()=>{},
-  reconcileBooking:async()=>{},
+  reconcileBooking:async()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+   ownerId:actor,requestKey:bookingKey,quoteId,routeId:eventId,
+   tripId,revision:1,serverPersisted:true,status:'ACCEPTED_QA'}),
   cancelBookedAuto:async()=>receipt,readCancellation:async()=>receipt,
   ...extra
  });
