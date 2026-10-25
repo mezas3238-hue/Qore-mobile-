@@ -30,8 +30,8 @@ BEGIN
   id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days)
  VALUES('93930000-0000-4939-8939-000000000020','AUTO_RIDE',
   'PY_AUTO_OWNER_60_QA_V1',o,true,
-  pg_catalog.clock_timestamp()-interval '1 hour',
-  pg_catalog.clock_timestamp()-interval '1 hour'+interval '60 days',60);
+  pg_catalog.transaction_timestamp()-interval '1 hour',
+  pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);
  receipt:=public.mobility_stage_g93_preview_auto_qa(p,qt);
  IF receipt->>'mode'<>'STAGING_DEMO_ONLY' OR receipt->>'ownerId'<>p::text
  OR receipt->>'serviceKind'<>'AUTO_RIDE' OR receipt->>'originalFareGs'<>'15200'
