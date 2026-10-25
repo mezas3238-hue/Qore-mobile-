@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {prepareQoreG4StagingRuntime} from './g4-staging-runtime.mjs';
 import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {request as httpRequest} from 'node:http';
+import {reconcilePrivateDriverOffer} from '../../movete-driver/src/domain/driver-offer-decision.mjs';
 
 const ref='staging1234567890abcd';
 const anonKey='sb_publishable_abcdefghijklmnopqrstuvwxyz';
@@ -784,4 +785,93 @@ test('G65 private API denies revoked or mismatched IdP and forbids GET request b
  await http(otherRuntime,async base=>{
   assert.equal((await req(base,g65Path,'driver')).status,401);
  });
+});
+
+const g64AutoPath='/v1/staging/driver/offers/reconcile';
+const g64DeliveryPath='/v1/staging/courier/delivery-offers/reconcile';
+const g64OfferEvent='64642000-0000-4642-8642-000000000004';
+const g64Key='64642000-0000-4642-8642-000000000005';
+const g64Payload={offerId:offer,requestKey:g64Key,action:'accept'};
+const g64Accepted=(kind='AUTO_RIDE')=>({
+ state:'COMMITTED',offerId:offer,requestKey:g64Key,kind,
+ action:'accept',outcome:'accepted',receiptId:g64OfferEvent,
+ serverPersisted:true,liveEnabled:false,pushDelivered:false,
+ qaOnly:true,productionEnabled:false,retrySafe:false,reconcileAgain:false
+});
+test('G64 recovery is unavailable by default and never sends another acceptance',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g64AutoPath,'driver','POST',g64Payload)).status,503);
+  assert.equal((await req(base,g64DeliveryPath,'driver','POST',g64Payload)).status,503);
+  assert.equal((await req(base,g64AutoPath,'driver','GET')).status,404);
+ });
+ assert.equal(m.state.rpcs.length,0);
+});
+test('G64 actual Driver HTTP reconciliation reads verified original acceptance, never writes',async()=>{
+ const m=mockSupabase(),f=g80Trust();
+ const ownerReads=[];
+ const runtime=await prepare(m,{
+  driverKycTrust:f.trust,
+  readDriverDecisionOwnerQa:async scope=>{
+   ownerReads.push(scope);
+   if(scope.kind!=='AUTO_RIDE'||scope.offerId!==offer||
+      scope.actorId!==driver||scope.requestKey!==g64Key||
+      scope.action!=='accept')throw Error('Unknown private owner receipt');
+   return g64Accepted();
+  }
+ });
+ await http(runtime,async base=>{
+  const originalRpcCount=m.state.rpcs.length;
+  const response=await reconcilePrivateDriverOffer({
+   apiOrigin:base,accessToken:jwt.driver,
+   kind:'AUTO_RIDE',offerId:offer,requestKey:g64Key,action:'accept',request:fetch
+  });
+  assert.equal(response.outcome,'accepted');
+  assert.equal(response.receiptId,g64OfferEvent);
+  assert.equal(response.serverPersisted,true);
+  assert.equal(response.liveEnabled,false);
+  assert.equal(m.state.rpcs.length,originalRpcCount,
+   'read-only reconciliation never calls acceptance or any service-role RPC');
+  assert.equal(ownerReads.length,1);
+  assert.equal(ownerReads[0].actorId,driver);
+  assert.equal(ownerReads[0].sessionId,vehicle);
+  const payload=JSON.stringify(await req(base,g64AutoPath,'driver','POST',g64Payload));
+  assert.doesNotMatch(payload,new RegExp(driver+'|'+passenger+'|sb_secret'));
+  assert.equal((await req(base,g64AutoPath,'rider','POST',g64Payload)).status,401);
+  assert.equal((await req(base,g64AutoPath,'stranger','POST',g64Payload)).status,401);
+  assert.equal((await req(base,g64AutoPath,'driver','POST',{
+   ...g64Payload,requestKey:requestKey})).status,503);
+ });
+});
+test('G64 unobserved SQL outcome, session revocation and dual role never allow retry',async()=>{
+ const m=mockSupabase(),f=g80Trust();
+ let valid=true,reads=0;
+ const trust={...f.trust,verifySessionNotRevoked:async()=>valid};
+ const runtime=await prepare(m,{
+  driverKycTrust:trust,
+  readDriverDecisionOwnerQa:async()=>{
+   reads++;
+   return {state:'NOT_YET_OBSERVED',qaOnly:true,
+    productionEnabled:false,retrySafe:false,reconcileAgain:true};
+  }
+ });
+ await http(runtime,async base=>{
+  const pending=await req(base,g64AutoPath,'driver','POST',g64Payload);
+  assert.equal(pending.status,503);
+  assert.equal(pending.body.retrySafe,false);
+  assert.equal(reads,1);
+  valid=false;
+  assert.equal((await req(base,g64AutoPath,'driver','POST',g64Payload)).status,401);
+  assert.equal(reads,1);
+  valid=true;m.state.dualRoleDriver=true;
+  assert.equal((await req(base,g64AutoPath,'driver','POST',g64Payload)).status,403);
+  assert.equal(reads,1);
+ });
+});
+test('G64 owner-only reader requires independently verified driver session',async()=>{
+ for(const reader of [async()=>g64Accepted(),false,{}]){
+  const m=mockSupabase();
+  await assert.rejects(()=>prepare(m,{readDriverDecisionOwnerQa:reader}));
+  assert.equal(m.state.clients.length,0);
+ }
 });

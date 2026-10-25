@@ -45,6 +45,7 @@ import {createDriverKycReadinessGateway} from './g20-driver-kyc-readiness-gatewa
 import {createDriverKycExpiryStatusQa} from './driver-kyc-expiry-status-qa.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG65DriverTripStatusRepository} from './g65-driver-trip-status-repository.mjs';
+import {createG64PrivateDriverDecisionReconcileQa} from './g64-driver-offer-reconcile-qa.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -155,7 +156,8 @@ export async function prepareQoreG4StagingRuntime({
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
  verifiedAutoRoute=null,g77RouteOptions=null,
- privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,now=Date.now,
+ privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
+ readDriverDecisionOwnerQa=null,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -192,6 +194,8 @@ export async function prepareQoreG4StagingRuntime({
      &&typeof g77RouteOptions.verifyRouteTolls==='function'
      &&typeof g77RouteOptions.request==='function'
      &&verifiedAutoRoute===null))||
+   !(readDriverDecisionOwnerQa===null||
+      (typeof readDriverDecisionOwnerQa==='function'&&driverKycTrust!==null))||
    !(driverKycTrust===null||(
      Object.getPrototypeOf(driverKycTrust)===Object.prototype&&
      Object.keys(driverKycTrust).length===4&&
@@ -518,6 +522,26 @@ export async function prepareQoreG4StagingRuntime({
   loadAssignedTrip:p=>driverTripStatusPersistence.loadAssignedTrip(p),
   allowRequest:({actorId})=>allowRequest({userId:actorId})
  });
+
+ // G64: immutable decision recovery requires owner-only SQL, distinct from
+ // the Supabase service_role used by G4; no privileged RPC fallback exists.
+ const driverDecisionRecovery=readDriverDecisionOwnerQa===null?null:
+  createG64PrivateDriverDecisionReconcileQa({
+   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,now,
+   verifyAccessToken:async token=>{
+    const provider=await verified(token);
+    const attested=await driverKycTrust.verifyDriverSession(token);
+    if(!provider||provider.id!==attested?.id||provider.is_anonymous===true||
+       !(typeof provider.email_confirmed_at==='string'||
+         typeof provider.phone_confirmed_at==='string'))
+     throw Error('G64 IdP session identity mismatch');
+    return attested;
+   },
+   verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p),
+   resolveExclusiveRole:id=>singleRole(admin,id),
+   allowRequest:({actorId})=>allowRequest({userId:actorId}),
+   readStoredDecision:scope=>readDriverDecisionOwnerQa(scope)
+  });
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -568,6 +592,7 @@ export async function prepareQoreG4StagingRuntime({
   server:createQoreRadarLoopbackTransport({
    riderHandler:guard(rider),riderHistoryHandler:guard(riderHistory),
    offerHandler:guard(driver),
+   ...(driverDecisionRecovery===null?{}:{driverDecisionRecoveryHandler:guard(driverDecisionRecovery)}),
    tripCommandHandler:guard(commands),
    f1AutoHandler:guard(f1Auto),
    ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),

@@ -14,6 +14,7 @@ const riderRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/status$/i;
 const riderHistoryRoute=/^\/v1\/staging\/rider\/history$/;
 const offerReadRoute=/^\/v1\/staging\/driver\/offers\/[0-9a-f-]{36}$/i;
 const offerDecisionRoute=/^\/v1\/staging\/driver\/offers\/(accept|decline)$/;
+const offerRecoveryRoute=/^\/v1\/staging\/(?:driver\/offers|courier\/delivery-offers)\/reconcile$/;
 const tripRequestRoute=/^\/v1\/staging\/rider\/trips\/request$/;
 const f1AutoPostRoute=/^\/v1\/staging\/rider\/auto\/(routes|prequote|book)$/;
 const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}$/i;
@@ -71,7 +72,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- f1AutoHandler,adminF1AuditHandler,
+ f1AutoHandler,adminF1AuditHandler,driverDecisionRecoveryHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,
 }){
@@ -81,6 +82,7 @@ export function createQoreRadarLoopbackTransport({
    typeof tripCommandHandler!=='function'||
    (f1AutoHandler!==undefined&&typeof f1AutoHandler!=='function')||
    (adminF1AuditHandler!==undefined&&typeof adminF1AuditHandler!=='function')||
+   (driverDecisionRecoveryHandler!==undefined&&typeof driverDecisionRecoveryHandler!=='function')||
    typeof deliveryHandler!=='function'||
    typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
    typeof safetyHandler!=='function'||typeof merchantManagementHandler!=='function'||
@@ -105,6 +107,7 @@ export function createQoreRadarLoopbackTransport({
   const riderHistory=req.method==='GET'&&riderHistoryRoute.test(path);
   const offerGet=req.method==='GET'&&offerReadRoute.test(path);
   const offerPost=req.method==='POST'&&offerDecisionRoute.test(path);
+  const offerRecoveryPost=req.method==='POST'&&offerRecoveryRoute.test(path);
   const tripPost=req.method==='POST'&&
    (tripRequestRoute.test(path)||tripTransitionRoute.test(path)||
     riderCancelRoute.test(path));
@@ -140,7 +143,7 @@ export function createQoreRadarLoopbackTransport({
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
-  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!adminF1AuditGet&&
+  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!adminF1AuditGet&&
     !deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
@@ -161,7 +164,7 @@ export function createQoreRadarLoopbackTransport({
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
-  if(offerPost||tripPost||f1AutoPost||deliveryPost||merchantPost||financePost||safetyPost||
+  if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||deliveryPost||merchantPost||financePost||safetyPost||
     merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
@@ -185,6 +188,7 @@ export function createQoreRadarLoopbackTransport({
     riderHistory?(riderHistoryHandler??(()=>({status:503,body:{error:'History not configured'}}))):
     (f1AutoGet||f1AutoPost)?(f1AutoHandler??(()=>({status:503,body:{error:'G72 not configured'}}))):
     adminF1AuditGet?(adminF1AuditHandler??(()=>({status:503,body:{error:'G75 IdP MFA unavailable'}}))):
+    offerRecoveryPost?(driverDecisionRecoveryHandler??(()=>({status:503,body:{error:'G64 owner-only decision reader unavailable',retrySafe:false}))):
     tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
     (merchantGet||merchantPost)?merchantHandler:
