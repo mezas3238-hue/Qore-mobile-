@@ -10,10 +10,11 @@ import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
 import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
-type Page='resumen'|'propietario'|'kyc'|'zonas'|'incidentes'|'auditoria';
+type Page='resumen'|'propietario'|'viajes'|'kyc'|'zonas'|'incidentes'|'auditoria';
 const sections:{id:Page;label:string;hint:string}[]=[
  {id:'resumen',label:'Resumen',hint:'Indicadores operativos'},
  {id:'propietario',label:'Propietario',hint:'Ingresos, comisiones y control estratégico'},
+ {id:'viajes',label:'Viajes AUTO',hint:'Verificación de un viaje F1 desde el servidor'},
  {id:'kyc',label:'Documentos y KYC',hint:'Revisión por responsable'},
  {id:'zonas',label:'Zonas y cobertura',hint:'Habilitaciones geográficas'},
  {id:'incidentes',label:'Seguridad',hint:'Incidentes y suspensiones'},
@@ -406,7 +407,7 @@ function AuditReadOnly({audit,allowed}:{
 }
 
 const readOperation:Record<Page,string|null>={
- resumen:null,propietario:'finance',kyc:'kyc',zonas:'zones',incidentes:'incidents',auditoria:'audit'
+ resumen:null,propietario:'finance',viajes:null,kyc:'kyc',zonas:'zones',incidentes:'incidents',auditoria:'audit'
 };
 const safeFeedback:Record<string,string>={
  AUTH_REQUIRED:'La sesión caducó. Volvé a autenticarte.',
@@ -417,6 +418,63 @@ const safeFeedback:Record<string,string>={
  READ_CONTRACT_NOT_CERTIFIED:'Contrato pendiente de certificación.',
  NO_ADDITIONAL_PAGE:'No hay otra página disponible.'
 };
+const F1_TRIP=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+function F1RideAuditPanel({client,state}:{client:AdminExperience;state:AdminSnapshot}){
+ const [tripId,setTripId]=useState('');
+ const [feedback,setFeedback]=useState('');
+ const current=state.f1RideAudit;
+ const allowed=state.account?.role==='admin'&&state.account.mfaVerified===true;
+ const ready=Boolean(allowed&&current.contractReady);
+ async function inspect(){
+  if(!ready||current.loading||!F1_TRIP.test(tripId))return;
+  const result=await client.loadF1RideAudit(tripId);
+  setFeedback(result.ok?'Lectura verificada del viaje, solo QA.':
+   'La lectura no pudo comprobar el mismo viaje en el servidor.');
+ }
+ const item=current.item;
+ return <Panel className="detail">
+  <div className="section-head"><div>
+   <h2>Viaje AUTO — verificación administrativa</h2>
+   <p>Consulta independiente del servidor, por identificador exacto de viaje.
+    No se usan permisos ni tokens del pasajero.</p>
+  </div><span className="muted-tag">F1 · SOLO LECTURA</span></div>
+  {!allowed?<p>Se requiere cuenta administrativa con MFA validado por el proveedor.</p>:
+   !ready?<p>No existe un contrato Admin F1 autorizado para esta sesión.
+    Aún no se puede consultar el viaje desde Admin.</p>:null}
+  <label htmlFor="f1-admin-trip">Identificador del viaje registrado (UUID)</label>
+  <input id="f1-admin-trip" value={tripId} maxLength={36}
+   placeholder="Identificador emitido por el servidor"
+   disabled={!ready||current.loading} autoComplete="off"
+   onChange={event=>{setTripId(event.target.value.trim());setFeedback('');
+    client.clearF1RideAudit();}}/>
+  <div className="refresh-actions">
+   <button type="button" disabled={!ready||current.loading||!F1_TRIP.test(tripId)}
+    onClick={()=>{void inspect();}}>
+    {current.loading?'Verificando…':'Comprobar viaje en servidor'}
+   </button>
+   <button type="button" disabled={!ready||current.loading||!item}
+    onClick={()=>{client.clearF1RideAudit();setFeedback('');}}>Limpiar lectura</button>
+  </div>
+  {feedback&&<p role="status">{feedback}</p>}
+  {current.error&&<p role="alert">No hay estado confirmado para esta consulta ({current.error}).</p>}
+  {item&&ready?<div className="zone-rows" aria-live="polite">
+   <div className="zone-row"><div><strong>Viaje: {item.tripId}</strong>
+    <small>Estado desde servidor: {item.status}</small>
+    <small>Tarifa: Gs. {item.amountGs.toLocaleString('es-PY')} · {item.service}</small>
+    <small>Versión de tarifa: {item.fareVersion} · Revisión: {item.revision}</small>
+    <small>Ruta vinculada: {item.routeId} · Cotización: {item.quoteId}</small>
+    <small>Asignación persistente reportada: {item.assignmentPersisted?'Sí':'No'}</small>
+   </div><div className="zone-count">QA<small>Sin tráfico LIVE</small></div></div>
+  </div>:<p className="training-disclaimer">
+   No se conoce ningún estado operativo hasta que exista una lectura autorizada.
+   La cotización o reserva del Cliente no habilita por sí sola esta vista.
+  </p>}
+  <p className="training-disclaimer">Sin dirección personal, teléfono, identidad del Driver,
+   GPS, pagos ni acciones de despacho. El rol, MFA y consistencia
+   de viaje/propietario/ruta/cotización deben verificarse en backend A.</p>
+ </Panel>;
+}
+
 function App(){
  const {client,view:adminState}=useAdminView();
  const [page,setPage]=useState<Page>('resumen');
@@ -531,7 +589,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}
