@@ -464,3 +464,36 @@ test('G25 HTTP: passenger cancellation is bound to JWT, atomic state and cannot 
  assert.equal((await client(base,path+'?actorId='+driverA,{id:riderId,
   method:'POST',body:{requestKey:keyA}})).status,404);
 });
+
+test('G75 F1 Admin audit: loopback refuses missing IdP MFA and routes read-only to verified handler',async t=>{
+ const unused=async()=>({status:404,body:{error:'Not found'}});
+ const required={riderHandler:unused,offerHandler:unused,
+  tripCommandHandler:unused,deliveryHandler:unused,merchantHandler:unused,
+  financeHandler:unused,safetyHandler:unused,
+  merchantManagementHandler:unused,deliveryOfferHandler:unused};
+ const path='/v1/staging/admin/rides/'+tripId+'/f1-verification';
+ const closed=createQoreRadarLoopbackTransport(required);
+ const local=await listenQoreRadarLoopback(closed);
+ t.after(()=>close(closed));
+ const blocked=await fetch(local+path,{headers:auth(outsider)});
+ assert.equal(blocked.status,503,'no independent AAL2 provider means no Admin proof');
+ let calls=0;
+ const permitted=createQoreRadarLoopbackTransport({...required,
+  adminF1AuditHandler:async request=>{
+   calls++;
+   assert.equal(request.method,'GET');
+   assert.equal(request.path,path);
+   assert.equal(request.body,undefined);
+   return {status:200,body:{qaOnly:true,productionEnabled:false}};
+  }});
+ const testBase=await listenQoreRadarLoopback(permitted);
+ t.after(()=>close(permitted));
+ const dto=await fetch(testBase+path,{headers:auth(outsider)});
+ assert.equal(dto.status,200);
+ assert.equal((await dto.json()).productionEnabled,false);
+ assert.equal(calls,1);
+ assert.equal((await fetch(testBase+path,{method:'POST',headers:auth(outsider)})).status,404);
+ assert.equal((await fetch(testBase+path,{
+  headers:{...auth(outsider),Origin:'https://malicious.invalid'}})).status,403);
+ assert.equal(calls,1);
+});
