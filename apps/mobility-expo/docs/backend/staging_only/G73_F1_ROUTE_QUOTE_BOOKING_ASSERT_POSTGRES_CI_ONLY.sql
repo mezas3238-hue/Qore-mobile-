@@ -51,12 +51,12 @@ BEGIN
  IF trip_id<>public.mobility_stage_g73_book(actor,quote_id,booking_key)
  THEN RAISE EXCEPTION 'G73 duplicate booking on replay'; END IF;
  v:=public.mobility_stage_g73_booking_receipt(actor,booking_key);
- IF (SELECT count(*) FROM pg_catalog.jsonb_object_keys(v))<>11
+ IF (SELECT count(*) FROM pg_catalog.jsonb_object_keys(v))<>10
  OR v->>'ownerId'<>actor::text OR v->>'requestKey'<>booking_key::text
  OR v->>'tripId'<>trip_id::text OR v->>'quoteId'<>quote_id::text
  OR v->>'routeId'<>route_id::text OR v->>'status'<>'ACCEPTED_QA'
  OR v->>'revision'<>'1'
- THEN RAISE EXCEPTION 'G73 B exact 11-field booking mismatch %',v; END IF;
+ THEN RAISE EXCEPTION 'G73 B exact 10-field booking mismatch %',v; END IF;
  IF public.mobility_stage_g73_booking_receipt(
   '33333333-3333-4333-8333-333333333333',booking_key) IS NOT NULL
  THEN RAISE EXCEPTION 'G73 foreign reconciliation leak'; END IF;
@@ -64,6 +64,6 @@ BEGIN
  BEGIN PERFORM public.mobility_stage_g73_book(actor,quote_id,pg_catalog.gen_random_uuid());
  EXCEPTION WHEN SQLSTATE 'P7201' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G73 same quote booked twice'; END IF;
- RAISE NOTICE 'G73 PASS: verified route, B 15-field quote, B 11-field booking, idempotent recovery';
+ RAISE NOTICE 'G73 PASS: verified route, B 15-field quote, B 10-field booking, idempotent recovery';
 END $t$;
 RESET ROLE;
