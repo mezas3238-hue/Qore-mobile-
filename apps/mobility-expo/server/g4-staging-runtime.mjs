@@ -21,8 +21,8 @@ import {createSupabaseStagingMerchantRepository} from './g6-supabase-merchant-re
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
 import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repository.mjs';
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
-import {createQoreG72AutoRepository} from './g72-auto-f1-repository.mjs';
-import {createQoreG72AutoGateway} from './g72-f1-auto-gateway.mjs';
+import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
+import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-merchant-management-repository.mjs';
@@ -188,7 +188,7 @@ export async function prepareQoreG4StagingRuntime({
  const deliveryPersistence=createSupabaseStagingDeliveryRepository(admin);
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
- const f1AutoPersistence=createQoreG72AutoRepository(admin);
+ const f1AutoPersistence=createQoreG73AutoRepository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
   createSupabaseStagingMerchantManagementRepository(admin);
@@ -346,11 +346,13 @@ export async function prepareQoreG4StagingRuntime({
    modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
- const f1Auto=createQoreG72AutoGateway({
+ const f1Auto=createQoreG73AutoGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   resolveVerifiedRoute:params=>verifiedAutoRoute(params),
-  prequoteFare:params=>f1AutoPersistence.prequote(params),
+  registerRoute:params=>f1AutoPersistence.registerRoute(params),
+  loadRoute:params=>f1AutoPersistence.routeReceipt(params),
+  quoteRoute:params=>f1AutoPersistence.quote(params),
   loadQuote:params=>f1AutoPersistence.quoteReceipt(params),
   bookQuote:params=>f1AutoPersistence.book(params),
   reconcileBooking:params=>f1AutoPersistence.bookingReceipt(params),
