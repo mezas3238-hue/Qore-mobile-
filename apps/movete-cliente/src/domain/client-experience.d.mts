@@ -31,6 +31,11 @@ export type ClientSnapshot={
    'SEARCHING_DRIVER'|'OFFER_PENDING'|'RETRY_PENDING'|'SEARCH_EXHAUSTED'|'CLOSED'|null;
   attempts:number|null;offerPendingAcceptance:boolean;
   needsRideVerification:boolean;productionEnabled:false};
+ autoFinance:{readReady:boolean;busy:boolean;error:string|null;
+  tripId:string|null;tripState:string|null;tripRevision:number|null;
+  financialState:'RESERVED_QA'|'VOIDED_QA'|'COMPLETED_UNSETTLED_QA'|null;
+  customerPaysGs:number|null;customerSubsidyGs:number|null;
+  pspCollected:false;pspRefunded:false;qaOnly:true;productionEnabled:false};
  quote:{quoteId:string;subjectId:string;amountGs:number;fareMode:string;
   subjectKind:string;expiresAt:number;fareVersion:string;formattedAmount:string}|null;
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
@@ -134,6 +139,7 @@ export type ClientExperience={
  reserveQuotedAuto(args:{requestKey:string}):Promise<ClientResult>;
  reconcileQuotedAuto():Promise<ClientResult>;
  refreshAutoDispatch():Promise<ClientResult>;
+ refreshAutoFinancialStatus():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
@@ -190,6 +196,7 @@ export declare function createClientExperience(options?:{
  autoG73HttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   routeProviderCertified?:boolean;subsidyContractCertified?:boolean;
+  financialContractCertified?:boolean;
   origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,init:unknown)=>Promise<unknown>|unknown;
   timeoutMs?:number;maxBytes?:number;

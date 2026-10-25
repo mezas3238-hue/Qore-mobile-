@@ -26,6 +26,7 @@ test('G73 Cliente operator-approved QA uses the same exact pinned Render HTTPS e
  assert.deepEqual(Object.keys(opt).sort(),[
   'enabled','contractCertified','stagingRuntimeVerified',
   'routeProviderCertified','subsidyContractCertified',
+  'financialContractCertified',
   'origin','pinnedOrigin','fetchImpl'
  ].sort());
  assert.equal(opt.origin,origin);

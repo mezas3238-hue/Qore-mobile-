@@ -20,7 +20,7 @@ export function createF1AuthorizedQaHttpOptions({
  origin,pinnedOrigin,
  ownerApproved=false,backendContractVerified=false,
  persistedRuntimeVerified=false,routeProviderVerified=false,
- subsidyContractVerified=false,fetchImpl=fetch
+ subsidyContractVerified=false,financialContractVerified=false,fetchImpl=fetch
 }={}){
  const url=pinned(origin);
  if(ownerApproved!==true||backendContractVerified!==true||
@@ -33,6 +33,7 @@ export function createF1AuthorizedQaHttpOptions({
  return Object.freeze({
   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
   routeProviderCertified:true,subsidyContractCertified:true,
+  financialContractCertified:financialContractVerified===true,
   origin:url,pinnedOrigin:url,fetchImpl
  });
 }

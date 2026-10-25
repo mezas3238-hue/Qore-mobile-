@@ -54,6 +54,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  let completedProof=null,completedBusy=false,completedEpoch=0;
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
  let subsidyReceipt=null,subsidyEpoch=0,subsidyBusy=false;
+ let financialAnchor=null,financial={busy:false,data:null,error:null},financialEpoch=0;
  const g93Required=autoG73HttpOptions?.subsidyContractCertified===true;
  const emptyDispatch=()=>Object.freeze({readReady:false,busy:false,error:null,
   tripId:null,tripState:null,dispatchState:null,attempts:null,
@@ -65,6 +66,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
   subsidyEpoch++;subsidyReceipt=null;subsidyBusy=false;
+  financialEpoch++;financialAnchor=null;financial={busy:false,data:null,error:null};
   dispatchEpoch++;dispatch={busy:false,data:null,error:null,scope:null};
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
@@ -715,6 +717,70 @@ export function createClientExperience({authProvider=null,gateway=null,
   return Object.freeze({ok:true,tripId:scope.tripId,
    dispatchState:result.data.dispatchState,qaOnly:true,productionEnabled:false});
  }
+ function anchorAutoFinancialReceipt(){
+  const proof=prequoteAuto.verifiedBooking(),u=actor(),receipt=subsidyReceipt;
+  if(!g93Required||!proof||!u||!receipt||proof.subject!==u.subject
+   ||proof.sessionRevision!==session.privacyRevision()
+   ||receipt.subject!==u.subject||receipt.privacy!==session.privacyRevision()
+   ||receipt.quoteId!==proof.quoteId||receipt.data.quoteId!==proof.quoteId
+   ||receipt.data.ownerId!==u.subject)return false;
+  const d=receipt.data;
+  financialEpoch++;financial={busy:false,data:null,error:null};
+  financialAnchor=Object.freeze({subject:u.subject,
+   sessionRevision:session.privacyRevision(),requestKey:proof.requestKey,
+   tripId:proof.tripId,quoteId:proof.quoteId,serverRevision:proof.serverRevision,
+   customerPaysGs:d.customerPaysGs,driverReceivesGs:d.driverReceivesGs,
+   customerSubsidyGs:d.customerSubsidyGs,platformRetainsGs:d.platformRetainsGs});
+  return true;
+ }
+ function verifiedAutoFinancialScope(){
+  const p=dispatchProof(),a=financialAnchor;
+  if(!p||!a||autoG73Http?.isFinancialConfigured()!==true
+   ||a.subject!==p.subject||a.sessionRevision!==p.sessionRevision
+   ||a.requestKey!==p.requestKey||a.tripId!==p.tripId
+   ||a.quoteId!==p.quoteId||a.serverRevision!==p.serverRevision)return null;
+  return a;
+ }
+ function publicAutoFinance(){
+  const s=verifiedAutoFinancialScope();
+  const empty={readReady:false,busy:false,error:null,tripId:null,
+   tripState:null,tripRevision:null,financialState:null,
+   customerPaysGs:null,customerSubsidyGs:null,
+   pspCollected:false,pspRefunded:false,qaOnly:true,productionEnabled:false};
+  if(!s)return Object.freeze(empty);
+  const d=financial.data;
+  return Object.freeze({...empty,readReady:true,busy:financial.busy,
+   error:financial.error,tripId:s.tripId,
+   tripState:d?.tripState??null,tripRevision:d?.tripRevision??null,
+   financialState:d?.financialState??null,customerPaysGs:d?.customerPaysGs??null,
+   customerSubsidyGs:d?.customerSubsidyGs??null});
+ }
+ async function refreshAutoFinancialStatus(){
+  const s=verifiedAutoFinancialScope();
+  if(!s)return fail('G94_BOOKING_NOT_VERIFIED');
+  if(financial.busy)return fail('G94_READ_IN_FLIGHT');
+  const epoch=++financialEpoch;
+  financial={busy:true,data:null,error:null};notify();
+  let result;
+  try{result=await autoG73Http.readFinancialStatus({
+   ownerId:s.subject,sessionRevision:s.sessionRevision,requestKey:s.requestKey,
+   quoteId:s.quoteId,tripId:s.tripId,serverRevision:s.serverRevision,
+   customerPaysGs:s.customerPaysGs,driverReceivesGs:s.driverReceivesGs,
+   customerSubsidyGs:s.customerSubsidyGs,platformRetainsGs:s.platformRetainsGs
+  });}catch{result=fail('NETWORK_OR_TIMEOUT');}
+  const latest=verifiedAutoFinancialScope();
+  if(epoch!==financialEpoch||latest!==s){
+   if(epoch===financialEpoch)financial={busy:false,data:null,error:null};
+   notify();return fail('STALE_SESSION_RESPONSE');
+  }
+  if(result?.ok!==true||result.qaOnly!==true||result.productionEnabled!==false){
+   const error=result?.code??'G94_UNVERIFIED_RECEIPT';
+   financial={busy:false,data:null,error};notify();return fail(error);
+  }
+  financial={busy:false,data:result.data,error:null};notify();
+  return Object.freeze({ok:true,tripId:s.tripId,
+   financialState:result.data.financialState,qaOnly:true,productionEnabled:false});
+ }
  function verifiedAutoSubsidy(){
   const user=actor(),quote=prequoteAuto.snapshot().quote,proof=subsidyReceipt;
   if(!g93Required||!user||!quote||!proof||proof.subject!==user.subject
@@ -754,7 +820,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
     autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
-    autoDispatch:emptyDispatch(),history:null,
+    autoDispatch:emptyDispatch(),autoFinance:publicAutoFinance(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -777,7 +843,8 @@ export function createClientExperience({authProvider=null,gateway=null,
    tracking:tracking.snapshot(),
    quote:quote.current(),
    autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
-   autoDispatch:autoDispatchSnapshot(),history:history.current(user.subject),
+   autoDispatch:autoDispatchSnapshot(),autoFinance:publicAutoFinance(),
+   history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -901,13 +968,20 @@ export function createClientExperience({authProvider=null,gateway=null,
   reserveQuotedAuto:async args=>{
    if(g93Required&&!verifiedAutoSubsidy())
     return fail('G93_SUBSIDY_PREVIEW_REQUIRED');
-   const p=prequoteAuto.reserve(args);notify();const r=await p;notify();return r;
+   const p=prequoteAuto.reserve(args);notify();const result=await p;
+   if(result.ok===true)anchorAutoFinancialReceipt();
+   notify();return result;
   },
-  reconcileQuotedAuto:async()=>{const p=prequoteAuto.reconcile();notify();const r=await p;notify();return r;},
-  refreshAutoDispatch,
+  reconcileQuotedAuto:async()=>{
+   const p=prequoteAuto.reconcile();notify();const result=await p;
+   if(result.ok===true)anchorAutoFinancialReceipt();
+   notify();return result;
+  },
+  refreshAutoDispatch,refreshAutoFinancialStatus,
   clearAutoPrequote:()=>{
    const result=prequoteAuto.discard();
-   if(result.ok){subsidyEpoch++;subsidyReceipt=null;}
+   if(result.ok){subsidyEpoch++;subsidyReceipt=null;
+    financialEpoch++;financialAnchor=null;financial={busy:false,data:null,error:null};}
    notify();return result;
   },
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},

@@ -36,7 +36,9 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const lock=useRef(false);
  const consultationLock=useRef(false);
  const [consulting,setConsulting]=useState(false);
- const dispatch=view.autoDispatch;
+ const dispatch=view.autoDispatch,finance=view.autoFinance;
+ const [financeBusy,setFinanceBusy]=useState(false);
+ const financeLock=useRef(false);
  const [quoteBusy,setQuoteBusy]=useState(false);
  const quoteLock=useRef(false);
  const bookingKey=useRef<string|null>(null);
@@ -119,6 +121,18 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     router.push('/seguimiento');
    }else setFeedback('No se pudo verificar el viaje desde el servidor. No hay seguimiento confirmado.');
   }finally{consultationLock.current=false;setConsulting(false);}
+ }
+ async function consultFinance(){
+  if(financeLock.current||!finance.readReady||finance.busy)return;
+  const latest=client.snapshot();
+  if(latest.privateViewRevision!==view.privateViewRevision
+   ||latest.autoFinance.tripId!==finance.tripId)return;
+  financeLock.current=true;setFinanceBusy(true);
+  try{
+   const result=await client.refreshAutoFinancialStatus();
+   if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+   if(!result.ok)setFeedback('No se verificó el estado contable en el servidor. No hay cobro ni reembolso confirmado.');
+  }finally{financeLock.current=false;setFinanceBusy(false);}
  }
  async function consultOfficialFare(){
   if(quoteLock.current||!free||!validated
@@ -401,6 +415,23 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
    {quoted.phase==='confirmed'&&<Text accessibilityLiveRegion="polite" style={styles.small}>
     Reserva confirmada en QA. Esto no demuestra conductor asignado, ruta GPS, pago ni viaje comercial. El seguimiento requiere otra consulta autenticada al servidor.
    </Text>}
+   {quoted.phase==='confirmed'&&finance.readReady&&<View>
+    <Text accessibilityRole="header" style={styles.heading}>Estado contable de mi reserva · QA</Text>
+    <Action label={financeBusy||finance.busy?'Verificando contabilidad…':'Consultar estado financiero G94'}
+     busy={financeBusy||finance.busy} disabled={financeBusy||finance.busy}
+     hint="GET privado por el mismo bookingKey, sin crear cobro ni devolución."
+     onPress={()=>{void consultFinance();}}/>
+    {finance.error&&<Text accessibilityRole="alert" style={styles.small}>No se pudo verificar la contabilidad. No se declara devolución ni cobro.</Text>}
+    {finance.financialState&&<View>
+     <Text accessibilityLiveRegion="polite" style={styles.text}>{
+      finance.financialState==='VOIDED_QA'?'Reserva anulada contablemente en QA. No es un reembolso.':
+      finance.financialState==='COMPLETED_UNSETTLED_QA'?'Viaje finalizado sin liquidación. No es comprobante de pago.':
+      'Reserva contable en QA; no se ha efectuado un cobro.'
+     }</Text>
+     <Text style={styles.small}>Importe del pasajero registrado: Gs. {finance.customerPaysGs?.toLocaleString('es-PY')} · Subsidio: Gs. {finance.customerSubsidyGs?.toLocaleString('es-PY')}</Text>
+     <Text style={styles.small}>Sin PSP, sin cargo y sin devolución real.</Text>
+    </View>}
+   </View>}
    {quoted.canDiscard&&<Action label="Descartar cotización sin solicitar viaje"
     secondary disabled={quoteBusy} onPress={discardVerifiedFare}/>}
    {quoted.locked&&<Text style={styles.small}>
