@@ -63,6 +63,19 @@ export function createQoreG73AutoRepository(client){
    return rpc(client,'mobility_stage_g93_preview_auto_qa',{
     _passenger_id:p.actorId,_quote_id:p.quoteId});
   },
+  async cancelBookedAuto(p){
+   if(!p||!id(p.actorId)||!id(p.requestKey)||!id(p.cancellationKey))
+    throw Error('G95 invalid private cancellation scope');
+   return rpc(client,'mobility_stage_g95_cancel_booked_auto_qa',{
+    _passenger_id:p.actorId,_booking_key:p.requestKey,
+    _cancellation_key:p.cancellationKey});
+  },
+  async cancellationReceipt(p){
+   if(!p||!id(p.actorId)||!id(p.requestKey))
+    throw Error('G95 invalid private cancellation recovery');
+   return rpc(client,'mobility_stage_g95_cancel_receipt_qa',{
+    _passenger_id:p.actorId,_booking_key:p.requestKey});
+  },
   async autoFinancialState(p){
    if(!p||!id(p.actorId)||!id(p.requestKey))
     throw Error('G94 invalid Passenger finance scope');

@@ -2,12 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g94",
+    "version": "1.0.0-g95",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED",
     "x-qore-f1-g73-g90-contract-status": "QA_ONLY_NO_EXTERNAL_STAGING",
     "x-qore-g93-financial-preview": "QA_ONLY_SERVER_ISSUED_NOT_MOUNTED",
-    "x-qore-g94-void-finance": "QA_ONLY_RESERVED_OR_VOIDED_NOT_PSP"
+    "x-qore-g94-void-finance": "QA_ONLY_RESERVED_OR_VOIDED_NOT_PSP",
+    "x-qore-g95-atomic-passenger-cancel": "QA_ONLY_SERVER_G73_G3_G94_NO_PSP"
   },
   "servers": [
     {
@@ -4299,6 +4300,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/G94AutoFinancialState"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/bookings/{bookingKey}/cancel": {
+      "post": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "operationId": "g95CancelExistingAutoBookingQa",
+        "summary": "Cancel owned AUTO trip, reversing provisional subsidy in same SQL transaction",
+        "description": "Requires confirmed Passenger JWT, exact {requestKey,confirmed:true} body; bookingKey must point to original committed G73 booking; no Driver or price fields. Replays with same cancellation requestKey reproduce original event and financial state. SQL failures use 503 and private GET reconciliation. QA only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G95CancelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One owner-bound persisted cancellation and financial reconciliation (not a PSP refund)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G95PassengerAutoCancellation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/bookings/{bookingKey}/cancellation": {
+      "get": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "operationId": "g95GetPassengerAutoCancellationQa",
+        "summary": "Recover exact committed cancellation if POST acknowledgment was lost",
+        "description": "Owner-bound read-only GET returns only a persisted G3 cancellation event for original G73 booking; 404 on absent/unowned cancellation. No receipt is created on reads, no PSP claim.",
+        "responses": {
+          "200": {
+            "description": "One owner-bound persisted cancellation and financial reconciliation (not a PSP refund)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G95PassengerAutoCancellation"
                 }
               }
             }
@@ -9248,6 +9387,103 @@
           }
         },
         "description": "Private read-only G94 SQL status after G73/G93 booking, including atomic cancellation reversal. Reserved is not paid; completed is not settled. Never claim PSP capture or refund in QA."
+      },
+      "G95PassengerAutoCancellation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "bookingKey",
+          "cancellationKey",
+          "eventId",
+          "tripId",
+          "quoteId",
+          "tripState",
+          "tripRevision",
+          "financialState",
+          "reversalEntriesBalanced",
+          "pspCollected",
+          "pspRefunded",
+          "serverPersisted"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "bookingKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "cancellationKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripState": {
+            "type": "string",
+            "const": "cancelled"
+          },
+          "tripRevision": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "financialState": {
+            "type": "string",
+            "enum": [
+              "VOIDED_QA",
+              "NO_CAMPAIGN_QA"
+            ]
+          },
+          "reversalEntriesBalanced": {
+            "type": "boolean"
+          },
+          "pspCollected": {
+            "type": "boolean",
+            "const": false
+          },
+          "pspRefunded": {
+            "type": "boolean",
+            "const": false
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "G95 authorized Passenger cancellation from existing G73 booking. G3 status event and G94 provisional ledger void are atomic. Not an external refund."
+      },
+      "G95CancelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "confirmed"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        }
       }
     }
   },

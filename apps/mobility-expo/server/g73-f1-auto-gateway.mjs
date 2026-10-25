@@ -17,6 +17,8 @@ const RECON=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})$/i;
 const DISPATCH=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/dispatch$/i;
 const SUBSIDY=/^\/v1\/staging\/rider\/auto\/prequotes\/([a-f0-9-]{36})\/subsidy$/i;
 const FINANCIAL=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/financial-status$/i;
+const CANCEL=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/cancel$/i;
+const CANCEL_RECEIPT=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/cancellation$/i;
 const respond=(status,body)=>({status,body});
 const bearer=h=>{
  const raw=h?.authorization??h?.Authorization;
@@ -97,6 +99,20 @@ const saneFinancial=(x,uid,key)=>exact(x,financialFields)&&
    :x.tripState==='completed'
     ?x.financialState==='COMPLETED_UNSETTLED_QA'&&x.reversalEntriesBalanced===false
     :x.financialState==='RESERVED_QA'&&x.reversalEntriesBalanced===false);
+// G95: actual G3 cancellation and G94 reversal, never PSP capture or refund.
+const cancellationFields=['mode','commercialEnabled','ownerId','bookingKey',
+ 'cancellationKey','eventId','tripId','quoteId','tripState','tripRevision',
+ 'financialState','reversalEntriesBalanced','pspCollected','pspRefunded',
+ 'serverPersisted'];
+const saneCancellation=(x,uid,key,decisionKey=null)=>exact(x,cancellationFields)&&
+ x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
+ x.ownerId===uid&&x.bookingKey===key&&id(x.cancellationKey)&&
+ (decisionKey===null||x.cancellationKey===decisionKey)&&
+ id(x.eventId)&&id(x.tripId)&&id(x.quoteId)&&
+ x.tripState==='cancelled'&&Number.isSafeInteger(x.tripRevision)&&
+ x.tripRevision>=2&&['VOIDED_QA','NO_CAMPAIGN_QA'].includes(x.financialState)&&
+ x.reversalEntriesBalanced===(x.financialState==='VOIDED_QA')&&
+ x.pspCollected===false&&x.pspRefunded===false&&x.serverPersisted===true;
 const saneBook=(x,uid,key)=>exact(x,bookFields)&&
  x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
  x.ownerId===uid&&x.requestKey===key&&id(x.quoteId)&&
@@ -120,7 +136,8 @@ const saneDispatch=(x,uid,key)=>exact(x,dispatchFields)&&
 export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorizePassenger,
  allowRequest,resolveVerifiedRoute,registerRoute,loadRoute,quoteRoute,loadQuote,
  bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,
- readSubsidyPreview=null,readAutoFinancialState=null,now=Date.now}={}){
+ readSubsidyPreview=null,readAutoFinancialState=null,
+ cancelBookedAuto=null,readCancellation=null,now=Date.now}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
@@ -128,7 +145,9 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
  !(dispatchBookedAuto===null||typeof dispatchBookedAuto==='function')||
  !(readDispatchStatus===null||typeof readDispatchStatus==='function')||
  !(readSubsidyPreview===null||typeof readSubsidyPreview==='function')||
- !(readAutoFinancialState===null||typeof readAutoFinancialState==='function'))
+ !(readAutoFinancialState===null||typeof readAutoFinancialState==='function')||
+ !(cancelBookedAuto===null||typeof cancelBookedAuto==='function')||
+ !(readCancellation===null||typeof readCancellation==='function'))
  throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
@@ -138,9 +157,13 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   const dispatchMatch=method==='GET'&&typeof path==='string'?DISPATCH.exec(path):null;
   const subsidyMatch=method==='POST'&&typeof path==='string'?SUBSIDY.exec(path):null;
   const financialMatch=method==='GET'&&typeof path==='string'?FINANCIAL.exec(path):null;
-  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch&&!subsidyMatch&&!financialMatch)
+  const cancelMatch=method==='POST'&&typeof path==='string'?CANCEL.exec(path):null;
+  const cancelReceiptMatch=method==='GET'&&typeof path==='string'?CANCEL_RECEIPT.exec(path):null;
+  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch&&!subsidyMatch&&!financialMatch&&
+   !cancelMatch&&!cancelReceiptMatch)
    return respond(404,{error:'Not found'});
-  if((match||dispatchMatch||subsidyMatch||financialMatch)&&body!==undefined&&body!==null)
+  if((match||dispatchMatch||subsidyMatch||financialMatch||cancelReceiptMatch)&&
+   body!==undefined&&body!==null)
    return respond(400,{error:'Read-only GET cannot contain a body'});
   if(isRoute&&(!exact(body,['quoteRequestKey','origin','destination','service'])||
     !id(body.quoteRequestKey)||!human(body.origin)||!human(body.destination)||
@@ -149,6 +172,12 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   if(isQuote&&(!exact(body,['requestKey','routeId'])||
     !id(body.requestKey)||!id(body.routeId)))
     return respond(400,{error:'Invalid quote'});
+  if((cancelMatch||cancelReceiptMatch)&&
+   !id((cancelMatch||cancelReceiptMatch)[1]))
+    return respond(400,{error:'Invalid booked trip key'});
+  if(cancelMatch&&(!exact(body,['requestKey','confirmed'])||
+    !id(body.requestKey)||body.confirmed!==true))
+    return respond(400,{error:'Explicit cancellation confirmation required'});
   if(isBook&&(!exact(body,['requestKey','quoteId','accepted'])||
     !id(body.requestKey)||!id(body.quoteId)||body.accepted!==true))
     return respond(400,{error:'Explicit price acceptance required'});
@@ -163,7 +192,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   try{if(allowRequest({userId:user.id,operation:
     isRoute?'g73_route':isQuote?'g73_quote':isBook?'g73_book':
     dispatchMatch?'g90_dispatch':subsidyMatch?'g93_subsidy_preview':
-    financialMatch?'g94_financial_status':'g73_reconcile'})!==true)
+    financialMatch?'g94_financial_status':cancelMatch?'g95_cancel':
+    cancelReceiptMatch?'g95_cancel_receipt':'g73_reconcile'})!==true)
     return respond(429,{error:'Request rate limited'});}
   catch{return respond(503,{error:'Rate limiter unavailable'});}
   try{
@@ -233,6 +263,29 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
      catch{/* Booking stays persisted/searching; private offer is uncertain. */}
     }
     return respond(201,rec);
+   }
+   if(cancelMatch){
+    if(cancelBookedAuto===null)
+     return respond(503,{error:'Official cancellation unavailable'});
+    let rec;
+    try{rec=await cancelBookedAuto({actorId:user.id,
+      requestKey:cancelMatch[1],cancellationKey:body.requestKey});}
+    catch{return respond(503,{error:'Cancellation uncertain; reconcile private GET'});}
+    if(!saneCancellation(rec,user.id,cancelMatch[1],body.requestKey))
+     return respond(409,{error:'Unverified cancellation receipt; reconcile private GET'});
+    return respond(200,rec);
+   }
+   if(cancelReceiptMatch){
+    if(readCancellation===null)
+     return respond(503,{error:'Cancellation reconciliation unavailable'});
+    let rec;
+    try{rec=await readCancellation({actorId:user.id,
+      requestKey:cancelReceiptMatch[1]});}
+    catch{return respond(503,{error:'Cancellation reconciliation unavailable'});}
+    if(rec===null)return respond(404,{error:'No authorized committed cancellation'});
+    if(!saneCancellation(rec,user.id,cancelReceiptMatch[1]))
+     return respond(409,{error:'Cancellation receipt invalid'});
+    return respond(200,rec);
    }
    if(financialMatch){
     if(readAutoFinancialState===null)

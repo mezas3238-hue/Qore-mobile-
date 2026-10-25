@@ -30,7 +30,8 @@ function fixture(readAutoFinancialState=async()=>reserved,patch={}){
  return {gw,calls};
 }
 test('G94 sealed financial contract cannot represent PSP charge or refund',()=>{
- assert.equal(spec.info.version,'1.0.0-g94');
+ assert.match(spec.info.version,/^1\.0\.0-g\d+$/);
+ assert.ok(Number(spec.info.version.split('-g')[1])>=94);
  const op=spec.paths['/v1/staging/rider/auto/bookings/{bookingKey}/financial-status'].get;
  assert.equal(op['x-qore-runtime-wired'],false);
  assert.deepEqual(op.security,[{BearerAuth:[]}]);
