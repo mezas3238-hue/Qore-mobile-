@@ -60,6 +60,25 @@ SELECT '71710000-0000-4717-8717-000000000101'::uuid,
  reviewed_by,reviewed_at
 FROM public.mobility_vehicle_compliance
 WHERE vehicle_id='00000000-0000-4000-8000-000000000184'::uuid;
+-- Earlier tests left the newest G17 license review pending. Restore it
+-- through the existing auditable Admin-only review RPC in disposable QA,
+-- never by changing the server's preflight or granting extra SQL privileges.
+DO $review$
+DECLARE
+ doc uuid;
+ admin uuid:='00000000-0000-4000-8000-000000000101';
+ driver uuid:='00000000-0000-4000-8000-000000000181';
+BEGIN
+ IF NOT public.mobility_stage_driver_current_license_approved(driver) THEN
+  SELECT id INTO doc FROM public.mobility_stage_driver_documents
+  WHERE driver_id=driver AND kind='licencia'
+  ORDER BY submitted_at DESC,id DESC LIMIT 1;
+  IF doc IS NULL THEN RAISE EXCEPTION 'G81 missing latest QA license'; END IF;
+  PERFORM public.mobility_stage_review_driver_document(
+    doc,admin,true,'DOCUMENT_VALID',
+    '81810000-0000-4818-8818-000000000020');
+ END IF;
+END $review$;
 -- The earlier G32/G34 adversarial suites may have disabled location
 -- availability/consent. Re-opt this synthetic fixture into QA and refresh
 -- its synthetic location explicitly; never apply to a real Driver account.
