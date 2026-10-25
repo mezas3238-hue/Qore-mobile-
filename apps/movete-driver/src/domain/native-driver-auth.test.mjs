@@ -82,6 +82,7 @@ test('auth listeners are isolated and unsubscribe without disclosing tokens',asy
  let count=0;
  const stop=f.auth.subscribe(()=>{count++;});
  f.emit();
+ await Promise.resolve();
  assert.equal(count,1);
  stop();
  assert.deepEqual(f.calls,['unsubscribed']);
