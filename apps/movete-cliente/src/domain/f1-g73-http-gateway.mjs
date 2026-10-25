@@ -6,7 +6,7 @@ import {readBoundedResponseText} from './bounded-http-response.mjs';
  */
 const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const SERVICES=new Set(['economico','confort','xl']);
-const K=['route','quote','book','reconcile','dispatch'];
+const K=['route','quote','book','reconcile','dispatch','subsidy'];
 const PATH=Object.freeze({
  route:'/v1/staging/rider/auto/routes',
  quote:'/v1/staging/rider/auto/prequote',
@@ -21,6 +21,32 @@ const BOOK=['mode','commercialEnabled','ownerId','requestKey','quoteId',
  'routeId','tripId','revision','serverPersisted','status'];
 const DISPATCH=['mode','commercialEnabled','ownerId','bookingKey','tripId',
  'tripState','dispatchState','attempts','offerPendingAcceptance'];
+const SUBSIDY=['mode','commercialEnabled','ownerId','quoteId','campaignId',
+ 'serviceKind','currency','originalFareGs','commissionBps','subsidyBps',
+ 'nominalCommissionGs','customerSubsidyGs','customerPaysGs','driverReceivesGs',
+ 'platformRetainsGs','fareVersion','expiresAt','serverPersisted'];
+const g93Round=(amount,bps)=>Number((BigInt(amount)*BigInt(bps)+5000n)/10000n);
+function goodSubsidy(x,s,t){
+ if(!exact(x,SUBSIDY)||x.mode!=='STAGING_DEMO_ONLY'
+  ||x.commercialEnabled!==false||x.ownerId!==s.ownerId
+  ||x.quoteId!==s.quoteId||!id(x.campaignId)
+  ||x.serviceKind!=='AUTO_RIDE'||x.currency!=='PYG'
+  ||x.commissionBps!==1500||x.subsidyBps!==1000
+  ||!Number.isSafeInteger(x.originalFareGs)||x.originalFareGs!==s.originalAmountGs
+  ||x.originalFareGs<1||x.originalFareGs>100000000
+  ||x.fareVersion!==s.fareVersion||!version(x.fareVersion)
+  ||!Number.isSafeInteger(x.expiresAt)||x.expiresAt<=t
+  ||x.expiresAt>s.quoteExpiresAt||x.serverPersisted!==true)return false;
+ for(const name of ['nominalCommissionGs','customerSubsidyGs','customerPaysGs',
+  'driverReceivesGs','platformRetainsGs'])
+  if(!Number.isSafeInteger(x[name])||x[name]<0||x[name]>100000000)return false;
+ return x.nominalCommissionGs===g93Round(x.originalFareGs,1500)
+  &&x.customerSubsidyGs===g93Round(x.originalFareGs,1000)
+  &&x.customerPaysGs===x.originalFareGs-x.customerSubsidyGs
+  &&x.driverReceivesGs===x.originalFareGs-x.nominalCommissionGs
+  &&x.platformRetainsGs===x.nominalCommissionGs-x.customerSubsidyGs
+  &&x.customerPaysGs===x.driverReceivesGs+x.platformRetainsGs;
+}
 const SEARCH_STATES=new Set(['SEARCHING_DRIVER','OFFER_PENDING','RETRY_PENDING',
  'SEARCH_EXHAUSTED','CLOSED']);
 const TRIP_STATES=new Set(['searching','accepted','arriving','in_progress',
@@ -98,6 +124,9 @@ const validScope=(kind,s)=>{
  if(kind==='book')return id(s.requestKey)&&id(s.quoteId)&&id(s.routeId)
   &&version(s.fareVersion)&&SERVICES.has(s.service);
  if(kind==='dispatch')return id(s.requestKey)&&id(s.tripId);
+ if(kind==='subsidy')return id(s.quoteId)&&version(s.fareVersion)
+  &&Number.isSafeInteger(s.originalAmountGs)&&s.originalAmountGs>0
+  &&Number.isSafeInteger(s.quoteExpiresAt)&&s.quoteExpiresAt>0;
  return id(s.requestKey)&&id(s.quoteId)&&id(s.routeId);
 };
 /**
@@ -107,7 +136,8 @@ const validScope=(kind,s)=>{
  */
 export function createF1G73HttpGateway({
  enabled=false,contractCertified=false,stagingRuntimeVerified=false,
- routeProviderCertified=false,origin,pinnedOrigin,getSession,fetchImpl,
+ routeProviderCertified=false,subsidyContractCertified=false,
+ origin,pinnedOrigin,getSession,fetchImpl,
  onSessionInvalid=()=>{},now=()=>Date.now(),timeoutMs=8000,maxBytes=32768
 }={}){
  const host=pinOrigin(origin),pin=pinOrigin(pinnedOrigin);
@@ -123,6 +153,8 @@ export function createF1G73HttpGateway({
  }
  async function execute(kind,scope){
   if(!ready)return fail('G73_STAGING_NOT_CERTIFIED');
+  if(kind==='subsidy'&&subsidyContractCertified!==true)
+   return fail('G93_SUBSIDY_NOT_CERTIFIED');
   if(!K.includes(kind)||!validScope(kind,scope))return fail('INVALID_G73_SCOPE');
   if(controller!==null)return fail('G73_REQUEST_IN_FLIGHT');
   const run=epoch,ctl=new AbortController();
@@ -143,8 +175,10 @@ export function createF1G73HttpGateway({
    const path=kind==='reconcile'||kind==='dispatch'
     ?'/v1/staging/rider/auto/bookings/'+encodeURIComponent(scope.requestKey)
       +(kind==='dispatch'?'/dispatch':'')
-    :PATH[kind];
-   const body=kind==='dispatch'?null:kind==='route'
+    :kind==='subsidy'
+     ?'/v1/staging/rider/auto/prequotes/'+encodeURIComponent(scope.quoteId)+'/subsidy'
+     :PATH[kind];
+   const body=kind==='dispatch'||kind==='subsidy'?null:kind==='route'
     ?{quoteRequestKey:scope.quoteRequestKey,origin:scope.origin,
       destination:scope.destination,service:scope.service}
     :kind==='quote'?{requestKey:scope.quoteRequestKey,routeId:scope.routeId}
@@ -191,6 +225,7 @@ export function createF1G73HttpGateway({
    let data;try{data=JSON.parse(read.text);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(kind==='route'?!goodRoute(data,scope,now())
     :kind==='quote'?!goodQuote(data,scope,now())
+    :kind==='subsidy'?!goodSubsidy(data,scope,now())
     :kind==='dispatch'?!goodDispatch(data,scope):!goodBook(data,scope))
     return fail('G73_RECEIPT_NOT_VERIFIED');
    // Response processing itself can span a JWT rotation.
@@ -206,9 +241,12 @@ export function createF1G73HttpGateway({
    if(controller===ctl)controller=null;
   }
  }
- return Object.freeze({isConfigured:()=>ready,cancelPending,
+ return Object.freeze({isConfigured:()=>ready,
+  isSubsidyConfigured:()=>ready&&subsidyContractCertified===true,
+  cancelPending,
   resolveRoute:s=>execute('route',s),
   readQuote:s=>execute('quote',s),
+  previewSubsidy:s=>execute('subsidy',s),
   bookQuote:s=>execute('book',s),
   reconcile:s=>execute('reconcile',s),
   readDispatch:s=>execute('dispatch',s),
