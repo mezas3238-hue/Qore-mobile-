@@ -88,7 +88,8 @@ export default function ClientTracking(){
   }finally{g95Lock.current=false;setG95Busy(false);}
  }
  async function reconcileG95Ui(){
-  if(g95Lock.current||!g95ForTrip||!g95.requiresReconciliation)return;
+  if(g95Lock.current||g95.tripId===null||!view.authenticated
+   ||!g95.requiresReconciliation)return;
   g95Lock.current=true;setG95Busy(true);
   try{
    const result=await client.reconcileG95Cancel(),after=client.snapshot();
