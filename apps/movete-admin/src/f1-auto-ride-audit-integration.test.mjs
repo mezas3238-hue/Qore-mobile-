@@ -76,3 +76,39 @@ test('Admin F1 existing trip stays invisible after logout, no automatically repe
  assert.equal(f.app.snapshot().authenticated,false);
  assert.equal(f.calls(),1);
 });
+
+
+test('G75 Admin integration refuses a stale revision after a newer trip state',async()=>{
+ let server={...receipt(),revision:3,status:'assigned',assignmentPersisted:true,
+  driverId:id(12),observedAt:t-800};
+ const f=build({readImpl:()=>reply(server)});
+ await f.app.refreshSession();
+ assert.equal((await f.app.loadF1RideAudit(trip)).ok,true);
+ f.app.clearF1RideAudit();
+ server={...receipt(),revision:2,observedAt:t-700};
+ const result=await f.app.loadF1RideAudit(trip);
+ assert.equal(result.code,'F1_ADMIN_STALE_REVISION');
+ assert.equal(f.app.snapshot().f1RideAudit.item,null);
+ assert.equal(f.calls(),2);
+});
+test('G75 Admin integration rejects changed quote price or booking after same-trip refresh',async()=>{
+ let server={...receipt(),revision:1};
+ const f=build({readImpl:()=>reply(server)});
+ await f.app.refreshSession();
+ assert.equal((await f.app.loadF1RideAudit(trip)).ok,true);
+ server={...receipt(),revision:2,observedAt:t-900,amountGs:20000};
+ assert.equal((await f.app.loadF1RideAudit(trip)).code,'F1_ADMIN_TRIP_LINK_CHANGED');
+ assert.equal(f.app.snapshot().f1RideAudit.item,null);
+ assert.equal(f.calls(),2);
+});
+test('G75 Admin same trip cannot resurrect assigned Driver after completed',async()=>{
+ let server={...receipt(),revision:5,status:'completed',
+  assignmentPersisted:true,observedAt:t-800};
+ const f=build({readImpl:()=>reply(server)});
+ await f.app.refreshSession();
+ assert.equal((await f.app.loadF1RideAudit(trip)).ok,true);
+ server={...receipt(),revision:6,status:'assigned',
+  assignmentPersisted:true,driverId:id(8),observedAt:t-100};
+ assert.equal((await f.app.loadF1RideAudit(trip)).code,'F1_ADMIN_TERMINAL_RESURRECTION');
+ assert.equal(f.app.snapshot().f1RideAudit.item,null);
+});
