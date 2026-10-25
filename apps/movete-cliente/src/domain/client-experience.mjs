@@ -11,6 +11,7 @@ import {createFareQuoteGateway} from './fare-quote-gateway.mjs';
 import {createFareQuoteFlow} from './fare-quote-flow.mjs';
 import {createF1AutoPrequoteConsent} from './f1-auto-prequote-consent.mjs';
 import {createF1AutoRouteQuoteIntake} from './f1-auto-route-quote-intake.mjs';
+import {createF1G73HttpGateway} from './f1-g73-http-gateway.mjs';
 import {createRideCancellationGateway,createRideCancellationController} from './ride-cancellation.mjs';
 import {createRiderPollingCoordinator} from './rider-polling.mjs';
 import {createRiderStatusStore} from './rider-status.mjs';
@@ -37,7 +38,7 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -47,7 +48,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
  let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox;
- let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null;
+ let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
@@ -64,6 +65,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(fareFlow)fareFlow.clear();
   if(prequoteAuto)prequoteAuto.clear();
    if(autoRouteIntake)autoRouteIntake.clear();
+  if(autoG73Http)autoG73Http.cancelPending();
   if(incidentFlow)incidentFlow.clear();
   if(senderCustody)senderCustody.clear();
   custodyAnchor=null;
@@ -84,13 +86,36 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
- // F1 disabled-by-default: backend A must certify route/prequote/booking/readback.
- prequoteAuto=createF1AutoPrequoteConsent({...(autoPrequoteOptions??{}),now,
+ // F1 G73 canonical HTTP is OFF unless a *separately certified* HTTPS,
+ // JWT, route provider, PostgreSQL and shared STAGING runtime is configured.
+ // Explicit custom QA injection and a G73 HTTP runtime are mutually exclusive.
+ autoG73Http=autoG73HttpOptions?createF1G73HttpGateway({
+  ...autoG73HttpOptions,now,
+  getSession:()=>{
+   const token=session.getSessionForGateway(),user=actor();
+   return token&&user?{...token,subject:user.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ const g73Ready=autoG73Http?.isConfigured()===true
+  &&!autoPrequoteOptions&&!autoRouteIntakeOptions;
+ const optionsQuote=g73Ready?{
+  enabled:true,quoteContractCertified:true,bookingContractCertified:true,
+  reconciliationContractCertified:true,stagingRuntimeVerified:true,
+  quoteGateway:scope=>autoG73Http.readQuote(scope),
+  bookingGateway:scope=>autoG73Http.bookQuote(scope),
+  reconciliationGateway:scope=>autoG73Http.reconcile(scope)
+ }:(autoPrequoteOptions??{});
+ prequoteAuto=createF1AutoPrequoteConsent({...optionsQuote,now,
   getActor:async()=>actorSession()});
- // A owns route-resolution and authoritative prequote; never local tags/price.
- // The intake is OFF until a separately certified owner-scoped route API.
+ // The owner-scoped server route attestation must precede any displayed PYG.
+ const optionsRoute=g73Ready?{
+  enabled:true,routeContractCertified:true,stagingRuntimeVerified:true,
+  routeGateway:scope=>autoG73Http.resolveRoute(scope)
+ }:(autoRouteIntakeOptions??{});
  autoRouteIntake=createF1AutoRouteQuoteIntake({
-  ...(autoRouteIntakeOptions??{}),now,quoteFlow:prequoteAuto,
+  ...optionsRoute,now,quoteFlow:prequoteAuto,
   getActor:async()=>actorSession()
  });
  // G68 is Passenger/sender-only; G66 remains strictly Driver-private.
