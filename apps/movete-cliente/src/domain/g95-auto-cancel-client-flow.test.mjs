@@ -258,7 +258,7 @@ test('R75 G95 persists only opaque identifiers BEFORE POST; restart reauthentica
   'cancellationKey','createdAt','ownerId','quoteId','requestKey',
   'routeId','serverRevision','tripId','version'].sort());
  for(const forbidden of ['token','bearer','gps','phone','originalFareGs',
-  'driverReceivesGs','customerPaysGs','password','route']) {
+  'driverReceivesGs','customerPaysGs','password','origin','destination']) {
   assert.equal(JSON.stringify(saved).includes(forbidden),false);
  }
  assert.equal(first.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
