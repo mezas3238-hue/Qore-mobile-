@@ -4,7 +4,7 @@ export type F1G73Session={
 export type F1G73Scope={
  ownerId:string;sessionRevision:number;service?:'economico'|'confort'|'xl';
  routeId?:string;quoteId?:string;quoteRequestKey?:string;
- origin?:string;destination?:string;fareVersion?:string;requestKey?:string};
+ origin?:string;destination?:string;fareVersion?:string;requestKey?:string;tripId?:string};
 export type F1G73Response={ok:boolean;code?:string;status:number;
  data?:unknown;qaOnly?:true;productionEnabled?:false};
 export type F1G73Gateway={
@@ -13,6 +13,7 @@ export type F1G73Gateway={
  readQuote(scope:F1G73Scope):Promise<F1G73Response>;
  bookQuote(scope:F1G73Scope):Promise<F1G73Response>;
  reconcile(scope:F1G73Scope):Promise<F1G73Response>;
+ readDispatch(scope:F1G73Scope):Promise<F1G73Response>;
  productionEnabled:false};
 export declare function createF1G73HttpGateway(options?:{
  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;

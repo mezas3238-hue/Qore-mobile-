@@ -6,7 +6,7 @@ import {readBoundedResponseText} from './bounded-http-response.mjs';
  */
 const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const SERVICES=new Set(['economico','confort','xl']);
-const K=['route','quote','book','reconcile'];
+const K=['route','quote','book','reconcile','dispatch'];
 const PATH=Object.freeze({
  route:'/v1/staging/rider/auto/routes',
  quote:'/v1/staging/rider/auto/prequote',
@@ -19,6 +19,23 @@ const QUOTE=['mode','commercialEnabled','ownerId','routeId','quoteId',
  'expiresAt','serverPriced','routingVerified','status'];
 const BOOK=['mode','commercialEnabled','ownerId','requestKey','quoteId',
  'routeId','tripId','revision','serverPersisted','status'];
+const DISPATCH=['mode','commercialEnabled','ownerId','bookingKey','tripId',
+ 'tripState','dispatchState','attempts','offerPendingAcceptance'];
+const SEARCH_STATES=new Set(['SEARCHING_DRIVER','OFFER_PENDING','RETRY_PENDING',
+ 'SEARCH_EXHAUSTED','CLOSED']);
+const TRIP_STATES=new Set(['searching','accepted','arriving','in_progress',
+ 'completed','cancelled']);
+function goodDispatch(x,s){
+ return exact(x,DISPATCH)&&x.mode==='STAGING_DEMO_ONLY'
+  &&x.commercialEnabled===false&&x.ownerId===s.ownerId
+  &&x.bookingKey===s.requestKey&&x.tripId===s.tripId
+  &&TRIP_STATES.has(x.tripState)&&SEARCH_STATES.has(x.dispatchState)
+  &&Number.isSafeInteger(x.attempts)&&x.attempts>=0&&x.attempts<=12
+  &&typeof x.offerPendingAcceptance==='boolean'
+  &&x.offerPendingAcceptance===(x.dispatchState==='OFFER_PENDING')
+  &&(x.tripState==='searching'?x.dispatchState!=='CLOSED':
+    x.dispatchState==='CLOSED');
+}
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const id=x=>typeof x==='string'&&ID.test(x);
 const exact=(x,a)=>object(x)&&Object.keys(x).length===a.length&&a.every(k=>Object.hasOwn(x,k));
@@ -80,6 +97,7 @@ const validScope=(kind,s)=>{
   &&SERVICES.has(s.service);
  if(kind==='book')return id(s.requestKey)&&id(s.quoteId)&&id(s.routeId)
   &&version(s.fareVersion)&&SERVICES.has(s.service);
+ if(kind==='dispatch')return id(s.requestKey)&&id(s.tripId);
  return id(s.requestKey)&&id(s.quoteId)&&id(s.routeId);
 };
 /**
@@ -121,11 +139,12 @@ export function createF1G73HttpGateway({
     ?timeoutMs:8000,deadline=now()+ms;
    timeout=setTimeout(()=>ctl.abort(),ms);
    const timedOut=()=>ctl.signal.aborted||now()>=deadline;
-   const method=kind==='reconcile'?'GET':'POST';
-   const path=kind==='reconcile'
+   const method=kind==='reconcile'||kind==='dispatch'?'GET':'POST';
+   const path=kind==='reconcile'||kind==='dispatch'
     ?'/v1/staging/rider/auto/bookings/'+encodeURIComponent(scope.requestKey)
+      +(kind==='dispatch'?'/dispatch':'')
     :PATH[kind];
-   const body=kind==='route'
+   const body=kind==='dispatch'?null:kind==='route'
     ?{quoteRequestKey:scope.quoteRequestKey,origin:scope.origin,
       destination:scope.destination,service:scope.service}
     :kind==='quote'?{requestKey:scope.quoteRequestKey,routeId:scope.routeId}
@@ -171,7 +190,8 @@ export function createF1G73HttpGateway({
    if(!read.ok)return fail(read.code);
    let data;try{data=JSON.parse(read.text);}catch{return fail('BAD_SERVER_RESPONSE');}
    if(kind==='route'?!goodRoute(data,scope,now())
-    :kind==='quote'?!goodQuote(data,scope,now()):!goodBook(data,scope))
+    :kind==='quote'?!goodQuote(data,scope,now())
+    :kind==='dispatch'?!goodDispatch(data,scope):!goodBook(data,scope))
     return fail('G73_RECEIPT_NOT_VERIFIED');
    // Response processing itself can span a JWT rotation.
    try{after=await getSession();}catch{return fail('STALE_SESSION_RESPONSE');}
@@ -191,5 +211,6 @@ export function createF1G73HttpGateway({
   readQuote:s=>execute('quote',s),
   bookQuote:s=>execute('book',s),
   reconcile:s=>execute('reconcile',s),
+  readDispatch:s=>execute('dispatch',s),
   productionEnabled:false});
 }

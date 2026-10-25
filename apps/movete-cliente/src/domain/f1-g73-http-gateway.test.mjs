@@ -164,3 +164,45 @@ test('logout cancels in-flight request, no second concurrent request or stale re
  assert.equal((await pending).code,'STALE_SESSION_RESPONSE');
  assert.equal(f.calls.length,1);
 });
+
+const dispatchScope={ownerId:owner,sessionRevision:1,requestKey:bookingKey,tripId};
+const dispatchDto=()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+ ownerId:owner,bookingKey,tripId,tripState:'searching',
+ dispatchState:'OFFER_PENDING',attempts:1,offerPendingAcceptance:true});
+test('R67 G90 reads owner-bound Driver search state over same pinned HTTPS without new booking',async()=>{
+ const f=fixture({wire:()=>reply(dispatchDto())});
+ const r=await f.gateway.readDispatch(dispatchScope);
+ assert.equal(r.ok,true);assert.deepEqual(r.data,dispatchDto());
+ assert.equal(f.calls.length,1);
+ assert.equal(f.calls[0].init.method,'GET');
+ assert.equal(new URL(f.calls[0].url).pathname,
+  '/v1/staging/rider/auto/bookings/'+bookingKey+'/dispatch');
+ assert.equal(f.calls[0].init.body,undefined);
+ assert.equal(f.calls[0].init.credentials,'omit');
+ assert.equal(f.calls[0].init.headers.Authorization.startsWith('Bearer '),true);
+ assert.equal(JSON.stringify(r).includes('driverId'),false);
+});
+test('R67 G90 fails closed on forged passenger/trip, arbitrary fields, invalid assignment and unpinned runtime',async()=>{
+ for(const bad of [
+  {...dispatchDto(),ownerId:foreign},
+  {...dispatchDto(),tripId:foreign},
+  {...dispatchDto(),driverId:foreign},
+  {...dispatchDto(),dispatchState:'OFFER_PENDING',offerPendingAcceptance:false},
+  {...dispatchDto(),dispatchState:'CLOSED'},
+  {...dispatchDto(),attempts:13},
+  {...dispatchDto(),tripState:'accepted'},
+  {...dispatchDto(),commercialEnabled:true}
+ ]){
+  const f=fixture({wire:()=>reply(bad)});
+  assert.equal((await f.gateway.readDispatch(dispatchScope)).code,'G73_RECEIPT_NOT_VERIFIED');
+ }
+ const f=fixture();
+ assert.equal((await f.gateway.readDispatch({...dispatchScope,tripId:foreign})).code,
+  'G73_RECEIPT_NOT_VERIFIED'); // Backend fixture does not support G90.
+ assert.equal((await f.gateway.readDispatch({...dispatchScope,requestKey:'forged'})).code,
+  'INVALID_G73_SCOPE');
+ assert.equal((await f.gateway.readDispatch({...dispatchScope,ownerId:foreign})).code,
+  'STALE_SESSION_RESPONSE');
+ assert.equal((await fixture({enabled:false}).gateway.readDispatch(dispatchScope)).code,
+  'G73_STAGING_NOT_CERTIFIED');
+});
