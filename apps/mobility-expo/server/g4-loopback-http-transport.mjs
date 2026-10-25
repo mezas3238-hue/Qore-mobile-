@@ -17,6 +17,7 @@ const offerDecisionRoute=/^\/v1\/staging\/driver\/offers\/(accept|decline)$/;
 const tripRequestRoute=/^\/v1\/staging\/rider\/trips\/request$/;
 const f1AutoPostRoute=/^\/v1\/staging\/rider\/auto\/(routes|prequote|book)$/;
 const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}$/i;
+const adminF1AuditRoute=/^\/v1\/staging\/admin\/rides\/[0-9a-f-]{36}\/f1-verification$/i;
 const riderCancelRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/cancel$/i;
 const tripTransitionRoute=/^\/v1\/staging\/trips\/[0-9a-f-]{36}\/transition$/i;
 const deliveryRequestRoute=/^\/v1\/staging\/sender\/deliveries\/request$/;
@@ -68,7 +69,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- f1AutoHandler,
+ f1AutoHandler,adminF1AuditHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,
 }){
@@ -77,6 +78,7 @@ export function createQoreRadarLoopbackTransport({
    typeof offerHandler!=='function'||
    typeof tripCommandHandler!=='function'||
    (f1AutoHandler!==undefined&&typeof f1AutoHandler!=='function')||
+   (adminF1AuditHandler!==undefined&&typeof adminF1AuditHandler!=='function')||
    typeof deliveryHandler!=='function'||
    typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
    typeof safetyHandler!=='function'||typeof merchantManagementHandler!=='function'||
@@ -103,6 +105,7 @@ export function createQoreRadarLoopbackTransport({
    (tripRequestRoute.test(path)||tripTransitionRoute.test(path)||
     riderCancelRoute.test(path));
   const f1AutoGet=req.method==='GET'&&f1AutoGetRoute.test(path);
+  const adminF1AuditGet=req.method==='GET'&&adminF1AuditRoute.test(path);
   const f1AutoPost=req.method==='POST'&&f1AutoPostRoute.test(path);
   const deliveryGet=req.method==='GET'&&deliveryStatusRoute.test(path);
   const deliveryPost=req.method==='POST'&&
@@ -131,7 +134,7 @@ export function createQoreRadarLoopbackTransport({
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
-  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&
+  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!adminF1AuditGet&&
     !deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
@@ -144,7 +147,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||riderHistory||offerGet||f1AutoGet||deliveryGet||merchantGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||f1AutoGet||adminF1AuditGet||deliveryGet||merchantGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -175,6 +178,7 @@ export function createQoreRadarLoopbackTransport({
    const handler=rider?riderHandler:
     riderHistory?(riderHistoryHandler??(()=>({status:503,body:{error:'History not configured'}}))):
     (f1AutoGet||f1AutoPost)?(f1AutoHandler??(()=>({status:503,body:{error:'G72 not configured'}}))):
+    adminF1AuditGet?(adminF1AuditHandler??(()=>({status:503,body:{error:'G75 IdP MFA unavailable'}}))):
     tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
     (merchantGet||merchantPost)?merchantHandler:
