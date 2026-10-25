@@ -48,6 +48,18 @@ export function AdminAuthPanel(){
   }catch{setMessage('No se pudo confirmar el segundo factor.');}
   finally{setBusy(false);}
  }
+ async function cancelSecondFactor(){
+  if(busy)return;
+  setPendingTotp(false);setCode('');setPassword('');
+  client.clear();
+  setBusy(true);
+  try{
+   await auth?.signOut();
+   setMessage('Segundo factor cancelado y sesión temporal cerrada.');
+  }catch{
+   setMessage('Acceso administrativo oculto. No se confirmó revocación remota.');
+  }finally{setBusy(false);}
+ }
  async function logout(){
   if(busy)return;
   setBusy(true);setPassword('');setCode('');setPendingTotp(false);
@@ -72,9 +84,7 @@ export function AdminAuthPanel(){
       onChange={event=>setCode(event.target.value.replace(/[^0-9]/g,'').slice(0,6))}/>
      <button type="button" disabled={busy||code.length!==6}
       onClick={()=>{void verify();}}>Verificar segundo factor</button>
-     <button type="button" disabled={busy} onClick={()=>{
-      setPendingTotp(false);setCode('');setPassword('');setMessage('');
-     }}>Cambiar de cuenta</button>
+     <button type="button" disabled={busy} onClick={()=>{void cancelSecondFactor();}}>Cancelar MFA y cerrar sesión</button>
     </div>:<div>
      <label htmlFor="admin-login-email">Correo administrativo</label>
      <input id="admin-login-email" type="email" value={email}
