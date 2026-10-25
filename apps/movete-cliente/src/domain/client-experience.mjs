@@ -53,6 +53,8 @@ export function createClientExperience({authProvider=null,gateway=null,
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
+ let subsidyReceipt=null,subsidyEpoch=0,subsidyBusy=false;
+ const g93Required=autoG73HttpOptions?.subsidyContractCertified===true;
  const emptyDispatch=()=>Object.freeze({readReady:false,busy:false,error:null,
   tripId:null,tripState:null,dispatchState:null,attempts:null,
   offerPendingAcceptance:false,needsRideVerification:false,
@@ -62,6 +64,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
+  subsidyEpoch++;subsidyReceipt=null;subsidyBusy=false;
   dispatchEpoch++;dispatch={busy:false,data:null,error:null,scope:null};
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
@@ -712,6 +715,29 @@ export function createClientExperience({authProvider=null,gateway=null,
   return Object.freeze({ok:true,tripId:scope.tripId,
    dispatchState:result.data.dispatchState,qaOnly:true,productionEnabled:false});
  }
+ function verifiedAutoSubsidy(){
+  const user=actor(),quote=prequoteAuto.snapshot().quote,proof=subsidyReceipt;
+  if(!g93Required||!user||!quote||!proof||proof.subject!==user.subject
+   ||proof.privacy!==session.privacyRevision()||proof.quoteId!==quote.quoteId
+   ||proof.data.fareVersion!==quote.fareVersion
+   ||proof.data.originalFareGs!==quote.amountGs
+   ||proof.data.expiresAt<=now()||proof.data.expiresAt>quote.expiresAt)
+   return null;
+  return proof.data;
+ }
+ function publicAutoPrequote(){
+  const base=prequoteAuto.snapshot(),proof=verifiedAutoSubsidy();
+  return Object.freeze({...base,subsidyRequired:g93Required,
+   subsidyAvailable:g93Required&&autoG73Http?.isSubsidyConfigured()===true,
+   subsidyLoading:subsidyBusy,
+   subsidy:proof?Object.freeze({
+    quoteId:proof.quoteId,campaignId:proof.campaignId,
+    originalFareGs:proof.originalFareGs,customerSubsidyGs:proof.customerSubsidyGs,
+    customerPaysGs:proof.customerPaysGs,commissionBps:proof.commissionBps,
+    subsidyBps:proof.subsidyBps,platformRetainsGs:proof.platformRetainsGs,
+    fareVersion:proof.fareVersion,expiresAt:proof.expiresAt
+   }):null});
+ }
  function snapshot(){
   const user=actor();
   guardCustodyScope();
@@ -727,7 +753,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
-    autoPrequote:prequoteAuto.snapshot(),autoRouteQuote:autoRouteIntake.snapshot(),
+    autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
     autoDispatch:emptyDispatch(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
@@ -750,7 +776,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    completedRideHistory:completedRideHistory(),
    tracking:tracking.snapshot(),
    quote:quote.current(),
-   autoPrequote:prequoteAuto.snapshot(),autoRouteQuote:autoRouteIntake.snapshot(),
+   autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
    autoDispatch:autoDispatchSnapshot(),history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
@@ -836,11 +862,54 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   prepareAutoPrequote:args=>{const result=prequoteAuto.prepare(args);notify();return result;},
   loadAutoPrequote:async()=>{const p=prequoteAuto.load();notify();const r=await p;notify();return r;},
-  acceptAutoPrequote:args=>{const result=prequoteAuto.accept(args);notify();return result;},
-  reserveQuotedAuto:async args=>{const p=prequoteAuto.reserve(args);notify();const r=await p;notify();return r;},
+  loadAutoSubsidy:async()=>{
+   if(!g93Required||autoG73Http?.isSubsidyConfigured()!==true)
+    return fail('G93_SUBSIDY_NOT_CERTIFIED');
+   const user=actor(),quote=prequoteAuto.snapshot().quote;
+   if(!user||!quote||prequoteAuto.snapshot().phase!=='quoted'||subsidyBusy)
+    return fail('G93_QUOTE_NOT_READY');
+   const epoch=++subsidyEpoch,privacy=session.privacyRevision();
+   subsidyReceipt=null;subsidyBusy=true;notify();
+   try{
+    const result=await autoG73Http.previewSubsidy({
+     quoteId:quote.quoteId,originalAmountGs:quote.amountGs,
+     quoteExpiresAt:quote.expiresAt,fareVersion:quote.fareVersion,
+     ownerId:user.subject,sessionRevision:privacy
+    });
+    const latest=actor(),present=prequoteAuto.snapshot();
+    if(epoch!==subsidyEpoch||!latest||latest.subject!==user.subject
+     ||session.privacyRevision()!==privacy||present.phase!=='quoted'
+     ||present.quote?.quoteId!==quote.quoteId
+     ||present.quote?.fareVersion!==quote.fareVersion
+     ||present.quote?.amountGs!==quote.amountGs)
+     return fail('STALE_SESSION_RESPONSE');
+    if(result?.ok!==true)return fail(result?.code??'G93_UNVERIFIED_RESPONSE');
+    subsidyReceipt=Object.freeze({subject:user.subject,privacy,
+     quoteId:quote.quoteId,data:result.data});
+    return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+   }finally{if(epoch===subsidyEpoch){subsidyBusy=false;notify();}}
+  },
+  acceptAutoPrequote:args=>{
+   if(g93Required){
+    const receipt=verifiedAutoSubsidy();
+    if(!receipt||receipt.campaignId!==args?.campaignId
+     ||receipt.customerPaysGs!==args?.customerPaysGs)
+     return fail('G93_SUBSIDY_PREVIEW_REQUIRED');
+   }
+   const result=prequoteAuto.accept(args);notify();return result;
+  },
+  reserveQuotedAuto:async args=>{
+   if(g93Required&&!verifiedAutoSubsidy())
+    return fail('G93_SUBSIDY_PREVIEW_REQUIRED');
+   const p=prequoteAuto.reserve(args);notify();const r=await p;notify();return r;
+  },
   reconcileQuotedAuto:async()=>{const p=prequoteAuto.reconcile();notify();const r=await p;notify();return r;},
   refreshAutoDispatch,
-  clearAutoPrequote:()=>{const r=prequoteAuto.discard();notify();return r;},
+  clearAutoPrequote:()=>{
+   const result=prequoteAuto.discard();
+   if(result.ok){subsidyEpoch++;subsidyReceipt=null;}
+   notify();return result;
+  },
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},

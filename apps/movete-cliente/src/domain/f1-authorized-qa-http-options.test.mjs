@@ -6,12 +6,14 @@ const origin='https://movete-facil-staging.onrender.com';
 const fetchImpl=async()=>{throw Error('No service called in wiring constructor');};
 const approved=Object.freeze({origin,pinnedOrigin:origin,
  ownerApproved:true,backendContractVerified:true,
- persistedRuntimeVerified:true,routeProviderVerified:true,fetchImpl});
+ persistedRuntimeVerified:true,routeProviderVerified:true,
+ subsidyContractVerified:true,fetchImpl});
 
 test('G73 Cliente real HTTP remains OFF by default and under partial attestations',()=>{
  assert.equal(createF1AuthorizedQaHttpOptions(),null);
  for(const key of ['ownerApproved','backendContractVerified',
-  'persistedRuntimeVerified','routeProviderVerified']){
+  'persistedRuntimeVerified','routeProviderVerified',
+  'subsidyContractVerified']){
   assert.equal(createF1AuthorizedQaHttpOptions({...approved,[key]:false}),null,
    'Missing independent authority '+key);
  }
@@ -23,7 +25,8 @@ test('G73 Cliente operator-approved QA uses the same exact pinned Render HTTPS e
  assert(opt);
  assert.deepEqual(Object.keys(opt).sort(),[
   'enabled','contractCertified','stagingRuntimeVerified',
-  'routeProviderCertified','origin','pinnedOrigin','fetchImpl'
+  'routeProviderCertified','subsidyContractCertified',
+  'origin','pinnedOrigin','fetchImpl'
  ].sort());
  assert.equal(opt.origin,origin);
  assert.equal(opt.pinnedOrigin,origin);

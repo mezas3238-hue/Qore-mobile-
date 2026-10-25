@@ -20,6 +20,10 @@ export type ClientSnapshot={
  };
  autoRouteQuote:{available:boolean;busy:boolean;productionEnabled:false};
  autoPrequote:{phase:string;quote:{quoteId:string;amountGs:number;currency:'PYG';fareVersion:string;expiresAt:number}|null;
+  subsidyRequired:boolean;subsidyAvailable:boolean;subsidyLoading:boolean;
+  subsidy:{quoteId:string;campaignId:string;originalFareGs:number;customerSubsidyGs:number;
+   customerPaysGs:number;commissionBps:number;subsidyBps:number;platformRetainsGs:number;
+   fareVersion:string;expiresAt:number}|null;
   quoteAvailable:boolean;bookingAvailable:boolean;canAccept:boolean;canReserve:boolean;
   requiresReconciliation:boolean;tripId:string|null;productionEnabled:false};
  autoDispatch:{readReady:boolean;busy:boolean;error:string|null;
@@ -124,7 +128,9 @@ export type ClientExperience={
  prepareAutoPrequote(args:{routeId:string;service:'economico'|'confort'|'xl';quoteRequestKey:string;
   ownerId:string;sessionRevision:number}):ClientResult;
  loadAutoPrequote():Promise<ClientResult>;
- acceptAutoPrequote(args:{quoteId:string;amountGs:number;fareVersion:string}):ClientResult;
+ loadAutoSubsidy():Promise<ClientResult>;
+ acceptAutoPrequote(args:{quoteId:string;amountGs:number;fareVersion:string;
+  customerPaysGs?:number;campaignId?:string}):ClientResult;
  reserveQuotedAuto(args:{requestKey:string}):Promise<ClientResult>;
  reconcileQuotedAuto():Promise<ClientResult>;
  refreshAutoDispatch():Promise<ClientResult>;
@@ -183,7 +189,8 @@ export declare function createClientExperience(options?:{
  // require an independently authorized provider, IdP and PostgreSQL STAGING.
  autoG73HttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
-  routeProviderCertified?:boolean;origin?:string;pinnedOrigin?:string;
+  routeProviderCertified?:boolean;subsidyContractCertified?:boolean;
+  origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,init:unknown)=>Promise<unknown>|unknown;
   timeoutMs?:number;maxBytes?:number;
  }|null;

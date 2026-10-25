@@ -154,12 +154,28 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   try{
    const fare=quoted.quote;
    const result=client.acceptAutoPrequote({
-    quoteId:fare.quoteId,amountGs:fare.amountGs,fareVersion:fare.fareVersion
+    quoteId:fare.quoteId,amountGs:fare.amountGs,fareVersion:fare.fareVersion,
+    ...(quoted.subsidy?{customerPaysGs:quoted.subsidy.customerPaysGs,
+     campaignId:quoted.subsidy.campaignId}:{})
    });
    setFeedback(result.ok?
     'Tarifa aceptada para esta cotización QA. Todavía no hay conductor, viaje ni cobro.':
     'La cotización ya no puede aceptarse. Consultá nuevamente al servidor.');
   }finally{quoteLock.current=false;}
+ }
+ async function consultAutoSubsidy(){
+  if(quoteLock.current||!quoted.canPreviewSubsidy)return;
+  const old=client.snapshot();
+  if(old.privateViewRevision!==view.privateViewRevision
+   ||old.autoPrequote.quote?.quoteId!==quoted.quote?.quoteId)return;
+  quoteLock.current=true;setQuoteBusy(true);setFeedback('');
+  try{
+   const response=await client.loadAutoSubsidy();
+   if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+   setFeedback(response.ok
+    ?'Descuento y precio final obtenidos del servidor G93 QA. Revisá los montos antes de aceptar.'
+    :'No se pudo verificar el subsidio oficial. No aceptamos ni reservamos.');
+  }finally{quoteLock.current=false;setQuoteBusy(false);}
  }
  async function reserveVerifiedFare(){
   if(quoteLock.current||!quoted.canReserve)return;
@@ -323,12 +339,26 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     <Text style={styles.small}>La ruta será validada por el servidor; ninguna cotización se acepta automáticamente.</Text>
    </View>}
    {quoted.quote&&<View>
-    <Text style={styles.small}>Importe calculado por el servidor (QA, sin cobro)</Text>
+    <Text style={styles.small}>Tarifa base G73 del servidor (QA, sin cobro)</Text>
     <Text accessibilityLiveRegion="polite" style={styles.heading}>{quoted.amountLabel}</Text>
-    <Text style={styles.small}>Cotización vigente hasta {new Date(quoted.quote.expiresAt).toLocaleTimeString('es-PY')}. Aceptar el precio no envía todavía una reserva.</Text>
-    <Text style={styles.small}>Esta respuesta G73 QA todavía no certifica desglose de tarifa original, subsidio del 10 % ni total final promocional. Se necesita un DTO firmado por backend A antes de presentarlos o aplicarlos en producción.</Text>
-    {quoted.canAccept&&<Action label="Acepto esta tarifa en guaraníes"
-     hint="Aceptación explícita de importe y versión exactos; sin despacho ni cobro"
+    <Text style={styles.small}>Cotización vigente hasta {new Date(quoted.quote.expiresAt).toLocaleTimeString('es-PY')}.</Text>
+    {quoted.subsidyRequired&&<View>
+     <Text style={styles.small}>AUTO requiere verificar el subsidio de pasajeros G93 antes de aceptar cualquier reserva. No se calcula desde el teléfono.</Text>
+     {quoted.canPreviewSubsidy&&<Action
+      label={quoteBusy?'Consultando subsidio…':'Consultar descuento oficial del servidor'}
+      disabled={quoteBusy} busy={quoteBusy}
+      hint="Lectura G93 idempotente sin cuerpo, sin tarifas enviadas por el pasajero."
+      onPress={()=>{void consultAutoSubsidy();}}/>}
+     {quoted.subsidy&&<View>
+      <Text style={styles.text}>Tarifa original: Gs. {quoted.subsidy.originalFareGs.toLocaleString('es-PY')}</Text>
+      <Text style={styles.text}>Descuento de pasajeros 10 %: −Gs. {quoted.subsidy.customerSubsidyGs.toLocaleString('es-PY')}</Text>
+      <Text accessibilityLiveRegion="polite" style={styles.heading}>Precio final: Gs. {quoted.subsidy.customerPaysGs.toLocaleString('es-PY')}</Text>
+      <Text style={styles.small}>Montos confirmados por el servidor QA y sujetos a vencimiento. No implican cobro ni activación comercial.</Text>
+     </View>}
+    </View>}
+    {!quoted.subsidyRequired&&<Text style={styles.small}>Lectura histórica G73 de QA sin desglose G93. No se declara ni aplica descuento.</Text>}
+    {quoted.canAccept&&<Action label={quoted.subsidyRequired?'Acepto precio final con subsidio — QA':'Acepto esta tarifa en guaraníes'}
+     hint="Consentimiento expreso para precio y versión, sin despacho ni cobro"
      onPress={acceptVerifiedFare}/>}
    </View>}
    {quoted.phase==='accepted'&&<Action

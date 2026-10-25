@@ -19,14 +19,32 @@ export function projectAutoPrequoteScreen({
   &&typeof quote.fareVersion==='string'&&quote.fareVersion.length>0
   &&Number.isSafeInteger(quote.expiresAt)&&quote.expiresAt>now;
  const visible=Boolean(valid&&['quoted','accepted','sending'].includes(phase));
+ const discount=prequote?.subsidy,required=prequote?.subsidyRequired===true;
+ const validDiscount=Boolean(valid&&discount
+  &&discount.quoteId===quote.quoteId
+  &&discount.fareVersion===quote.fareVersion
+  &&discount.originalFareGs===quote.amountGs
+  &&discount.commissionBps===1500&&discount.subsidyBps===1000
+  &&Number.isSafeInteger(discount.customerSubsidyGs)
+  &&Number.isSafeInteger(discount.customerPaysGs)
+  &&discount.customerPaysGs===discount.originalFareGs-discount.customerSubsidyGs
+  &&Number.isSafeInteger(discount.expiresAt)&&discount.expiresAt>now
+  &&discount.expiresAt<=quote.expiresAt);
  const ready=authenticated===true&&mutationPhase==='idle';
  return Object.freeze({
   phase,quote:visible?Object.freeze({...quote}):null,
   amountLabel:visible?'Gs. '+quote.amountGs.toLocaleString('es-PY'):null,
+  subsidyRequired:required,
+  subsidy:visible&&validDiscount?Object.freeze({...discount}):null,
+  canPreviewSubsidy:ready&&valid&&required&&!validDiscount
+   &&prequote.subsidyAvailable===true&&prequote.subsidyLoading!==true
+   &&phase==='quoted',
   canEditRoute:!ACTIVE.has(phase)&&phase!=='unknown',
-  canAccept:ready&&valid&&phase==='quoted'&&prequote.canAccept===true,
+  canAccept:ready&&valid&&phase==='quoted'&&prequote.canAccept===true
+   &&(!required||validDiscount),
   canReserve:ready&&valid&&phase==='accepted'
-   &&prequote.bookingAvailable===true&&prequote.canReserve===true,
+   &&prequote.bookingAvailable===true&&prequote.canReserve===true
+   &&(!required||validDiscount),
   canReconcile:authenticated===true&&phase==='ambiguous'
    &&prequote.requiresReconciliation===true,
   canDiscard:authenticated===true&&DISCARD.has(phase),

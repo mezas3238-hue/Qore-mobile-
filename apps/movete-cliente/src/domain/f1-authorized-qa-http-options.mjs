@@ -20,17 +20,19 @@ export function createF1AuthorizedQaHttpOptions({
  origin,pinnedOrigin,
  ownerApproved=false,backendContractVerified=false,
  persistedRuntimeVerified=false,routeProviderVerified=false,
- fetchImpl=fetch
+ subsidyContractVerified=false,fetchImpl=fetch
 }={}){
  const url=pinned(origin);
  if(ownerApproved!==true||backendContractVerified!==true||
-  persistedRuntimeVerified!==true||routeProviderVerified!==true||
+  persistedRuntimeVerified!==true||routeProviderVerified!==true
+  ||subsidyContractVerified!==true||
   url===null||url!==pinned(pinnedOrigin)||
   typeof fetchImpl!=='function')return null;
  // This is explicitly STAGING QA; these flags do not enable payment,
  // commercial rides, production or an independently attested server.
  return Object.freeze({
   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
-  routeProviderCertified:true,origin:url,pinnedOrigin:url,fetchImpl
+  routeProviderCertified:true,subsidyContractCertified:true,
+  origin:url,pinnedOrigin:url,fetchImpl
  });
 }
