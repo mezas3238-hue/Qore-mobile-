@@ -129,6 +129,13 @@ function mockSupabase(){
      state.g84OfferKey=params._offer_key;
      return {data:offer,error:null};
     }
+    if(state.g84Enabled&&name==='mobility_stage_poll_driver_auto_offers'){
+     return {data:state.g84OfferKey?[{offer_id:offer,trip_id:ride,
+      expires_at:new Date(now+20000).toISOString()}]:[],error:null};
+    }
+    if(state.g84Enabled&&name==='mobility_stage_poll_courier_delivery_offers'){
+     return {data:[],error:null};
+    }
     if(name==='mobility_stage_g73_route'){
      state.g77RegisteredRoute=params;
      return {data:offer,error:null};
@@ -900,11 +907,26 @@ test('G84 real HTTP booking from Client invokes one private G82 SQL offer for or
  const runtime=await prepare(m);
  await http(runtime,async base=>{
   const request={requestKey,quoteId:fareQuote,accepted:true};
+  const inboxBefore=await req(base,'/v1/staging/driver/inbox','driver');
+  assert.equal(inboxBefore.status,200);
+  assert.deepEqual(inboxBefore.body.offers,[]);
   const first=await req(base,'/v1/staging/rider/auto/book','rider','POST',request);
   assert.equal(first.status,201);
   assert.equal(first.body.tripId,ride);
   assert.equal(first.body.status,'ACCEPTED_QA');
   assert.equal(first.body.serverPersisted,true);
+  const inbox=await req(base,'/v1/staging/driver/inbox','driver');
+  assert.equal(inbox.status,200);
+  assert.deepEqual(inbox.body.offers,[{kind:'AUTO_RIDE',offerId:offer,
+   serviceId:first.body.tripId,expiresAtMs:now+20000}]);
+  assert.equal(inbox.body.pushDelivered,false);
+  assert.equal(inbox.body.deviceReceived,false);
+  assert.equal((await req(base,'/v1/staging/driver/inbox','stranger')).status,403);
+  const offerDetail=await req(base,offerPath,'driver');
+  assert.equal(offerDetail.status,200);
+  assert.equal(offerDetail.body.tripId,first.body.tripId);
+  assert.equal(offerDetail.body.offerId,offer);
+  assert.equal(offerDetail.body.confirmedAcceptance,false);
   const calls=m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa');
   assert.equal(calls.length,1);
   assert.match(calls[0].params._offer_key,/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
