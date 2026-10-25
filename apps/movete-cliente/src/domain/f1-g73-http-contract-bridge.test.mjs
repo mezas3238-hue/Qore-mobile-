@@ -163,7 +163,9 @@ test('Client F1 G73 integration: route -> quote -> explicit consent -> one booki
  assert.equal(booked.ok,true);
  assert.equal(booked.tripId,TRIP);
  assert.equal(history.filter(x=>x.path.endsWith('/book')).length,1);
- assert.equal(client.snapshot().rideContinuation.tripId,TRIP);
+ assert.equal(client.snapshot().autoPrequote.tripId,TRIP);
+ // Booking evidence alone is NOT authorization for status/GPS tracking.
+ assert.equal(client.snapshot().rideContinuation.canVerify,false);
  assert.equal(client.snapshot().rideContinuation.productionEnabled,false);
 });
 test('Client F1 G73 lost POST ACK recovers via owner-scoped GET only',async()=>{
@@ -175,7 +177,8 @@ test('Client F1 G73 lost POST ACK recovers via owner-scoped GET only',async()=>{
  assert.equal((await client.reserveQuotedAuto({requestKey:BKEY})).code,
   'BOOKING_RECONCILIATION_REQUIRED');
  assert.equal((await client.reconcileQuotedAuto()).recoveredWithoutPost,true);
- assert.equal(client.snapshot().rideContinuation.tripId,TRIP);
+ assert.equal(client.snapshot().autoPrequote.tripId,TRIP);
+ assert.equal(client.snapshot().rideContinuation.canVerify,false);
  assert.equal(history.filter(x=>x.path.endsWith('/book')).length,1);
  assert.equal(history.filter(x=>x.path.endsWith('/bookings/'+BKEY)).length,1);
 });
