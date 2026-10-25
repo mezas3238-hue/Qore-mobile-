@@ -18,6 +18,7 @@ export type ClientSnapshot={
   locationObservedAt:number|null;subscriptionActive:boolean;syncing:boolean;
   lastFetchedAt:number|null;lastError:string|null;liveEnabled:false;
  };
+ autoRouteQuote:{available:boolean;busy:boolean;productionEnabled:false};
  autoPrequote:{phase:string;quote:{quoteId:string;amountGs:number;currency:'PYG';fareVersion:string;expiresAt:number}|null;
   quoteAvailable:boolean;bookingAvailable:boolean;canAccept:boolean;canReserve:boolean;
   requiresReconciliation:boolean;tripId:string|null;productionEnabled:false};
@@ -114,6 +115,7 @@ export type ClientExperience={
  submitIncidentReport():Promise<ClientResult>;
  retryIncidentReport():Promise<ClientResult>;
  refreshIncidentStatus():Promise<ClientResult>;
+ requestAutoQuote(args:{origin:string;destination:string;service:'economico'|'confort'|'xl';quoteRequestKey:string}):Promise<ClientResult>;
  prepareAutoPrequote(args:{routeId:string;service:'economico'|'confort'|'xl';quoteRequestKey:string;
   ownerId:string;sessionRevision:number}):ClientResult;
  loadAutoPrequote():Promise<ClientResult>;
@@ -171,6 +173,13 @@ export declare function createClientExperience(options?:{
   timeoutMs?:number;maxBytes?:number;
  }|null;
  // Disabled until A supplies certified route/prequote/booking/readback contracts.
+ autoRouteIntakeOptions?:{
+  enabled?:boolean;routeContractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  // A's current G72 /auto/prequote does not provide routeId contract.
+  routeGateway?:(scope:{origin:string;destination:string;
+   service:'economico'|'confort'|'xl';ownerId:string;quoteRequestKey:string;
+   sessionRevision:number})=>Promise<unknown>|unknown;
+ }|null;
  autoPrequoteOptions?:{
   enabled?:boolean;quoteContractCertified?:boolean;bookingContractCertified?:boolean;
   reconciliationContractCertified?:boolean;stagingRuntimeVerified?:boolean;
