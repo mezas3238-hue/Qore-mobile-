@@ -103,7 +103,7 @@ CREATE FUNCTION public.mobility_stage_g96_push_still_eligible_qa(
 RETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
 DECLARE t_status public.mobility_stage_trip_status;
  f_status public.mobility_stage_offer_state;
- expires_at timestamptz;
+ v_expiry timestamptz;
 BEGIN
  IF current_database()<>'qore_disposable_chain'
  OR current_setting('application_name')<>'qore_ci_disposable_chain'
@@ -115,10 +115,10 @@ BEGIN
   ON b.offer_id=o.id AND b.driver_id=o.driver_id
  WHERE o.id=_offer_id AND o.driver_id=_driver_id FOR SHARE OF t;
  IF NOT FOUND OR t_status<>'searching' THEN RETURN false; END IF;
- SELECT status,expires_at INTO f_status,expires_at
- FROM public.mobility_stage_auto_demo_offers
- WHERE id=_offer_id AND driver_id=_driver_id FOR SHARE;
- RETURN FOUND AND f_status='offered' AND expires_at>pg_catalog.clock_timestamp();
+ SELECT o.status,o.expires_at INTO f_status,v_expiry
+ FROM public.mobility_stage_auto_demo_offers o
+ WHERE o.id=_offer_id AND o.driver_id=_driver_id FOR SHARE;
+ RETURN FOUND AND f_status='offered' AND v_expiry>pg_catalog.clock_timestamp();
 END $f$;
 REVOKE ALL ON FUNCTION public.mobility_stage_g96_cancel_dispatch_fence_qa()
  FROM PUBLIC,anon,authenticated,service_role;
