@@ -85,6 +85,17 @@ export function createRenderStagingIngress({
   }
   const cors=origin===adminOrigin&&adminOrigin!==null?
    {'access-control-allow-origin':adminOrigin,'vary':'Origin'}:{};
+  // G26 signed, owner-scoped cursor travels as a header, never a URL query.
+  // Forward ONLY a single syntactically valid cursor on Rider History GET.
+  // G26 itself verifies signature, subject and expiry after JWT validation.
+  const historyCursor=req.headers['x-qore-history-cursor'];
+  if(historyCursor!==undefined&&
+     (req.method!=='GET'||req.url!=='/v1/staging/rider/history'||
+      rawHeaderCount(req,'x-qore-history-cursor')!==1||
+      typeof historyCursor!=='string'||historyCursor.length>200||
+      !/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(historyCursor))){
+   json(res,400,{error:'Invalid history cursor header'},cors);return;
+  }
   if(req.method==='OPTIONS'){
    if(origin===undefined||badPath(req.url)||
      req.headers['access-control-request-method']===undefined||
@@ -152,6 +163,7 @@ export function createRenderStagingIngress({
     method:req.method,
     headers:{
      authorization:req.headers.authorization,
+     ...(historyCursor===undefined?{}:{'x-qore-history-cursor':historyCursor}),
      ...(req.method==='POST'?{'content-type':'application/json'}:{})
     },
     ...(req.method==='POST'?{body}:{}),

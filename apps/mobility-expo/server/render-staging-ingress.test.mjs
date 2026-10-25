@@ -21,6 +21,7 @@ async function withServers(callback){
   for await(const chunk of req)chunks.push(chunk);
   calls.push({method:req.method,path:req.url,
    auth:req.headers.authorization,origin:req.headers.origin,
+   cursor:req.headers['x-qore-history-cursor'],
    body:Buffer.concat(chunks).toString('utf8')});
   res.writeHead(200,{'content-type':'application/json'});
   res.end(JSON.stringify({tripId:'same-verified-qa-trip',status:'searching',
@@ -166,6 +167,37 @@ test('Render ingress fail-closed on untrusted, non-JSON and oversized upstream r
    assert(!JSON.stringify(await response.json()).includes(token));
   }finally{await new Promise(done=>server.close(done));}
  }
+});
+test('G26 second-page history cursor reaches private G4 without query or token leakage',async()=>{
+ await withServers(async({remote,calls})=>{
+  const cursor='v1.'+'a'.repeat(56)+'.'+'b'.repeat(43);
+  const page=await doReq(remote,'/v1/staging/rider/history',{
+   headers:{'x-qore-history-cursor':cursor}
+  });
+  assert.equal(page.status,200);
+  await page.json();
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].cursor,cursor);
+  assert.equal(calls[0].auth,'Bearer '+token);
+  assert.equal(calls[0].path,'/v1/staging/rider/history');
+  for(const headers of [
+   {'x-qore-history-cursor':'v1.bad.invalid'},
+   {'x-qore-history-cursor':cursor+'%0a'},
+   {'x-qore-history-cursor':[cursor,cursor]}
+  ]){
+   const denied=await doReq(remote,'/v1/staging/rider/history',{headers});
+   assert.equal(denied.status,400);
+  }
+  const other=await doReq(remote,'/v1/staging/driver/inbox',{
+   headers:{'x-qore-history-cursor':cursor}
+  });
+  assert.equal(other.status,400);
+  assert.equal(calls.length,1,'No malformed/cross-route cursor reaches G4');
+  const firstPage=await doReq(remote,'/v1/staging/rider/history');
+  assert.equal(firstPage.status,200);
+  await firstPage.json();
+  assert.equal(calls[1].cursor,undefined,'First-page request forwards no cursor');
+ });
 });
 test('Render ingress imposes bounded request rate independent of phone retries',async()=>{
  const server=createRenderStagingIngress({
