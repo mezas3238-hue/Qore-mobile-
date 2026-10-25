@@ -43,7 +43,7 @@ function doReq(base,path,{method='GET',authorization='Bearer '+token,
  // Use raw Node HTTP so this explicitly verifies the Render Host pin.
  return new Promise((resolve,reject)=>{
   const req=nativeHttpRequest(base+path,{
-   method,headers:{host,'x-forwarded-proto':'https',
+   method,headers:{host,'x-forwarded-proto':'https',connection:'close',
     ...(body===undefined?{}:{'content-length':String(Buffer.byteLength(body))}),
     ...(authorization===null?{}:{authorization}),...headers}
   },res=>{
@@ -129,7 +129,7 @@ test('Malformed route, GET bodies, POST JSON and unknown methods never hit G4',a
   assert.equal((await doReq(remote,'/v1/staging/rider/auto/book?test=1')).status,404);
   assert.equal((await doReq(remote,'/v1/staging/%2e%2e/rider')).status,404);
   assert.equal((await doReq(remote,'/v1/staging/rider/history',
-   {headers:{'content-length':'1'}})).status,400);
+   {body:'x',headers:{'content-length':'1'}})).status,400);
   assert.equal((await doReq(remote,'/v1/staging/rider/auto/book',{
    method:'POST',body:'{"x":1}',headers:{'content-type':'text/plain'}
   })).status,415);
