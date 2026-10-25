@@ -627,3 +627,85 @@ test('G79 never mounts two route providers or billing-disabled/corrupted config'
  }
  assert.equal(first.calls.paid,0);
 });
+
+const g80Path='/v1/staging/driver/kyc/validity';
+const g80Expired=()=>({mode:'STAGING_DEMO_ONLY',state:'BLOCKED_EXPIRED',
+ expiredKinds:['licencia'],renewalRequiredKinds:['licencia'],expiringSoonKinds:[],
+ nearestExpiryAtMs:now+86400000,accountBlocked:true,qaOnboardingActive:false,
+ commercialDispatchAuthorized:false,qaOnly:true,productionEnabled:false});
+function g80Trust({validity=g80Expired(),...changes}={}){
+ const reads=[];
+ return {reads,trust:{
+  verifyDriverSession:async token=>{
+   if(token!==jwt.driver)throw Error('not independently verified');
+   return {id:driver,sessionId:vehicle,tokenIatMs:now-1000,
+    expiresAtMs:now+60000,is_anonymous:false};
+  },
+  verifySessionNotRevoked:async()=>true,
+  resolveActiveVehicle:async id=>({driverId:id,vehicleId:vehicle}),
+  queryOwnerValidity:async scope=>{reads.push(scope);return validity;},
+  ...changes
+ }};
+}
+test('G80 expiry HTTP defaults 503 and does not read KYC without owner-only authority',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g80Path,'driver')).status,503);
+  assert.equal(m.state.rpcs.length,0);
+ });
+});
+test('G80 real local HTTP shows expired Driver document and owner-scope read, no file data',async()=>{
+ const m=mockSupabase(),f=g80Trust(),runtime=await prepare(m,{driverKycTrust:f.trust});
+ await http(runtime,async base=>{
+  const result=await req(base,g80Path,'driver');
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body,g80Expired());
+  assert.deepEqual(f.reads,[{driverId:driver,vehicleId:vehicle}]);
+  assert.equal((await req(base,g80Path,'rider')).status,503);
+  assert.equal((await req(base,g80Path,'stranger')).status,503);
+  assert.equal(f.reads.length,1,'foreign JWT must never reach private KYC');
+  assert.doesNotMatch(JSON.stringify(result),/PRIVATE_PHOTO|sb_secret|faceTemplate/);
+ });
+});
+test('G80 independently verified renewal changes QA state but never authorizes commerce',async()=>{
+ const m=mockSupabase(),f=g80Trust({validity:{...g80Expired(),
+  state:'READY_QA',expiredKinds:[],renewalRequiredKinds:[],
+  accountBlocked:false,qaOnboardingActive:true}});
+ const runtime=await prepare(m,{driverKycTrust:f.trust});
+ await http(runtime,async base=>{
+  const status=await req(base,g80Path,'driver');
+  assert.equal(status.status,200);
+  assert.equal(status.body.accountBlocked,false);
+  assert.equal(status.body.commercialDispatchAuthorized,false);
+  assert.equal(status.body.productionEnabled,false);
+ });
+});
+test('G80 revoked session, foreign vehicle or untrusted renewal denied without status data',async()=>{
+ for(const patch of [
+  {verifySessionNotRevoked:async()=>false},
+  {resolveActiveVehicle:async()=>({driverId:passenger,vehicleId:vehicle})},
+  {verifyDriverSession:async()=>({id:passenger})},
+  {validity:{...g80Expired(),commercialDispatchAuthorized:true}},
+  {validity:{...g80Expired(),identityCard:'PII'}}
+ ]){
+  const m=mockSupabase(),f=g80Trust(patch);
+  const runtime=await prepare(m,{driverKycTrust:f.trust});
+  await http(runtime,async base=>{
+   const res=await req(base,g80Path,'driver');
+   assert.notEqual(res.status,200);
+   assert.doesNotMatch(JSON.stringify(res),/identityCard|PII/);
+  });
+ }
+});
+test('G80 malformed owner-only trust refused before Auth and database initialization',async()=>{
+ const f=g80Trust();
+ for(const bad of [
+  {...f.trust,queryOwnerValidity:null},
+  {...f.trust,verifySessionNotRevoked:null},
+  {...f.trust,permitServiceRole:true}
+ ]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,{driverKycTrust:bad}));
+  assert.equal(m.state.clients.length,0);
+ }
+});
