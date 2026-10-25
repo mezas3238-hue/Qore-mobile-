@@ -19,7 +19,7 @@ test('MOTO local review fails closed for unsafe or incomplete intent',()=>{
   {origin:'  Centro',destination:'Aeropuerto',safetyAcknowledged:true},
   {origin:'Centro',destination:'Aeropuerto',safetyAcknowledged:false},
   {origin:'Centro',destination:'Aeropuerto',safetyAcknowledged:'true'},
-  {origin:'Centro',destination:'Aeropuerto\\nOtra',safetyAcknowledged:true},
+  {origin:'Centro',destination:'Aeropuerto'+String.fromCharCode(10)+'Otra',safetyAcknowledged:true},
   {origin:'Centro',destination:'X'.repeat(121),safetyAcknowledged:true},
   {origin:'CENTRO',destination:'centro',safetyAcknowledged:true}
  ]){

@@ -1,7 +1,7 @@
 /** Separate MOTO_RIDE passenger intent. No request path, payment, or local fare. */
 export const MOTO_PASSENGER_SERVICE='MOTO_RIDE';
 const validText=x=>typeof x==='string'&&x===x.trim()&&x.length>=3
- &&x.length<=120&&!/[\\u0000-\\u001f\\u007f]/.test(x);
+ &&x.length<=120&&!Array.from(x).some(c=>c.charCodeAt(0)<32||c.charCodeAt(0)===127);
 const fail=reason=>Object.freeze({ok:false,reason,canBook:false});
 export function reviewMotoRideDraft({origin,destination,safetyAcknowledged}={}){
  if(!validText(origin)||!validText(destination))
