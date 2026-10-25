@@ -4,6 +4,7 @@ import {createClientExperience} from './domain/client-experience.mjs';
 import type {ClientExperience,ClientSnapshot} from './domain/client-experience.mjs';
 import {getNativePassengerAuth} from './NativePassengerAuth';
 import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
+import {createF1AuthorizedQaHttpOptions} from './domain/f1-authorized-qa-http-options.mjs';
 
 const ExperienceContext=createContext<ClientExperience|null>(null);
 const NativeAuthContext=createContext<NativePassengerAuth|null>(null);
@@ -27,9 +28,19 @@ export function ClientRuntimeProvider({children,experience}:{
  children:React.ReactNode;experience?:ClientExperience;
 }){
  const nativeAuth=useMemo(()=>getNativePassengerAuth(),[]);
- // The only native identity is verified remotely; all trip HTTP gates remain
- // OFF until the A persistent HTTPS/IdP/zone integration is certified.
- const client=useMemo(()=>experience??createClientExperience({authProvider:nativeAuth}),[experience,nativeAuth]);
+ // Stage enrollment is a manual, independently reviewed decision. A simple
+ // Render /liveness 200 cannot switch on pricing, booking or GPS.
+ const qaHttp=useMemo(()=>createF1AuthorizedQaHttpOptions({
+  origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+  pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN,
+  ownerApproved:process.env.EXPO_PUBLIC_F1_OWNER_APPROVED==='true',
+  backendContractVerified:process.env.EXPO_PUBLIC_F1_G73_CONTRACT_VERIFIED==='true',
+  persistedRuntimeVerified:process.env.EXPO_PUBLIC_F1_PG_RUNTIME_VERIFIED==='true',
+  routeProviderVerified:process.env.EXPO_PUBLIC_F1_ROUTE_PROVIDER_VERIFIED==='true'
+ }),[]);
+ const client=useMemo(()=>experience??createClientExperience({
+  authProvider:nativeAuth,autoG73HttpOptions:qaHttp
+ }),[experience,nativeAuth,qaHttp]);
  useEffect(()=>{if(nativeAuth)void client.refreshSession();},[client,nativeAuth]);
  const [simpleMode,setSimpleMode]=useState(false);
  const simplePreferences=useMemo(()=>({simpleMode,setSimpleMode}),[simpleMode]);
