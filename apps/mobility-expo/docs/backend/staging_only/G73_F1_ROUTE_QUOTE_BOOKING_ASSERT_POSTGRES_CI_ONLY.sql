@@ -38,7 +38,7 @@ BEGIN
  OR v->>'ownerId'<>actor::text OR v->>'routeId'<>route_id::text
  OR v->>'quoteRequestKey'<>quote_key::text OR v->>'currency'<>'PYG'
  OR v->>'status'<>'QUOTED_QA' OR v->>'amountGs'<>'15200'
- OR (v->>'expiresAt')::bigint<=floor(pg_catalog.extract(epoch from pg_catalog.clock_timestamp())*1000)::bigint
+ OR (v->>'expiresAt')::bigint<=floor(extract(epoch from pg_catalog.clock_timestamp())*1000)::bigint
  THEN RAISE EXCEPTION 'G73 B exact 15-field prequote mismatch %',v; END IF;
  denied:=false;
  BEGIN PERFORM public.mobility_stage_g73_quote('33333333-3333-4333-8333-333333333333',

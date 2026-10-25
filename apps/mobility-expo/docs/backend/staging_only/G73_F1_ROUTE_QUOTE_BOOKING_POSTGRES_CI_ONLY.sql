@@ -81,7 +81,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
   'mode','STAGING_DEMO_ONLY','commercialEnabled',false,'ownerId',r.passenger_id,
   'routeId',r.id,'requestKey',r.request_key,'service',r.service,
   'routingVerified',true,'expiresAt',
-  floor(pg_catalog.extract(epoch from r.expires_at)*1000)::bigint)
+  floor(extract(epoch from r.expires_at)*1000)::bigint)
  FROM public.mobility_stage_g73_auto_routes r
  WHERE r.passenger_id=$1 AND r.id=$2
 $f$;
@@ -124,7 +124,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
   'routeId',r.id,'quoteId',q.id,'quoteRequestKey',q.request_key,
   'fareMode','AUTO','service',r.service,'currency','PYG',
   'amountGs',q.total_pyg,'fareVersion',f.rule_key,
-  'expiresAt',floor(pg_catalog.extract(epoch from q.expires_at)*1000)::bigint,
+  'expiresAt',floor(extract(epoch from q.expires_at)*1000)::bigint,
   'serverPriced',true,'routingVerified',true,'status','QUOTED_QA')
  FROM public.mobility_stage_g72_auto_prequotes q
  JOIN public.mobility_stage_g73_auto_routes r ON r.id=q.route_id
