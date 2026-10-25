@@ -202,3 +202,13 @@ Fuentes exhaustivas:
 “Soy el siguiente arquitecto de QORE Mobile / Movete Fácil. Leo el Handoff Maestro Global A+B de docs/architect-b/HANDOFF_MAESTRO_GLOBAL_A_B_F1_OPERATIVO_CONTINUIDAD_2026-10-24.md y los handoffs históricos. Reviso los HEAD/CI actuales de PR #7 y #8 e issue #9. Mi prioridad absoluta es cerrar el primer viaje AUTO íntegro y verificable entre Cliente, Driver, Admin Web y un mismo backend/PostgreSQL persistente, con PYG, GPS, mensajería, finalización y comisión; luego los 17 gates y 20 circuitos. Trabajo funcional y pruebas auténticas, NO volumen de commits. No edito archivos del otro arquitecto ni hago MERGE/LIVE/PROD/deploy/pagos/PII sin aprobación. No vuelvo a pedir respuestas dadas; avanzo sin detenerme salvo bloqueo real, documento solo la dependencia bloqueada y sigo con el siguiente trabajo seguro. Nunca llamo terminada una función demostrada únicamente por mock/CI.”
 
 **ESTADO DE ENTREGA:** Auth Cliente y Driver + Admin MFA, ingress Render y puente HTTP G73 de Cliente están IMPLEMENTADOS y CI PASS. **Sin acceso autorizado a STAGING PG/IdP externo ni móviles físicos comprobados: F1 real sigue NO_GO.** Continuar ejecutando P0 sin nuevas pausas documentales.
+
+## 10. ADDENDUM POST-CORTE: NUEVO HANDOFF A VERIFICADO SIN MODIFICAR FUNCIONES
+
+Después del corte A de la sección 0, **Arquitecto A avanzó un solo commit documental** a **cbb3f39321cdad159a3c9f33014bfed6ffdaebba**, sin modificar código (comparación GitHub 420b898...→cbb3f...: un único archivo agregado). El nuevo documento es:
+
+docs/handoff/HANDOFF_MAESTRO_A_RENDER_SUPABASE_F1_CONTINUIDAD_SIN_PAUSAS_2026-10-24.md
+
+**CI A nuevo SHA: 4/4 SUCCESS:** [Node](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40154922468), [PostgreSQL](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40154922447), [apps separadas](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40154922451), [Expo](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40154922537). Este addendum actualiza el punto de partida A; el codebase funcional es el mismo del corte anterior.
+
+**Conclusión no cambia:** infraestructura/IdP/DB remotos no certificados en dispositivos, **0 viajes E2E reales**, PRs DRAFT y prohibiciones vigentes. El sucesor debe revisar *ambos handoffs* y luego los HEAD/Actions del momento.
