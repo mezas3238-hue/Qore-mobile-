@@ -25,13 +25,16 @@ test('native Keychain stores full >1900 byte IdP session in bounded encrypted ch
  assert.equal(await f.vault.getItem('session'),session);
  assert.equal(f.saved.has('session'),false);
  assert.equal(f.saved.size>2,true);
- for(const v of f.saved.values())assert(Buffer.byteLength(v,'utf8')<=1400);
- assert([...f.saved.keys()].every(k=>k.startsWith('qa-auth-vault:session:')));
+ for(const [key,v] of f.saved){
+  assert(/^[\\w.-]+$/.test(key),'Expo SecureStore key must be supported');
+  assert(Buffer.byteLength(v,'utf8')<=1400);
+ }
+ assert([...f.saved.keys()].every(k=>k.startsWith('qa-auth-vault_session_')));
 });
 test('write manifest LAST, failed chunks preserve previous complete session',async()=>{
  const f=fixture();
  await f.vault.setItem('session','OLD_SESSION');
- f.failAt('qa-auth-vault:session:77770000-0000-4777-8777-000000000002:0');
+ f.failAt('qa-auth-vault_session_77770000-0000-4777-8777-000000000002:0');
  await assert.rejects(f.vault.setItem('session','NEW_SESSION'),/Native secure storage failed/);
  assert.equal(await f.vault.getItem('session'),'OLD_SESSION');
  assert.equal(f.saved.size,2,'Only old manifest and old encrypted generation remain');
@@ -39,7 +42,7 @@ test('write manifest LAST, failed chunks preserve previous complete session',asy
 test('failed manifest commit preserves old session and cleans new fragments',async()=>{
  const f=fixture();
  await f.vault.setItem('session','OLD');
- f.failAt('qa-auth-vault:session:manifest');
+ f.failAt('qa-auth-vault_session_manifest');
  await assert.rejects(f.vault.setItem('session','x'.repeat(7000)));
  assert.equal(await f.vault.getItem('session'),'OLD');
  assert.equal(f.saved.size,2);
@@ -47,7 +50,7 @@ test('failed manifest commit preserves old session and cleans new fragments',asy
 test('relogin rotates encrypted generation; no plaintext or old session remains',async()=>{
  const f=fixture();
  await f.vault.setItem('session','FIRST_PRIVATE_SESSION');
- const previous=[...f.saved.keys()].find(k=>k.endsWith(':0'));
+ const previous=[...f.saved.keys()].find(k=>k.endsWith('_0'));
  await f.vault.setItem('session','SECOND_PRIVATE_SESSION');
  assert.equal(await f.vault.getItem('session'),'SECOND_PRIVATE_SESSION');
  assert.equal(f.saved.has(previous),false);
@@ -58,7 +61,7 @@ test('relogin rotates encrypted generation; no plaintext or old session remains'
 test('corrupted and missing fragment fails closed without accepting half token',async()=>{
  const f=fixture();
  await f.vault.setItem('session','x'.repeat(5000));
- const k=[...f.saved.keys()].find(k=>k.endsWith(':1'));
+ const k=[...f.saved.keys()].find(k=>k.endsWith('_1'));
  f.saved.delete(k);
  await assert.rejects(f.vault.getItem('session'),/Incomplete secure auth session/);
 });
