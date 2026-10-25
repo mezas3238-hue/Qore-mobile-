@@ -23,6 +23,7 @@ import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repo
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
+import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
 import {createG82PrivateAutoCandidateDispatch} from './g82-f1-auto-candidate-dispatch.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
@@ -157,7 +158,7 @@ export async function prepareQoreG4StagingRuntime({
  projectRef,anonKey,serviceKey,historyCursorSecrets,
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
- verifiedAutoRoute=null,g77RouteOptions=null,
+ verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
 }){
@@ -176,6 +177,7 @@ export async function prepareQoreG4StagingRuntime({
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
    typeof pricingContext!=='function'||
    !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
+   !(verifiedMotoRoute===null||typeof verifiedMotoRoute==='function')||
    !(privateEvidenceAdapters===null||
      (typeof privateEvidenceAdapters==='object'&&
       !Array.isArray(privateEvidenceAdapters)))||
@@ -234,6 +236,7 @@ export async function prepareQoreG4StagingRuntime({
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
+ const f1MotoPersistence=createG101MotoPassengerRepository(admin);
  const candidateDispatch=createG82PrivateAutoCandidateDispatch(admin);
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
@@ -439,6 +442,15 @@ export async function prepareQoreG4StagingRuntime({
    candidateDispatch.offerFirstEligible({passengerId,bookingKey,
     offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}),
  });
+ // G101: isolated and independent MOTO ride contract. An AUTO-only
+ // route provider is never accepted as authorization for passenger MOTO.
+ // No configured provider => 503; G100 SQL itself requires disposable PG16.
+ const f1Moto=createG101MotoPassengerGateway({
+  projectRef:ref,verifyAccessToken:verified,now,
+  authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
+  resolveVerifiedMotoRoute:verifiedMotoRoute??unavailablePricingContext,
+  repository:f1MotoPersistence
+ });
  // G76: only an independently authenticated and AAL2-verified Admin may
  // access SQL G75. Unconfigured remains HTTP 503; nothing is exposed LIVE.
  const adminF1=adminF1Trust===null?null:createG75AdminF1AuditGateway({
@@ -627,7 +639,7 @@ export async function prepareQoreG4StagingRuntime({
    offerHandler:guard(driver),
    ...(driverDecisionRecovery===null?{}:{driverDecisionRecoveryHandler:guard(driverDecisionRecovery)}),
    tripCommandHandler:guard(commands),
-   f1AutoHandler:guard(f1Auto),
+   f1AutoHandler:guard(f1Auto),motoHandler:guard(f1Moto),
    ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
