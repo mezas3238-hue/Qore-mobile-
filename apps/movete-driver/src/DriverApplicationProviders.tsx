@@ -1,4 +1,4 @@
-import React from 'react';
+import React,{createContext,useContext,useMemo} from 'react';
 import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
@@ -7,6 +7,10 @@ import {DriverKycExpiryProvider} from './DriverKycExpiryProvider';
 import {DriverDocumentUploadProvider} from './DriverDocumentUploadProvider';
 import {DriverCustodyProvider} from './DriverCustodyProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
+import {getNativeDriverAuth} from './NativeDriverAuth';
+import type {NativeDriverAuth} from './domain/native-driver-auth.mjs';
+const NativeAuthContext=createContext<NativeDriverAuth|null>(null);
+export const useNativeDriverAuth=()=>useContext(NativeAuthContext);
 
 /**
  * G62C: single Driver-only application composition. No default STAGING
@@ -22,8 +26,11 @@ export function DriverApplicationProviders({
  if(runtime!==null&&(runtime.allowedByOwner!==true||
    runtime.productionEnabled!==false||runtime.qaOnly!==true))
   throw Error('G62 Driver provider refuses unapproved/production runtime');
- return <DriverWorkspaceProvider
-  authAdapter={runtime?.authAdapter??null}
+ const nativeAuth=useMemo(()=>getNativeDriverAuth(),[]);
+ // Native login alone grants no Driver dispatch or KYC authority.
+ const identity=runtime?.authAdapter??nativeAuth;
+ return <NativeAuthContext.Provider value={nativeAuth}><DriverWorkspaceProvider
+  authAdapter={identity}
   apiOrigin={runtime?.apiOrigin??null}
   approvedStagingHost={runtime?.approvedStagingHost??null}
   allowedByOwner={runtime?.allowedByOwner??false}
@@ -31,22 +38,22 @@ export function DriverApplicationProviders({
   readDocuments={runtime?.workspaceReaders.readDocuments}
   readLicense={runtime?.workspaceReaders.readLicense}>
   <DriverKycExpiryProvider
-   authAdapter={runtime?.authAdapter??null}
+   authAdapter={identity}
    adapter={runtime?.kycValidityAdapter??null}>
  <DriverDocumentUploadProvider
-   authAdapter={runtime?.authAdapter??null}
+   authAdapter={identity}
    qaAdapters={runtime?.documentUploads??null}>
  <DriverOfferActionsProvider
-   authAdapter={runtime?.authAdapter??null}
+   authAdapter={identity}
    qaAdapters={runtime?.offerActions??null}>
   <DriverTripProvider
-   authAdapter={runtime?.authAdapter??null}
+   authAdapter={identity}
    qaAdapters={runtime?.tripActions??null}>
   <DriverCustodyProvider
-   authAdapter={runtime?.authAdapter??null}
+   authAdapter={identity}
    qaAdapters={runtime?.custodyActions??null}>
   <DriverMessagesProvider
-   authAdapter={runtime?.authAdapter??null}
+   authAdapter={identity}
    qaAdapters={runtime?.chatAdapters??null}>
    {children}
   </DriverMessagesProvider>
@@ -55,5 +62,5 @@ export function DriverApplicationProviders({
   </DriverOfferActionsProvider>
  </DriverDocumentUploadProvider>
  </DriverKycExpiryProvider>
- </DriverWorkspaceProvider>;
+ </DriverWorkspaceProvider></NativeAuthContext.Provider>;
 }
