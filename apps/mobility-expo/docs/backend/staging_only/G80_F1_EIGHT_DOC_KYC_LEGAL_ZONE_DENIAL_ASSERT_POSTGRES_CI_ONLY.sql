@@ -76,17 +76,17 @@ DECLARE
  route_key uuid:='80800000-0000-4808-8808-000000000010';
  quote_key uuid:='80800000-0000-4808-8808-000000000011';
  book_key uuid:='80800000-0000-4808-8808-000000000012';
- route_id uuid;quote_id uuid;trip_id uuid;receipt jsonb;
+ route_id uuid;quote_id uuid;v_trip uuid;receipt jsonb;
  initial_price bigint;denied boolean:=false;current_revision integer;
 BEGIN
  route_id:=public.mobility_stage_g73_route(passenger,route_key,'economico',
   'CENTRO_FIXTURE','AEROPUERTO','ASUNCION_FIXTURE',5000,600,0);
  quote_id:=public.mobility_stage_g73_quote(passenger,route_id,quote_key);
- trip_id:=public.mobility_stage_g73_book(passenger,quote_id,book_key);
- receipt:=public.mobility_stage_g75_admin_f1_receipt(administrator,trip_id);
+ v_trip:=public.mobility_stage_g73_book(passenger,quote_id,book_key);
+ receipt:=public.mobility_stage_g75_admin_f1_receipt(administrator,v_trip);
  initial_price:=(receipt->>'amountGs')::bigint;
  IF initial_price<=0 OR receipt->>'status'<>'searching'
- OR receipt->>'tripId'<>trip_id::text OR receipt->>'routeId'<>route_id::text
+ OR receipt->>'tripId'<>v_trip::text OR receipt->>'routeId'<>route_id::text
  OR receipt->>'quoteId'<>quote_id::text
  THEN RAISE EXCEPTION 'G80 F1 same-trip Admin baseline missing'; END IF;
  -- A current synthetic eight-doc dossier is NOT a legal-zone permission.
@@ -95,24 +95,24 @@ BEGIN
   UPDATE public.mobility_stage_auto_demo_trips
    SET driver_id=driver,vehicle_id=vehicle,
        status='accepted',revision=revision+1
-   WHERE id=trip_id AND status='searching';
+   WHERE id=v_trip AND status='searching';
  EXCEPTION WHEN SQLSTATE 'G3801' THEN denied:=true; END;
  IF NOT denied THEN
   RAISE EXCEPTION 'G80 G38 accepted synthetic KYC without legal zone'; END IF;
- receipt:=public.mobility_stage_g75_admin_f1_receipt(administrator,trip_id);
+ receipt:=public.mobility_stage_g75_admin_f1_receipt(administrator,v_trip);
  IF receipt->>'status'<>'searching'
  OR receipt->>'driverId' IS NOT NULL
  OR receipt->>'assignmentPersisted'<>'false'
  OR receipt->>'revision'<>'1'
- OR receipt->>'tripId'<>trip_id::text
+ OR receipt->>'tripId'<>v_trip::text
  OR receipt->>'routeId'<>route_id::text
  OR receipt->>'quoteId'<>quote_id::text
  OR (receipt->>'amountGs')::bigint<>initial_price
- OR public.mobility_stage_g73_book(passenger,quote_id,book_key)<>trip_id
+ OR public.mobility_stage_g73_book(passenger,quote_id,book_key)<>v_trip
  OR (SELECT count(*) FROM public.mobility_stage_auto_demo_trips
   WHERE passenger_id=passenger AND request_key=book_key)<>1
  OR EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_events ev
-  WHERE ev.trip_id=trip_id)
+  WHERE ev.trip_id=v_trip)
  THEN RAISE EXCEPTION 'G80 legally blocked assignment changed same F1 ride'; END IF;
  RAISE NOTICE 'G80 PASS: 8 verified synthetic KYC docs, but legal G38 blocks Driver; same Client/Admin trip and fare intact';
 END $ride$;
