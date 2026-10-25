@@ -427,6 +427,7 @@ export async function prepareQoreG4StagingRuntime({
   loadQuote:params=>f1AutoPersistence.quoteReceipt(params),
   bookQuote:params=>f1AutoPersistence.book(params),
   reconcileBooking:params=>f1AutoPersistence.bookingReceipt(params),
+  readDispatchStatus:params=>f1AutoPersistence.dispatchStatus(params),
   dispatchBookedAuto:async({passengerId,bookingKey})=>
    candidateDispatch.offerFirstEligible({passengerId,bookingKey,
     offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}),

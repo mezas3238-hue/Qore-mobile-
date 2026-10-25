@@ -212,6 +212,15 @@ BEGIN
   WHERE inbox.offer_id=(receipt->>'offerId')::uuid)
  THEN RAISE EXCEPTION 'G85 failed to reconcile original private offer'; END IF;
 END $g85_reconcile$;
+DO $g90_offered$
+DECLARE x jsonb;
+BEGIN
+ x:=public.mobility_stage_g90_passenger_dispatch_status_qa(
+  '81810000-0000-4818-8818-000000000001',
+  '81810000-0000-4818-8818-000000000012');
+ IF x->>'dispatchState'<>'CLOSED'
+ THEN RAISE EXCEPTION 'G90 canceled ride not closed'; END IF;
+END $g90_offered$;
 DO $g82$
 DECLARE
  p uuid:='81810000-0000-4818-8818-000000000001';

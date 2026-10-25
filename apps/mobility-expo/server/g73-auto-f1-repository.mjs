@@ -52,6 +52,11 @@ export function createQoreG73AutoRepository(client){
    if(!id(tripId))throw Error('Booking not persisted');
    return tripId;
   },
+  async dispatchStatus(p){
+   if(!p||!id(p.actorId)||!id(p.requestKey))throw Error('G90 invalid Passenger SQL scope');
+   return rpc(client,'mobility_stage_g90_passenger_dispatch_status_qa',{
+    _passenger_id:p.actorId,_booking_key:p.requestKey});
+  },
   async bookingReceipt(p){
    if(!id(p.actorId)||!id(p.requestKey))throw Error('Booking receipt scope');
    return rpc(client,'mobility_stage_g73_booking_receipt',{

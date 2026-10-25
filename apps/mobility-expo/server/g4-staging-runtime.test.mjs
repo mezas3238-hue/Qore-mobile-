@@ -137,6 +137,13 @@ function mockSupabase(){
     if(state.g84Enabled&&name==='mobility_stage_poll_courier_delivery_offers'){
      return {data:[],error:null};
     }
+    if(name==='mobility_stage_g90_passenger_dispatch_status_qa'){
+     return {data:params._passenger_id===passenger&&params._booking_key===requestKey?
+      {mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:passenger,
+       bookingKey:requestKey,tripId:ride,tripState:'searching',
+       dispatchState:'RETRY_PENDING',attempts:1,offerPendingAcceptance:false}:null,
+       error:null};
+    }
     if(name==='mobility_stage_g73_route'){
      state.g77RegisteredRoute=params;
      return {data:offer,error:null};
@@ -999,5 +1006,22 @@ test('G89 authenticated Client distinguishes confirmed missing trip from databas
   assert.equal(offline.body.error,'Trip status temporarily unavailable');
   assert.equal((await req(base,statusPath,'stranger')).status,403);
   assert.doesNotMatch(JSON.stringify(offline),/Connection lost|offline|08006|password|JWT/);
+ });
+});
+
+test('G90 private HTTP route allows only authenticated Passenger booking owner',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const path='/v1/staging/rider/auto/bookings/'+requestKey+'/dispatch';
+  const a=await req(base,path,'rider');
+  assert.equal(a.status,200);
+  assert.equal(a.body.tripId,ride);
+  assert.equal(a.body.dispatchState,'RETRY_PENDING');
+  assert.equal(a.body.offerPendingAcceptance,false);
+  assert.doesNotMatch(JSON.stringify(a),/driverId|vehicleId|offerId|latitude|longitude/);
+  assert.equal((await req(base,path,'stranger')).status,403);
+  assert.equal((await req(base,path,'driver')).status,403);
+  assert.deepEqual(m.state.rpcs.filter(x=>x.name==='mobility_stage_g90_passenger_dispatch_status_qa')
+   .map(x=>x.params),[{_passenger_id:passenger,_booking_key:requestKey}]);
  });
 });

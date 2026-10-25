@@ -14,6 +14,7 @@ const ROUTE='/v1/staging/rider/auto/routes';
 const QUOTE='/v1/staging/rider/auto/prequote';
 const BOOK='/v1/staging/rider/auto/book';
 const RECON=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})$/i;
+const DISPATCH=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/dispatch$/i;
 const respond=(status,body)=>({status,body});
 const bearer=h=>{
  const raw=h?.authorization??h?.Authorization;
@@ -51,21 +52,40 @@ const saneBook=(x,uid,key)=>exact(x,bookFields)&&
  x.ownerId===uid&&x.requestKey===key&&id(x.quoteId)&&
  id(x.routeId)&&id(x.tripId)&&Number.isSafeInteger(x.revision)&&
  x.revision>=1&&x.serverPersisted===true&&x.status==='ACCEPTED_QA';
+// Exact G90 passenger-only queue status. Never pass an offer/Driver ID.
+const dispatchFields=['mode','commercialEnabled','ownerId','bookingKey','tripId',
+ 'tripState','dispatchState','attempts','offerPendingAcceptance'];
+const dispatchStates=new Set(['SEARCHING_DRIVER','OFFER_PENDING','RETRY_PENDING',
+ 'SEARCH_EXHAUSTED','CLOSED']);
+const rideStates=new Set(['searching','accepted','arriving','in_progress','completed','cancelled']);
+const saneDispatch=(x,uid,key)=>exact(x,dispatchFields)&&
+ x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
+ x.ownerId===uid&&x.bookingKey===key&&id(x.tripId)&&
+ rideStates.has(x.tripState)&&dispatchStates.has(x.dispatchState)&&
+ Number.isSafeInteger(x.attempts)&&x.attempts>=0&&x.attempts<=12&&
+ typeof x.offerPendingAcceptance==='boolean'&&
+ x.offerPendingAcceptance===(x.dispatchState==='OFFER_PENDING')&&
+ (x.tripState==='searching'?x.dispatchState!=='CLOSED':
+  x.dispatchState==='CLOSED');
 export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorizePassenger,
  allowRequest,resolveVerifiedRoute,registerRoute,loadRoute,quoteRoute,loadQuote,
- bookQuote,reconcileBooking,dispatchBookedAuto=null,now=Date.now}={}){
+ bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,now=Date.now}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
  .every(fn=>typeof fn==='function')||
- !(dispatchBookedAuto===null||typeof dispatchBookedAuto==='function'))
+ !(dispatchBookedAuto===null||typeof dispatchBookedAuto==='function')||
+ !(readDispatchStatus===null||typeof readDispatchStatus==='function'))
  throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
   const isQuote=method==='POST'&&path===QUOTE;
   const isBook=method==='POST'&&path===BOOK;
   const match=method==='GET'&&typeof path==='string'?RECON.exec(path):null;
-  if(!isRoute&&!isQuote&&!isBook&&!match)return respond(404,{error:'Not found'});
+  const dispatchMatch=method==='GET'&&typeof path==='string'?DISPATCH.exec(path):null;
+  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch)return respond(404,{error:'Not found'});
+  if((match||dispatchMatch)&&body!==undefined&&body!==null)
+   return respond(400,{error:'Read-only GET cannot contain a body'});
   if(isRoute&&(!exact(body,['quoteRequestKey','origin','destination','service'])||
     !id(body.quoteRequestKey)||!human(body.origin)||!human(body.destination)||
     body.origin.toLowerCase()===body.destination.toLowerCase()||
@@ -85,7 +105,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     return respond(403,{error:'Passenger role required'});}
   catch{return respond(503,{error:'Role verification unavailable'});}
   try{if(allowRequest({userId:user.id,operation:
-    isRoute?'g73_route':isQuote?'g73_quote':isBook?'g73_book':'g73_reconcile'})!==true)
+    isRoute?'g73_route':isQuote?'g73_quote':isBook?'g73_book':
+    dispatchMatch?'g90_dispatch':'g73_reconcile'})!==true)
     return respond(429,{error:'Request rate limited'});}
   catch{return respond(503,{error:'Rate limiter unavailable'});}
   try{
@@ -144,6 +165,16 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
      catch{/* Booking stays persisted/searching; private offer is uncertain. */}
     }
     return respond(201,rec);
+   }
+   if(dispatchMatch){
+    if(readDispatchStatus===null)
+     return respond(503,{error:'Private dispatch status unavailable'});
+    const receipt=await readDispatchStatus({actorId:user.id,
+     requestKey:dispatchMatch[1]});
+    if(receipt===null)return respond(404,{error:'Unknown or unauthorized booking'});
+    if(!saneDispatch(receipt,user.id,dispatchMatch[1]))
+     throw Error('Unverified private G90 queue status');
+    return respond(200,receipt);
    }
    const rec=await reconcileBooking({actorId:user.id,requestKey:match[1]});
    if(rec===null)return respond(404,{error:'Unknown or unauthorized booking'});

@@ -123,3 +123,41 @@ test('G84 private dispatch outage never rolls back committed booking or invents 
   assert.throws(()=>fixture({dispatchBookedAuto:bad}));
  }
 });
+
+test('G90 Passenger-only read exposes durable dispatch progress without Driver PII',async()=>{
+ const data={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:actor,
+  bookingKey:bookKey,tripId,tripState:'searching',dispatchState:'RETRY_PENDING',
+  attempts:1,offerPendingAcceptance:false};
+ const calls=[];
+ const path='/v1/staging/rider/auto/bookings/'+bookKey+'/dispatch';
+ const f=fixture({readDispatchStatus:async p=>{calls.push(p);return data;}});
+ assert.deepEqual(await f.app(request(path,null,'GET')),{status:200,body:data});
+ assert.deepEqual(calls,[{actorId:actor,requestKey:bookKey}]);
+ assert.equal((await f.app(request(path,{driverId:stranger},'GET'))).status,400);
+ const denied=fixture({authorizePassenger:async()=>false,
+  readDispatchStatus:async()=>{throw Error('Must not read SQL');}});
+ assert.equal((await denied.app(request(path,null,'GET'))).status,403);
+ assert.equal((await fixture({readDispatchStatus:async()=>null})
+  .app(request(path,null,'GET'))).status,404);
+});
+test('G90 rejects untrusted or contradictory SQL receipt and never leaks identities',async()=>{
+ const good={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:actor,
+  bookingKey:bookKey,tripId,tripState:'searching',dispatchState:'OFFER_PENDING',
+  attempts:1,offerPendingAcceptance:true};
+ const path='/v1/staging/rider/auto/bookings/'+bookKey+'/dispatch';
+ for(const bad of [
+  {...good,ownerId:stranger},
+  {...good,dispatchState:'OFFER_PENDING',offerPendingAcceptance:false},
+  {...good,dispatchState:'SEARCH_EXHAUSTED',offerPendingAcceptance:true},
+  {...good,tripState:'accepted'},
+  {...good,driverId:stranger},
+  {...good,attempts:13}
+ ]){
+  const f=fixture({readDispatchStatus:async()=>bad});
+  const r=await f.app(request(path,null,'GET'));
+  assert.equal(r.status,409);
+  assert.doesNotMatch(JSON.stringify(r),new RegExp(stranger));
+ }
+ assert.equal((await fixture().app(request(path,null,'GET'))).status,503);
+ assert.throws(()=>fixture({readDispatchStatus:'forged'}));
+});
