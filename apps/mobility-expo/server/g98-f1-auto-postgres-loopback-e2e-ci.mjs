@@ -9,6 +9,9 @@ import {execFileSync} from 'node:child_process';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
+import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
+import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
+import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -19,6 +22,8 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const p='98980000-0000-4989-8989-000000000001';
 const owner='98980000-0000-4989-8989-000000000002';
 const outsider='98980000-0000-4989-8989-000000000003';
+const adminId='98980000-0000-4989-8989-000000000004';
+const adminSessionId='98980000-0000-4989-8989-000000000005';
 const campaign='98980000-0000-4989-8989-000000000020';
 const routeKey='98980000-0000-4989-8989-000000000010';
 const quoteKey='98980000-0000-4989-8989-000000000011';
@@ -26,6 +31,7 @@ const bookingKey='98980000-0000-4989-8989-000000000012';
 const cancelKey='98980000-0000-4989-8989-000000000013';
 const token='g98-verified-qa-session-'+p.replaceAll('-','');
 const otherToken='g98-verified-qa-session-'+outsider.replaceAll('-','');
+const adminToken='g99-admin-aal2-qa-'+adminId.replaceAll('-','');
 const f1='/v1/staging/rider/auto';
 const noop=async()=>({status:404,body:{error:'Not found'}});
 function psql(script){
@@ -53,7 +59,8 @@ const methods={
  mobility_stage_g93_preview_auto_qa:['_passenger_id','_quote_id'],
  mobility_stage_g94_auto_financial_state_qa:['_passenger_id','_booking_key'],
  mobility_stage_g95_cancel_booked_auto_qa:['_passenger_id','_booking_key','_cancellation_key'],
- mobility_stage_g95_cancel_receipt_qa:['_passenger_id','_booking_key']
+ mobility_stage_g95_cancel_receipt_qa:['_passenger_id','_booking_key'],
+ mobility_stage_g75_admin_f1_receipt:['_admin_id','_trip_id']
 };
 async function rpc(name,args){
  const keys=methods[name];
@@ -88,9 +95,10 @@ async function http(base,path,{method='GET',body,auth=token}={}){
 async function main(){
  assertLocalDatabase();
  psql("DO $g$ BEGIN IF current_database()<>'qore_disposable_chain' OR current_setting('application_name')<>'qore_ci_disposable_chain' THEN RAISE EXCEPTION 'G98 refusal'; END IF; END $g$;"+
-  "INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+outsider+"');"+
-  "DELETE FROM public.user_roles WHERE user_id='"+owner+"';"+
+  "INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+outsider+"'),('"+adminId+"');"+
+  "DELETE FROM public.user_roles WHERE user_id IN ('"+owner+"','"+adminId+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+owner+"','owner','active','"+owner+"');"+
+  "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+adminId+"','admin','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_g93_ride_campaigns(id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days) VALUES('"+campaign+"','AUTO_RIDE','G98_AUTO_60_QA','"+owner+"',true,pg_catalog.transaction_timestamp()-interval '1 hour',pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);");
  const db=createQoreG73AutoRepository({rpc});
  const gateway=createQoreG73AutoGateway({
@@ -121,8 +129,58 @@ async function main(){
   cancelBookedAuto:x=>db.cancelBookedAuto(x),
   readCancellation:x=>db.cancellationReceipt(x),
  });
+ // G99: Client state reads the exact G3 row in real PG16, scoped by the
+ // server-verified synthetic Passenger. No event or Driver profile is forged.
+ const rider=createQoreRiderStatusGateway({
+  projectRef:'staging1234567890abcd',now:Date.now,
+  verifyAccessToken:async value=>{
+   const id=value===token?p:value===otherToken?outsider:null;
+   if(!id)throw Error('Unknown Passenger session in disposable QA');
+   return {id,is_anonymous:false,email_confirmed_at:'2026-10-25T00:00:00Z'};
+  },
+  authorizePassenger:async id=>id===p||id===outsider,allowRequest:()=>true,
+  loadOwnTrip:async({tripId,passengerId})=>{
+   if(!uuid.test(tripId)||!uuid.test(passengerId))return null;
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT pg_catalog.jsonb_build_object("+
+    "'id',t.id,'passengerId',t.passenger_id,'driverId',t.driver_id,"+
+    "'vehicleId',t.vehicle_id,'status',t.status,'revision',t.revision,"+
+    "'trackingSequence',0) FROM public.mobility_stage_auto_demo_trips t "+
+    "WHERE t.id='"+tripId+"' AND t.passenger_id='"+passengerId+"'),"+
+    "'null'::jsonb)::text;");
+  },
+  loadArrivalEvidence:async()=>{throw Error('Real GPS/Driver identity deliberately unavailable');}
+ });
+ // G99: Admin receives only private source SQL G75 after independently
+ // simulated AAL2 IdP grant and revocation checks. This is disposable QA:
+ // no externally certified MFA provider or installed Admin deployment.
+ const adminSql=createG75AdminF1Repository({rpc});
+ let adminSessionRevoked=false;
+ const adminGateway=createG75AdminF1AuditGateway({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  projectRef:'staging1234567890abcd',now:Date.now,
+  verifyAccessToken:async value=>{
+   if(value!==adminToken)throw Error('Unverified Admin synthetic session');
+   return {id:adminId,sessionId:adminSessionId,is_anonymous:false,
+    email_confirmed_at:'2026-10-25T00:00:00Z',
+    expiresAtMs:Date.now()+600000};
+  },
+  verifySessionNotRevoked:async x=>!adminSessionRevoked&&
+   x.userId===adminId&&x.sessionId===adminSessionId,
+  loadExclusiveBackofficeRole:async id=>{
+   if(!uuid.test(id))throw Error('Invalid private Admin ID');
+   const role=psql("SET ROLE service_role; SELECT public.mobility_stage_g27_backoffice_role_of('"+id+"')");
+   return role===''?null:role;
+  },
+  verifyBackofficeMfa:async x=>({
+   verifiedByProvider:true,userId:x.userId,sessionId:x.sessionId,
+   assuranceLevel:'aal2',verifiedAtMs:Date.now()-1000,
+   expiresAtMs:Date.now()+300000}),
+  allowRequest:()=>true,
+  loadAdminRideReceipt:x=>adminSql.read(x)
+ });
  const server=createQoreRadarLoopbackTransport({
-  riderHandler:noop,offerHandler:noop,tripCommandHandler:noop,
+  riderHandler:rider,adminF1AuditHandler:adminGateway,
+  offerHandler:noop,tripCommandHandler:noop,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
   safetyHandler:noop,merchantManagementHandler:noop,deliveryOfferHandler:noop,
   f1AutoHandler:gateway
@@ -160,6 +218,30 @@ async function main(){
   assert.equal(booked.status,201,JSON.stringify(booked.data));
   assert.ok(uuid.test(booked.data.tripId));
   const tripId=booked.data.tripId;
+  // Two distinct HTTP clients read exactly the same G73 -> G3 trip.
+  const riderBefore=await http(base,
+   '/v1/staging/rider/trips/'+tripId+'/status');
+  assert.equal(riderBefore.status,200,JSON.stringify(riderBefore.data));
+  assert.equal(riderBefore.data.tripId,tripId);
+  assert.equal(riderBefore.data.state,'searching');
+  assert.equal(riderBefore.data.revision,1);
+  assert.equal(riderBefore.data.driver,null);
+  assert.equal(riderBefore.data.location,null);
+  const adminPath='/v1/staging/admin/rides/'+tripId+'/f1-verification';
+  const adminBefore=await http(base,adminPath,{auth:adminToken});
+  assert.equal(adminBefore.status,200,JSON.stringify(adminBefore.data));
+  assert.equal(adminBefore.data.tripId,tripId);
+  assert.equal(adminBefore.data.quoteId,q.data.quoteId);
+  assert.equal(adminBefore.data.bookingRequestKey,bookingKey);
+  assert.equal(adminBefore.data.status,riderBefore.data.state);
+  assert.equal(adminBefore.data.revision,riderBefore.data.revision);
+  assert.equal(adminBefore.data.passengerId,p);
+  assert.equal(adminBefore.data.driverId,null);
+  assert.equal(adminBefore.data.assignmentPersisted,false);
+  assert.equal(adminBefore.data.amountGs,q.data.amountGs);
+  assert.equal((await http(base,adminPath,{auth:token})).status,401);
+  assert.equal((await http(base,
+   '/v1/staging/rider/trips/'+tripId+'/status',{auth:otherToken})).status,404);
   const replay=await http(base,f1+'/bookings/'+bookingKey);
   assert.equal(replay.status,200,JSON.stringify(replay.data));
   assert.equal(replay.data.tripId,tripId);
@@ -202,6 +284,27 @@ async function main(){
   assert.equal(closed.data.tripId,tripId);
   assert.equal(closed.data.dispatchState,'CLOSED');
   assert.equal(closed.data.offerPendingAcceptance,false);
+  const riderAfter=await http(base,
+   '/v1/staging/rider/trips/'+tripId+'/status');
+  assert.equal(riderAfter.status,200,JSON.stringify(riderAfter.data));
+  assert.equal(riderAfter.data.tripId,tripId);
+  assert.equal(riderAfter.data.state,'cancelled');
+  assert.equal(riderAfter.data.revision,2);
+  assert.equal(riderAfter.data.driver,null);
+  const adminAfter=await http(base,adminPath,{auth:adminToken});
+  assert.equal(adminAfter.status,200,JSON.stringify(adminAfter.data));
+  assert.equal(adminAfter.data.tripId,tripId);
+  assert.equal(adminAfter.data.status,riderAfter.data.state);
+  assert.equal(adminAfter.data.revision,riderAfter.data.revision);
+  assert.equal(adminAfter.data.driverId,null);
+  assert.equal(adminAfter.data.assignmentPersisted,false);
+  // Provider revocation and stored backoffice suspension must both deny reads.
+  adminSessionRevoked=true;
+  assert.equal((await http(base,adminPath,{auth:adminToken})).status,401);
+  adminSessionRevoked=false;
+  psql("UPDATE public.mobility_stage_backoffice_roles SET status='suspended',"+
+   "revision=revision+1 WHERE user_id='"+adminId+"'");
+  assert.equal((await http(base,adminPath,{auth:adminToken})).status,403);
   assert.equal((await http(base,f1+'/bookings/'+bookingKey+'/cancellation',
    {auth:otherToken})).status,404);
   assert.equal((await http(base,f1+'/bookings/'+bookingKey+'/cancel',
@@ -221,7 +324,7 @@ async function main(){
   assert.equal(Number(ledger.offsets),4);
   assert.equal(ledger.queueState,'CLOSED');
   assert.equal(Number(ledger.outstandingOffers),0);
-  console.log('G98 PASS: REAL 127.0.0.1 HTTP -> real PostgreSQL16 G73/G93/G95/G94/G96; one trip, 4 voids, one cancellation, closed dispatch, actor isolation; NO PSP / NO LIVE');
+  console.log('G99 PASS: REAL local HTTP+PostgreSQL16 same G73 trip across Client+Admin before/after G95 cancellation; 4 G94 void entries, G96 dispatch CLOSED, Passenger privacy, Admin MFA/revocation QA, NO PSP / NO LIVE');
  }finally{
   if(server.listening)await new Promise((resolve,reject)=>
    server.close(err=>err?reject(err):resolve()));
