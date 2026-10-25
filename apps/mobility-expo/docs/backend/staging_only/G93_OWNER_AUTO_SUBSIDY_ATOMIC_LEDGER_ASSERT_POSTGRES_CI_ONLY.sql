@@ -4,7 +4,8 @@ BEGIN;
 SET LOCAL statement_timeout='50s';
 INSERT INTO auth.users(id) VALUES
  ('93930000-0000-4939-8939-000000000001'),
- ('93930000-0000-4939-8939-000000000002');
+ ('93930000-0000-4939-8939-000000000002'),
+ ('93930000-0000-4939-8939-000000000003');
 DELETE FROM public.user_roles
  WHERE user_id='93930000-0000-4939-8939-000000000002'::uuid;
 INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by)
@@ -80,7 +81,7 @@ END $test$;
 -- Another Passenger creates a valid G73 quote but cannot book under an
 -- active Owner campaign without accepting the persisted discounted preview.
 DO $missing$
-DECLARE p uuid:='93930000-0000-4939-8939-000000000001';
+DECLARE p uuid:='93930000-0000-4939-8939-000000000003';
  rt uuid;qt uuid;denied boolean:=false;
 BEGIN
  rt:=public.mobility_stage_g73_route(p,
@@ -117,7 +118,7 @@ UPDATE public.mobility_stage_backoffice_roles
  SET status='suspended',revision=revision+1
  WHERE user_id='93930000-0000-4939-8939-000000000002'::uuid;
 DO $revoked$
-DECLARE p uuid:='93930000-0000-4939-8939-000000000001';
+DECLARE p uuid:='93930000-0000-4939-8939-000000000003';
  qt uuid;denied boolean:=false;
 BEGIN
  SELECT id INTO qt FROM public.mobility_stage_g72_auto_prequotes
