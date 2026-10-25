@@ -1,32 +1,89 @@
-import React from 'react';
-import {ScrollView,Text,View} from 'react-native';
+import React,{useState} from 'react';
+import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
-import {useClientView,useClientSimpleMode} from '../src/ClientRuntime';
+import {useClientView,useClientSimpleMode,useNativePassengerAuth} from '../src/ClientRuntime';
 export default function Account(){
  const {client,view}=useClientView();
  const {simpleMode,setSimpleMode}=useClientSimpleMode();
- return <ScrollView style={styles.page} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic"
+ const auth=useNativePassengerAuth();
+ const [email,setEmail]=useState('');
+ const [password,setPassword]=useState('');
+ const [busy,setBusy]=useState(false);
+ const [message,setMessage]=useState('');
+ async function logIn(){
+  if(!auth||busy)return;
+  const secret=password;
+  setPassword('');setBusy(true);setMessage('');
+  try{
+   const result=await auth.signIn(email.trim(),secret);
+   if(!result.ok){
+    setMessage(result.code==='PASSENGER_ROLE_NOT_VERIFIED'
+     ?'La cuenta no está habilitada como pasajero; no se permitirá solicitar viajes.'
+     :'No se pudo verificar el acceso. Revisá tus credenciales y la conexión segura.');
+    return;
+   }
+   const refreshed=await client.refreshSession();
+   setMessage(refreshed.ok
+    ?'Sesión de pasajero verificada con el servidor. Los viajes todavía requieren el backend compartido habilitado.'
+    :'La sesión no pudo certificarse; las solicitudes siguen bloqueadas.');
+  }catch{setMessage('Autenticación temporalmente no disponible.');}
+  finally{setBusy(false);}
+ }
+ async function logOut(){
+  if(busy)return;
+  setBusy(true);setPassword('');setMessage('');
+  try{
+   const result=await client.signOut();
+   setMessage(result.ok?'Sesión cerrada.':'Datos locales borrados; no se confirmó la revocación remota.');
+  }finally{setBusy(false);}
+ }
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content}
+  contentInsetAdjustmentBehavior="automatic"
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Mi cuenta</Text>
-   <Text style={styles.heroSub}>Acceso independiente de Movete Fácil Cliente.</Text></View>
+   <Text style={styles.heroSub}>Identidad independiente de Movete Fácil Cliente.</Text></View>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Accesibilidad · Modo simple</Text>
-   <Text style={styles.text}>Botones más grandes y acceso directo a las tareas esenciales desde Inicio. Podés cambiarlo cuando quieras.</Text>
+   <Text style={styles.text}>Botones más grandes y acceso directo a las tareas esenciales.</Text>
    <Action label={simpleMode?'Desactivar modo simple':'Activar modo simple'}
-    secondary={!simpleMode} selected={simpleMode}
-    onPress={()=>setSimpleMode(!simpleMode)}/>
-   <Text style={styles.small}>Preferencia temporal en esta aplicación. No se guarda en el servidor ni modifica tarifas, permisos o funciones de seguridad.</Text>
+    secondary={!simpleMode} selected={simpleMode} onPress={()=>setSimpleMode(!simpleMode)}/>
   </Panel>
   {view.authenticated&&view.account?
    <Panel>
-    <Text accessibilityRole="header" style={styles.heading}>Sesión pasajero</Text>
-    <Text style={styles.text}>Cuenta: {view.account.subject}</Text>
-    <Text style={styles.small}>No se expone el JWT. Driver y Admin no usan esta sesión.</Text>
-    <Action label="Cerrar sesión y borrar datos temporales" onPress={()=>{void client.signOut();}}/>
+    <Text accessibilityRole="header" style={styles.heading}>Pasajero verificado</Text>
+    <Text style={styles.small}>ID de cuenta: {view.account.subject}</Text>
+    <Text style={styles.small}>Sesión autenticada y rol pasajero confirmado por Auth/RLS.
+     Driver y Admin no comparten esta sesión.</Text>
+    <Action label="Cerrar sesión y borrar datos temporales" disabled={busy}
+     onPress={()=>{void logOut();}}/>
    </Panel>:
-   <Panel><Text accessibilityRole="header" style={styles.heading}>Acceso todavía no conectado</Text>
-    <Text style={styles.text}>El ingreso requiere la autenticación segura y los permisos de pasajero del backend. No se almacenan claves de administración ni documentos de conductores.</Text>
-    <Text style={styles.small}>No hay una sesión Passenger autenticada en esta instalación.</Text>
+   <Panel>
+    <Text accessibilityRole="header" style={styles.heading}>Ingresar como pasajero</Text>
+    {auth?<React.Fragment>
+     <Text style={styles.small}>Ingreso contra Supabase Auth mediante conexión TLS.
+      La contraseña no se guarda en esta pantalla.</Text>
+     <TextInput style={styles.field} value={email} onChangeText={setEmail}
+      placeholder="Correo electrónico" autoCapitalize="none"
+      autoComplete="email" keyboardType="email-address" textContentType="username"
+      accessibilityLabel="Correo de la cuenta pasajero" editable={!busy}/>
+     <TextInput style={styles.field} value={password} onChangeText={setPassword}
+      placeholder="Contraseña" autoCapitalize="none" secureTextEntry
+      autoComplete="current-password" textContentType="password"
+      accessibilityLabel="Contraseña" editable={!busy}/>
+     <Action label={busy?'Verificando…':'Ingresar de forma segura'}
+      disabled={busy||!email.trim()||!password} onPress={()=>{void logIn();}}/>
+    </React.Fragment>:<Text style={styles.text}>
+     Todavía falta configurar el entorno privado de pruebas y la clave pública
+     autorizada del servicio de autenticación. No se conectará a un backend
+     desconocido ni se guardarán claves de administración.
+    </Text>}
    </Panel>}
+  {message!==''&&<Panel><Text accessibilityRole="alert"
+   accessibilityLiveRegion="polite" style={styles.text}>{message}</Text></Panel>}
+  <Panel>
+   <Text style={styles.small}>La autenticación no activa por sí sola viajes, GPS,
+    cobros ni despachos. Esas funciones requieren un backend HTTPS y una base
+    persistente certificados para esta instalación.</Text>
+  </Panel>
  </ScrollView>;
 }
