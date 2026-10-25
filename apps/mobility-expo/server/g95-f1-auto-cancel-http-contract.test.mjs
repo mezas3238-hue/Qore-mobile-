@@ -40,7 +40,8 @@ function app(extra={}){
  return {gate,calls};
 }
 test('G95 OpenAPI explicitly QA-only, JWT and no arbitrary financial input',()=>{
- assert.equal(spec.info.version,'1.0.0-g95');
+ assert.match(spec.info.version,/^1\.0\.0-g\d+$/);
+ assert.ok(Number(spec.info.version.split('-g')[1])>=95);
  const path='/v1/staging/rider/auto/bookings/{bookingKey}';
  const cancel=spec.paths[path+'/cancel']?.post;
  const recover=spec.paths[path+'/cancellation']?.get;

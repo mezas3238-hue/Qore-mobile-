@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createG101MotoPassengerGateway,
  createG101MotoPassengerRepository} from './g101-moto-passenger-gateway.mjs';
 import {createQoreRadarLoopbackTransport,
@@ -210,4 +211,33 @@ test('G101 real 127.0.0.1 HTTP router: MOTO is not confused with AUTO',async t=>
  assert.equal((await send(prefix+'/quotes',{method:'POST',body:quoteRequest.body,
   headers:{origin:'https://evil.example'}})).status,403);
  assert.equal((await send('/v1/staging/rider/auto/bookings/'+bookingKey)).status,503);
+});
+
+test('G101 OpenAPI documents exact MOTO Passenger routes, isolated pricing and NO LIVE',()=>{
+ const spec=JSON.parse(readFileSync(new URL('../docs/backend/openapi/movete-facil-staging.openapi.json',import.meta.url)));
+ assert.match(spec.info.version,/^1\.0\.0-g\d+$/);
+ assert.ok(Number(spec.info.version.split('-g')[1])>=101);
+ for(const pathname of [
+  '/v1/staging/rider/moto/quotes',
+  '/v1/staging/rider/moto/book',
+  '/v1/staging/rider/moto/bookings/{bookingKey}',
+  '/v1/staging/rider/moto/bookings/{bookingKey}/cancel',
+  '/v1/staging/rider/moto/bookings/{bookingKey}/cancellation'
+ ]){
+  const op=Object.values(spec.paths[pathname])[0];
+  assert.equal(op['x-qore-runtime-wired'],false);
+  assert.equal(op['x-qore-loopback-wired'],true);
+  assert.equal(op['x-qore-external-staging-certified'],false);
+  assert.deepEqual(op.security,[{BearerAuth:[]}]);
+ }
+ const q=spec.components.schemas.G101MotoQuote;
+ const b=spec.components.schemas.G101MotoBooking;
+ assert.equal(q.properties.commissionBps.const,1200);
+ assert.equal(q.properties.subsidyBps.const,1000);
+ assert.equal(q.properties.serviceKind.const,'MOTO_RIDE');
+ assert.equal(b.properties.service.const,'moto_pasajero');
+ assert.equal(b.properties.pspRefunded.const,false);
+ assert.equal(b.properties.driverAssigned.const,false);
+ for(const forbidden of ['driverId','deliveryId','acceptedDriver','commissionOverrideBps'])
+  assert.equal(q.properties[forbidden],undefined);
 });

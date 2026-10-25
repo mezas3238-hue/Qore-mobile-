@@ -2,13 +2,14 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g95",
+    "version": "1.0.0-g101",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED",
     "x-qore-f1-g73-g90-contract-status": "QA_ONLY_NO_EXTERNAL_STAGING",
     "x-qore-g93-financial-preview": "QA_ONLY_SERVER_ISSUED_NOT_MOUNTED",
     "x-qore-g94-void-finance": "QA_ONLY_RESERVED_OR_VOIDED_NOT_PSP",
-    "x-qore-g95-atomic-passenger-cancel": "QA_ONLY_SERVER_G73_G3_G94_NO_PSP"
+    "x-qore-g95-atomic-passenger-cancel": "QA_ONLY_SERVER_G73_G3_G94_NO_PSP",
+    "x-qore-g101-moto-passenger": "separate_MOTO_RIDE_12_10_2_private_QA_only"
   },
   "servers": [
     {
@@ -4438,6 +4439,337 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/G95PassengerAutoCancellation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/moto/quotes": {
+      "post": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-loopback-wired": true,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "g101CreateMotoPassengerQuoteQa",
+        "summary": "Quote a separate passenger motorcycle ride with Owner 12/10/2 QA policy",
+        "description": "Requires verified Passenger JWT, independent MOTO motorcycle route evidence, approved MOTO fare rule and active Owner MOTO_RIDE campaign. No commercial route provider configured by default.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G101MotoQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-owned MOTO passenger state in disposable QA only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G101MotoQuote"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/moto/book": {
+      "post": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-loopback-wired": true,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "g101BookMotoPassengerQa",
+        "summary": "Persist one MOTO Passenger booking and 4 provisional ledger entries atomically",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G101MotoBookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Server-owned MOTO passenger state in disposable QA only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G101MotoBooking"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/moto/bookings/{bookingKey}": {
+      "get": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-loopback-wired": true,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "g101GetOwnMotoPassengerBookingQa",
+        "summary": "Owner-scoped source-backed MOTO booking and financial state",
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-owned MOTO passenger state in disposable QA only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G101MotoBooking"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/moto/bookings/{bookingKey}/cancel": {
+      "post": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-loopback-wired": true,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "g101CancelMotoPassengerBookingQa",
+        "summary": "Cancel unassigned searching MOTO ride; atomically reverse 4 provisional entries",
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G101MotoCancelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-owned MOTO passenger state in disposable QA only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G101MotoBooking"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/moto/bookings/{bookingKey}/cancellation": {
+      "get": {
+        "tags": [
+          "rides"
+        ],
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-loopback-wired": true,
+        "x-qore-external-staging-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "operationId": "g101RecoverMotoPassengerCancellationQa",
+        "summary": "Recover only committed MOTO cancellation after a lost acknowledgment",
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-owned MOTO passenger state in disposable QA only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G101MotoBooking"
                 }
               }
             }
@@ -9484,6 +9816,342 @@
             "const": true
           }
         }
+      },
+      "G101MotoQuote": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "serviceKind",
+          "service",
+          "quoteId",
+          "quoteRequestKey",
+          "campaignId",
+          "currency",
+          "amountGs",
+          "commissionBps",
+          "subsidyBps",
+          "customerPaysGs",
+          "customerSubsidyGs",
+          "driverReceivesGs",
+          "platformRetainsGs",
+          "expiresAt",
+          "driverAssigned",
+          "pspCollected",
+          "serverPersisted"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "const": "MOTO_RIDE"
+          },
+          "service": {
+            "type": "string",
+            "const": "moto_pasajero"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteRequestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "campaignId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "currency": {
+            "type": "string",
+            "const": "PYG"
+          },
+          "amountGs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "commissionBps": {
+            "type": "integer",
+            "const": 1200
+          },
+          "subsidyBps": {
+            "type": "integer",
+            "const": 1000
+          },
+          "customerPaysGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "customerSubsidyGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "driverReceivesGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "platformRetainsGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "driverAssigned": {
+            "type": "boolean",
+            "const": false
+          },
+          "pspCollected": {
+            "type": "boolean",
+            "const": false
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "Separate MOTO_RIDE Passenger quote sourced from G100 authorized MOTO tariff and Owner campaign. 12% nominal commission, 10% Customer subsidy, 2% retained by platform; QA only; no PSP or assigned Driver."
+      },
+      "G101MotoBooking": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "serviceKind",
+          "service",
+          "bookingKey",
+          "quoteId",
+          "tripId",
+          "tripState",
+          "tripRevision",
+          "cancellationKey",
+          "cancellationEventId",
+          "currency",
+          "amountGs",
+          "customerPaysGs",
+          "customerSubsidyGs",
+          "driverReceivesGs",
+          "platformRetainsGs",
+          "commissionBps",
+          "subsidyBps",
+          "financialState",
+          "reversalEntriesBalanced",
+          "driverAssigned",
+          "pspCollected",
+          "pspRefunded",
+          "serverPersisted"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "const": "MOTO_RIDE"
+          },
+          "service": {
+            "type": "string",
+            "const": "moto_pasajero"
+          },
+          "bookingKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripState": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "cancelled"
+            ]
+          },
+          "tripRevision": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "cancellationKey": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancellationEventId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "const": "PYG"
+          },
+          "amountGs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "customerPaysGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "customerSubsidyGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "driverReceivesGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "platformRetainsGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "commissionBps": {
+            "type": "integer",
+            "const": 1200
+          },
+          "subsidyBps": {
+            "type": "integer",
+            "const": 1000
+          },
+          "financialState": {
+            "type": "string",
+            "enum": [
+              "RESERVED_QA",
+              "VOIDED_QA"
+            ]
+          },
+          "reversalEntriesBalanced": {
+            "type": "boolean"
+          },
+          "driverAssigned": {
+            "type": "boolean",
+            "const": false
+          },
+          "pspCollected": {
+            "type": "boolean",
+            "const": false
+          },
+          "pspRefunded": {
+            "type": "boolean",
+            "const": false
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "Persisted separate passenger MOTO booking, never Delivery courier and never AUTO. Status searching/cancelled only; 4 provisional entries reversed on cancel. No actual payout/refund."
+      },
+      "G101MotoQuoteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "origin",
+          "destination"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          }
+        },
+        "description": "No coordinates, Driver identity, price, vehicle or admin fields. Route proof must be independently verified server-side."
+      },
+      "G101MotoBookRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "quoteId",
+          "accepted"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "Explicit acceptance of quote; only server retains financial authority."
+      },
+      "G101MotoCancelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "confirmed"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "One idempotent cancellation decision."
       }
     }
   },
