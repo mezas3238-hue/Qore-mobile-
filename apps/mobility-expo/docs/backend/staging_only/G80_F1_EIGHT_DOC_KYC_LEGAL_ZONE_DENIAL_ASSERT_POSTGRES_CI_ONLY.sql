@@ -65,7 +65,8 @@ DELETE FROM public.user_roles WHERE user_id IN (
 INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by)
  VALUES('80800000-0000-4808-8808-000000000002','admin','active',
   '80800000-0000-4808-8808-000000000003');
-SET LOCAL ROLE service_role;
+-- Owner-only disposable harness exercises trigger path directly; G73/G75
+-- service_role privilege and JWT fences are certified in their own suites.
 DO $ride$
 DECLARE
  passenger uuid:='80800000-0000-4808-8808-000000000001';
@@ -110,10 +111,9 @@ BEGIN
  OR public.mobility_stage_g73_book(passenger,quote_id,book_key)<>trip_id
  OR (SELECT count(*) FROM public.mobility_stage_auto_demo_trips
   WHERE passenger_id=passenger AND request_key=book_key)<>1
- OR EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_events
-  WHERE trip_id=trip_id)
+ OR EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_events ev
+  WHERE ev.trip_id=trip_id)
  THEN RAISE EXCEPTION 'G80 legally blocked assignment changed same F1 ride'; END IF;
  RAISE NOTICE 'G80 PASS: 8 verified synthetic KYC docs, but legal G38 blocks Driver; same Client/Admin trip and fare intact';
 END $ride$;
-RESET ROLE;
 ROLLBACK;
