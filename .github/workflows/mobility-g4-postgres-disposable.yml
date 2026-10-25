@@ -573,3 +573,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G100_MOTO_PASSENGER_QUOTE_BOOK_CANCEL_LEDGER_POSTGRES_CI_ONLY.sql
       - name: G100 assert MOTO passenger 12-10-2%, cancel reversal, actor privacy and separation from AUTO/DELIVERY
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G100_MOTO_PASSENGER_QUOTE_BOOK_CANCEL_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
+        run: node apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs
