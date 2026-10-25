@@ -2,8 +2,12 @@ import React,{createContext,useCallback,useContext,useEffect,useMemo,useState} f
 import {useFocusEffect} from 'expo-router';
 import {createClientExperience} from './domain/client-experience.mjs';
 import type {ClientExperience,ClientSnapshot} from './domain/client-experience.mjs';
+import {getNativePassengerAuth} from './NativePassengerAuth';
+import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
 
 const ExperienceContext=createContext<ClientExperience|null>(null);
+const NativeAuthContext=createContext<NativePassengerAuth|null>(null);
+export const useNativePassengerAuth=()=>useContext(NativeAuthContext);
 // Preferencia de presentación en RAM: no guarda identidades, rutas ni tokens.
 // No se presenta como una configuración persistida en el servidor.
 const SimpleModeContext=createContext<{
@@ -22,11 +26,17 @@ export function useClientSimpleMode(){
 export function ClientRuntimeProvider({children,experience}:{
  children:React.ReactNode;experience?:ClientExperience;
 }){
- const client=useMemo(()=>experience??createClientExperience(),[experience]);
+ const nativeAuth=useMemo(()=>getNativePassengerAuth(),[]);
+ // The only native identity is verified remotely; all trip HTTP gates remain
+ // OFF until the A persistent HTTPS/IdP/zone integration is certified.
+ const client=useMemo(()=>experience??createClientExperience({authProvider:nativeAuth}),[experience,nativeAuth]);
+ useEffect(()=>{if(nativeAuth)void client.refreshSession();},[client,nativeAuth]);
  const [simpleMode,setSimpleMode]=useState(false);
  const simplePreferences=useMemo(()=>({simpleMode,setSimpleMode}),[simpleMode]);
  return <ExperienceContext.Provider value={client}>
-  <SimpleModeContext.Provider value={simplePreferences}>{children}</SimpleModeContext.Provider>
+  <NativeAuthContext.Provider value={nativeAuth}>
+   <SimpleModeContext.Provider value={simplePreferences}>{children}</SimpleModeContext.Provider>
+  </NativeAuthContext.Provider>
  </ExperienceContext.Provider>;
 }
 export function useClientView(){
