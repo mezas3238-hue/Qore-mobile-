@@ -285,4 +285,77 @@ BEGIN
  RAISE NOTICE 'G82 PASS: G73 booking to DB-selected G4 offer and G16 Driver inbox; no legal acceptance';
 END $g82$;
 RESET ROLE;
+-- G87: prove expired offer re-arm on exactly the same committed G73 trip.
+-- Existing G81/G82 fixture supplied a valid 8-document QA Driver; all
+-- mutations in this assertion are ROLLBACK-only on disposable PG16.
+DO $g87_guard$
+BEGIN
+ IF has_function_privilege('service_role',
+  'public.mobility_stage_g87_dispatch_core_qa()','EXECUTE')
+ OR has_function_privilege('authenticated',
+  'public.mobility_stage_g85_run_one_dispatch_qa()','EXECUTE')
+ OR NOT has_function_privilege('service_role',
+  'public.mobility_stage_g85_run_one_dispatch_qa()','EXECUTE')
+ THEN RAISE EXCEPTION 'G87 private worker grants are not isolated'; END IF;
+END $g87_guard$;
+SET LOCAL ROLE service_role;
+DO $g87_original_offer$
+DECLARE got jsonb;
+BEGIN
+ -- G87 first marks the old canceled trip CLOSED, then G85 reconciles the
+ -- G82 offer already written for the next G73 booking.
+ got:=public.mobility_stage_g85_run_one_dispatch_qa();
+ IF got->>'status'<>'OFFERED' OR got->>'commercialEnabled'<>'false'
+ OR (SELECT status FROM public.mobility_stage_g85_auto_dispatch_jobs
+     WHERE booking_key='81810000-0000-4818-8818-000000000012')<>'CLOSED'
+ OR (SELECT offer_id FROM public.mobility_stage_g85_auto_dispatch_jobs
+     WHERE booking_key='82820000-0000-4828-8828-000000000012')
+    IS DISTINCT FROM (got->>'offerId')::uuid
+ THEN RAISE EXCEPTION 'G87 did not close canceled trip and reconcile active second offer'; END IF;
+END $g87_original_offer$;
+RESET ROLE;
+-- Simulate wall-clock expiry without sleeping; never touch a live Driver.
+DO $g87_expire_fixture$
+DECLARE o uuid;
+BEGIN
+ SELECT offer_id INTO o FROM public.mobility_stage_g85_auto_dispatch_jobs
+ WHERE booking_key='82820000-0000-4828-8828-000000000012';
+ IF o IS NULL THEN RAISE EXCEPTION 'G87 missing original QA offer'; END IF;
+ UPDATE public.mobility_stage_auto_demo_offers
+ SET offered_at=pg_catalog.clock_timestamp()-interval '65 seconds',
+     expires_at=pg_catalog.clock_timestamp()-interval '35 seconds'
+ WHERE id=o;
+END $g87_expire_fixture$;
+SET LOCAL ROLE service_role;
+DO $g87_rearm$
+DECLARE before_key uuid;before_offer uuid;trip uuid;got jsonb;
+BEGIN
+ SELECT offer_key,offer_id,trip_id INTO before_key,before_offer,trip
+ FROM public.mobility_stage_g85_auto_dispatch_jobs
+ WHERE booking_key='82820000-0000-4828-8828-000000000012'
+ AND status='OFFERED';
+ IF before_offer IS NULL THEN RAISE EXCEPTION 'G87 no expired offered row'; END IF;
+ got:=public.mobility_stage_g85_run_one_dispatch_qa();
+ -- The one previously eligible Driver already received an offer. The G82
+ -- unique-driver fence must not reoffer to the same person.
+ IF got->>'status'<>'WAITING' OR got->>'tripId'<>trip::text
+ OR got->>'offerId' IS NOT NULL
+ OR NOT EXISTS(
+  SELECT 1 FROM public.mobility_stage_g85_auto_dispatch_jobs j
+  WHERE j.trip_id=trip AND j.status='WAITING' AND j.offer_id IS NULL
+  AND j.offer_key<>before_key AND j.attempts=2
+  AND j.next_attempt_at>pg_catalog.clock_timestamp())
+ OR (SELECT count(*) FROM public.mobility_stage_auto_demo_offers
+     WHERE trip_id=trip)<>1
+ OR EXISTS(SELECT 1 FROM public.mobility_stage_poll_driver_auto_offers(
+   '00000000-0000-4000-8000-000000000181') inbox
+   WHERE inbox.offer_id=before_offer)
+ OR (SELECT status FROM public.mobility_stage_auto_demo_trips
+     WHERE id=trip)<>'searching'
+ THEN RAISE EXCEPTION 'G87 expiry stuck job, repeated Driver, or forged trip assignment'; END IF;
+ IF (public.mobility_stage_g85_run_one_dispatch_qa()->>'status')<>'IDLE'
+ THEN RAISE EXCEPTION 'G87 bypassed retry backoff'; END IF;
+ RAISE NOTICE 'G87 PASS: expired offer is not recycled; next Driver search waits with a new key';
+END $g87_rearm$;
+RESET ROLE;
 ROLLBACK;

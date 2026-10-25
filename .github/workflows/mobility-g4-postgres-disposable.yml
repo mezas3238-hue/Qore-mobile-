@@ -531,6 +531,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G82_F1_PRIVATE_AUTO_CANDIDATE_POSTGRES_CI_ONLY.sql
       - name: G85 install durable server-only dispatch recovery queue after committed G73 booking
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G85_F1_DURABLE_AUTO_DISPATCH_OUTBOX_POSTGRES_CI_ONLY.sql
+      - name: G87 enable durable recovery of expired or declined G85 private offers (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G87_RECOVER_EXPIRED_PRIVATE_AUTO_OFFERS_POSTGRES_CI_ONLY.sql
       - name: G81-G82-G85 verify booking, Driver inbox, legal denial and existing offer reconciliation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G81_F1_BOOKING_TO_PRIVATE_DRIVER_OFFER_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G85 verify persisted booking, unavailable Driver backoff, grants and rollback
