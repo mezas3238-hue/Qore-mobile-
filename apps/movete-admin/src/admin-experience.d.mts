@@ -4,9 +4,12 @@ export type AdminKycRecord={
 };
 export type PageState={pageNumber:number;hasNext:boolean;hasPrevious:boolean;nextCursor:string|null};
 import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
+import type {F1AdminTripAudit} from './f1-auto-ride-audit-gateway.mjs';
 export type AdminSnapshot={
  authenticated:boolean;
  merchantCases:MerchantCasePageSuccess|null;
+ f1RideAudit:{contractReady:boolean;loading:boolean;item:F1AdminTripAudit|null;
+  error:string|null;qaOnly:true;productionEnabled:false};
  merchantCaseContractReady:false;
  account:{subject:string;role:'admin'|'owner';mfaVerified:true}|null;
  kyc:{revision:number;generatedAt:number;expiresAt:number;items:readonly Readonly<AdminKycRecord>[]} |null;
@@ -56,12 +59,20 @@ export type AdminExperience={
  syncFromServer:(operation:string,direction?:'refresh'|'reset'|'next'|'previous')=>Promise<{ok:boolean;code?:string}>;
  loadGlobalIncidentTriage:(args?:{severityFilter?:string|null;statusFilter?:string|null;next?:boolean;previous?:boolean})=>
   Promise<{ok:boolean;code?:string;pageNumber?:number;hasNext?:boolean;hasPrevious?:boolean}>;
+ loadF1RideAudit:(tripId:string)=>Promise<{ok:boolean;code?:string;qaOnly?:true;productionEnabled?:false}>;
+ clearF1RideAudit:()=>void;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };
 export declare function createAdminExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{isConfigured:()=>boolean;reviewVehicle:(body:unknown)=>unknown|Promise<unknown>}|null;
+ f1RideAuditOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  triageGatewayOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   origin?:string;pinnedOrigin?:string;
