@@ -90,15 +90,16 @@ BEGIN
  OR receipt->>'quoteId'<>quote_id::text
  THEN RAISE EXCEPTION 'G80 F1 same-trip Admin baseline missing'; END IF;
  -- A current synthetic eight-doc dossier is NOT a legal-zone permission.
- -- The G38 trigger must refuse direct assignment, regardless of KYC.
+ -- G36 preflight may correctly deny before the G38 legal-zone trigger.
+ -- The independent G38 suite still verifies its exact zone-policy refusal.
  BEGIN
   UPDATE public.mobility_stage_auto_demo_trips
    SET driver_id=driver,vehicle_id=vehicle,
        status='accepted',revision=revision+1
    WHERE id=v_trip AND status='searching';
- EXCEPTION WHEN SQLSTATE 'G3801' THEN denied:=true; END;
+ EXCEPTION WHEN SQLSTATE 'G3601' OR SQLSTATE 'G3801' THEN denied:=true; END;
  IF NOT denied THEN
-  RAISE EXCEPTION 'G80 G38 accepted synthetic KYC without legal zone'; END IF;
+  RAISE EXCEPTION 'G80 assignment bypassed G36 preflight and G38 legal-zone fence'; END IF;
  receipt:=public.mobility_stage_g75_admin_f1_receipt(administrator,v_trip);
  IF receipt->>'status'<>'searching'
  OR receipt->>'driverId' IS NOT NULL
@@ -114,6 +115,6 @@ BEGIN
  OR EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_events ev
   WHERE ev.trip_id=v_trip)
  THEN RAISE EXCEPTION 'G80 legally blocked assignment changed same F1 ride'; END IF;
- RAISE NOTICE 'G80 PASS: 8 verified synthetic KYC docs, but legal G38 blocks Driver; same Client/Admin trip and fare intact';
+ RAISE NOTICE 'G80 PASS: 8 verified QA documents do not bypass G36 preflight or G38 legal NO_GO; Client/Admin trip and fare unchanged';
 END $ride$;
 ROLLBACK;
