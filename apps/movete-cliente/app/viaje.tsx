@@ -51,11 +51,11 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  });
  // Unknown phase, different outstanding operation or a sent request
  // must never leave the vehicle type or route editor unlocked.
- const free=ui.ok&&ui.editable&&quoted.canEditRoute;
+ const free=ui.ok&&ui.editable&&quoted.canEditRoute&&!quoteBusy;
  const myDraft=ui.ok&&ui.canDiscard;
  // Las direcciones son datos privados de la pantalla, ajenos al snapshot Auth.
  function changeRoute(change:LocalRouteEdit){
-  if(!free||lock.current)return;
+  if(!free||lock.current||quoteLock.current)return;
   const next=editLocalRouteDraft(route,change);
   if(!next.ok){setFeedback(next.reason);return;}
   setRoute(next.route);setValidated(false);setFeedback('');
@@ -63,7 +63,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  function editPickup(value:string){changeRoute({type:'origin',value});}
  function editDestination(value:string){changeRoute({type:'destination',value});}
  function selectService(next:Service){
-  if(!free||lock.current)return;
+  if(!free||lock.current||quoteLock.current)return;
   setService(next);setValidated(false);setFeedback('');
  }
  function validate(){
@@ -111,6 +111,32 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     router.push('/seguimiento');
    }else setFeedback('No se pudo verificar el viaje desde el servidor. No hay seguimiento confirmado.');
   }finally{consultationLock.current=false;setConsulting(false);}
+ }
+ async function consultOfficialFare(){
+  if(quoteLock.current||!free||!validated
+   ||!view.autoRouteQuote.available||route.stops.length!==0
+   ||view.mutation.phase!=='idle'||!view.authenticated)return;
+  const reviewed=reviewLocalRouteDraft(route);
+  const compatible=canPrepareCurrentRideContract(route);
+  if(!reviewed.ok||!compatible.ok)return;
+  const previous=client.snapshot();
+  if(previous.privateViewRevision!==view.privateViewRevision
+   ||previous.autoPrequote.phase!=='idle')return;
+  quoteLock.current=true;setQuoteBusy(true);setFeedback('');
+  try{
+   // Only server-verified route attestation may supply the opaque routeId.
+   // Local address, GPS guess, or SQL tag cannot become the fare authority.
+   const result=await client.requestAutoQuote({
+    origin:pickup.trim(),destination:destination.trim(),
+    service,quoteRequestKey:Crypto.randomUUID()
+   });
+   if(client.snapshot().privateViewRevision!==view.privateViewRevision)return;
+   setFeedback(result.ok
+    ?'Tarifa recibida del servidor para QA. Revisá el importe antes de aceptar.'
+    :result.code==='ROUTE_ATTESTATION_NOT_VERIFIED'
+     ?'No se pudo verificar la ruta o la zona; no hay precio ni conductor confirmado.'
+     :'No se obtuvo una cotización vigente y certificada; no se inició reserva.');
+  }finally{quoteLock.current=false;setQuoteBusy(false);}
  }
  function acceptVerifiedFare(){
   if(quoteLock.current||!quoted.canAccept||!quoted.quote)return;
@@ -274,10 +300,19 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   </Panel>}
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Cotización y consentimiento</Text>
-   {!view.autoPrequote.quoteAvailable&&<View>
+   {!view.autoRouteQuote.available&&<View>
     <Action label="Consultar tarifa oficial — pendiente de backend" disabled
-     hint="Requiere resolución de ruta, precotización PYG y contrato certificado de A" onPress={()=>{}}/>
-    <Text style={styles.small}>No hay tarifa vigente. El backend debe verificar ruta y cobertura y emitir un precio en Gs antes de solicitar un conductor. La revisión local no es una cotización.</Text>
+     hint="Requiere resolución de ruta y precotización certificadas por A" onPress={()=>{}}/>
+    <Text style={styles.small}>No hay ruta ni tarifa oficial verificadas. El backend debe comprobar zona y recorrido y emitir un precio en Gs antes de reservar. No se usa el importe calculado en el teléfono.</Text>
+   </View>}
+   {view.autoRouteQuote.available&&quoted.phase==='idle'&&<View>
+    <Action label={quoteBusy?'Consultando ruta y tarifa…':'Consultar tarifa oficial en Gs'}
+     busy={quoteBusy}
+     disabled={!free||!validated||route.stops.length!==0
+      ||view.mutation.phase!=='idle'||!view.authenticated}
+     hint="Consulta únicamente el servidor autorizado: ruta, cobertura y tarifa; no despacha conductor"
+     onPress={()=>{void consultOfficialFare();}}/>
+    <Text style={styles.small}>La ruta será validada por el servidor; ninguna cotización se acepta automáticamente.</Text>
    </View>}
    {quoted.quote&&<View>
     <Text style={styles.small}>Importe calculado por el servidor (QA, sin cobro)</Text>
