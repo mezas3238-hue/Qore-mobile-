@@ -257,3 +257,69 @@ test('G23 Client v1: stale/unconsented location, old trip owner, terminal and pi
  assert.equal(foreign.status,404);
  assert.doesNotMatch(JSON.stringify(foreign),/TEST999|QORE Prueba|-25.28/);
 });
+
+test('G86 persistent AUTO assignment remains visible without claiming Driver identity or GPS',async()=>{
+ for(const [state,revision,expectedState,eventState] of [
+  ['accepted',2,'assigned','accepted'],
+  ['arriving',3,'arriving','at_pickup'],
+  ['in_progress',4,'in_progress','in_progress']
+ ]){
+  let reads=0;
+  const {handler}=fixture({
+   loadOwnTrip:async()=>({...accepted,status:state,revision}),
+   loadArrivalEvidence:async()=>{reads++;throw Error('Third-party evidence offline');}
+  });
+  const response=await handler(request());
+  assert.equal(response.status,200,state);
+  assert.equal(reads,1);
+  const x=response.body;
+  assert.equal(x.tripId,tripId);
+  assert.equal(x.ownerId,passenger);
+  assert.equal(x.revision,revision);
+  assert.equal(x.state,expectedState);
+  assert.equal(x.assignmentPersisted,true);
+  assert.equal(x.event.status,eventState);
+  assert.equal(x.event.serverRevision,revision);
+  assert.equal(x.event.acceptedDriver,null);
+  assert.equal(x.event.tracking,null);
+  assert.equal(x.driver,null);
+  assert.equal(x.vehicle,null);
+  assert.equal(x.gpsConsent,false);
+  assert.equal(x.location,null);
+  assert.equal(x.etaVerified,false);
+  assert.equal(x.etaMinutes,null);
+  assert.equal(x.locationVisible,false);
+  assert.equal(x.deliveryConfirmed,false);
+  assert.equal(x.commercialRidesEnabled,false);
+  assert.doesNotMatch(JSON.stringify(x),/QORE Prueba|Toyota|TEST999|-25\.28|\b44444444-4444\b/);
+ }
+});
+test('G86 cannot claim assignment on passenger mismatch, missing vehicle or ambiguous state',async()=>{
+ let reads=0;
+ for(const broken of [
+  {...accepted,passengerId:stranger},
+  {...accepted,vehicleId:null},
+  {...accepted,status:'searching'},
+ ]){
+  const {handler}=fixture({
+   loadOwnTrip:async()=>broken,
+   loadArrivalEvidence:async()=>{reads++;throw Error('No GPS');}
+  });
+  const result=await handler(request());
+  assert.equal(result.status,404);
+ }
+ assert.equal(reads,0);
+});
+test('G86 verified evidence contradiction still fails closed; only provider outage degrades gracefully',async()=>{
+ for(const bad of [
+  {driverProfile:{...profile,driverId:stranger},location:gps,route},
+  {driverProfile:{...profile,vehicleKind:'MOTO'},location:gps,route},
+  {driverProfile:null,location:gps,route},
+ ]){
+  const {handler}=fixture({loadOwnTrip:async()=>accepted,
+   loadArrivalEvidence:async()=>bad});
+  const x=await handler(request());
+  assert.equal(x.status,503);
+  assert.doesNotMatch(JSON.stringify(x),/TEST999|-25\.28/);
+ }
+});

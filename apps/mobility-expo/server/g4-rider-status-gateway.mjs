@@ -27,6 +27,21 @@ const safeTrip=(trip,id,passenger)=>plain(trip)&&trip.id===id&&
  (trip.status!=='searching'||(trip.driverId===null&&trip.vehicleId===null))&&
  (['searching','cancelled'].includes(trip.status)||
    (UUID.test(trip.driverId??'')&&UUID.test(trip.vehicleId??'')));
+
+// G86: SQL assignment and third-party profile/GPS evidence are independent.
+// When the latter is offline, publish ONLY the persisted lifecycle state;
+// never fabricate Driver identity, vehicle, coordinates or arrival estimate.
+// Malformed/contradictory evidence still fails closed and never enters here.
+function safeAssignedLifecycleOnly(trip,passenger,base,clientBase){
+ const state=trip.status==='accepted'?'assigned':trip.status;
+ const eventStatus=trip.status==='arriving'?'at_pickup':trip.status;
+ return RESP(200,{...clientBase,state,assignmentPersisted:true,
+  driver:null,vehicle:null,gpsConsent:false,location:null,
+  etaVerified:false,etaMinutes:null,
+  mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
+  event:{...base,status:eventStatus,acceptedDriver:null,tracking:null},
+  locationVisible:false,deliveryConfirmed:false});
+}
 /**
  * Polling contract. Postgres and Realtime adapters must use the SAME policy:
  * getUser(jwt), SQL filter by trip ID and passenger ID, then server-owned
@@ -89,7 +104,11 @@ export function createQoreRiderStatusGateway({
     tripId:trip.id,passengerId:user.id,driverId:trip.driverId,
     vehicleId:trip.vehicleId,includeLocation:trip.status==='accepted'
    });
-  }catch{return RESP(503,{error:'Verified driver evidence temporarily unavailable'});}
+  }catch{
+   // A committed assignment remains true even when profile/GPS is offline.
+   // Do not imply provider verification or driver arrival.
+   return safeAssignedLifecycleOnly(trip,user.id,base,clientBase);
+  }
   if(!plain(evidence)||!plain(evidence.driverProfile)||
      evidence.driverProfile.driverId!==trip.driverId||
      evidence.driverProfile.vehicleId!==trip.vehicleId)

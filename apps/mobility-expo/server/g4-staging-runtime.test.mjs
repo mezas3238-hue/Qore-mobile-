@@ -325,7 +325,19 @@ test('real HTTP with Supabase-like adapters verifies role/JWT and uses server-de
   }]);
   // G1 profile table has no name/photo/rating: NEVER make up an identity.
   const after=await req(base,statusPath);
-  assert.equal(after.status,503);
+  assert.equal(after.status,200);
+  assert.equal(after.body.tripId,ride);
+  assert.equal(after.body.state,'assigned');
+  assert.equal(after.body.assignmentPersisted,true);
+  assert.equal(after.body.revision,2);
+  assert.equal(after.body.event.status,'accepted');
+  assert.equal(after.body.driver,null);
+  assert.equal(after.body.vehicle,null);
+  assert.equal(after.body.event.acceptedDriver,null);
+  assert.equal(after.body.event.tracking,null);
+  assert.equal(after.body.location,null);
+  assert.equal(after.body.etaVerified,false);
+  assert.equal(after.body.gpsConsent,false);
   assert.doesNotMatch(JSON.stringify(after),/TEST777|Toyota|-25\./);
   assert.equal((await req(base,statusPath,'stranger')).status,403);
  });
