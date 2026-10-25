@@ -1,11 +1,55 @@
-import React,{useState} from 'react';
-import {ScrollView,Switch,Text,View} from 'react-native';
+import React,{useEffect,useState} from 'react';
+import {ScrollView,Switch,Text,TextInput,View} from 'react-native';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
+import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
 export default function DriverHome(){
  const [demoAvailable,setDemoAvailable]=useState(false);
+ const auth=useNativeDriverAuth();
+ const [email,setEmail]=useState('');
+ const [password,setPassword]=useState('');
+ const [authBusy,setAuthBusy]=useState(false);
+ const [authenticated,setAuthenticated]=useState(false);
+ const [authMessage,setAuthMessage]=useState('');
+ useEffect(()=>{
+  let active=true;
+  const verify=async()=>{
+   if(!auth)return;
+   try{
+    const session=await auth.getSession();
+    if(active)setAuthenticated(session?.role==='driver');
+   }catch{if(active)setAuthenticated(false);}
+  };
+  void verify();
+  const unsubscribe=auth?.subscribe?.(()=>{void verify();});
+  return ()=>{active=false;unsubscribe?.();};
+ },[auth]);
+ async function signIn(){
+  if(!auth||authBusy)return;
+  const secret=password;setPassword('');setAuthBusy(true);setAuthMessage('');
+  try{
+   const result=await auth.signIn(email,secret);
+   if(!result.ok){
+    setAuthenticated(false);
+    setAuthMessage(result.code==='DRIVER_ROLE_NOT_VERIFIED'
+     ?'Esta cuenta no tiene rol exclusivo de conductor verificado.'
+     :'No fue posible verificar credenciales, identidad y rol.');
+    return;
+   }
+   setAuthenticated((await auth.getSession())?.role==='driver');
+   setAuthMessage('Identidad Driver verificada. Sin backend autorizado, las ofertas siguen bloqueadas.');
+  }catch{setAuthenticated(false);setAuthMessage('Sin conexión segura confirmada.');}
+  finally{setAuthBusy(false);}
+ }
+ async function signOut(){
+  if(!auth||authBusy)return;
+  setAuthBusy(true);setPassword('');setAuthenticated(false);
+  try{await auth.signOut();setAuthMessage('Sesión Driver cerrada.');}
+  catch{setAuthMessage('Acceso oculto; no se confirmó revocación remota.');}
+  finally{setAuthBusy(false);}
+ }
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
  const phase:Record<string,string>={
@@ -22,6 +66,29 @@ export default function DriverHome(){
    <Text style={styles.heroSub}>Aplicación exclusiva para conductores y repartidores. Todos los movimientos de esta versión son locales y de prueba.</Text>
   </View>
   <View style={styles.badge}><Text style={styles.badgeText}>DEMO • SIN VIAJES REALES</Text></View>
+  <Panel>
+   <Text style={styles.heading}>Acceso seguro de conductor</Text>
+   {auth?(authenticated?
+    <>
+     <Text style={styles.text}>Cuenta Driver autenticada. No significa habilitación de KYC, GPS ni viajes.</Text>
+     <Action label="Cerrar sesión Driver" secondary disabled={authBusy}
+      onPress={()=>{void signOut();}}/>
+    </>:
+    <>
+     <Text style={styles.small}>Cuenta Driver exclusiva, validada por Auth y roles del servidor.</Text>
+     <TextInput style={styles.field} value={email} onChangeText={setEmail}
+      autoCapitalize="none" keyboardType="email-address" autoComplete="email"
+      accessibilityLabel="Correo conductor" editable={!authBusy} placeholder="Correo"/>
+     <TextInput style={styles.field} value={password} onChangeText={setPassword}
+      secureTextEntry autoComplete="current-password" autoCapitalize="none"
+      accessibilityLabel="Contraseña conductor" editable={!authBusy} placeholder="Contraseña"/>
+     <Action label={authBusy?'Verificando…':'Ingresar como Driver'}
+      disabled={authBusy||!email||!password} onPress={()=>{void signIn();}}/>
+    </>
+   ):<Text style={styles.small}>Falta configurar la identidad pública del STAGING autorizado.
+    No se almacenan credenciales de servidor en el celular.</Text>}
+   {authMessage!==''&&<Text accessibilityRole="alert" style={styles.small}>{authMessage}</Text>}
+  </Panel>
   <Panel>
    <Text style={styles.heading}>Conexión privada de Driver</Text>
    <Text accessibilityRole="text" style={styles.text}>{phase[state.phase]}</Text>
