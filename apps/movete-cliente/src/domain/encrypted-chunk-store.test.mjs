@@ -26,7 +26,7 @@ test('native Keychain stores full >1900 byte IdP session in bounded encrypted ch
  assert.equal(f.saved.has('session'),false);
  assert.equal(f.saved.size>2,true);
  for(const [key,v] of f.saved){
-  assert(/^[\\w.-]+$/.test(key),'Expo SecureStore key must be supported');
+  assert(/^[\w.-]+$/.test(key),'Expo SecureStore key must be supported');
   assert(Buffer.byteLength(v,'utf8')<=1400);
  }
  assert([...f.saved.keys()].every(k=>k.startsWith('qa-auth-vault_session_')));
@@ -34,7 +34,7 @@ test('native Keychain stores full >1900 byte IdP session in bounded encrypted ch
 test('write manifest LAST, failed chunks preserve previous complete session',async()=>{
  const f=fixture();
  await f.vault.setItem('session','OLD_SESSION');
- f.failAt('qa-auth-vault_session_77770000-0000-4777-8777-000000000002:0');
+ f.failAt('qa-auth-vault_session_77770000-0000-4777-8777-000000000002_0');
  await assert.rejects(f.vault.setItem('session','NEW_SESSION'),/Native secure storage failed/);
  assert.equal(await f.vault.getItem('session'),'OLD_SESSION');
  assert.equal(f.saved.size,2,'Only old manifest and old encrypted generation remain');
