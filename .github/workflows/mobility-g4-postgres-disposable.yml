@@ -565,3 +565,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_FENCE_POSTGRES_CI_ONLY.sql
       - name: G96 assert same G73 trip, one cancel/void, closed queue, withdrawn offer and late ACK denial
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G98 real PG16-backed F1 HTTP quote, subsidy, booked trip, cancel, dispatch closure and 4 reverse entries
+        run: node apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
