@@ -558,3 +558,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G95_F1_PASSENGER_CANCEL_ATOMIC_POSTGRES_CI_ONLY.sql
       - name: G95 certify original trip, one cancel event, financial void, replay, privacy and no promotion
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G95_F1_PASSENGER_CANCEL_ATOMIC_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G96 install cancel fence for private Driver dispatch, offer and push ACK
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G96 assert same G73 trip, one cancel/void, closed queue, withdrawn offer and late ACK denial
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_ASSERT_POSTGRES_CI_ONLY.sql
