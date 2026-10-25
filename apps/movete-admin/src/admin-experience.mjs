@@ -6,6 +6,7 @@ import {createIncidentQueueStore} from './incidents-overview.mjs';
 import {createAuditFeedStore} from './audit-feed.mjs';
 import {createAdminReadGateway} from './admin-read-gateway.mjs';
 import {createF1AutoRideAuditGateway} from './f1-auto-ride-audit-gateway.mjs';
+import {createF1AdminTripIntegrityFence} from './f1-admin-trip-integrity-fence.mjs';
 import {createPageNavigator,readContinuation} from './page-cursor.mjs';
 import {createIncidentTriageG41Gateway} from './incident-g41-gateway.mjs';
 import {createGlobalTriageFlow} from './incident-g41-flow.mjs';
@@ -23,6 +24,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const incidents=createIncidentQueueStore({now});
  const audit=createAuditFeedStore({now});
  const pages=createPageNavigator();
+ const f1Integrity=createF1AdminTripIntegrityFence();
  let session,globalTriage,f1AuditGateway=null,f1Audit=null,f1AuditBusy=false,f1AuditGeneration=0,f1AuditError=null;
  // No second KYC decision after an unknown/accepted POST until an
  // authoritative NEWER server page has been read for the same Admin.
@@ -32,6 +34,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();globalTriage?.clear();
   f1AuditGeneration++;f1Audit=null;f1AuditBusy=false;f1AuditError=null;
   f1AuditGateway?.cancelPending();
+  f1Integrity.clear();
   reviewInFlight=false;reviewNeedsReconciliation=false;reviewRevisionFloor=-1;};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
  const readGateway=readGatewayOptions?createAdminReadGateway({
@@ -73,6 +76,13 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
     f1AuditError=typeof result?.code==='string'
      ?result.code:'F1_ADMIN_READ_UNAVAILABLE';notify();
     return fail(f1AuditError);
+   }
+   // A valid G75 200 may still be older than this Admin's previous
+   // observation of the exact same trip. Never display a rollback.
+   const integrity=f1Integrity.observe(result.data);
+   if(!integrity.ok){
+    f1AuditError=integrity.code;f1Audit=null;notify();
+    return fail(integrity.code);
    }
    f1Audit=result.data;notify();
    return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
