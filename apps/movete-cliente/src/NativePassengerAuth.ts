@@ -27,7 +27,7 @@ export function getNativePassengerAuth():NativePassengerAuth|null{
   },
   async setItem(key:string,value:string){
    // Native Keychain/Keystore only. No persistent cleartext fallback.
-   if(new TextEncoder().encode(value).length>1900)
+   if(encodeURIComponent(value).replace(/%[0-9A-F]{2}/gi,'_').length>1900)
     throw Error('Supabase native session exceeds secure storage limit');
    return SecureStore.setItemAsync(key,value,{
     keychainAccessible:SecureStore.WHEN_UNLOCKED
