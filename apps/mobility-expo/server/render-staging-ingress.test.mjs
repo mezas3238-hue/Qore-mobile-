@@ -44,6 +44,7 @@ function doReq(base,path,{method='GET',authorization='Bearer '+token,
  return new Promise((resolve,reject)=>{
   const req=nativeHttpRequest(base+path,{
    method,headers:{host,'x-forwarded-proto':'https',
+    ...(body===undefined?{}:{'content-length':String(Buffer.byteLength(body))}),
     ...(authorization===null?{}:{authorization}),...headers}
   },res=>{
    const buffers=[];
