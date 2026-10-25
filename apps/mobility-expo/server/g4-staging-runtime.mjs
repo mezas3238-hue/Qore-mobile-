@@ -180,6 +180,14 @@ export async function prepareQoreG4StagingRuntime({
        .every(k=>Object.hasOwn(g77RouteOptions,k))
      &&g77RouteOptions.enabled===true
      &&g77RouteOptions.billableProviderApproved===true
+     &&typeof g77RouteOptions.apiKey==='string'
+     &&g77RouteOptions.apiKey.length>=20&&g77RouteOptions.apiKey.length<=300
+     &&!/\\s/.test(g77RouteOptions.apiKey)
+     &&typeof g77RouteOptions.tagSecret==='string'
+     &&g77RouteOptions.tagSecret.length>=32
+     &&typeof g77RouteOptions.resolveCoveredPlaces==='function'
+     &&typeof g77RouteOptions.verifyRouteTolls==='function'
+     &&typeof g77RouteOptions.request==='function'
      &&verifiedAutoRoute===null))||
    !(adminF1Trust===null||(Object.getPrototypeOf(adminF1Trust)===Object.prototype
     &&Object.keys(adminF1Trust).length===3
