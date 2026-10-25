@@ -218,8 +218,12 @@ BEGIN
  x:=public.mobility_stage_g90_passenger_dispatch_status_qa(
   '81810000-0000-4818-8818-000000000001',
   '81810000-0000-4818-8818-000000000012');
- IF x->>'dispatchState'<>'CLOSED'
- THEN RAISE EXCEPTION 'G90 canceled ride not closed'; END IF;
+ -- G81 first offer is STILL active at this point. G82 cancels this trip
+ -- later in the same fixture. This assertion must not invent cancellation.
+ IF x->>'dispatchState'<>'OFFER_PENDING'
+ OR x->>'offerPendingAcceptance'<>'true'
+ OR x ? 'offerId' OR x ? 'driverId'
+ THEN RAISE EXCEPTION 'G90 current private Driver offer not projected safely'; END IF;
 END $g90_offered$;
 DO $g82$
 DECLARE
