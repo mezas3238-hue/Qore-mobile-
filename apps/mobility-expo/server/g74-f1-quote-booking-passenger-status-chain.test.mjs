@@ -50,7 +50,7 @@ function fixture({quoteExpiresAt=CLOCK+120000}={}){
    routingVerified:true,status:'QUOTED_QA'}),
   bookQuote:async p=>{
    if(p.actorId!==passenger||p.quoteId!==quoteId||p.requestKey!==bKey||
-    quoteExpiresAt<=CLOCK)throw Error('Unauthorized or expired booking');
+    state.prices===0||quoteExpiresAt<=CLOCK)throw Error('Unauthorized, unquoted or expired booking');
    if(!state.trip){
     state.books++;
     state.trip={id:tripId,passengerId:passenger,driverId:null,
