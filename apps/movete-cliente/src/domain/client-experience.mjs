@@ -52,11 +52,16 @@ export function createClientExperience({authProvider=null,gateway=null,
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
+ let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
+ const emptyDispatch=()=>Object.freeze({readReady:false,busy:false,error:null,
+  tripId:null,tripState:null,dispatchState:null,attempts:null,
+  offerPendingAcceptance:false,productionEnabled:false});
  let custodyAnchor=null;
  const seenCursors=new Set();
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
+  dispatchEpoch++;dispatch={busy:false,data:null,error:null,scope:null};
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
   if(mutations)mutations.clear();
@@ -643,6 +648,58 @@ export function createClientExperience({authProvider=null,gateway=null,
    if(generation===completedEpoch){completedBusy=false;notify();}
   }
  }
+
+ function dispatchProof(){
+  const user=actor(),proof=prequoteAuto?.verifiedBooking();
+  return g73Ready&&autoG73Http?.isConfigured()===true&&user&&proof
+   &&proof.subject===user.subject
+   &&proof.sessionRevision===session.privacyRevision()
+   &&proof.qaOnly===true&&proof.productionEnabled===false?proof:null;
+ }
+ function autoDispatchSnapshot(){
+  const proof=dispatchProof();
+  if(!proof)return emptyDispatch();
+  const own=dispatch.scope?.subject===proof.subject
+   &&dispatch.scope?.requestKey===proof.requestKey
+   &&dispatch.scope?.tripId===proof.tripId
+   &&dispatch.scope?.sessionRevision===proof.sessionRevision;
+  const data=own?dispatch.data:null;
+  return Object.freeze({readReady:true,busy:own&&dispatch.busy,
+   error:own?dispatch.error:null,tripId:proof.tripId,
+   tripState:data?.tripState??null,dispatchState:data?.dispatchState??null,
+   attempts:data?.attempts??null,
+   offerPendingAcceptance:data?.offerPendingAcceptance===true,
+   productionEnabled:false});
+ }
+ async function refreshAutoDispatch(){
+  const proof=dispatchProof();
+  if(!proof)return fail('DISPATCH_BOOKING_NOT_VERIFIED');
+  if(dispatch.busy)return fail('DISPATCH_READ_IN_FLIGHT');
+  const scope={subject:proof.subject,sessionRevision:proof.sessionRevision,
+   requestKey:proof.requestKey,tripId:proof.tripId};
+  const epoch=++dispatchEpoch;
+  dispatch={busy:true,data:null,error:null,scope};notify();
+  let result;
+  try{result=await autoG73Http.readDispatch({
+   ownerId:scope.subject,sessionRevision:scope.sessionRevision,
+   requestKey:scope.requestKey,tripId:scope.tripId
+  });}catch{result=fail('NETWORK_OR_TIMEOUT');}
+  const still=dispatchProof();
+  if(epoch!==dispatchEpoch||!still||still.subject!==scope.subject
+   ||still.sessionRevision!==scope.sessionRevision
+   ||still.requestKey!==scope.requestKey||still.tripId!==scope.tripId){
+   if(epoch===dispatchEpoch)
+    dispatch={busy:false,data:null,error:null,scope:null};
+   notify();return fail('STALE_SESSION_RESPONSE');
+  }
+  if(result?.ok!==true||result.qaOnly!==true||result.productionEnabled!==false){
+   const error=result?.code??'DISPATCH_READ_FAILED';
+   dispatch={busy:false,data:null,error,scope};notify();return fail(error);
+  }
+  dispatch={busy:false,data:result.data,error:null,scope};notify();
+  return Object.freeze({ok:true,tripId:scope.tripId,
+   dispatchState:result.data.dispatchState,qaOnly:true,productionEnabled:false});
+ }
  function snapshot(){
   const user=actor();
   guardCustodyScope();
@@ -658,7 +715,8 @@ export function createClientExperience({authProvider=null,gateway=null,
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
-    autoPrequote:prequoteAuto.snapshot(),autoRouteQuote:autoRouteIntake.snapshot(),history:null,
+    autoPrequote:prequoteAuto.snapshot(),autoRouteQuote:autoRouteIntake.snapshot(),
+    autoDispatch:emptyDispatch(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -681,7 +739,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    tracking:tracking.snapshot(),
    quote:quote.current(),
    autoPrequote:prequoteAuto.snapshot(),autoRouteQuote:autoRouteIntake.snapshot(),
-   history:history.current(user.subject),
+   autoDispatch:autoDispatchSnapshot(),history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
    historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -769,6 +827,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   acceptAutoPrequote:args=>{const result=prequoteAuto.accept(args);notify();return result;},
   reserveQuotedAuto:async args=>{const p=prequoteAuto.reserve(args);notify();const r=await p;notify();return r;},
   reconcileQuotedAuto:async()=>{const p=prequoteAuto.reconcile();notify();const r=await p;notify();return r;},
+  refreshAutoDispatch,
   clearAutoPrequote:()=>{const r=prequoteAuto.discard();notify();return r;},
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},

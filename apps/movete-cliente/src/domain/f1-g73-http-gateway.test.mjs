@@ -196,9 +196,9 @@ test('R67 G90 fails closed on forged passenger/trip, arbitrary fields, invalid a
   const f=fixture({wire:()=>reply(bad)});
   assert.equal((await f.gateway.readDispatch(dispatchScope)).code,'G73_RECEIPT_NOT_VERIFIED');
  }
- const f=fixture();
+ const f=fixture({wire:()=>reply(dispatchDto())});
  assert.equal((await f.gateway.readDispatch({...dispatchScope,tripId:foreign})).code,
-  'G73_RECEIPT_NOT_VERIFIED'); // Backend fixture does not support G90.
+  'G73_RECEIPT_NOT_VERIFIED');
  assert.equal((await f.gateway.readDispatch({...dispatchScope,requestKey:'forged'})).code,
   'INVALID_G73_SCOPE');
  assert.equal((await f.gateway.readDispatch({...dispatchScope,ownerId:foreign})).code,

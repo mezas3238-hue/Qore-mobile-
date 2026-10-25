@@ -36,6 +36,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const lock=useRef(false);
  const consultationLock=useRef(false);
  const [consulting,setConsulting]=useState(false);
+ const dispatch=view.autoDispatch;
  const [quoteBusy,setQuoteBusy]=useState(false);
  const quoteLock=useRef(false);
  const bookingKey=useRef<string|null>(null);
@@ -94,6 +95,13 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     'Solicitud guardada temporalmente en esta sesión. NO fue enviada, cotizada ni despachada.':
     'No se pudo preparar el viaje: hay otra solicitud pendiente o faltan permisos.');
   }finally{lock.current=false;}
+ }
+ async function consultDispatch(){
+  if(!dispatch.readReady||dispatch.busy||quoteBusy||!view.authenticated)return;
+  const before=client.snapshot();
+  if(before.privateViewRevision!==view.privateViewRevision
+   ||before.autoDispatch.tripId!==dispatch.tripId)return;
+  await client.refreshAutoDispatch();
  }
  async function consultVerifiedRide(){
   if(consultationLock.current||!view.rideContinuation.canVerify)return;
@@ -333,6 +341,25 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
      busy={quoteBusy} disabled={!quoted.canReconcile}
      hint="Solo lectura privada en el servidor con la misma requestKey"
      onPress={()=>{void reconcileQuotedRide();}}/>
+   </View>}
+   {quoted.phase==='confirmed'&&dispatch.readReady&&<View>
+    <Text accessibilityRole="header" style={styles.heading}>Búsqueda de conductor · STAGING</Text>
+    <Text accessibilityLiveRegion="polite" style={styles.text}>{
+     dispatch.dispatchState==='SEARCHING_DRIVER'?'Buscando conductor elegible':
+     dispatch.dispatchState==='OFFER_PENDING'?'Esperando respuesta del conductor':
+     dispatch.dispatchState==='RETRY_PENDING'?'Buscando otro conductor':
+     dispatch.dispatchState==='SEARCH_EXHAUSTED'?'No se consiguió conductor en los intentos permitidos':
+     dispatch.dispatchState==='CLOSED'?'Búsqueda finalizada según el servidor':
+      'Estado de búsqueda pendiente de consulta'
+    }</Text>
+    {dispatch.error&&<Text accessibilityRole="alert" style={styles.small}>
+     No se pudo comprobar el estado de búsqueda. La reserva no se vuelve a solicitar.
+    </Text>}
+    <Action label={dispatch.busy?'Consultando búsqueda…':'Actualizar búsqueda de conductor'}
+     busy={dispatch.busy} disabled={dispatch.busy||quoteBusy}
+     hint="Solo lectura privada de la misma reserva G90, sin nuevo pedido ni cobro."
+     onPress={()=>{void consultDispatch();}}/>
+    <Text style={styles.small}>No se muestran conductores candidatos ni GPS sin aceptación verificada.</Text>
    </View>}
    {quoted.phase==='confirmed'&&<Text accessibilityLiveRegion="polite" style={styles.small}>
     Reserva confirmada en QA. Esto no demuestra conductor asignado, ruta GPS, pago ni viaje comercial. El seguimiento requiere otra consulta autenticada al servidor.

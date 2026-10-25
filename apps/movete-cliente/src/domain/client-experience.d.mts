@@ -22,6 +22,10 @@ export type ClientSnapshot={
  autoPrequote:{phase:string;quote:{quoteId:string;amountGs:number;currency:'PYG';fareVersion:string;expiresAt:number}|null;
   quoteAvailable:boolean;bookingAvailable:boolean;canAccept:boolean;canReserve:boolean;
   requiresReconciliation:boolean;tripId:string|null;productionEnabled:false};
+ autoDispatch:{readReady:boolean;busy:boolean;error:string|null;
+  tripId:string|null;tripState:string|null;dispatchState:
+   'SEARCHING_DRIVER'|'OFFER_PENDING'|'RETRY_PENDING'|'SEARCH_EXHAUSTED'|'CLOSED'|null;
+  attempts:number|null;offerPendingAcceptance:boolean;productionEnabled:false};
  quote:{quoteId:string;subjectId:string;amountGs:number;fareMode:string;
   subjectKind:string;expiresAt:number;fareVersion:string;formattedAmount:string}|null;
  historyLoading:boolean;historyLoadError:string|null;historyConfigured:boolean;
@@ -122,6 +126,7 @@ export type ClientExperience={
  acceptAutoPrequote(args:{quoteId:string;amountGs:number;fareVersion:string}):ClientResult;
  reserveQuotedAuto(args:{requestKey:string}):Promise<ClientResult>;
  reconcileQuotedAuto():Promise<ClientResult>;
+ refreshAutoDispatch():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;

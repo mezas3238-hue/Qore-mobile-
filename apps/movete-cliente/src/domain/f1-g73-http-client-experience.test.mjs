@@ -39,6 +39,10 @@ function build({runtime=true,failBooking=false,foreignQuote=false}={}){
     if(path.endsWith('/routes'))return reply(route());
     if(path.endsWith('/prequote'))return reply(foreignQuote
      ?{...quote(),ownerId:id(9)}:quote());
+    if(path.endsWith('/dispatch'))return reply({
+     mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:owner,
+     bookingKey:bookKey,tripId,tripState:'searching',
+     dispatchState:'RETRY_PENDING',attempts:1,offerPendingAcceptance:false});
     if(path.endsWith('/book'))return failBooking?reply({error:'timeout after commit'},503)
      :reply(booked(),201);
     if(path.endsWith('/bookings/'+bookKey))return reply(booked(),200);
@@ -114,4 +118,41 @@ test('G73 JWT rotation clears the entire route/fare/booking chain',async()=>{
  assert.equal(c.snapshot().autoPrequote.phase,'idle');
  assert.equal(c.snapshot().rideContinuation.canVerify,false);
  assert.equal(f.calls.length,2);
+});
+
+test('R67 actual Cliente reads G90 search status only after confirmed G73 booking, no duplicate POST',async()=>{
+ const f=build(),c=f.experience;
+ await c.refreshSession();
+ assert.equal((await c.refreshAutoDispatch()).code,'DISPATCH_BOOKING_NOT_VERIFIED');
+ assert.equal(c.snapshot().autoDispatch.readReady,false);
+ assert.equal(f.calls.length,0);
+ await c.requestAutoQuote(input);
+ c.acceptAutoPrequote({quoteId,amountGs:17500,fareVersion:'g73-qa-v1'});
+ assert.equal((await c.reserveQuotedAuto({requestKey:bookKey})).ok,true);
+ assert.equal(c.snapshot().autoDispatch.readReady,true);
+ const r=await c.refreshAutoDispatch();
+ assert.equal(r.ok,true);
+ const snap=c.snapshot().autoDispatch;
+ assert.equal(snap.tripId,tripId);
+ assert.equal(snap.dispatchState,'RETRY_PENDING');
+ assert.equal(snap.attempts,1);
+ assert.equal(snap.offerPendingAcceptance,false);
+ assert.equal(snap.productionEnabled,false);
+ assert.deepEqual(f.calls.map(x=>x.method),['POST','POST','POST','GET']);
+ assert.equal(f.calls[3].path,'/v1/staging/rider/auto/bookings/'+bookKey+'/dispatch');
+ assert.equal(f.calls[3].body,null);
+ assert.equal(JSON.stringify(c.snapshot()).includes(f.session().token),false);
+});
+test('R67 rotated JWT revokes G90 private Driver search view',async()=>{
+ const f=build(),c=f.experience;
+ await c.refreshSession();
+ await c.requestAutoQuote(input);
+ c.acceptAutoPrequote({quoteId,amountGs:17500,fareVersion:'g73-qa-v1'});
+ await c.reserveQuotedAuto({requestKey:bookKey});
+ assert.equal((await c.refreshAutoDispatch()).ok,true);
+ f.changeSession({...f.session(),token:'rotated-synthetic-qa-jwt-abcdefghijklmnopq'});
+ await c.refreshSession();
+ assert.equal(c.snapshot().autoDispatch.readReady,false);
+ assert.equal(c.snapshot().autoDispatch.dispatchState,null);
+ assert.equal((await c.refreshAutoDispatch()).code,'DISPATCH_BOOKING_NOT_VERIFIED');
 });
