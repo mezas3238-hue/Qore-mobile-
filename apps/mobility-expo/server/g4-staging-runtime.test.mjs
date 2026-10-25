@@ -24,6 +24,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
+   adminRole:null,adminReceipt:null,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -107,6 +108,11 @@ function mockSupabase(){
    },
    async rpc(name,params){
     state.rpcs.push({name,params});
+    if(name==='mobility_stage_g27_backoffice_role_of')
+     return {data:params._user===stranger?state.adminRole:null,error:null};
+    if(name==='mobility_stage_g75_admin_f1_receipt')
+     return {data:params._admin_id===stranger&&params._trip_id===ride?
+      state.adminReceipt:null,error:null};
     if(name==='mobility_stage_auto_demo_request'){
      if(params._passenger_id!==passenger)return {error:{message:'Wrong passenger'}};
      return {data:ride,error:null};
@@ -422,4 +428,76 @@ test('dual-role driver with admin privileges is denied private offers and accept
   assert.equal((await req(base,acceptPath,'driver','POST',{offerId:offer,requestKey})).status,403);
   assert.equal(m.state.rpcs.length,0);
  });
+});
+
+const g76Path='/v1/staging/admin/rides/'+ride+'/f1-verification';
+const trust=(mods={})=>({
+ verifyAdminSession:async token=>{
+  if(token!==jwt.stranger)throw Error('Independent IdP rejected session');
+  return {id:stranger,sessionId:vehicle,
+   expiresAtMs:now+600000,is_anonymous:false};
+ },
+ verifySessionNotRevoked:async()=>true,
+ verifyBackofficeMfa:async({userId,sessionId,at})=>({
+  verifiedByProvider:true,userId,sessionId,assuranceLevel:'aal2',
+  verifiedAtMs:at-500,expiresAtMs:at+20000
+ }),
+ ...mods
+});
+const adminF1Receipt=()=>({
+ mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+ viewerId:stranger,tripId:ride,routeId:offer,quoteId:fareQuote,
+ passengerId:passenger,bookingRequestKey:requestKey,service:'economico',
+ currency:'PYG',amountGs:13000,fareVersion:'qa-g73-f1',revision:1,
+ status:'searching',assignmentPersisted:false,driverId:null,
+ observedAt:now-1000,expiresAt:now+30000,serverPersisted:true
+});
+test('G76 unconfigured local runtime denies Admin F1 and never reads SQL',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g76Path,'stranger')).status,503);
+  assert.equal(m.state.rpcs.filter(x=>x.name.includes('g75')).length,0);
+ });
+});
+test('G76 independent IdP, provider AAL2, revocation and exclusive Admin bind 19-field SQL',async()=>{
+ const m=mockSupabase();m.state.adminRole='admin';m.state.adminReceipt=adminF1Receipt();
+ const runtime=await prepare(m,{adminF1Trust:trust()});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g76Path,'rider')).status,401);
+  const result=await req(base,g76Path,'stranger');
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body,adminF1Receipt());
+  assert.equal(Object.keys(result.body).length,19);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g75_admin_f1_receipt').length,1);
+  assert.deepEqual(m.state.rpcs.at(-1),{
+   name:'mobility_stage_g75_admin_f1_receipt',
+   params:{_admin_id:stranger,_trip_id:ride}
+  });
+ });
+});
+test('G76 refused MFA, revoked token, fake IdP actor, Owner never reads receipt',async()=>{
+ for(const bad of [
+  {trust:{verifySessionNotRevoked:async()=>false},status:401},
+  {trust:{verifyBackofficeMfa:async()=>({verifiedByProvider:false})},status:403},
+  {trust:{verifyAdminSession:async()=>({id:passenger})},status:401},
+  {trust:{},role:'owner',status:403}
+ ]){
+  const m=mockSupabase();
+  m.state.adminRole=bad.role??'admin';m.state.adminReceipt=adminF1Receipt();
+  const runtime=await prepare(m,{adminF1Trust:trust(bad.trust)});
+  await http(runtime,async base=>{
+   assert.equal((await req(base,g76Path,'stranger')).status,bad.status);
+   assert(!m.state.rpcs.some(x=>x.name==='mobility_stage_g75_admin_f1_receipt'));
+  });
+ }
+});
+test('G76 startup rejects incomplete, extra or unverified Admin trust adapters',async()=>{
+ for(const bad of [{verifyAdminSession:()=>{}},
+  {verifyAdminSession:()=>{},verifySessionNotRevoked:()=>{},
+   verifyBackofficeMfa:()=>{},fakeMfa:true},
+  {verifyAdminSession:true,verifySessionNotRevoked:()=>{},verifyBackofficeMfa:()=>{}}]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,{adminF1Trust:bad}));
+  assert.equal(m.state.clients.length,0);
+ }
 });
