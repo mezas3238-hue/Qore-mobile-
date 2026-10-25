@@ -188,7 +188,7 @@ export function createQoreRadarLoopbackTransport({
     riderHistory?(riderHistoryHandler??(()=>({status:503,body:{error:'History not configured'}}))):
     (f1AutoGet||f1AutoPost)?(f1AutoHandler??(()=>({status:503,body:{error:'G72 not configured'}}))):
     adminF1AuditGet?(adminF1AuditHandler??(()=>({status:503,body:{error:'G75 IdP MFA unavailable'}}))):
-    offerRecoveryPost?(driverDecisionRecoveryHandler??(()=>({status:503,body:{error:'G64 owner-only decision reader unavailable',retrySafe:false}))):
+    offerRecoveryPost?(driverDecisionRecoveryHandler??(()=>({status:503,body:{error:'G64 owner-only decision reader unavailable',retrySafe:false}}))):
     tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
     (merchantGet||merchantPost)?merchantHandler:
