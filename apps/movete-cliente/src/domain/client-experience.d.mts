@@ -18,6 +18,12 @@ export type ClientSnapshot={
   locationObservedAt:number|null;subscriptionActive:boolean;syncing:boolean;
   lastFetchedAt:number|null;lastError:string|null;liveEnabled:false;
  };
+ motoPassenger:{contractReady:boolean;phase:string;busy:boolean;
+  quote:{quoteId:string;originalFareGs:number;customerPaysGs:number;
+   customerSubsidyGs:number;driverReceivesGs:number;platformRetainsGs:number;
+   commissionBps:1200;subsidyBps:1000;expiresAt:number}|null;
+  tripId:string|null;needsReadback:boolean;cancelled:boolean;
+  error:string|null;qaOnly:true;productionEnabled:false};
  autoRouteQuote:{available:boolean;busy:boolean;productionEnabled:false};
  autoPrequote:{phase:string;quote:{quoteId:string;amountGs:number;currency:'PYG';fareVersion:string;expiresAt:number}|null;
   subsidyRequired:boolean;subsidyAvailable:boolean;subsidyLoading:boolean;
@@ -109,6 +115,14 @@ export type ClientResult={ok:boolean;code?:string;status?:number;requestKey?:str
 export type ClientExperience={
  subscribe(listener:()=>void):()=>void;
  refreshSession():Promise<ClientResult>;
+ requestMotoQuote(args:{origin:string;destination:string;quoteRequestKey:string;
+  safetyAcknowledged:boolean}):Promise<ClientResult>;
+ acceptMotoQuote(args:{quoteId:string;customerPaysGs:number}):ClientResult;
+ bookMoto(args:{bookingKey:string}):Promise<ClientResult>;
+ readMotoBooking():Promise<ClientResult>;
+ cancelMoto(args:{cancellationKey:string}):Promise<ClientResult>;
+ readMotoCancellation():Promise<ClientResult>;
+ resetMoto():void;
  signOut():Promise<ClientResult>;
  clear():void;
  loadCommerceCatalog(branchId:string):Promise<ClientResult>;
@@ -188,6 +202,15 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ motoPassengerOptions?:{
+  enabled?:boolean;contractCertified?:boolean;externalRuntimeVerified?:boolean;
+  motoLegalVerified?:boolean;motoRouteVerified?:boolean;
+  quoteGateway?:(args:unknown)=>Promise<unknown>;
+  bookGateway?:(args:unknown)=>Promise<unknown>;
+  bookingReadGateway?:(args:unknown)=>Promise<unknown>;
+  cancelGateway?:(args:unknown)=>Promise<unknown>;
+  cancelReadGateway?:(args:unknown)=>Promise<unknown>;
+ }|null;
  senderCustodyOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   readOwnDelivery?:(scope:Readonly<{deliveryId:string;ownerId:string;

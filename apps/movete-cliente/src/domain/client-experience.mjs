@@ -28,6 +28,7 @@ import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
 import {createG51ChatInboxHttpGateway} from './g51-chat-inbox-http-gateway.mjs';
 import {createG52ChatHistoryHttpGateway} from './g52-chat-history-http-gateway.mjs';
 import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
+import {createG100MotoPassengerFlow} from './g100-moto-passenger-flow.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -38,7 +39,7 @@ import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,motoPassengerOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -47,7 +48,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
- let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null;
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
@@ -76,6 +77,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   dispatchEpoch++;dispatch={busy:false,data:null,error:null,scope:null};
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
+  if(motoFlow)motoFlow.clear(true);
   if(mutations)mutations.clear();
   if(tracking)tracking.stop();
   if(cancellation)cancellation.clear();
@@ -103,6 +105,11 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
+ // G100 is only PG SQL on A today. Default disabled; injected QA connector
+ // must attest independent MOTO passenger permissions/route/legal/rules.
+ motoFlow=createG100MotoPassengerFlow({
+  ...(motoPassengerOptions??{}),getActor:actorSession,now,onChange:notify
+ });
  // F1 G73 canonical HTTP is OFF unless a *separately certified* HTTPS,
  // JWT, route provider, PostgreSQL and shared STAGING runtime is configured.
  // Explicit custom QA injection and a G73 HTTP runtime are mutually exclusive.
@@ -1073,7 +1080,8 @@ export function createClientExperience({authProvider=null,gateway=null,
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
     autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
-    autoDispatch:emptyDispatch(),autoFinance:publicAutoFinance(),g95Cancellation:publicG95(),history:null,
+    autoDispatch:emptyDispatch(),autoFinance:publicAutoFinance(),g95Cancellation:publicG95(),
+    motoPassenger:motoFlow.snapshot(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -1097,7 +1105,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    quote:quote.current(),
    autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
    autoDispatch:autoDispatchSnapshot(),autoFinance:publicAutoFinance(),
-   g95Cancellation:publicG95(),
+   g95Cancellation:publicG95(),motoPassenger:motoFlow.snapshot(),
    history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
@@ -1124,6 +1132,13 @@ export function createClientExperience({authProvider=null,gateway=null,
   refreshSession:async()=>{const result=await session.refresh();notify();return result;},
   signOut:async()=>{const result=await signOut();notify();return result;},
   clear:()=>{session.clear();clearPrivate();notify();},
+  requestMotoQuote:args=>motoFlow.requestQuote(args),
+  acceptMotoQuote:args=>motoFlow.acceptQuote(args),
+  bookMoto:args=>motoFlow.book(args),
+  readMotoBooking:()=>motoFlow.readBooking(),
+  cancelMoto:args=>motoFlow.cancel(args),
+  readMotoCancellation:()=>motoFlow.readCancellation(),
+  resetMoto:()=>motoFlow.clear(),
   loadCommerceCatalog:async branchId=>{const p=commerceFlow.loadCatalog(branchId);notify();const r=await p;notify();return r;},
   loadCommercePage:async args=>{const p=commercePager.load(args);notify();const r=await p;notify();return r;},
   clearCommercePage:()=>{commercePager.clear();notify();},

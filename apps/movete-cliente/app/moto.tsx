@@ -1,20 +1,68 @@
 /** MOTO_RIDE Passenger: independent, local-only route review until A certifies API. */
 import React,{useState} from 'react';
+import * as Crypto from 'expo-crypto';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import {reviewMotoRideDraft} from '../src/domain/moto-ride-draft.mjs';
 
 export default function PassengerMoto(){
- const {view}=useClientView();
+ const {client,view}=useClientView();
  // Remount on subject/JWT revision: never preserve a previous rider's route.
- return <PrivateMoto key={view.privateViewRevision} authenticated={view.authenticated}/>;
+ return <PrivateMoto key={view.privateViewRevision} authenticated={view.authenticated}
+  client={client} moto={view.motoPassenger}/>;
 }
-function PrivateMoto({authenticated}:{authenticated:boolean}){
+type Client=ReturnType<typeof useClientView>['client'];
+type MotoView=ReturnType<typeof useClientView>['view']['motoPassenger'];
+function PrivateMoto({authenticated,client,moto}:{
+ authenticated:boolean;client:Client;moto:MotoView;
+}){
  const [origin,setOrigin]=useState('');
  const [destination,setDestination]=useState('');
  const [safetyAcknowledged,setSafetyAcknowledged]=useState(false);
  const [reviewed,setReviewed]=useState<ReturnType<typeof reviewMotoRideDraft>|null>(null);
+ const [feedback,setFeedback]=useState('');
+ const [sending,setSending]=useState(false);
+ const [confirmBook,setConfirmBook]=useState(false);
+ const [confirmCancel,setConfirmCancel]=useState(false);
+ async function quoteMoto(){
+  if(!authenticated||!moto.contractReady||!reviewed?.ok||sending)return;
+  setSending(true);setFeedback('');
+  try{
+   const result=await client.requestMotoQuote({
+    origin:reviewed.origin,destination:reviewed.destination,
+    quoteRequestKey:Crypto.randomUUID(),safetyAcknowledged:true
+   });
+   setFeedback(result.ok?'Cotización MOTO validada por el servidor QA.':
+    'Sin cotización verificada del servidor MOTO. No se mostrará precio.');
+  }finally{setSending(false);}
+ }
+ async function bookMoto(){
+  if(!moto.contractReady||moto.phase!=='accepted'||sending)return;
+  setConfirmBook(false);setSending(true);
+  try{const result=await client.bookMoto({bookingKey:Crypto.randomUUID()});
+   setFeedback(result.ok?'Reserva MOTO registrada en QA; sin conductor asignado.':
+    'Respuesta de reserva incierta: solo se admite lectura privada, no otro POST.');
+  }finally{setSending(false);}
+ }
+ async function cancelMoto(){
+  if(!moto.contractReady||moto.phase!=='booked'||sending)return;
+  setConfirmCancel(false);setSending(true);
+  try{const result=await client.cancelMoto({cancellationKey:Crypto.randomUUID()});
+   setFeedback(result.ok?'Cancelación MOTO registrada en QA. No es reembolso PSP.':
+    'Cancelación incierta. Consultá el recibo, sin repetir POST.');
+  }finally{setSending(false);}
+ }
+ async function readBack(){
+  if(!moto.contractReady||!moto.needsReadback||sending)return;
+  setSending(true);
+  try{
+   const result=moto.phase==='bookingUnknown'
+    ?await client.readMotoBooking():await client.readMotoCancellation();
+   setFeedback(result.ok?'El servidor confirmó el comprobante MOTO original.':
+    'El servidor aún no confirmó la operación; no enviaremos otro POST.');
+  }finally{setSending(false);}
+ }
  function edit(setter:(value:string)=>void,value:string){
   setter(value);setReviewed(null);
  }
@@ -54,10 +102,46 @@ function PrivateMoto({authenticated}:{authenticated:boolean}){
      <Text style={styles.text}>{reviewed.reason}</Text>}
    </View>}
    {!authenticated&&<Text style={styles.small}>Para contratar el servicio cuando se habilite, se exigirá identidad de pasajero validada.</Text>}
-   <Action label="Cotizar MOTO y solicitar conductor — pendiente de A" disabled
-    hint="Sin endpoints MOTO_RIDE, certificación legal, tarifa del servidor ni autorización comercial"
-    onPress={()=>{}}/>
-   <Text style={styles.small}>No hay cotización, subsidio aplicado, conductor asignado, mapa real, ETA, chat ni viaje iniciado. Ningún importe se calcula en este dispositivo.</Text>
+   {!moto.contractReady?<Action label="Cotizar MOTO — pendiente de API certificada" disabled
+    hint="G100 existe en PostgreSQL de QA, todavía sin HTTPS legal/ruteo/driver verificado"
+    onPress={()=>{}}/>:
+    <Action label={sending?'Consultando…':'Cotizar MOTO con servidor'} disabled={sending||!reviewed?.ok||moto.phase!=='idle'}
+     busy={sending} onPress={()=>{void quoteMoto();}}/>}
+   {moto.quote&&<View>
+    <Text style={styles.text}>Tarifa original: {moto.quote.originalFareGs.toLocaleString('es-PY')} Gs.</Text>
+    <Text style={styles.text}>Subsidio al cliente (10 %): {moto.quote.customerSubsidyGs.toLocaleString('es-PY')} Gs.</Text>
+    <Text style={styles.text}>Total para el cliente: {moto.quote.customerPaysGs.toLocaleString('es-PY')} Gs.</Text>
+    <Text style={styles.small}>Comisión nominal 12 %, retención plataforma 2 %. Cifras recibidas y comprobadas contra el servidor en QA, no calculadas como cotización local.</Text>
+    {moto.phase==='quoted'&&<Action label="Aceptar esta cotización MOTO" disabled={sending}
+     onPress={()=>{
+      const result=client.acceptMotoQuote({quoteId:moto.quote!.quoteId,customerPaysGs:moto.quote!.customerPaysGs});
+      setFeedback(result.ok?'Cotización aceptada; confirmá expresamente la reserva.':'La cotización cambió o venció.');
+     }}/>}
+    {moto.phase==='accepted'&&!confirmBook&&<Action label="Revisar reserva MOTO"
+     disabled={sending} onPress={()=>setConfirmBook(true)}/>}
+    {moto.phase==='accepted'&&confirmBook&&<View>
+     <Text style={styles.text}>¿Confirmás pedir MOTO por el total mostrado? Ningún conductor está asignado todavía.</Text>
+     <Action label="Confirmar reserva MOTO QA" disabled={sending} busy={sending}
+      onPress={()=>{void bookMoto();}}/>
+     <Action label="Volver sin reservar" secondary disabled={sending}
+      onPress={()=>setConfirmBook(false)}/>
+    </View>}
+   </View>}
+   {moto.phase==='booked'&&<View>
+    <Text style={styles.text}>Reserva MOTO registrada en QA. Sin asignación de conductor ni ETA certificada.</Text>
+    {!confirmCancel?<Action label="Solicitar cancelación MOTO" secondary
+     onPress={()=>setConfirmCancel(true)}/>:<View>
+     <Text style={styles.text}>¿Confirmás cancelar esta reserva de MOTO?</Text>
+     <Action label="Confirmar cancelación MOTO QA" disabled={sending} busy={sending}
+      onPress={()=>{void cancelMoto();}}/>
+     <Action label="Volver sin cancelar" secondary onPress={()=>setConfirmCancel(false)}/>
+    </View>}
+   </View>}
+   {moto.needsReadback&&<Action label="Recuperar comprobante MOTO sin reenviar"
+    disabled={sending} busy={sending} onPress={()=>{void readBack();}}/>}
+   {moto.cancelled&&<Text style={styles.text}>Viaje MOTO cancelado en QA, asiento revertido. No se efectuó reembolso bancario.</Text>}
+   {feedback!==''&&<Text accessibilityRole="alert" style={styles.small}>{feedback}</Text>}
+   <Text style={styles.small}>MOTO no está disponible comercialmente. G100 solo tiene contratos SQL de laboratorio; sin API HTTPS ni mapas, asignación, ETA, KYC del motorista o pagos reales.</Text>
   </Panel>
  </ScrollView>;
 }
