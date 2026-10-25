@@ -5,6 +5,7 @@ import type {ClientExperience,ClientSnapshot} from './domain/client-experience.m
 import {getNativePassengerAuth} from './NativePassengerAuth';
 import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
 import {createF1AuthorizedQaHttpOptions} from './domain/f1-authorized-qa-http-options.mjs';
+import {createF1AuthorizedHistoryRecoveryOptions} from './domain/f1-authorized-history-recovery-options.mjs';
 
 const ExperienceContext=createContext<ClientExperience|null>(null);
 const NativeAuthContext=createContext<NativePassengerAuth|null>(null);
@@ -38,9 +39,22 @@ export function ClientRuntimeProvider({children,experience}:{
   persistedRuntimeVerified:process.env.EXPO_PUBLIC_F1_PG_RUNTIME_VERIFIED==='true',
   routeProviderVerified:process.env.EXPO_PUBLIC_F1_ROUTE_PROVIDER_VERIFIED==='true'
  }),[]);
+ // Independent G26 history + G11 status attestations. A G73 booking gate,
+ // /liveness response or Expo web export NEVER enable this recovery path.
+ const recoveryHttp=useMemo(()=>createF1AuthorizedHistoryRecoveryOptions({
+  origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+  pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN,
+  ownerApproved:process.env.EXPO_PUBLIC_F1_OWNER_APPROVED==='true',
+  persistedRuntimeVerified:process.env.EXPO_PUBLIC_F1_PG_RUNTIME_VERIFIED==='true',
+  historyContractVerified:process.env.EXPO_PUBLIC_F1_HISTORY_CONTRACT_VERIFIED==='true',
+  statusContractVerified:process.env.EXPO_PUBLIC_F1_STATUS_CONTRACT_VERIFIED==='true',
+  passengerRlsVerified:process.env.EXPO_PUBLIC_F1_PASSENGER_RLS_VERIFIED==='true'
+ }),[]);
  const client=useMemo(()=>experience??createClientExperience({
-  authProvider:nativeAuth,autoG73HttpOptions:qaHttp
- }),[experience,nativeAuth,qaHttp]);
+  authProvider:nativeAuth,autoG73HttpOptions:qaHttp,
+  historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
+  statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
+ }),[experience,nativeAuth,qaHttp,recoveryHttp]);
  useEffect(()=>{if(nativeAuth)void client.refreshSession();},[client,nativeAuth]);
  const [simpleMode,setSimpleMode]=useState(false);
  const simplePreferences=useMemo(()=>({simpleMode,setSimpleMode}),[simpleMode]);

@@ -79,6 +79,18 @@ export default function ClientHistory(){
     <Text accessibilityRole="header" style={styles.heroText}>Mi historial</Text>
     <Text style={styles.heroSub}>Servicios propios, sin límite global de registros. La lista se muestra en partes para cuidar la memoria.</Text>
    </View>
+   <Panel>
+    <Text accessibilityRole="header" style={styles.heading}>¿Reiniciaste la app durante un viaje?</Text>
+    <Text style={styles.text}>Primero consultá tus viajes en el servidor. Si aparece uno activo, verificaremos su estado mediante otra lectura antes de abrir el seguimiento. No se vuelve a reservar ni se genera un cobro.</Text>
+    <Action label={view.historyLoading?'Consultando viajes propios…':'Buscar mis viajes en el servidor'}
+     busy={view.historyLoading}
+     disabled={!view.authenticated||!view.historyConfigured||view.historyLoading}
+     hint="GET de historial autorizado, no crea ni duplica una reserva."
+     onPress={resetHistory}/>
+    {!view.historyConfigured&&<Text style={styles.small}>Recuperación suspendida: A debe certificar ambos contratos HTTPS, la persistencia PostgreSQL y la autorización de pasajero.</Text>}
+    {view.historyConfigured&&!view.rideHistoryRecovery.readReady&&
+     <Text style={styles.small}>El seguimiento solo se habilita después de verificar una fila propia y el estado independiente del viaje. La ausencia de fila en una página no significa que no exista reserva.</Text>}
+   </Panel>
    {view.history?.window.hasEvictedNewer&&<Panel>
     <Text accessibilityRole="header" style={styles.heading}>Ventana de memoria activa</Text>
     <Text style={styles.text}>Se liberaron {view.history.window.evictedCount.toLocaleString('es-PY')} servicios recientes ya recorridos para mantener estable el dispositivo. El historial completo continúa en el servidor.</Text>
