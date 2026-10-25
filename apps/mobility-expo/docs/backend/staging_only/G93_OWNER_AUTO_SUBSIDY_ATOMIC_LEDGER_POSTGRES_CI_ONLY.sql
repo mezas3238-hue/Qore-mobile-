@@ -137,7 +137,7 @@ BEGIN
  WHERE service_kind='AUTO_RIDE' AND active
  AND begins_at<=pg_catalog.clock_timestamp() AND ends_at>pg_catalog.clock_timestamp()
  FOR SHARE;
- IF NOT FOUND OR public.mobility_stage_g27_backoffice_role_of(c.approved_by)<>'owner'
+ IF NOT FOUND OR public.mobility_stage_g27_backoffice_role_of(c.approved_by) IS DISTINCT FROM 'owner'
  THEN RAISE EXCEPTION 'G93 no verified Owner campaign' USING ERRCODE='P9301'; END IF;
  nominal:=(q.total_pyg::bigint*1500+5000)/10000;
  subsidy:=(q.total_pyg::bigint*1000+5000)/10000;
@@ -175,7 +175,7 @@ BEGIN
  SELECT * INTO c FROM public.mobility_stage_g93_ride_campaigns WHERE id=t.campaign_id;
  IF NOT FOUND OR NOT c.active OR c.service_kind<>'AUTO_RIDE'
  OR c.begins_at>stamp OR c.ends_at<=stamp
- OR public.mobility_stage_g27_backoffice_role_of(c.approved_by)<>'owner'
+ OR public.mobility_stage_g27_backoffice_role_of(c.approved_by) IS DISTINCT FROM 'owner'
  OR t.passenger_id<>NEW.passenger_id OR t.original_fare_gs<>NEW.total_pyg
  OR NEW.booking_key IS NULL OR NEW.trip_id IS NULL
  OR t.commission_gs<>(NEW.total_pyg::bigint*1500+5000)/10000
