@@ -29,14 +29,14 @@ const subsidy={
 };
 const settled={
  mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:uid,
- bookingKey,tripId,quoteId,tripState:'cancelled',tripRevision:2,
+ bookingKey:bookKey,tripId,quoteId,tripState:'cancelled',tripRevision:2,
  financialState:'VOIDED_QA',customerPaysGs:13680,driverReceivesGs:12920,
  customerSubsidyGs:1520,platformRetainsGs:760,originalEntriesBalanced:true,
  reversalEntriesBalanced:true,pspCollected:false,pspRefunded:false,serverPersisted:true
 };
 const cancelled={
  mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:uid,
- bookingKey,cancellationKey:cancelKey,eventId,tripId,quoteId,
+ bookingKey:bookKey,cancellationKey:cancelKey,eventId,tripId,quoteId,
  tripState:'cancelled',tripRevision:2,financialState:'VOIDED_QA',
  reversalEntriesBalanced:true,pspCollected:false,pspRefunded:false,
  serverPersisted:true
