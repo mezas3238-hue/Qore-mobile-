@@ -16,8 +16,11 @@ const offerReadRoute=/^\/v1\/staging\/driver\/offers\/[0-9a-f-]{36}$/i;
 const offerDecisionRoute=/^\/v1\/staging\/driver\/offers\/(accept|decline)$/;
 const offerRecoveryRoute=/^\/v1\/staging\/(?:driver\/offers|courier\/delivery-offers)\/reconcile$/;
 const tripRequestRoute=/^\/v1\/staging\/rider\/trips\/request$/;
-const f1AutoPostRoute=/^\/v1\/staging\/rider\/auto\/(routes|prequote|book)$/;
-const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}(?:\/dispatch)?$/i;
+// G97: route already-authenticated G93/G94/G95 through loopback HTTP.
+const f1AutoPostRoute=/^\/v1\/staging\/rider\/auto\/(?:routes|prequote|book)$/;
+const f1AutoCancelPostRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}\/cancel$/i;
+const f1AutoSubsidyPostRoute=/^\/v1\/staging\/rider\/auto\/prequotes\/[0-9a-f-]{36}\/subsidy$/i;
+const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}(?:\/(?:dispatch|financial-status|cancellation))?$/i;
 const adminF1AuditRoute=/^\/v1\/staging\/admin\/rides\/[0-9a-f-]{36}\/f1-verification$/i;
 const riderCancelRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/cancel$/i;
 const tripTransitionRoute=/^\/v1\/staging\/trips\/[0-9a-f-]{36}\/transition$/i;
@@ -113,7 +116,11 @@ export function createQoreRadarLoopbackTransport({
     riderCancelRoute.test(path));
   const f1AutoGet=req.method==='GET'&&f1AutoGetRoute.test(path);
   const adminF1AuditGet=req.method==='GET'&&adminF1AuditRoute.test(path);
-  const f1AutoPost=req.method==='POST'&&f1AutoPostRoute.test(path);
+  const f1AutoPost=req.method==='POST'&&
+   (f1AutoPostRoute.test(path)||f1AutoCancelPostRoute.test(path));
+  // This POST is a read-only persisted quote disclosure: NO JSON request
+  // body, no browser cookies, no network provider, no price supplied by Rider.
+  const f1AutoSubsidyPost=req.method==='POST'&&f1AutoSubsidyPostRoute.test(path);
   const deliveryGet=req.method==='GET'&&deliveryStatusRoute.test(path);
   const deliveryPost=req.method==='POST'&&
    (deliveryRequestRoute.test(path)||deliveryTransitionRoute.test(path));
@@ -143,7 +150,7 @@ export function createQoreRadarLoopbackTransport({
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
-  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!adminF1AuditGet&&
+  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!adminF1AuditGet&&
     !deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
@@ -156,7 +163,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||riderHistory||offerGet||f1AutoGet||adminF1AuditGet||deliveryGet||merchantGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||adminF1AuditGet||deliveryGet||merchantGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet||driverKycValidityGet||driverTripStatusGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -186,7 +193,7 @@ export function createQoreRadarLoopbackTransport({
   try {
    const handler=rider?riderHandler:
     riderHistory?(riderHistoryHandler??(()=>({status:503,body:{error:'History not configured'}}))):
-    (f1AutoGet||f1AutoPost)?(f1AutoHandler??(()=>({status:503,body:{error:'G72 not configured'}}))):
+    (f1AutoGet||f1AutoPost||f1AutoSubsidyPost)?(f1AutoHandler??(()=>({status:503,body:{error:'F1 Auto not configured'}}))):
     adminF1AuditGet?(adminF1AuditHandler??(()=>({status:503,body:{error:'G75 IdP MFA unavailable'}}))):
     offerRecoveryPost?(driverDecisionRecoveryHandler??(()=>({status:503,body:{error:'G64 owner-only decision reader unavailable',retrySafe:false}}))):
     tripPost?tripCommandHandler:

@@ -428,6 +428,13 @@ export async function prepareQoreG4StagingRuntime({
   bookQuote:params=>f1AutoPersistence.book(params),
   reconcileBooking:params=>f1AutoPersistence.bookingReceipt(params),
   readDispatchStatus:params=>f1AutoPersistence.dispatchStatus(params),
+  // G97: loopback-only wiring; G93/G94/G95 SQL deny remote execution by
+  // database/application_name guards. Missing RPC -> fail closed HTTP 503.
+  // Do not claim a live financial campaign, merchant settlement, or refund.
+  readSubsidyPreview:params=>f1AutoPersistence.previewAutoSubsidy(params),
+  readAutoFinancialState:params=>f1AutoPersistence.autoFinancialState(params),
+  cancelBookedAuto:params=>f1AutoPersistence.cancelBookedAuto(params),
+  readCancellation:params=>f1AutoPersistence.cancellationReceipt(params),
   dispatchBookedAuto:async({passengerId,bookingKey})=>
    candidateDispatch.offerFirstEligible({passengerId,bookingKey,
     offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}),
