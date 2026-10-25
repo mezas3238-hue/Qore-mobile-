@@ -21,10 +21,9 @@ const hostname=process.env.QORE_RENDER_HOSTNAME;
 const adminOrigin=process.env.QORE_ADMIN_BROWSER_ORIGIN||null;
 if(!hostname)throw Error('Render STAGING pinned hostname required');
 // Validate host/origin BEFORE initializing any privileged clients.
-const probe=createRenderStagingIngress({
+createRenderStagingIngress({
  loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,adminOrigin
 });
-probe.close();
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
