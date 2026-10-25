@@ -11,7 +11,11 @@ const bookKey='73730000-0000-4737-8737-000000000012';
 const tripId='73730000-0000-4737-8737-000000000016';
 const time=1900000000000;
 const headers={authorization:'Bearer '+ 'x'.repeat(40)};
-const route={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+const route={routeId,ownerId:actor,quoteRequestKey:routeKey,
+ origin:'Panteón',destination:'Aeropuerto',service:'economico',
+ routingVerified:true,coverageVerified:true,expiresAt:time+300000,
+ source:'SERVER_VERIFIED_ROUTE',status:'ROUTE_VERIFIED_QA'};
+const backendRoute={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
  ownerId:actor,routeId,requestKey:routeKey,service:'economico',routingVerified:true,
  expiresAt:time+300000};
 const quote={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
@@ -30,11 +34,11 @@ function fixture(patch={}){
   verifyAccessToken:async()=>({id:actor,is_anonymous:false,email_confirmed_at:'2026-10-24T00:00:00Z'}),
   authorizePassenger:async()=>true,allowRequest:()=>true,
   resolveVerifiedRoute:async x=>{calls.push('routing');return {
-   routingVerified:true,trafficAware:true,fallbackUsed:false,
+   routingVerified:true,coverageVerified:true,trafficAware:true,fallbackUsed:false,
    originTag:'PANTEON',destinationTag:'AEROPUERTO',zoneTag:'ASUNCION_FIXTURE',
    distanceMeters:5000,durationSeconds:600,tollsPyg:0};},
   registerRoute:async x=>{calls.push('route');return routeId;},
-  loadRoute:async()=>route,
+  loadRoute:async()=>backendRoute,
   quoteRoute:async x=>{calls.push('quote');return quoteId;},
   loadQuote:async()=>quote,
   bookQuote:async x=>{calls.push('book');return tripId;},
@@ -46,7 +50,7 @@ function fixture(patch={}){
 test('G73 F1 route -> exact B quote -> explicit book -> owner GET reconciles same ride',async()=>{
  const {app,calls}=fixture();
  const a=await app(request('/v1/staging/rider/auto/routes',{
-  requestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'}));
+  quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'}));
  assert.equal(a.status,201);assert.deepEqual(a.body,route);
  const q=await app(request('/v1/staging/rider/auto/prequote',{
   requestKey:quoteKey,routeId}));
@@ -63,12 +67,12 @@ test('G73 no forged cost, no route fallback, no inactive consent or extra payloa
  const {app}=fixture({resolveVerifiedRoute:async()=>({routingVerified:false}),
   registerRoute:async()=>{calls++;return routeId;}});
  assert.equal((await app(request('/v1/staging/rider/auto/routes',{
-  requestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'})).status,409);
+  quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'})).status,409);
  assert.equal(calls,0);
  for(const payload of [
-  {requestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico',amountGs:1},
-  {requestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'moto_pasajero'},
-  {requestKey:routeKey,origin:'Panteón',destination:'Panteón',service:'economico'}
+  {quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico',amountGs:1},
+  {quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'moto_pasajero'},
+  {quoteRequestKey:routeKey,origin:'Panteón',destination:'Panteón',service:'economico'}
  ])assert.equal((await app(request('/v1/staging/rider/auto/routes',payload)).status,400);
  for(const payload of [{requestKey:bookKey,quoteId,accepted:false},
  {requestKey:bookKey,quoteId,accepted:true,priceGs:12000}]){

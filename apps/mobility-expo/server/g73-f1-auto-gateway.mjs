@@ -24,6 +24,8 @@ const actor=u=>obj(u)&&id(u.id)&&u.is_anonymous!==true&&
  (typeof u.email_confirmed_at==='string'||typeof u.phone_confirmed_at==='string');
 const routeFields=['mode','commercialEnabled','ownerId','routeId','requestKey',
  'service','routingVerified','expiresAt'];
+const consumerRouteFields=['routeId','ownerId','quoteRequestKey','origin','destination',
+ 'service','routingVerified','coverageVerified','expiresAt','source','status'];
 const quoteFields=['mode','commercialEnabled','ownerId','routeId','quoteId',
  'quoteRequestKey','fareMode','service','currency','amountGs','fareVersion',
  'expiresAt','serverPriced','routingVerified','status'];
@@ -62,8 +64,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   const isBook=method==='POST'&&path===BOOK;
   const match=method==='GET'&&typeof path==='string'?RECON.exec(path):null;
   if(!isRoute&&!isQuote&&!isBook&&!match)return respond(404,{error:'Not found'});
-  if(isRoute&&(!exact(body,['requestKey','origin','destination','service'])||
-    !id(body.requestKey)||!human(body.origin)||!human(body.destination)||
+  if(isRoute&&(!exact(body,['quoteRequestKey','origin','destination','service'])||
+    !id(body.quoteRequestKey)||!human(body.origin)||!human(body.destination)||
     body.origin.toLowerCase()===body.destination.toLowerCase()||
     !service(body.service)))return respond(400,{error:'Invalid route'});
   if(isQuote&&(!exact(body,['requestKey','routeId'])||
@@ -89,7 +91,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     const r=await resolveVerifiedRoute({
      actorId:user.id,origin:body.origin,destination:body.destination,
      service:body.service});
-    if(!obj(r)||r.routingVerified!==true||r.trafficAware!==true||
+    if(!obj(r)||r.routingVerified!==true||r.coverageVerified!==true||
+      r.trafficAware!==true||
       r.fallbackUsed!==false||!tag(r.originTag)||!tag(r.destinationTag)||
       r.originTag===r.destinationTag||!tag(r.zoneTag)||
       !Number.isSafeInteger(r.distanceMeters)||r.distanceMeters<0||
@@ -98,14 +101,23 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
       !Number.isSafeInteger(r.tollsPyg)||r.tollsPyg<0||r.tollsPyg>1000000)
       return respond(409,{error:'Independently verified route unavailable'});
     const routeId=await registerRoute({
-     actorId:user.id,requestKey:body.requestKey,service:body.service,
+     actorId:user.id,requestKey:body.quoteRequestKey,service:body.service,
      originTag:r.originTag,destinationTag:r.destinationTag,zoneTag:r.zoneTag,
      distanceMeters:r.distanceMeters,durationSeconds:r.durationSeconds,
      tollsPyg:r.tollsPyg});
     const receipt=await loadRoute({actorId:user.id,routeId});
-    if(!saneRoute(receipt,user.id,body.requestKey,body.service,now()))
+    if(!saneRoute(receipt,user.id,body.quoteRequestKey,body.service,now()))
       throw Error('Route not confirmed');
-    return respond(201,receipt);
+    // Echo only the same just-authenticated route intent; SQL retains no
+    // human-readable address. The verified resolver MUST attest coverage.
+    const consumer=Object.freeze({routeId,ownerId:user.id,
+     quoteRequestKey:body.quoteRequestKey,origin:body.origin,
+     destination:body.destination,service:body.service,
+     routingVerified:true,coverageVerified:true,expiresAt:receipt.expiresAt,
+     source:'SERVER_VERIFIED_ROUTE',status:'ROUTE_VERIFIED_QA'});
+    if(!exact(consumer,consumerRouteFields))
+      throw Error('Invalid route consumer DTO');
+    return respond(200,consumer);
    }
    if(isQuote){
     const quoteId=await quoteRoute({actorId:user.id,
