@@ -15,6 +15,7 @@ const QUOTE='/v1/staging/rider/auto/prequote';
 const BOOK='/v1/staging/rider/auto/book';
 const RECON=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})$/i;
 const DISPATCH=/^\/v1\/staging\/rider\/auto\/bookings\/([a-f0-9-]{36})\/dispatch$/i;
+const SUBSIDY=/^\/v1\/staging\/rider\/auto\/prequotes\/([a-f0-9-]{36})\/subsidy$/i;
 const respond=(status,body)=>({status,body});
 const bearer=h=>{
  const raw=h?.authorization??h?.Authorization;
@@ -47,6 +48,32 @@ const saneQuote=(x,uid,key,routeId,now)=>exact(x,quoteFields)&&
  Number.isSafeInteger(x.expiresAt)&&x.expiresAt>now&&
  x.expiresAt<=now+3600000&&x.serverPriced===true&&
  x.routingVerified===true&&x.status==='QUOTED_QA';
+// G93 displayed price is server-issued only; POST is idempotent and keeps
+// the quotation original and subsidy amounts separately, never a PSP charge.
+const subsidyFields=['mode','commercialEnabled','ownerId','quoteId','campaignId',
+ 'serviceKind','currency','originalFareGs','commissionBps','subsidyBps',
+ 'nominalCommissionGs','customerSubsidyGs','customerPaysGs','driverReceivesGs',
+ 'platformRetainsGs','fareVersion','expiresAt','serverPersisted'];
+const roundedBps=(amount,bps)=>Number((BigInt(amount)*BigInt(bps)+5000n)/10000n);
+const money=x=>Number.isSafeInteger(x)&&x>=0&&x<=100000000;
+const saneSubsidy=(x,uid,quoteId,now)=>exact(x,subsidyFields)&&
+ x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
+ x.ownerId===uid&&x.quoteId===quoteId&&id(x.campaignId)&&
+ x.serviceKind==='AUTO_RIDE'&&x.currency==='PYG'&&
+ money(x.originalFareGs)&&x.originalFareGs>0&&
+ x.commissionBps===1500&&x.subsidyBps===1000&&
+ money(x.nominalCommissionGs)&&money(x.customerSubsidyGs)&&
+ money(x.customerPaysGs)&&money(x.driverReceivesGs)&&
+ money(x.platformRetainsGs)&&
+ x.nominalCommissionGs===roundedBps(x.originalFareGs,1500)&&
+ x.customerSubsidyGs===roundedBps(x.originalFareGs,1000)&&
+ x.customerPaysGs===x.originalFareGs-x.customerSubsidyGs&&
+ x.driverReceivesGs===x.originalFareGs-x.nominalCommissionGs&&
+ x.platformRetainsGs===x.nominalCommissionGs-x.customerSubsidyGs&&
+ x.customerPaysGs===x.driverReceivesGs+x.platformRetainsGs&&
+ /^[A-Za-z0-9._-]{1,48}$/.test(x.fareVersion)&&
+ Number.isSafeInteger(x.expiresAt)&&x.expiresAt>now&&
+ x.expiresAt<=now+3600000&&x.serverPersisted===true;
 const saneBook=(x,uid,key)=>exact(x,bookFields)&&
  x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
  x.ownerId===uid&&x.requestKey===key&&id(x.quoteId)&&
@@ -69,13 +96,15 @@ const saneDispatch=(x,uid,key)=>exact(x,dispatchFields)&&
   x.dispatchState==='CLOSED');
 export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorizePassenger,
  allowRequest,resolveVerifiedRoute,registerRoute,loadRoute,quoteRoute,loadQuote,
- bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,now=Date.now}={}){
+ bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,
+ readSubsidyPreview=null,now=Date.now}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
  .every(fn=>typeof fn==='function')||
  !(dispatchBookedAuto===null||typeof dispatchBookedAuto==='function')||
- !(readDispatchStatus===null||typeof readDispatchStatus==='function'))
+ !(readDispatchStatus===null||typeof readDispatchStatus==='function')||
+ !(readSubsidyPreview===null||typeof readSubsidyPreview==='function'))
  throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
@@ -83,8 +112,10 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   const isBook=method==='POST'&&path===BOOK;
   const match=method==='GET'&&typeof path==='string'?RECON.exec(path):null;
   const dispatchMatch=method==='GET'&&typeof path==='string'?DISPATCH.exec(path):null;
-  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch)return respond(404,{error:'Not found'});
-  if((match||dispatchMatch)&&body!==undefined&&body!==null)
+  const subsidyMatch=method==='POST'&&typeof path==='string'?SUBSIDY.exec(path):null;
+  if(!isRoute&&!isQuote&&!isBook&&!match&&!dispatchMatch&&!subsidyMatch)
+   return respond(404,{error:'Not found'});
+  if((match||dispatchMatch||subsidyMatch)&&body!==undefined&&body!==null)
    return respond(400,{error:'Read-only GET cannot contain a body'});
   if(isRoute&&(!exact(body,['quoteRequestKey','origin','destination','service'])||
     !id(body.quoteRequestKey)||!human(body.origin)||!human(body.destination)||
@@ -106,7 +137,7 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   catch{return respond(503,{error:'Role verification unavailable'});}
   try{if(allowRequest({userId:user.id,operation:
     isRoute?'g73_route':isQuote?'g73_quote':isBook?'g73_book':
-    dispatchMatch?'g90_dispatch':'g73_reconcile'})!==true)
+    dispatchMatch?'g90_dispatch':subsidyMatch?'g93_subsidy_preview':'g73_reconcile'})!==true)
     return respond(429,{error:'Request rate limited'});}
   catch{return respond(503,{error:'Rate limiter unavailable'});}
   try{
@@ -148,6 +179,17 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     const receipt=await loadQuote({actorId:user.id,quoteId});
     if(!saneQuote(receipt,user.id,body.requestKey,body.routeId,now()))
       throw Error('Quote not confirmed');
+    return respond(200,receipt);
+   }
+   if(subsidyMatch){
+    if(readSubsidyPreview===null)
+     return respond(503,{error:'Official campaign preview unavailable'});
+    let receipt;
+    try{receipt=await readSubsidyPreview({actorId:user.id,quoteId:subsidyMatch[1]});}
+    catch{return respond(503,{error:'Official campaign preview unavailable'});}
+    if(receipt===null)return respond(404,{error:'Unknown or unauthorized quote'});
+    if(!saneSubsidy(receipt,user.id,subsidyMatch[1],now()))
+     return respond(409,{error:'Unverified campaign price; booking blocked'});
     return respond(200,receipt);
    }
    if(isBook){

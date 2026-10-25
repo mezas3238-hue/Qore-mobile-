@@ -2,10 +2,11 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g92",
+    "version": "1.0.0-g93",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
     "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED",
-    "x-qore-f1-g73-g90-contract-status": "QA_ONLY_NO_EXTERNAL_STAGING"
+    "x-qore-f1-g73-g90-contract-status": "QA_ONLY_NO_EXTERNAL_STAGING",
+    "x-qore-g93-financial-preview": "QA_ONLY_SERVER_ISSUED_NOT_MOUNTED"
   },
   "servers": [
     {
@@ -4169,6 +4170,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/G90PrivateDispatchReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/prequotes/{quoteId}/subsidy": {
+      "post": {
+        "operationId": "g93PreviewOwnerAutoRideSubsidyQa",
+        "summary": "Persist and return authorized AUTO campaign subsidy before booking",
+        "description": "Passenger JWT identity; POST with no body. Return 10% subsidy funded from 15% original fare nominal commission only when Owner campaign authorized, legal route/quote still fresh; request cannot set rates or amounts. Not mounted on remote HTTPS. Existing G73 15-field quote does NOT include this discount, so Cliente B must explicitly read this independent receipt before allowing consent. Server G93 SQL trigger rejects active-campaign bookings lacking preview.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-staging-certified": false,
+        "tags": [
+          "rides"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Idempotent server-stored subsidy quotation in PYG (QA only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G93AutoSubsidyPreview"
                 }
               }
             }
@@ -8905,6 +8970,110 @@
           }
         },
         "description": "All fields are server-verified. OFFER_PENDING iff offerPendingAcceptance=true. While tripState=searching, dispatchState cannot be CLOSED; once not searching dispatchState=CLOSED. No driverId, offerId, GPS, ETA, device or contact data."
+      },
+      "G93AutoSubsidyPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "quoteId",
+          "campaignId",
+          "serviceKind",
+          "currency",
+          "originalFareGs",
+          "commissionBps",
+          "subsidyBps",
+          "nominalCommissionGs",
+          "customerSubsidyGs",
+          "customerPaysGs",
+          "driverReceivesGs",
+          "platformRetainsGs",
+          "fareVersion",
+          "expiresAt",
+          "serverPersisted"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "campaignId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "serviceKind": {
+            "type": "string",
+            "const": "AUTO_RIDE"
+          },
+          "currency": {
+            "type": "string",
+            "const": "PYG"
+          },
+          "originalFareGs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "commissionBps": {
+            "type": "integer",
+            "const": 1500
+          },
+          "subsidyBps": {
+            "type": "integer",
+            "const": 1000
+          },
+          "nominalCommissionGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "customerSubsidyGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "customerPaysGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "driverReceivesGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "platformRetainsGs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000
+          },
+          "fareVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "Stored Server-only G93 AUTO_RIDE campaign preview before consent; NOT a commercial price, insurance permission, PSP payment or native deployment. MOTO_RIDE needs distinct legally verified route and fare. All financial fields must be verified and reconciled on server."
       }
     }
   },

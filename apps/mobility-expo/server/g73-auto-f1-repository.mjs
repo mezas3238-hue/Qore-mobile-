@@ -57,6 +57,18 @@ export function createQoreG73AutoRepository(client){
    return rpc(client,'mobility_stage_g90_passenger_dispatch_status_qa',{
     _passenger_id:p.actorId,_booking_key:p.requestKey});
   },
+  async previewAutoSubsidy(p){
+   if(!p||!id(p.actorId)||!id(p.quoteId))
+    throw Error('G93 invalid private quote scope');
+   return rpc(client,'mobility_stage_g93_preview_auto_qa',{
+    _passenger_id:p.actorId,_quote_id:p.quoteId});
+  },
+  async autoSubsidySettlement(p){
+   if(!p||!id(p.actorId)||!id(p.requestKey))
+    throw Error('G93 invalid private booking scope');
+   return rpc(client,'mobility_stage_g93_settlement_receipt_qa',{
+    _passenger_id:p.actorId,_booking_key:p.requestKey});
+  },
   async bookingReceipt(p){
    if(!id(p.actorId)||!id(p.requestKey))throw Error('Booking receipt scope');
    return rpc(client,'mobility_stage_g73_booking_receipt',{
