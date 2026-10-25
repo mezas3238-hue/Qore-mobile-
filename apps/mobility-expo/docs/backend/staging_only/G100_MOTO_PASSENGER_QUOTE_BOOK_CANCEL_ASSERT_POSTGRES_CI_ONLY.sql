@@ -12,7 +12,7 @@ INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_
 INSERT INTO public.mobility_stage_fare_rules(
  rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,minimum_pyg,
  commission_bps,valid_from,valid_until,active,approved_by,approved_at)
-VALUES('G100_MOTO_QA_ONLY','MOTO','G100_MOTO_ZONE',
+VALUES('G100_MOTO_QA_ONLY','MOTO','MOTO_TEST_ZONE',
  4000,1000,200,4000,1200,
  pg_catalog.clock_timestamp()-interval '1 hour',
  pg_catalog.clock_timestamp()+interval '60 days',true,
@@ -36,7 +36,7 @@ DECLARE
 BEGIN
  quote:=public.mobility_stage_g100_moto_quote_qa(p,
  '10000000-0000-4100-8100-000000000011',
- 'CENTRO_FIXTURE','AEROPUERTO','G100_MOTO_ZONE',5000,600);
+ 'CENTRO_FIXTURE','AEROPUERTO','MOTO_TEST_ZONE',5000,600);
  IF quote->>'serviceKind'<>'MOTO_RIDE' OR quote->>'service'<>'moto_pasajero'
  OR quote->>'amountGs'<>'11000' OR quote->>'commissionBps'<>'1200'
  OR quote->>'subsidyBps'<>'1000' OR quote->>'customerPaysGs'<>'9900'
