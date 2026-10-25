@@ -71,4 +71,28 @@ BEGIN
  THEN RAISE EXCEPTION 'G85 duplicate queue records'; END IF;
  RAISE NOTICE 'G85 PASS: G73 durable queue, retry backoff, no unauthorized offer';
 END $validate$;
+-- Advance only the disposable QA job to its retry ceiling; a worker must
+-- transition to EXHAUSTED instead of violating CHECK(attempts<=12).
+UPDATE public.mobility_stage_g85_auto_dispatch_jobs
+ SET attempts=12,next_attempt_at=pg_catalog.clock_timestamp()-interval '1 second'
+ WHERE booking_key='85850000-0000-4858-8858-000000000012';
+SET LOCAL ROLE service_role;
+DO $bounded$
+DECLARE result jsonb;
+BEGIN
+ result:=public.mobility_stage_g85_run_one_dispatch_qa();
+ IF result->>'status'<>'EXHAUSTED'
+ OR result->>'commercialEnabled'<>'false'
+ THEN RAISE EXCEPTION 'G85 attempt ceiling not handled safely'; END IF;
+ IF (public.mobility_stage_g85_run_one_dispatch_qa()->>'status')<>'IDLE'
+ THEN RAISE EXCEPTION 'G85 exhausted job attempted an unsafe retry'; END IF;
+END $bounded$;
+RESET ROLE;
+DO $exhausted$
+BEGIN
+ IF (SELECT count(*) FROM public.mobility_stage_g85_auto_dispatch_jobs
+   WHERE booking_key='85850000-0000-4858-8858-000000000012'
+    AND status='EXHAUSTED' AND attempts=12 AND offer_id IS NULL)<>1
+ THEN RAISE EXCEPTION 'G85 exhaustion row not durable or offer forged'; END IF;
+END $exhausted$;
 ROLLBACK;

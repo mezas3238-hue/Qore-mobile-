@@ -16,7 +16,7 @@ CREATE TABLE public.mobility_stage_g85_auto_dispatch_jobs (
  trip_id uuid NOT NULL UNIQUE REFERENCES public.mobility_stage_auto_demo_trips(id) ON DELETE RESTRICT,
  offer_key uuid NOT NULL UNIQUE DEFAULT pg_catalog.gen_random_uuid(),
  status text NOT NULL DEFAULT 'PENDING' CHECK(status IN
-  ('PENDING','WAITING','OFFERED','CLOSED')),
+  ('PENDING','WAITING','OFFERED','CLOSED','EXHAUSTED')),
  offer_id uuid UNIQUE REFERENCES public.mobility_stage_auto_demo_offers(id) ON DELETE RESTRICT,
  attempts integer NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 12),
  next_attempt_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
@@ -94,10 +94,21 @@ BEGIN
   RETURN pg_catalog.jsonb_build_object('mode','STAGING_DEMO_ONLY',
    'commercialEnabled',false,'status','CLOSED','tripId',job.trip_id);
  END IF;
+ -- Bounded operator-owned attempts: never breach the SQL counter CHECK,
+ -- spin indefinitely, or mislabel exhausted dispatch as a canceled trip.
+ IF job.attempts>=12 THEN
+  UPDATE public.mobility_stage_g85_auto_dispatch_jobs
+   SET status='EXHAUSTED',updated_at=pg_catalog.clock_timestamp()
+  WHERE booking_key=job.booking_key;
+  RETURN pg_catalog.jsonb_build_object('mode','STAGING_DEMO_ONLY',
+   'commercialEnabled',false,'status','EXHAUSTED','tripId',job.trip_id);
+ END IF;
  -- G84 may already have committed an offer with a DIFFERENT deterministic
  -- key. Reconcile that one instead of issuing duplicate offers.
  SELECT o.id INTO existing_offer
  FROM public.mobility_stage_auto_demo_offers o
+ JOIN public.mobility_stage_auto_demo_push_outbox p
+  ON p.offer_id=o.id AND p.driver_id=o.driver_id
  WHERE o.trip_id=job.trip_id
  AND o.status='offered' AND o.expires_at>pg_catalog.clock_timestamp()
  ORDER BY o.offered_at,o.id LIMIT 1;
