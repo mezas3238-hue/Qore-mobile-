@@ -2,9 +2,10 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Movete Fácil — QORE Mobile STAGING API",
-    "version": "1.0.0-g69",
+    "version": "1.0.0-g92",
     "description": "Contrato de interfaz STAGING. NO LIVE, NO producción, NO pagos reales. La identidad siempre proviene del bearer verificado.",
-    "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED"
+    "x-qore-contract-extension": "G68 Passenger-owned delivery read + G69 NOLOGIN one-use SQL delegation. QA ONLY; route NOT MOUNTED",
+    "x-qore-f1-g73-g90-contract-status": "QA_ONLY_NO_EXTERNAL_STAGING"
   },
   "servers": [
     {
@@ -3872,6 +3873,319 @@
             "$ref": "#/components/responses/Error"
           },
           "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/routes": {
+      "post": {
+        "operationId": "g73ResolvePassengerAutoRouteQa",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Resolve AUTO route with independently verified provider and coverage",
+        "description": "Verified Passenger JWT and server-only routing provider; returns only echoed intent plus verified route UUID, cannot be used without a certified routing provider. No GPS leak or commercial fare.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-https-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G73RouteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-only synthetic receipt; persistent STAGING or commercial operation is not certified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G73VerifiedRouteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/prequote": {
+      "post": {
+        "operationId": "g73ReadPassengerAutoPrequoteQa",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Retrieve server-priced AUTO prequote in PYG",
+        "description": "Owner-scoped route and quote TTL; amountGs is server-issued synthetic QA, not an approved live fare, promotion, 10% subsidy or PSP charge.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-https-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G73PrequoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-only synthetic receipt; persistent STAGING or commercial operation is not certified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G73PrequoteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/book": {
+      "post": {
+        "operationId": "g73BookPassengerAutoQa",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Confirm consented AUTO booking in disposable QA",
+        "description": "Explicit accepted=true required. SQL durable on disposable QA DB only. Returns identical tripId to read recovery. Private side-effect dispatch failure cannot undo a previously committed booking.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-https-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/G73BookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Owner-only synthetic receipt; persistent STAGING or commercial operation is not certified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G73BookingReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/bookings/{bookingKey}": {
+      "get": {
+        "operationId": "g73ReconcilePassengerAutoBookingQa",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Reconcile own committed AUTO booking",
+        "description": "Authenticated Passenger subject, never a caller-supplied owner; 404 for absent or foreign booking. GET never dispatches again. 409 for invalid/untrusted receipt. No HTTPS/PG remote certified.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-https-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "description": "Booking idempotency UUID originally returned in requestKey (never a tripId, Driver ID or owner from client)",
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only synthetic receipt; persistent STAGING or commercial operation is not certified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G73BookingReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/staging/rider/auto/bookings/{bookingKey}/dispatch": {
+      "get": {
+        "operationId": "g90ReadPassengerAutoDispatchQa",
+        "tags": [
+          "rides"
+        ],
+        "summary": "Read private G90/G91 AUTO dispatch search without Driver identity",
+        "description": "Owner-only G85 queue with G91 pre-reconciliation G4 offer; offering is not acceptance. 404 means missing/foreign; 409 means structurally contradictory receipt; 503 means SQL adapter unavailable. Attempts 0–12. No Driver ID, offer ID, GPS or ETA until verified assignment. B R67 contract.",
+        "x-qore-qa-only": true,
+        "x-qore-runtime-wired": false,
+        "x-qore-external-https-certified": false,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bookingKey",
+            "in": "path",
+            "required": true,
+            "description": "Booking idempotency UUID originally returned in requestKey (never a tripId, Driver ID or owner from client)",
+            "schema": {
+              "$ref": "#/components/schemas/Uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only synthetic receipt; persistent STAGING or commercial operation is not certified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/G90PrivateDispatchReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
             "$ref": "#/components/responses/Error"
           },
           "429": {
@@ -8252,6 +8566,345 @@
           }
         },
         "description": "Server-verified Passenger-owned delivery status. Exactly 11 fields, no courier identity, proofRef, location, phone or media. Terminal proofVerified originates from G67 atomic SQL custody evidence; no LIVE."
+      },
+      "G73RouteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "quoteRequestKey",
+          "origin",
+          "destination",
+          "service"
+        ],
+        "properties": {
+          "quoteRequestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "economico",
+              "confort",
+              "xl"
+            ]
+          }
+        }
+      },
+      "G73VerifiedRouteReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "routeId",
+          "ownerId",
+          "quoteRequestKey",
+          "origin",
+          "destination",
+          "service",
+          "routingVerified",
+          "coverageVerified",
+          "expiresAt",
+          "source",
+          "status"
+        ],
+        "properties": {
+          "routeId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteRequestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "economico",
+              "confort",
+              "xl"
+            ]
+          },
+          "routingVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "coverageVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unix epoch milliseconds"
+          },
+          "source": {
+            "type": "string",
+            "const": "SERVER_VERIFIED_ROUTE"
+          },
+          "status": {
+            "type": "string",
+            "const": "ROUTE_VERIFIED_QA"
+          }
+        }
+      },
+      "G73PrequoteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "routeId"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "routeId": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        }
+      },
+      "G73PrequoteReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "routeId",
+          "quoteId",
+          "quoteRequestKey",
+          "fareMode",
+          "service",
+          "currency",
+          "amountGs",
+          "fareVersion",
+          "expiresAt",
+          "serverPriced",
+          "routingVerified",
+          "status"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "routeId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteRequestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "fareMode": {
+            "type": "string",
+            "const": "AUTO"
+          },
+          "service": {
+            "type": "string",
+            "enum": [
+              "economico",
+              "confort",
+              "xl"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "const": "PYG"
+          },
+          "amountGs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "fareVersion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,48}$"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unix epoch milliseconds"
+          },
+          "serverPriced": {
+            "type": "boolean",
+            "const": true
+          },
+          "routingVerified": {
+            "type": "boolean",
+            "const": true
+          },
+          "status": {
+            "type": "string",
+            "const": "QUOTED_QA"
+          }
+        }
+      },
+      "G73BookRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestKey",
+          "quoteId",
+          "accepted"
+        ],
+        "properties": {
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "G73BookingReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "requestKey",
+          "quoteId",
+          "routeId",
+          "tripId",
+          "revision",
+          "serverPersisted",
+          "status"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "requestKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "quoteId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "routeId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "serverPersisted": {
+            "type": "boolean",
+            "const": true
+          },
+          "status": {
+            "type": "string",
+            "const": "ACCEPTED_QA"
+          }
+        }
+      },
+      "G90PrivateDispatchReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "commercialEnabled",
+          "ownerId",
+          "bookingKey",
+          "tripId",
+          "tripState",
+          "dispatchState",
+          "attempts",
+          "offerPendingAcceptance"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "STAGING_DEMO_ONLY"
+          },
+          "commercialEnabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "bookingKey": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/Uuid"
+          },
+          "tripState": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "accepted",
+              "arriving",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "dispatchState": {
+            "type": "string",
+            "enum": [
+              "SEARCHING_DRIVER",
+              "OFFER_PENDING",
+              "RETRY_PENDING",
+              "SEARCH_EXHAUSTED",
+              "CLOSED"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12
+          },
+          "offerPendingAcceptance": {
+            "type": "boolean"
+          }
+        },
+        "description": "All fields are server-verified. OFFER_PENDING iff offerPendingAcceptance=true. While tripState=searching, dispatchState cannot be CLOSED; once not searching dispatchState=CLOSED. No driverId, offerId, GPS, ETA, device or contact data."
       }
     }
   },
@@ -8277,5 +8930,7 @@
   "x-qore-g56b-driver-inbox-runtime-wired": false,
   "x-qore-g57-ordered-visible-runtime-wired": false,
   "x-qore-g57b-driver-ordered-visible-runtime-wired": false,
-  "x-qore-g68-sender-custody-runtime-wired": false
+  "x-qore-g68-sender-custody-runtime-wired": false,
+  "x-qore-f1-auto-external-staging-certified": false,
+  "x-qore-f1-auto-native-certified": false
 }

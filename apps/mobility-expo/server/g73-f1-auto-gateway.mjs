@@ -169,8 +169,12 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
    if(dispatchMatch){
     if(readDispatchStatus===null)
      return respond(503,{error:'Private dispatch status unavailable'});
-    const receipt=await readDispatchStatus({actorId:user.id,
-     requestKey:dispatchMatch[1]});
+    // A temporary private SQL adapter failure is NOT an invalid/foreign booking.
+    // Keep 409 for contradictory receipts and never reveal SQL error details.
+    let receipt;
+    try{receipt=await readDispatchStatus({actorId:user.id,
+      requestKey:dispatchMatch[1]});}
+    catch{return respond(503,{error:'Private dispatch status unavailable'});}
     if(receipt===null)return respond(404,{error:'Unknown or unauthorized booking'});
     if(!saneDispatch(receipt,user.id,dispatchMatch[1]))
      throw Error('Unverified private G90 queue status');
