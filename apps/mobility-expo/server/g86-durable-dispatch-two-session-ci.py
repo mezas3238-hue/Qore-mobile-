@@ -103,7 +103,93 @@ def main():
                     raise AssertionError(f"G86 wrong permission refusal {exc.sqlstate}")
             else:
                 raise AssertionError("G86 authenticated role triggered worker")
-        print("G86 PASS: canceled CLOSED; two concurrent workers claim disjoint jobs; KYC denied; no offer")
+        # G87: exercise OFFERED -> expired -> fresh idempotency under TWO
+        # simultaneous connections. This synthetic offer is inserted by DB
+        # owner only; no app may forge it or bypass the real G71/G38 gates.
+        candidate = a.execute("""SELECT driver_id,id FROM public.mobility_vehicles
+                         WHERE vehicle_kind='AUTO' ORDER BY id LIMIT 1""").fetchone()
+        if not candidate:
+            raise AssertionError("G87 disposable Driver fixture missing")
+        driver_id,vehicle_id = candidate
+        old_key = key(0x801)
+        offer_id = scalar(a, """INSERT INTO public.mobility_stage_auto_demo_offers
+                   (request_key,trip_id,driver_id,vehicle_id,ttl_seconds,
+                    offered_at,expires_at)
+                   VALUES (%s,%s,%s,%s,30,
+                    clock_timestamp()-interval '90 seconds',
+                    clock_timestamp()-interval '60 seconds') RETURNING id""",
+                          (old_key,u_trip,driver_id,vehicle_id))
+        a.execute("""INSERT INTO public.mobility_stage_auto_demo_push_outbox
+                     (offer_id,driver_id) VALUES (%s,%s)""",(offer_id,driver_id))
+        original_job_key=scalar(a,"""SELECT offer_key FROM
+                   public.mobility_stage_g85_auto_dispatch_jobs
+                   WHERE booking_key=%s""",(u_key,))
+        a.execute("""UPDATE public.mobility_stage_g85_auto_dispatch_jobs
+                     SET status='OFFERED',offer_id=%s
+                     WHERE booking_key=%s""",(offer_id,u_key))
+        a.execute("""UPDATE public.mobility_stage_g85_auto_dispatch_jobs
+                     SET next_attempt_at=clock_timestamp()+interval '1 hour'
+                     WHERE booking_key=%s""",(v_key,))
+        with a.transaction():
+            # B MUST skip A's row, never return the same expired offer.
+            a.execute("""SELECT booking_key FROM public.mobility_stage_g85_auto_dispatch_jobs
+                         WHERE booking_key=%s FOR UPDATE""",(u_key,))
+            b.execute("SET ROLE service_role")
+            blocked=run_qa(b)
+            b.execute("RESET ROLE")
+            a.execute("SET LOCAL ROLE service_role")
+            recovered=run_qa(a)
+            if blocked.get("status")!="IDLE":
+                raise AssertionError("G87 second session claimed locked expired offer")
+            if recovered.get("status")!="WAITING" or recovered.get("tripId")!=str(u_trip):
+                raise AssertionError(f"G87 expired offer did not recover: {recovered}")
+            if recovered.get("offerId") is not None:
+                raise AssertionError("G87 recovered stale private offer ID")
+        state=a.execute("""SELECT status,attempts,offer_key,offer_id
+                  FROM public.mobility_stage_g85_auto_dispatch_jobs
+                  WHERE booking_key=%s""",(u_key,)).fetchone()
+        if state[0]!="WAITING" or state[1]!=2 or state[2]==original_job_key or state[3] is not None:
+            raise AssertionError(f"G87 non-idempotent requeue {state}")
+        if scalar(a,"""SELECT count(*) FROM public.mobility_stage_auto_demo_offers
+                      WHERE trip_id=%s""",(u_trip,))!=1:
+            raise AssertionError("G87 duplicated old Driver offer")
+
+        # Decline before TTL expiry is also terminal; never need to sleep
+        # or fabricate a location/legal proof for the passenger.
+        a.execute("""UPDATE public.mobility_stage_auto_demo_offers
+                     SET status='declined',decision_key=%s,
+                     offered_at=clock_timestamp()-interval '5 seconds',
+                     expires_at=clock_timestamp()+interval '20 seconds'
+                     WHERE id=%s""",(key(0x802),offer_id))
+        new_key=state[2]
+        a.execute("""UPDATE public.mobility_stage_g85_auto_dispatch_jobs
+                     SET status='OFFERED',offer_id=%s
+                     WHERE booking_key=%s""",(offer_id,u_key))
+        a.execute("SET ROLE service_role")
+        declined=run_qa(a)
+        a.execute("RESET ROLE")
+        after=a.execute("""SELECT status,attempts,offer_key,offer_id
+                          FROM public.mobility_stage_g85_auto_dispatch_jobs
+                          WHERE booking_key=%s""",(u_key,)).fetchone()
+        if declined.get("status")!="WAITING" or declined.get("tripId")!=str(u_trip) or (
+                after[0]!="WAITING" or after[1]!=3 or after[2]==new_key or after[3] is not None):
+            raise AssertionError(f"G87 declined Driver offer was not requeued once: {declined}/{after}")
+
+        # Passenger cancel must close the pending retry without assignment.
+        scalar(a,"SELECT public.mobility_stage_auto_demo_transition(%s,%s,'cancelled',%s)",
+               (u_trip,u,key(0x803)))
+        a.execute("""UPDATE public.mobility_stage_g85_auto_dispatch_jobs
+                     SET next_attempt_at=clock_timestamp()-interval '1 minute'
+                     WHERE booking_key=%s""",(u_key,))
+        a.execute("SET ROLE service_role")
+        closed=run_qa(a)
+        a.execute("RESET ROLE")
+        if closed.get("status")!="CLOSED" or closed.get("tripId")!=str(u_trip):
+            raise AssertionError(f"G87 canceled retry was dispatched: {closed}")
+        if scalar(a,"""SELECT count(*) FROM public.mobility_stage_auto_demo_offers
+                    WHERE trip_id=%s""",(u_trip,))!=1:
+            raise AssertionError("G87 cancellation minted an extra offer")
+        print("G86/G87 PASS: disjoint workers, expired/declined requeue once, cancel CLOSED, no unsafe offers")
 
 if __name__ == "__main__":
     main()
