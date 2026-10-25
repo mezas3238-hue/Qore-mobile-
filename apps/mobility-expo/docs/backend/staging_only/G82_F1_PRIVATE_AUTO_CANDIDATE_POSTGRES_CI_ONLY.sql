@@ -15,7 +15,7 @@ CREATE FUNCTION public.mobility_stage_g82_offer_first_eligible_auto_qa(
 RETURNS uuid LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=''
 AS $fn$
 DECLARE
- trip_id uuid; trip_service public.mobility_service_kind;
+ v_trip_id uuid; trip_service public.mobility_service_kind;
  chosen_driver uuid; chosen_vehicle uuid;
  already public.mobility_stage_auto_demo_offers%ROWTYPE;
 BEGIN
@@ -25,7 +25,7 @@ BEGIN
  OR _ttl_seconds IS NULL OR _ttl_seconds NOT BETWEEN 5 AND 30
  THEN RAISE EXCEPTION 'G82 invalid private QA dispatch scope' USING ERRCODE='P8201'; END IF;
  -- Serialize retries and competing candidate selections on the G73 trip.
- SELECT t.id,t.service INTO trip_id,trip_service
+ SELECT t.id,t.service INTO v_trip_id,trip_service
  FROM public.mobility_stage_g72_auto_prequotes q
  JOIN public.mobility_stage_auto_demo_trips t
    ON t.id=q.trip_id AND t.passenger_id=q.passenger_id
@@ -44,7 +44,7 @@ BEGIN
  SELECT * INTO already FROM public.mobility_stage_auto_demo_offers
   WHERE request_key=_offer_key;
  IF FOUND THEN
-  IF already.trip_id<>trip_id OR already.ttl_seconds<>_ttl_seconds
+  IF already.trip_id<>v_trip_id OR already.ttl_seconds<>_ttl_seconds
   THEN RAISE EXCEPTION 'G82 conflicting dispatch key' USING ERRCODE='P8201'; END IF;
   RETURN public.mobility_stage_g81_offer_booked_auto(
    _passenger_id,_booking_key,already.driver_id,already.vehicle_id,
@@ -66,7 +66,7 @@ BEGIN
    WHERE slot.driver_id=v.driver_id)
   AND NOT EXISTS(
    SELECT 1 FROM public.mobility_stage_auto_demo_offers o
-   WHERE o.trip_id=trip_id AND o.driver_id=v.driver_id)
+   WHERE o.trip_id=v_trip_id AND o.driver_id=v.driver_id)
   AND public.mobility_vehicle_preflight(v.driver_id,v.id,trip_service)
   AND public.mobility_stage_g71_valid_locked_dossier(v.driver_id,v.id)
  ORDER BY l.updated_at DESC,v.driver_id,v.id
