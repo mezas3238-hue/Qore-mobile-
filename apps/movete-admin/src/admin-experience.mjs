@@ -5,6 +5,7 @@ import {createZoneOverviewStore} from './zone-overview.mjs';
 import {createIncidentQueueStore} from './incidents-overview.mjs';
 import {createAuditFeedStore} from './audit-feed.mjs';
 import {createAdminReadGateway} from './admin-read-gateway.mjs';
+import {createF1AutoRideAuditGateway} from './f1-auto-ride-audit-gateway.mjs';
 import {createPageNavigator,readContinuation} from './page-cursor.mjs';
 import {createIncidentTriageG41Gateway} from './incident-g41-gateway.mjs';
 import {createGlobalTriageFlow} from './incident-g41-flow.mjs';
@@ -15,20 +16,22 @@ import {createGlobalTriageFlow} from './incident-g41-flow.mjs';
  * Las operaciones de escritura siguen bajo validación y autorización de A.
  */
 const fail=code=>({ok:false,code});
-export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,triageGatewayOptions=null,now=()=>Date.now()}={}){
+export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,triageGatewayOptions=null,f1RideAuditOptions=null,now=()=>Date.now()}={}){
  const queue=createKycQueueStore({now});
  const finance=createOwnerFinanceStore({now});
  const zones=createZoneOverviewStore({now});
  const incidents=createIncidentQueueStore({now});
  const audit=createAuditFeedStore({now});
  const pages=createPageNavigator();
- let session,globalTriage;
+ let session,globalTriage,f1AuditGateway=null,f1Audit=null,f1AuditBusy=false,f1AuditGeneration=0,f1AuditError=null;
  // No second KYC decision after an unknown/accepted POST until an
  // authoritative NEWER server page has been read for the same Admin.
  let reviewInFlight=false,reviewNeedsReconciliation=false,reviewRevisionFloor=-1;
  const listeners=new Set();
  const notify=()=>{for(const callback of listeners){try{callback();}catch{/* no filtrar secretos */}}};
  const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();globalTriage?.clear();
+  f1AuditGeneration++;f1Audit=null;f1AuditBusy=false;f1AuditError=null;
+  f1AuditGateway?.cancelPending();
   reviewInFlight=false;reviewNeedsReconciliation=false;reviewRevisionFloor=-1;};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
  const readGateway=readGatewayOptions?createAdminReadGateway({
@@ -41,7 +44,56 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
 
- // G41 sigue UNMOUNTED en A. Sin STAGING real verificado no existe GET.
+ // F1 Admin read-only is independent of Passenger privileges and G73.
+ // No endpoint is mounted by A yet: this remains OFF in default runtime.
+ f1AuditGateway=f1RideAuditOptions?createF1AutoRideAuditGateway({
+  ...f1RideAuditOptions,now,
+  getSession:()=>{
+   const privateValue=session.getSessionForGateway();
+   return privateValue?{...privateValue,authRevision:session.revision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ async function loadF1RideAudit(tripId){
+  const current=session.publicSession();
+  if(!current||current.role!=='admin'||current.mfaVerified!==true)
+   return fail('ADMIN_AUTH_REQUIRED');
+  if(!f1AuditGateway?.isConfigured())
+   return fail('F1_ADMIN_CONTRACT_PENDING');
+  if(f1AuditBusy)return fail('F1_ADMIN_READ_IN_FLIGHT');
+  const generation=++f1AuditGeneration,epoch=session.revision();
+  f1AuditBusy=true;f1AuditError=null;f1Audit=null;notify();
+  try{
+   const result=await f1AuditGateway.read(tripId);
+   const latest=session.publicSession();
+   if(generation!==f1AuditGeneration||!latest
+    ||latest.subject!==current.subject||latest.role!==current.role
+    ||session.revision()!==epoch)return fail('STALE_SESSION_RESPONSE');
+   if(!result?.ok){
+    f1AuditError=typeof result?.code==='string'
+     ?result.code:'F1_ADMIN_READ_UNAVAILABLE';notify();
+    return fail(f1AuditError);
+   }
+   f1Audit=result.data;notify();
+   return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+  }finally{
+   if(generation===f1AuditGeneration){f1AuditBusy=false;notify();}
+  }
+ }
+ function clearF1RideAudit(){
+  f1AuditGeneration++;f1Audit=null;f1AuditBusy=false;f1AuditError=null;
+  f1AuditGateway?.cancelPending();notify();
+ }
+ function f1AuditSnapshot(user){
+  const authorized=user?.role==='admin'&&user?.mfaVerified===true;
+  const current=f1Audit&&f1Audit.expiresAt>now()?f1Audit:null;
+  if(f1Audit&&!current)f1Audit=null;
+  return Object.freeze({contractReady:Boolean(authorized&&f1AuditGateway?.isConfigured()),
+   loading:Boolean(authorized&&f1AuditBusy),
+   item:authorized?current:null,
+   error:authorized?f1AuditError:null,qaOnly:true,productionEnabled:false});
+ }
+  // G41 sigue UNMOUNTED en A. Sin STAGING real verificado no existe GET.
  const triageGateway=triageGatewayOptions?createIncidentTriageG41Gateway({
   ...triageGatewayOptions,now,
   getSession:()=>{
@@ -72,7 +124,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const reading=new Set();
  function snapshot(){
   const current=session.publicSession();
-  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,merchantCases:null,merchantCaseContractReady:false,
+  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,f1RideAudit:f1AuditSnapshot(null),merchantCases:null,merchantCaseContractReady:false,
    pagination:Object.freeze({kyc:pages.get('kyc'),zones:pages.get('zones'),
     incidents:pages.get('incidents'),audit:pages.get('audit')}),
    actionsEnabled:false});}
@@ -85,6 +137,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    incidents:current.role==='admin'?incidents.current(current.role):null,
    audit:current.role==='admin'?audit.current(current.role):null,
    globalTriage:current.role==='admin'?globalTriage.snapshot():null,
+   f1RideAudit:f1AuditSnapshot(current),
    // R43 aislado: no convertir G41/seguridad genérica en casos comerciales.
    // El endpoint MerchantSupport A todavía no existe ni está certificado.
    merchantCases:null,merchantCaseContractReady:false,
@@ -227,6 +280,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   clear:()=>{session.clear();notify();},
   readKyc,readFinance,readZones,readIncidents,readAudit,
   isReadConfigured:operation=>Boolean(readGateway?.isConfigured(operation)),
-  syncFromServer,reviewVehicle,loadGlobalIncidentTriage,snapshot
+  syncFromServer,reviewVehicle,loadGlobalIncidentTriage,
+  loadF1RideAudit,clearF1RideAudit,snapshot
  });
 }
