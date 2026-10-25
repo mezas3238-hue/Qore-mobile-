@@ -60,11 +60,16 @@ SELECT '71710000-0000-4717-8717-000000000101'::uuid,
  reviewed_by,reviewed_at
 FROM public.mobility_vehicle_compliance
 WHERE vehicle_id='00000000-0000-4000-8000-000000000184'::uuid;
--- No location is invented: only update timestamp if existing synthetic
--- fixture is available; eligibility still depends on every preflight.
-UPDATE public.driver_locations SET updated_at=pg_catalog.clock_timestamp()
- WHERE driver_id='00000000-0000-4000-8000-000000000181'::uuid
- AND available=true;
+-- The earlier G32/G34 adversarial suites may have disabled location
+-- availability/consent. Re-opt this synthetic fixture into QA and refresh
+-- its synthetic location explicitly; never apply to a real Driver account.
+UPDATE public.mobility_location_consents
+ SET opted_in_at=pg_catalog.clock_timestamp()-interval '5 minutes',
+ revoked_at=NULL
+ WHERE driver_id='00000000-0000-4000-8000-000000000181'::uuid;
+UPDATE public.driver_locations
+ SET available=true, updated_at=pg_catalog.clock_timestamp()
+ WHERE driver_id='00000000-0000-4000-8000-000000000181'::uuid;
 INSERT INTO auth.users(id) VALUES
  ('81810000-0000-4818-8818-000000000001'),
  ('81810000-0000-4818-8818-000000000002'),
@@ -83,7 +88,13 @@ DECLARE p uuid:='81810000-0000-4818-8818-000000000001';
 BEGIN
  IF NOT public.mobility_stage_g71_valid_locked_dossier(d,v)
  OR NOT public.mobility_vehicle_preflight(d,v,'economico')
- THEN RAISE EXCEPTION 'G81 disposable Driver QA preflight fixture unavailable'; END IF;
+ THEN RAISE EXCEPTION 'G81 disposable Driver QA preflight fixture unavailable: dossier %, preflight %, license %, vehicle compliance %, consent %, location %',
+ public.mobility_stage_g71_valid_locked_dossier(d,v),
+ public.mobility_vehicle_preflight(d,v,'economico'),
+ public.mobility_stage_driver_current_license_approved(d),
+ EXISTS(SELECT 1 FROM public.mobility_vehicle_compliance WHERE vehicle_id=v),
+ EXISTS(SELECT 1 FROM public.mobility_location_consents WHERE driver_id=d AND revoked_at IS NULL),
+ EXISTS(SELECT 1 FROM public.driver_locations WHERE driver_id=d AND available AND updated_at>pg_catalog.clock_timestamp()-interval '120 seconds'); END IF;
  r:=public.mobility_stage_g73_route(p,
  '81810000-0000-4818-8818-000000000010','economico',
  'CENTRO_FIXTURE','AEROPUERTO','ASUNCION_FIXTURE',5000,600,0);
