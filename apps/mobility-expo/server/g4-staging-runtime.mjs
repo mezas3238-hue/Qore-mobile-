@@ -43,6 +43,8 @@ import {createDriverEnrollmentGateway} from './g18-driver-enrollment-gateway.mjs
 import {createDriverKycReadinessRepository} from './g20-driver-kyc-readiness-repository.mjs';
 import {createDriverKycReadinessGateway} from './g20-driver-kyc-readiness-gateway.mjs';
 import {createDriverKycExpiryStatusQa} from './driver-kyc-expiry-status-qa.mjs';
+import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
+import {createG65DriverTripStatusRepository} from './g65-driver-trip-status-repository.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -226,6 +228,7 @@ export async function prepareQoreG4StagingRuntime({
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
+ const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
@@ -495,6 +498,26 @@ export async function prepareQoreG4StagingRuntime({
   queryOwnerValidity:scope=>driverKycTrust.queryOwnerValidity(scope),
   allowRequest:({actorId})=>allowRequest({userId:actorId})
  });
+
+ // G65: assigned trip is always sourced from the same G3/G73 PostgreSQL row.
+ // A provider-confirmed, revocable Driver session is REQUIRED. A Supabase
+ // getUser result alone does not carry enough trust to expose this route.
+ const driverTripStatus=driverKycTrust===null?null:createG65PrivateDriverTripStatusQa({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,now,
+  verifyAccessToken:async token=>{
+   const provider=await verified(token);
+   const attested=await driverKycTrust.verifyDriverSession(token);
+   if(!provider||provider.id!==attested?.id||provider.is_anonymous===true||
+      !(typeof provider.email_confirmed_at==='string'||
+        typeof provider.phone_confirmed_at==='string'))
+    throw Error('G65 IdP session identity mismatch');
+   return attested;
+  },
+  verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p),
+  resolveExclusiveRole:id=>singleRole(admin,id),
+  loadAssignedTrip:p=>driverTripStatusPersistence.loadAssignedTrip(p),
+  allowRequest:({actorId})=>allowRequest({userId:actorId})
+ });
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -559,6 +582,7 @@ export async function prepareQoreG4StagingRuntime({
    driverDocumentHandler:guard(driverDocuments),
    driverEnrollmentHandler:guard(driverEnrollment),
    driverLicenseReadinessHandler:guard(driverKycReadiness),
+   ...(driverTripStatus===null?{}:{driverTripStatusHandler:guard(driverTripStatus)}),
    ...(driverKycValidity===null?{}:{driverKycValidityHandler:guard(input=>{
     const bearer=typeof input?.headers?.authorization==='string'?
      /^Bearer ([A-Za-z0-9._~-]{20,7900})$/.exec(input.headers.authorization)?.[1]:null;

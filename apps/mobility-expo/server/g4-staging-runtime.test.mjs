@@ -74,8 +74,9 @@ function mockSupabase(){
         if(table==='mobility_stage_auto_demo_trips'){
          const t=state.trip;
          const actor=filter.$or?.match(/passenger_id\.eq\.([^,]+)/)?.[1];
-         const ok=t.id===filter.id&&(!actor||
-          t.passenger_id===actor||t.driver_id===actor);
+         const ok=t.id===filter.id&&
+          (filter.driver_id===undefined||t.driver_id===filter.driver_id)&&
+          (!actor||t.passenger_id===actor||t.driver_id===actor);
          return {data:ok?{...t}:null,error:null};
         }
         if(table==='mobility_stage_delivery_offers'){
@@ -708,4 +709,70 @@ test('G80 malformed owner-only trust refused before Auth and database initializa
   await assert.rejects(prepare(m,{driverKycTrust:bad}));
   assert.equal(m.state.clients.length,0);
  }
+});
+
+const g65Path='/v1/staging/driver/trips/'+ride+'/status';
+test('G65 transport remains unavailable without independently attested Driver session',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g65Path,'driver')).status,503);
+  assert.equal((await req(base,g65Path,'rider')).status,503);
+  assert.equal((await req(base,g65Path,'driver','POST',{})).status,404);
+ });
+});
+test('G65 same G73/G3 trip is private via real loopback HTTP and SQL Driver scope',async()=>{
+ const m=mockSupabase(),trust=g80Trust();
+ const runtime=await prepare(m,{driverKycTrust:trust.trust});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g65Path,'driver')).status,404,
+   'unassigned searching trip cannot appear to Driver');
+  m.state.trip={...m.state.trip,driver_id:driver,vehicle_id:vehicle,
+   status:'accepted',revision:2};
+  const accepted=await req(base,g65Path,'driver');
+  assert.equal(accepted.status,200);
+  assert.equal(accepted.body.tripId,ride);
+  assert.equal(accepted.body.state,'accepted');
+  assert.equal(accepted.body.nextEvent,'arrive');
+  assert.equal(accepted.body.assignmentPersisted,true);
+  assert.equal(accepted.body.productionEnabled,false);
+  assert.equal(accepted.body.gpsVerified,false);
+  assert.doesNotMatch(JSON.stringify(accepted),new RegExp(passenger));
+  assert.doesNotMatch(JSON.stringify(accepted),/origin_tag|destination_tag|phone|plate/i);
+  assert.equal((await req(base,g65Path,'rider')).status,401);
+  assert.equal((await req(base,g65Path,'stranger')).status,401);
+  m.state.trip={...m.state.trip,status:'arriving',revision:3};
+  const arriving=await req(base,g65Path,'driver');
+  assert.equal(arriving.body.nextEvent,'pickup');
+  assert.equal(arriving.body.revision,3);
+  m.state.dualRoleDriver=true;
+  assert.equal((await req(base,g65Path,'driver')).status,403,
+   'dual-role principal must not acquire Driver data');
+ });
+});
+test('G65 private API denies revoked or mismatched IdP and forbids GET request body',async()=>{
+ let revoked=false;
+ const m=mockSupabase(),f=g80Trust({
+  verifySessionNotRevoked:async()=>!revoked
+ });
+ m.state.trip={...m.state.trip,driver_id:driver,vehicle_id:vehicle,
+  status:'accepted',revision:2};
+ const runtime=await prepare(m,{driverKycTrust:f.trust});
+ await http(runtime,async base=>{
+  const leakedBody=await fetch(base+g65Path,{
+   headers:{authorization:'Bearer '+jwt.driver,'content-length':'2'},
+  });
+  assert.equal(leakedBody.status,400);
+  revoked=true;
+  assert.equal((await req(base,g65Path,'driver')).status,401);
+ });
+ const second=mockSupabase(),mismatch=g80Trust({
+  verifyDriverSession:async()=>({id:passenger,sessionId:vehicle,
+   tokenIatMs:now-1000,expiresAtMs:now+60000,is_anonymous:false})
+ });
+ second.state.trip={...second.state.trip,driver_id:driver,vehicle_id:vehicle,
+  status:'accepted',revision:2};
+ const otherRuntime=await prepare(second,{driverKycTrust:mismatch.trust});
+ await http(otherRuntime,async base=>{
+  assert.equal((await req(base,g65Path,'driver')).status,401);
+ });
 });
