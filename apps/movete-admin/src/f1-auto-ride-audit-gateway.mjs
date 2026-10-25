@@ -49,10 +49,12 @@ function validAudit(d,tripId,viewerId,t){
   ||t-d.observedAt>30000||!Number.isSafeInteger(d.expiresAt)
   ||d.expiresAt<=t||d.expiresAt>t+60000||d.serverPersisted!==true)
   return false;
- const assigned=['assigned','arriving','in_progress'].includes(d.status);
- if(d.assignmentPersisted!==assigned
-  ||(assigned&&d.driverId===null)
-  ||(!assigned&&d.driverId!==null))return false;
+ // Assignment may remain persisted after a terminal ride, but a completed
+ // or cancelled Admin view must not expose a historic Driver identity.
+ const active=['assigned','arriving','in_progress'].includes(d.status);
+ if((active&&(!d.assignmentPersisted||d.driverId===null))
+  ||(!active&&d.driverId!==null)
+  ||(d.status==='searching'&&d.assignmentPersisted))return false;
  return true;
 }
 export function createF1AutoRideAuditGateway({
