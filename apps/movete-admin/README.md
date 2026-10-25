@@ -1,18 +1,13 @@
-# Movete Fácil Admin — web independiente (Arquitecto B)
+# Movete Fácil Admin Web — backoffice independiente (Arquitecto B)
 
-Interfaz React/TypeScript/Vite **solo web**, separada de Cliente y Driver.
+React + Vite solo web, sin compartir bundle ni sesión con Cliente ni Driver.
 
-Estado inicial: UI de QA, **no es panel operativo**. Todo aparece como "Sin conexión" hasta recibir backend Admin y Auth auditados por A (issue #9). No se almacenan credenciales, PII, claves de servicio, cookies ni documentos; no existen llamadas de red desde las pantallas.
+**Acceso:** la pantalla administrativa ofrece login de cuentas ya autorizadas de STAGING con Supabase Auth y TOTP. El proveedor verifica remotamente identidad (getUser), exige nivel de autenticación **aal2**, un único factor TOTP `verified` y un único rol `admin` u `owner` leído bajo RLS. Los roles son exclusivos: Owner no hereda permisos de Admin F1. La contraseña por sí sola no habilita la UI. No admite `service_role`, `sb_secret_*`, HTTP, credenciales embebidas ni proyectos ajenos a Supabase. Autenticación de Admin opera **solo en memoria de la pestaña** (`persistSession:false`): al cerrar/recargar se requiere nueva sesión; sin localStorage de tokens. Se desconecta ante logout, expiración o autorización fallida.
 
-## Ejecutar
+La autenticación del navegador **NO constituye autorización del servidor**: cada lectura G75 debe validar por separado JWT, sesión no revocada, exclusividad del rol de Admin, proveedor MFA AAL2, RLS y propiedad del viaje.
 
-- Node >=22.13, `npm install` dentro de **este directorio**, sin modificar root.
-- `npm run check` comprueba TypeScript + tests de frontera segura.
-- `npm run build` genera assets web estáticos, **no hace deploy**.
-- `npm run dev` sirve únicamente en localhost.
+**Todavía no es un Admin operativo conectado:** por defecto `AdminRuntimeProvider` NO monta G75 ni ninguna API; backend HTTPS persistente de A/IdP y cuentas de STAGING no están autorizadas ni probadas en el presente corte. Los indicadores permanecen `Sin conexión`, no se aprueban KYC ni se ejecuta despacho o cobros. Inicio de sesión implementado con prueba automatizada, NO se verificó todavía con un usuario real del IdP.
 
-El módulo `src/admin-access.mjs` contiene un adaptador no conectado: defecto `enabled=false` y `contractCertified=false`. Solo el backend de A puede verificar roles, autorización del revisor y datos. Un contrato en OpenAPI no equivale a endpoint disponible.
+`npm install && npm run check && npm run build` valida TypeScript, tests e interfaz exportada **solo local/QA**, sin deploy. Variables públicas de `.env.example` solo con STAGING autorizado; nunca compartir credenciales en Git.
 
-Los indicadores son "Sin conexión" y las pantallas no inventan personas, autorizaciones, expedientes, GPS ni dinero. Nunca colocar una clave `service_role` o `sb_secret_*` en el bundle del navegador.
-
-PR #8 DRAFT · carpetas exclusivas B · no merge/live.
+PR #8 DRAFT · no merge/live/producción · coordinación funcional con A en issue #9.
