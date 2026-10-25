@@ -62,6 +62,31 @@ export function createQoreG4PrivatePushWorker({
   if(!device||device.driverId!==selected.driverId||
      device.pushOptIn!==true||device.active!==true||
      typeof device.token!=='string')return record('no_consenting_device');
+  // G88: fetching a device may take seconds. During that await the passenger
+  // can cancel, the offer can expire/withdraw, or KYC can be revoked.
+  // Re-read authoritative SQL immediately BEFORE any external push request.
+  // This mitigates the lookup gap, without claiming an impossible atomic
+  // transaction across PostgreSQL and the third-party push provider.
+  let finalOffer;
+  try{
+   finalOffer=await readCurrentOffer({
+    offerId:selected.offerId,driverId:selected.driverId,tripId:selected.tripId
+   });
+  }catch{return record('final_offer_recheck_failed');}
+  const finalAt=now();
+  if(!okInt(finalAt)||finalAt+3_000>=selected.expiresAtMs)
+   return record('expired_before_final_send');
+  if(!finalOffer||finalOffer.offerId!==selected.offerId||
+     finalOffer.driverId!==selected.driverId||
+     finalOffer.tripId!==selected.tripId||
+     finalOffer.status!=='offered'||finalOffer.tripStatus!=='searching'||
+     finalOffer.expiresAtMs!==selected.expiresAtMs)
+   return record('changed_before_final_send');
+  try{
+   if(await verifyCurrentEligibility({
+     driverId:selected.driverId,tripId:selected.tripId,offerId:selected.offerId
+   })!==true)return record('revoked_before_final_send');
+  }catch{return record('final_eligibility_unavailable');}
   const notification=makePrivateDriverPush({
    rideId:selected.tripId,offerId:selected.offerId,
    driverId:selected.driverId,expiresAtMs:selected.expiresAtMs,

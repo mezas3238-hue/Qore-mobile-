@@ -115,6 +115,49 @@ test('provider failures, invalid ticket and ACK errors fail closed without fabri
  assert.equal((await ackError.fn()).status,'ack_unavailable_no_retry');
  assert.doesNotMatch(JSON.stringify(await ackError.fn()),/DB private/);
 });
+test('G88 cancellation during device lookup denies push after authoritative second read',async()=>{
+ let reads=0;
+ const h=harness({
+  readCurrentOffer:async()=>{reads++;return reads===1?{...live}:
+    {...live,tripStatus:'cancelled'};}
+ });
+ const result=await h.fn();
+ assert.equal(result.status,'changed_before_final_send');
+ assert.equal(reads,2);
+ assert.equal(h.actions.tokenLookups,1);
+ assert.equal(h.actions.send,0);
+ assert.equal(h.actions.ack,0);
+});
+test('G88 late Driver KYC revocation during device resolution blocks push',async()=>{
+ let eligibility=0;
+ const h=harness({verifyCurrentEligibility:async()=>{
+  eligibility++;return eligibility===1;
+ }});
+ assert.equal((await h.fn()).status,'revoked_before_final_send');
+ assert.equal(eligibility,2);
+ assert.equal(h.actions.send,0);
+});
+test('G88 provider or SQL outages and expiry after device resolution cannot notify',async()=>{
+ let reads=0;
+ const sql=harness({readCurrentOffer:async()=>{
+  reads++;if(reads===2)throw Error('private PostgreSQL error');
+  return {...live};
+ }});
+ assert.equal((await sql.fn()).status,'final_offer_recheck_failed');
+ assert.equal(sql.actions.send,0);
+ let timeReads=0;
+ const expired=harness({now:()=>{
+  timeReads++;
+  return timeReads<=2?nowMs:nowMs+18_000;
+ }});
+ assert.equal((await expired.fn()).status,'expired_before_final_send');
+ assert.equal(expired.actions.send,0);
+  const revoked=harness({verifyCurrentEligibility:(()=>{
+  let n=0;return async()=>{if(++n===2)throw Error('secret');return true;}
+ })()});
+ assert.equal((await revoked.fn()).status,'final_eligibility_unavailable');
+ assert.equal(revoked.actions.send,0);
+});
 test('worker startup requires server-only interfaces and forbids any LIVE environment',()=>{
  const required={workerId,environment:'staging',liveTripsEnabled:false,
   claim:async()=>null,readCurrentOffer:async()=>live,
