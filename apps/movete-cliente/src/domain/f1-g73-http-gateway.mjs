@@ -6,7 +6,8 @@ import {readBoundedResponseText} from './bounded-http-response.mjs';
  */
 const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const SERVICES=new Set(['economico','confort','xl']);
-const K=['route','quote','book','reconcile','dispatch','subsidy','finance'];
+const K=['route','quote','book','reconcile','dispatch','subsidy','finance',
+ 'cancelAuto','cancelReceipt'];
 const PATH=Object.freeze({
  route:'/v1/staging/rider/auto/routes',
  quote:'/v1/staging/rider/auto/prequote',
@@ -71,6 +72,22 @@ function goodFinance(x,s){
    ?x.financialState==='COMPLETED_UNSETTLED_QA'&&x.reversalEntriesBalanced===false
    :FINANCE_ACTIVE.has(x.tripState)
     &&x.financialState==='RESERVED_QA'&&x.reversalEntriesBalanced===false;
+}
+const G95=['mode','commercialEnabled','ownerId','bookingKey','cancellationKey',
+ 'eventId','tripId','quoteId','tripState','tripRevision','financialState',
+ 'reversalEntriesBalanced','pspCollected','pspRefunded','serverPersisted'];
+function goodG95(x,s){
+ return exact(x,G95)&&x.mode==='STAGING_DEMO_ONLY'
+  &&x.commercialEnabled===false&&x.ownerId===s.ownerId
+  &&x.bookingKey===s.requestKey&&x.tripId===s.tripId
+  &&x.quoteId===s.quoteId&&id(x.cancellationKey)&&id(x.eventId)
+  &&(s.cancellationKey===undefined||x.cancellationKey===s.cancellationKey)
+  &&x.tripState==='cancelled'&&Number.isSafeInteger(x.tripRevision)
+  &&x.tripRevision>=2&&x.tripRevision>s.serverRevision
+  &&['VOIDED_QA','NO_CAMPAIGN_QA'].includes(x.financialState)
+  &&x.reversalEntriesBalanced===(x.financialState==='VOIDED_QA')
+  &&x.pspCollected===false&&x.pspRefunded===false
+  &&x.serverPersisted===true;
 }
 const SEARCH_STATES=new Set(['SEARCHING_DRIVER','OFFER_PENDING','RETRY_PENDING',
  'SEARCH_EXHAUSTED','CLOSED']);
@@ -149,6 +166,11 @@ const validScope=(kind,s)=>{
  if(kind==='book')return id(s.requestKey)&&id(s.quoteId)&&id(s.routeId)
   &&version(s.fareVersion)&&SERVICES.has(s.service);
  if(kind==='dispatch')return id(s.requestKey)&&id(s.tripId);
+ if(kind==='cancelAuto'||kind==='cancelReceipt')
+  return id(s.requestKey)&&id(s.tripId)&&id(s.quoteId)
+   &&Number.isSafeInteger(s.serverRevision)&&s.serverRevision>=1
+   &&(kind!=='cancelAuto'
+    ||(id(s.cancellationKey)&&s.cancellationKey!==s.requestKey));
  if(kind==='finance')return id(s.requestKey)&&id(s.tripId)&&id(s.quoteId)
   &&Number.isSafeInteger(s.serverRevision)&&s.serverRevision>=1
   &&FINANCE_AMOUNT.every(k=>Number.isSafeInteger(s[k])&&s[k]>=0&&s[k]<=100000000);
@@ -165,7 +187,7 @@ const validScope=(kind,s)=>{
 export function createF1G73HttpGateway({
  enabled=false,contractCertified=false,stagingRuntimeVerified=false,
  routeProviderCertified=false,subsidyContractCertified=false,
- financialContractCertified=false,
+ financialContractCertified=false,cancellationContractCertified=false,
  origin,pinnedOrigin,getSession,fetchImpl,
  onSessionInvalid=()=>{},now=()=>Date.now(),timeoutMs=8000,maxBytes=32768
 }={}){
@@ -186,6 +208,9 @@ export function createF1G73HttpGateway({
    return fail('G93_SUBSIDY_NOT_CERTIFIED');
   if(kind==='finance'&&financialContractCertified!==true)
    return fail('G94_FINANCE_NOT_CERTIFIED');
+  if((kind==='cancelAuto'||kind==='cancelReceipt')
+   &&cancellationContractCertified!==true)
+   return fail('G95_CANCEL_NOT_CERTIFIED');
   if(!K.includes(kind)||!validScope(kind,scope))return fail('INVALID_G73_SCOPE');
   if(controller!==null)return fail('G73_REQUEST_IN_FLIGHT');
   const run=epoch,ctl=new AbortController();
@@ -202,14 +227,18 @@ export function createF1G73HttpGateway({
     ?timeoutMs:8000,deadline=now()+ms;
    timeout=setTimeout(()=>ctl.abort(),ms);
    const timedOut=()=>ctl.signal.aborted||now()>=deadline;
-   const method=['reconcile','dispatch','finance'].includes(kind)?'GET':'POST';
-   const path=['reconcile','dispatch','finance'].includes(kind)
+   const method=['reconcile','dispatch','finance','cancelReceipt']
+    .includes(kind)?'GET':'POST';
+   const path=['reconcile','dispatch','finance','cancelAuto','cancelReceipt'].includes(kind)
     ?'/v1/staging/rider/auto/bookings/'+encodeURIComponent(scope.requestKey)
-      +(kind==='dispatch'?'/dispatch':kind==='finance'?'/financial-status':'')
+      +(kind==='dispatch'?'/dispatch':kind==='finance'?'/financial-status':
+        kind==='cancelAuto'?'/cancel':kind==='cancelReceipt'?'/cancellation':'')
     :kind==='subsidy'
      ?'/v1/staging/rider/auto/prequotes/'+encodeURIComponent(scope.quoteId)+'/subsidy'
      :PATH[kind];
-   const body=['dispatch','subsidy','finance'].includes(kind)?null:kind==='route'
+   const body=['dispatch','subsidy','finance','cancelReceipt'].includes(kind)?null
+    :kind==='cancelAuto'?{requestKey:scope.cancellationKey,confirmed:true}
+    :kind==='route'
     ?{quoteRequestKey:scope.quoteRequestKey,origin:scope.origin,
       destination:scope.destination,service:scope.service}
     :kind==='quote'?{requestKey:scope.quoteRequestKey,routeId:scope.routeId}
@@ -258,6 +287,7 @@ export function createF1G73HttpGateway({
     :kind==='quote'?!goodQuote(data,scope,now())
     :kind==='subsidy'?!goodSubsidy(data,scope,now())
     :kind==='finance'?!goodFinance(data,scope)
+    :kind==='cancelAuto'||kind==='cancelReceipt'?!goodG95(data,scope)
     :kind==='dispatch'?!goodDispatch(data,scope):!goodBook(data,scope))
     return fail('G73_RECEIPT_NOT_VERIFIED');
    // Response processing itself can span a JWT rotation.
@@ -276,11 +306,14 @@ export function createF1G73HttpGateway({
  return Object.freeze({isConfigured:()=>ready,
   isSubsidyConfigured:()=>ready&&subsidyContractCertified===true,
   isFinancialConfigured:()=>ready&&financialContractCertified===true,
+  isCancellationConfigured:()=>ready&&cancellationContractCertified===true,
   cancelPending,
   resolveRoute:s=>execute('route',s),
   readQuote:s=>execute('quote',s),
   previewSubsidy:s=>execute('subsidy',s),
   readFinancialStatus:s=>execute('finance',s),
+  cancelAuto:s=>execute('cancelAuto',s),
+  readCancellation:s=>execute('cancelReceipt',s),
   bookQuote:s=>execute('book',s),
   reconcile:s=>execute('reconcile',s),
   readDispatch:s=>execute('dispatch',s),
