@@ -1,6 +1,8 @@
 import 'react-native-url-polyfill/auto';
 import {Platform} from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as Crypto from 'expo-crypto';
+import {createEncryptedChunkStore} from './domain/encrypted-chunk-store.mjs';
 import {createClient} from '@supabase/supabase-js';
 import {verifyNativeDriverConfig} from './domain/native-driver-config.mjs';
 import {createNativeDriverAuth} from './domain/native-driver-auth.mjs';
@@ -18,17 +20,15 @@ export function getNativeDriverAuth():NativeDriverAuth|null{
   publishableKey:process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
  });
  if(!config.ok)return (instance=null);
- const storage={
-  getItem:(key:string)=>SecureStore.getItemAsync(key),
-  async setItem(key:string,value:string){
-   const bytes=encodeURIComponent(value).replace(/%[0-9A-F]{2}/gi,'_').length;
-   if(bytes>1900)throw Error('Driver session exceeds secure storage limit');
-   await SecureStore.setItemAsync(key,value,{
-    keychainAccessible:SecureStore.WHEN_UNLOCKED
-   });
-  },
-  removeItem:(key:string)=>SecureStore.deleteItemAsync(key)
- };
+ const storage=createEncryptedChunkStore({
+  prefix:'movete-facil-driver-vault-v1',
+  randomUUID:()=>Crypto.randomUUID(),
+  get:key=>SecureStore.getItemAsync(key),
+  put:(key,value)=>SecureStore.setItemAsync(key,value,{
+   keychainAccessible:SecureStore.WHEN_UNLOCKED
+  }),
+  del:key=>SecureStore.deleteItemAsync(key)
+ });
  const supabase=createClient(config.url,config.publishableKey,{
   auth:{storage,persistSession:true,autoRefreshToken:true,
    detectSessionInUrl:false,flowType:'pkce',
