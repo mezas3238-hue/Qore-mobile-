@@ -24,7 +24,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
-   adminRole:null,adminReceipt:null,
+   adminRole:null,adminReceipt:null,g77RegisteredRoute:null,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -108,6 +108,18 @@ function mockSupabase(){
    },
    async rpc(name,params){
     state.rpcs.push({name,params});
+    if(name==='mobility_stage_g73_route'){
+     state.g77RegisteredRoute=params;
+     return {data:offer,error:null};
+    }
+    if(name==='mobility_stage_g73_route_receipt'){
+     return {data:state.g77RegisteredRoute?{
+      mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+      ownerId:passenger,routeId:offer,
+      requestKey:state.g77RegisteredRoute._request_key,
+      service:'economico',routingVerified:true,expiresAt:now+10000
+     }:null,error:null};
+    }
     if(name==='mobility_stage_g27_backoffice_role_of')
      return {data:params._user===stranger?state.adminRole:null,error:null};
     if(name==='mobility_stage_g75_admin_f1_receipt')
@@ -500,4 +512,118 @@ test('G76 startup rejects incomplete, extra or unverified Admin trust adapters',
   await assert.rejects(prepare(m,{adminF1Trust:bad}));
   assert.equal(m.state.clients.length,0);
  }
+});
+
+const g79Origin='Centro, Asunción',g79Destination='Aeropuerto, Luque';
+const g79Path='/v1/staging/rider/auto/routes';
+const g79PlaceA='ChIJTrustedPlaceAsuncion00001',
+ g79PlaceB='ChIJTrustedPlaceLuque000002',
+ g79Proof='79790000-0000-4797-8797-000000000001',
+ g79Toll='79790000-0000-4797-8797-000000000002';
+function g79Options({coverageEnabled=true,chargesEnabled=true}={}){
+ const calls={paid:0,cover:0,tolls:0};
+ const options={
+  enabled:true,billableProviderApproved:true,
+  apiKey:'QA_PRIVATE_GOOGLE_FAKE_NOT_REAL_0123456789',
+  tagSecret:'QA_PRIVATE_HMAC_32_BYTES_NEVER_REAL_2026',
+  resolveCoveredPlaces:async p=>{
+   calls.cover++;
+   return {source:'INDEPENDENT_COVERAGE_AUTHORITY',
+    coverageVerified:coverageEnabled,evidenceId:g79Proof,revision:1,
+    verifiedAtMs:now-100,actorId:p.actorId,
+    origin:p.origin,destination:p.destination,service:p.service,
+    originPlaceId:g79PlaceA,destinationPlaceId:g79PlaceB,
+    originTag:'PREVERIFY_ORIGIN',destinationTag:'PREVERIFY_DESTINATION',
+    zoneTag:'ASUNCION_FIXTURE'};
+  },
+  verifyRouteTolls:async s=>{
+   calls.tolls++;
+   return {source:'INDEPENDENT_TOLL_AUTHORITY',tollsVerified:chargesEnabled,
+    coverageEvidenceId:g79Proof,evidenceId:g79Toll,
+    originPlaceId:g79PlaceA,destinationPlaceId:g79PlaceB,
+    distanceMeters:s.distanceMeters,durationSeconds:s.durationSeconds,
+    verifiedAtMs:now-100,tollsPyg:0};
+  },
+  request:async(url,init)=>{
+   calls.paid++;
+   assert.equal(url,'https://routes.googleapis.com/directions/v2:computeRoutes');
+   assert.equal(init.method,'POST');
+   assert.equal(init.headers['X-Goog-FieldMask'],
+    'routes.distanceMeters,routes.duration,fallbackInfo');
+   assert.equal(JSON.parse(init.body).origin.placeId,g79PlaceA);
+   return {ok:true,status:200,redirected:false,
+    headers:{get:key=>key==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify({routes:[{distanceMeters:5000,duration:'600s'}]})};
+  }
+ };
+ return {options,calls};
+}
+test('G79 only selected precoverage G77 provider reaches exact G73 route SQL on loopback',async()=>{
+ const m=mockSupabase(),f=g79Options();
+ const runtime=await prepare(m,{g77RouteOptions:f.options});
+ await http(runtime,async base=>{
+  const result=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,destination:g79Destination,
+   service:'economico'
+  });
+  assert.equal(result.status,200);
+  assert.equal(result.body.routeId,offer);
+  assert.equal(result.body.routingVerified,true);
+  assert.equal(result.body.coverageVerified,true);
+  assert.equal(result.body.status,'ROUTE_VERIFIED_QA');
+  assert.deepEqual(f.calls,{paid:1,cover:1,tolls:1});
+  assert.equal(m.state.g77RegisteredRoute._distance_meters,5000);
+  assert.equal(m.state.g77RegisteredRoute._duration_seconds,600);
+  assert.equal(m.state.g77RegisteredRoute._tolls_pyg,0);
+  assert.match(m.state.g77RegisteredRoute._origin_tag,/^LOC_[A-P]{32}$/);
+  assert.match(m.state.g77RegisteredRoute._destination_tag,/^LOC_[A-P]{32}$/);
+  assert.notEqual(m.state.g77RegisteredRoute._origin_tag,
+   m.state.g77RegisteredRoute._destination_tag);
+  assert(!JSON.stringify(m.state.g77RegisteredRoute).includes(g79PlaceA));
+  assert(!JSON.stringify(result.body).includes(g79PlaceA));
+  assert(!JSON.stringify(result.body).includes(f.options.apiKey));
+ });
+});
+test('G79 unverified coverage before paid provider never reaches Google nor G73 SQL',async()=>{
+ const m=mockSupabase(),f=g79Options({coverageEnabled:false});
+ const runtime=await prepare(m,{g77RouteOptions:f.options});
+ await http(runtime,async base=>{
+  const fail=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,destination:g79Destination,
+   service:'economico'
+  });
+  assert.equal(fail.status,409);
+  assert.deepEqual(f.calls,{paid:0,cover:1,tolls:0});
+  assert.equal(m.state.g77RegisteredRoute,null);
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_g73_route'),false);
+ });
+});
+test('G79 invalid toll after one trusted route cannot publish/price or persist SQL',async()=>{
+ const m=mockSupabase(),f=g79Options({chargesEnabled:false});
+ const runtime=await prepare(m,{g77RouteOptions:f.options});
+ await http(runtime,async base=>{
+  const fail=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,destination:g79Destination,
+   service:'economico'
+  });
+  assert.equal(fail.status,409);
+  assert.deepEqual(f.calls,{paid:1,cover:1,tolls:1});
+  assert.equal(m.state.g77RegisteredRoute,null);
+ });
+});
+test('G79 never mounts two route providers or billing-disabled/corrupted config',async()=>{
+ const first=g79Options();
+ for(const bad of [
+  {g77RouteOptions:first.options,verifiedAutoRoute:async()=>({})},
+  {g77RouteOptions:{...first.options,enabled:false}},
+  {g77RouteOptions:{...first.options,billableProviderApproved:false}},
+  {g77RouteOptions:{...first.options,tagSecret:null}},
+  {g77RouteOptions:{...first.options,geocodingFirst:true}}
+ ]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,bad));
+  assert.equal(m.state.clients.length,0);
+  assert.equal(m.state.rpcs.length,0);
+ }
+ assert.equal(first.calls.paid,0);
 });
