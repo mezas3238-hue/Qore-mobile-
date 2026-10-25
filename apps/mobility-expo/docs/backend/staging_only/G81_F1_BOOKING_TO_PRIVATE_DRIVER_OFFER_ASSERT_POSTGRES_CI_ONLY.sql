@@ -198,4 +198,78 @@ BEGIN
  THEN RAISE EXCEPTION 'G81 leaked an unaccepted Driver into Admin'; END IF;
  RAISE NOTICE 'G81 PASS: one booked G73 trip, private offer and outbox; KYC and legal fences remain';
 END $verify$;
+SET LOCAL ROLE service_role;
+DO $g82$
+DECLARE
+ p uuid:='81810000-0000-4818-8818-000000000001';
+ foreign_user uuid:='81810000-0000-4818-8818-000000000003';
+ driver uuid:='00000000-0000-4000-8000-000000000181';
+ v uuid:='71710000-0000-4717-8717-000000000101';
+ b uuid:='82820000-0000-4828-8828-000000000012';
+ key uuid:='82820000-0000-4828-8828-000000000013';
+ v_route uuid;v_quote uuid;v_trip uuid;candidate uuid;denied boolean;
+BEGIN
+ IF NOT has_function_privilege('service_role',
+  'public.mobility_stage_g82_offer_first_eligible_auto_qa(uuid,uuid,uuid,integer)','EXECUTE')
+ OR has_function_privilege('authenticated',
+  'public.mobility_stage_g82_offer_first_eligible_auto_qa(uuid,uuid,uuid,integer)','EXECUTE')
+ OR has_function_privilege('anon',
+  'public.mobility_stage_g82_offer_first_eligible_auto_qa(uuid,uuid,uuid,integer)','EXECUTE')
+ THEN RAISE EXCEPTION 'G82 SQL candidate service privileges incorrect'; END IF;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g82_offer_first_eligible_auto_qa(
+   foreign_user,'81810000-0000-4818-8818-000000000012',
+   '82820000-0000-4828-8828-000000000018',15);
+ EXCEPTION WHEN SQLSTATE 'P8201' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G82 foreign booking selection allowed'; END IF;
+ v_route:=public.mobility_stage_g73_route(p,
+  '82820000-0000-4828-8828-000000000010','economico',
+  'CENTRO_FIXTURE','AEROPUERTO','ASUNCION_FIXTURE',5000,600,0);
+ v_quote:=public.mobility_stage_g73_quote(p,v_route,
+  '82820000-0000-4828-8828-000000000011');
+ -- The previous ride for p is still searching. A second active passenger
+ -- booking must be refused. Cancel the previous one through G3 lifecycle,
+ -- not direct DML (which G37 forbids).
+ PERFORM public.mobility_stage_auto_demo_transition(
+  (public.mobility_stage_g73_booking_receipt(p,
+   '81810000-0000-4818-8818-000000000012')->>'tripId')::uuid,
+  p,'cancelled','82820000-0000-4828-8828-000000000015');
+ v_trip:=public.mobility_stage_g73_book(p,v_quote,b);
+ candidate:=public.mobility_stage_g82_offer_first_eligible_auto_qa(p,b,key,30);
+ IF candidate IS NULL THEN
+  RAISE EXCEPTION 'G82 no QA eligible AUTO candidate, check G36 current Driver slot'; END IF;
+ IF candidate<>public.mobility_stage_g82_offer_first_eligible_auto_qa(p,b,key,30)
+ OR NOT EXISTS(
+  SELECT 1 FROM public.mobility_stage_auto_demo_offers o
+  JOIN public.mobility_stage_auto_demo_push_outbox outbox ON outbox.offer_id=o.id
+  WHERE o.id=candidate AND o.trip_id=v_trip AND o.driver_id=driver
+   AND o.vehicle_id=v AND o.status='offered' AND outbox.driver_id=driver)
+ OR NOT EXISTS(
+  SELECT 1 FROM public.mobility_stage_poll_driver_auto_offers(driver) inbox
+  WHERE inbox.offer_id=candidate AND inbox.trip_id=v_trip)
+ THEN RAISE EXCEPTION 'G82 private selected Driver offer/inbox diverged from G73 trip'; END IF;
+ -- A different idempotency key cannot re-offer same trip to same Driver.
+ IF public.mobility_stage_g82_offer_first_eligible_auto_qa(
+  p,b,'82820000-0000-4828-8828-000000000016',30) IS NOT NULL
+ THEN RAISE EXCEPTION 'G82 re-offered same Driver'; END IF;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g82_offer_first_eligible_auto_qa(
+   p,b,key,29);
+ EXCEPTION WHEN SQLSTATE 'P8201' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G82 accepted conflicted TTL key'; END IF;
+ -- G38 legal-zone gate still denies true assignment even with QA offer.
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_auto_demo_accept_offer(
+   candidate,driver,'82820000-0000-4828-8828-000000000017');
+ EXCEPTION WHEN SQLSTATE 'G3801' OR SQLSTATE 'G3601' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G82 bypassed G38 legal block'; END IF;
+ IF EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips t
+  WHERE t.id=v_trip AND (t.status<>'searching' OR t.driver_id IS NOT NULL))
+ THEN RAISE EXCEPTION 'G82 unapproved Driver assignment persisted'; END IF;
+ RAISE NOTICE 'G82 PASS: G73 booking to DB-selected G4 offer and G16 Driver inbox; no legal acceptance';
+END $g82$;
+RESET ROLE;
 ROLLBACK;

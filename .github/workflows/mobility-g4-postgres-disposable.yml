@@ -91,6 +91,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G4_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G80_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G81_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G82_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G5_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
       - 'apps/mobility-expo/server/g67-*'
@@ -525,5 +526,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G80_F1_EIGHT_DOC_KYC_LEGAL_ZONE_DENIAL_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G81 install trusted private offer from an existing G73 Passenger booking
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G81_F1_BOOKING_TO_PRIVATE_DRIVER_OFFER_POSTGRES_CI_ONLY.sql
-      - name: G81 verify real booked-trip offer, single outbox, role/KYC and legal denial
+      - name: G82 install DB-side first eligible AUTO candidate without client driver ID
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G82_F1_PRIVATE_AUTO_CANDIDATE_POSTGRES_CI_ONLY.sql
+      - name: G81-G82 verify booking-to-Driver private inbox and refusal without legal zone
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G81_F1_BOOKING_TO_PRIVATE_DRIVER_OFFER_ASSERT_POSTGRES_CI_ONLY.sql
