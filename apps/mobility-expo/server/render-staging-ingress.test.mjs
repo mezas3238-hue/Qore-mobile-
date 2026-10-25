@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
+import {createServer,request as nativeHttpRequest} from 'node:http';
 import {once} from 'node:events';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -39,9 +39,25 @@ async function withServers(callback){
 }
 function doReq(base,path,{method='GET',authorization='Bearer '+token,
  headers={},body}={}){
- return fetch(base+path,{method,redirect:'manual',
-  headers:{host,'x-forwarded-proto':'https',
-   ...(authorization===null?{}:{authorization}),...headers},body});
+ // Node fetch/undici rewrites Host to 127.0.0.1 for localhost targets.
+ // Use raw Node HTTP so this explicitly verifies the Render Host pin.
+ return new Promise((resolve,reject)=>{
+  const req=nativeHttpRequest(base+path,{
+   method,headers:{host,'x-forwarded-proto':'https',
+    ...(authorization===null?{}:{authorization}),...headers}
+  },res=>{
+   const buffers=[];
+   res.on('data',chunk=>buffers.push(chunk));
+   res.once('error',reject);
+   res.once('end',()=>resolve(new Response(
+    res.statusCode===204?null:Buffer.concat(buffers),
+    {status:res.statusCode,headers:res.headers}
+   )));
+  });
+  req.once('error',reject);
+  if(body!==undefined)req.write(body);
+  req.end();
+ });
 }
 test('Render ingress constructor requires pinned onrender host and fixed private loopback',()=>{
  for(const opts of [
