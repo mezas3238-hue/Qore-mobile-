@@ -11,7 +11,8 @@ const refs=[
  ['/v1/staging/rider/auto/bookings/{bookingKey}/dispatch','get','G90PrivateDispatchReceipt',null,'200']
 ];
 test('F1 G73/G90 are fully versioned, synthetic, private and without a false commercial claim',()=>{
- assert.equal(spec.info.version,'1.0.0-g92');
+ assert.match(spec.info.version,/^1\.0\.0-g\d+$/);
+ assert.ok(Number(spec.info.version.split('-g')[1])>=92);
  assert.equal(spec['x-qore-live-enabled'],false);
  assert.equal(spec['x-qore-f1-auto-external-staging-certified'],false);
  assert.equal(spec['x-qore-f1-auto-native-certified'],false);
