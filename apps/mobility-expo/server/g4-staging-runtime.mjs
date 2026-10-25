@@ -23,6 +23,8 @@ import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repo
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
+import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
+import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-merchant-management-repository.mjs';
@@ -149,7 +151,7 @@ export async function prepareQoreG4StagingRuntime({
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
  verifiedAutoRoute=unavailablePricingContext,
- privateEvidenceAdapters=null,now=Date.now,
+ privateEvidenceAdapters=null,adminF1Trust=null,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -167,7 +169,12 @@ export async function prepareQoreG4StagingRuntime({
    typeof pricingContext!=='function'||
    !(privateEvidenceAdapters===null||
      (typeof privateEvidenceAdapters==='object'&&
-      !Array.isArray(privateEvidenceAdapters)))||typeof now!=='function')
+      !Array.isArray(privateEvidenceAdapters)))||
+   !(adminF1Trust===null||(Object.getPrototypeOf(adminF1Trust)===Object.prototype
+    &&Object.keys(adminF1Trust).length===3
+    &&['verifyAdminSession','verifySessionNotRevoked','verifyBackofficeMfa']
+      .every(k=>typeof adminF1Trust[k]==='function')))||
+   typeof now!=='function')
   throw Error('G4 server-only secret separation and adapters required');
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
@@ -189,6 +196,7 @@ export async function prepareQoreG4StagingRuntime({
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
+ const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
   createSupabaseStagingMerchantManagementRepository(admin);
@@ -357,6 +365,33 @@ export async function prepareQoreG4StagingRuntime({
   bookQuote:params=>f1AutoPersistence.book(params),
   reconcileBooking:params=>f1AutoPersistence.bookingReceipt(params),
  });
+ // G76: only an independently authenticated and AAL2-verified Admin may
+ // access SQL G75. Unconfigured remains HTTP 503; nothing is exposed LIVE.
+ const adminF1=adminF1Trust===null?null:createG75AdminF1AuditGateway({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  projectRef:ref,now,allowRequest,
+  verifyAccessToken:async token=>{
+   const user=await verified(token);
+   const attested=await adminF1Trust.verifyAdminSession(token);
+   if(!attested||typeof attested!=='object'||attested.id!==user.id||
+      attested.is_anonymous!==false||
+      !(typeof user.email_confirmed_at==='string'||
+        typeof user.phone_confirmed_at==='string'))
+    throw Error('Admin IdP session mismatch');
+   return {...attested,email_confirmed_at:user.email_confirmed_at,
+    phone_confirmed_at:user.phone_confirmed_at};
+  },
+  verifySessionNotRevoked:p=>adminF1Trust.verifySessionNotRevoked(p),
+  loadExclusiveBackofficeRole:async id=>{
+   const {data,error}=await admin.rpc('mobility_stage_g27_backoffice_role_of',{
+    _user:id
+   });
+   if(error)throw Error('Admin G27 exclusive role lookup unavailable');
+   return data;
+  },
+  verifyBackofficeMfa:p=>adminF1Trust.verifyBackofficeMfa(p),
+  loadAdminRideReceipt:p=>adminF1Persistence.read(p),
+ });
  const safety=createQoreSafetyGateway({
   projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
   allowRequest,
@@ -457,6 +492,7 @@ export async function prepareQoreG4StagingRuntime({
    offerHandler:guard(driver),
    tripCommandHandler:guard(commands),
    f1AutoHandler:guard(f1Auto),
+   ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
    financeHandler:guard(finance),
