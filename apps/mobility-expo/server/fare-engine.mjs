@@ -38,7 +38,7 @@ export const SERVICE_CATEGORIES=Object.freeze([
 ]);
 export const RIDE_CAMPAIGN_LIVE_ENABLED=false;
 const DAY_MS=86_400_000;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COMMISSION=Object.freeze({AUTO_RIDE:1500,MOTO_RIDE:1200});
 const roundBps=(base,bps)=>Number((BigInt(base)*BigInt(bps)+5000n)/10000n);
 const safeEpoch=x=>Number.isSafeInteger(x)&&x>0&&x<8640000000000000;
