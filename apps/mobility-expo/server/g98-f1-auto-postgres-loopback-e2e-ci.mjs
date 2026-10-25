@@ -149,8 +149,12 @@ async function main(){
   assert.equal(preview.data.subsidyBps,1000);
   assert.equal(preview.data.customerPaysGs,
    preview.data.driverReceivesGs+preview.data.platformRetainsGs);
-  assert.equal((await http(base,f1+'/prequotes/'+q.data.quoteId+'/subsidy',
-   {method:'POST',auth:otherToken})).status,404);
+  // G93 deliberately throws on foreign preview rather than revealing the
+  // existence of another Passenger's quoted price. HTTP maps it to 503.
+  const foreignQuote=await http(base,f1+'/prequotes/'+q.data.quoteId+'/subsidy',
+   {method:'POST',auth:otherToken});
+  assert.equal(foreignQuote.status,503);
+  assert.doesNotMatch(JSON.stringify(foreignQuote.data),/amountGs|commission|subsidy|15200/);
   const booked=await http(base,f1+'/book',{method:'POST',
    body:{requestKey:bookingKey,quoteId:q.data.quoteId,accepted:true}});
   assert.equal(booked.status,201,JSON.stringify(booked.data));
