@@ -21,12 +21,13 @@ const toll=(p={})=>({source:'INDEPENDENT_TOLL_AUTHORITY',
  originPlaceId:coverage().originPlaceId,destinationPlaceId:coverage().destinationPlaceId,
  distanceMeters:5000,durationSeconds:600,tollsPyg:0,verifiedAtMs:AT-1000,...p});
 const api=body=>({ok:true,status:200,redirected:false,
- headers:{get:()=>null},text:async()=>JSON.stringify(body)});
+ headers:{get:k=>k==='content-type'?'application/json':null},text:async()=>JSON.stringify(body)});
 function scenario({covered=coverage(),charges=toll(),payload={routes:[{distanceMeters:5000,duration:'600s'}]},
  time=AT}={}){
  const requests=[],zones=[],chargeReads=[];
  const resolver=createG77VerifiedAutoRouteResolver({
   apiKey:'SERVER_ONLY_FAKE_KEY_NEVER_REAL_123456',
+  tagSecret:'G77_QA_HMAC_TESTING_SECRET_PRIVATE_32_BYTES',
   billableProviderApproved:true,now:()=>time,
   resolveCoveredPlaces:async ctx=>{zones.push(ctx);return covered;},
   verifyRouteTolls:async proof=>{chargeReads.push(proof);return charges;},
@@ -47,10 +48,18 @@ test('G77 cannot instantiate billable API without explicit Owner billing approva
 test('G77 only routes Place IDs after independent coverage and toll verification',async()=>{
  const f=scenario();
  const receipt=await f.resolver(scope);
- assert.deepEqual(receipt,{routingVerified:true,coverageVerified:true,
-  trafficAware:true,fallbackUsed:false,originTag:'CENTRO_ASUNCION',
-  destinationTag:'AIRPORT_LUQUE',zoneTag:'ASUNCION_FIXTURE',
-  distanceMeters:5000,durationSeconds:600,tollsPyg:0});
+ assert.equal(receipt.routingVerified,true);
+ assert.equal(receipt.coverageVerified,true);
+ assert.equal(receipt.trafficAware,true);
+ assert.equal(receipt.fallbackUsed,false);
+ assert.equal(receipt.zoneTag,'ASUNCION_FIXTURE');
+ assert.equal(receipt.distanceMeters,5000);
+ assert.equal(receipt.durationSeconds,600);
+ assert.equal(receipt.tollsPyg,0);
+ assert.match(receipt.originTag,/^LOC_[A-P]{32}$/);
+ assert.match(receipt.destinationTag,/^LOC_[A-P]{32}$/);
+ assert.notEqual(receipt.originTag,receipt.destinationTag);
+ assert.equal(Object.keys(receipt).length,10);
  assert.equal(f.requests.length,1);
  assert.equal(f.zones.length,1);assert.deepEqual(f.zones[0],scope);
  assert.equal(f.chargeReads.length,1);
@@ -104,10 +113,12 @@ test('G77 refuses traffic fallback, multiple routes, invalid duration and oversi
  // No real network request. Oversized provider stub must be rejected early.
  const denied=createG77VerifiedAutoRouteResolver({
   apiKey:'SERVER_ONLY_FAKE_KEY_NEVER_REAL_123456',
+  tagSecret:'G77_QA_HMAC_TESTING_SECRET_PRIVATE_32_BYTES',
   billableProviderApproved:true,now:()=>AT,
   resolveCoveredPlaces:async()=>coverage(),verifyRouteTolls:async()=>toll(),
   request:async()=>({ok:true,status:200,redirected:false,
-   headers:{get:k=>k==='content-length'?'900000':null},
+   headers:{get:k=>k==='content-type'?'application/json':
+    k==='content-length'?'900000':null},
    text:async()=>{throw Error('must not stream giant body');}})
  });
  await assert.rejects(denied(scope),/too large/);
@@ -134,7 +145,7 @@ test('G77 source-backed route flows into G73 without local price or invented ava
   resolveVerifiedRoute:f.resolver,
   registerRoute:async r=>{
    assert.equal(r.distanceMeters,5000);assert.equal(r.tollsPyg,0);
-   assert.equal(r.originTag,'CENTRO_ASUNCION');return ROUTE;
+   assert.match(r.originTag,/^LOC_[A-P]{32}$/);return ROUTE;
   },
   loadRoute:async()=>({mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
    ownerId:ACTOR,routeId:ROUTE,requestKey:KEY,service:'economico',
