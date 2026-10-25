@@ -46,8 +46,8 @@ BEGIN
  OR receipt->>'quoteId'<>v_quote::text OR receipt->>'status'<>'searching'
  OR receipt->>'driverId' IS NOT NULL OR receipt->>'assignmentPersisted'<>'false'
  THEN RAISE EXCEPTION 'G78 initial shared Client/Admin trip drift'; END IF;
- IF public.mobility_stage_g71_valid_locked_dossier(driver,vehicle)
- THEN RAISE EXCEPTION 'G78 Driver without 8 verified documents accepted'; END IF;
+ -- G71 dossier helper is owner-only: do not grant or call it as service_role.
+ -- The public offer wrapper must enforce it and return P7401.
  blocked:=false;
  BEGIN
   PERFORM public.mobility_stage_auto_demo_offer(v_trip,driver,vehicle,
