@@ -187,6 +187,10 @@ export async function prepareQoreG4StagingRuntime({
       .every(k=>typeof adminF1Trust[k]==='function')))||
    typeof now!=='function')
   throw Error('G4 server-only secret separation and adapters required');
+ // Validate billing authorization, key, HMAC and provider authorities BEFORE
+ // even constructing Supabase Auth/SQL clients, never after side effects.
+ const preparedG77Route=g77RouteOptions===null?null:
+  createG77VerifiedAutoRouteResolver({...g77RouteOptions,now});
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
  // A bearer supplied by the user is verified over Supabase Auth, never
@@ -367,9 +371,8 @@ export async function prepareQoreG4StagingRuntime({
  });
  // G79: choose one route provider. No geocode-first alternative is mounted.
  // All billable routing is OFF unless explicitly approved by Owner.
- const resolvedAutoRoute=g77RouteOptions===null?
-  (verifiedAutoRoute??unavailablePricingContext):
-  createG77VerifiedAutoRouteResolver({...g77RouteOptions,now});
+ const resolvedAutoRoute=preparedG77Route??
+  verifiedAutoRoute??unavailablePricingContext;
  const f1Auto=createQoreG73AutoGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
