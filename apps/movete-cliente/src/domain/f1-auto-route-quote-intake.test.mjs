@@ -51,10 +51,9 @@ test('validated Passenger route -> opaque server ID -> PYG quote, without bookin
 });
 test('reject arbitrary route tags, equal locations, and unsupported passenger MOTO',async()=>{
  const f=fixture();
- for(const bad of [{...scope,origin:'CENTRO'},
+ for(const bad of [{...scope,origin:' Centro '},
   {...scope,destination:scope.origin},{...scope,service:'moto'},
   {...scope,ownerId:foreign},{...scope,quoteRequestKey:'not-uuid'}]){
-  if(bad.origin==='CENTRO')continue; // a human-readable place name is allowed
   assert.equal((await f.flow.request(bad)).ok,false);
  }
  assert.equal(f.routes(),0);
@@ -117,6 +116,6 @@ test('route expires while independent quote is outstanding: discard price and co
  const task=f.flow.request(scope);
  await enteredPromise;
  f.advance(120000);release();
- assert.equal((await task).code,'PREQUOTE_NOT_VERIFIED');
+ assert.equal((await task).code,'ROUTE_ATTESTATION_EXPIRED');
  assert.equal(f.quote.snapshot().quote,null);
 });
