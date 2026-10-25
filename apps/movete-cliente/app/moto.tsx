@@ -19,7 +19,8 @@ function PrivateMoto({authenticated}:{authenticated:boolean}){
   setter(value);setReviewed(null);
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
-  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
+  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
+  keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>MOTO · Viaje de pasajeros</Text>
    <Text style={styles.heroSub}>Transporte de personas en motocicleta, separado de MOTO ENVÍOS. Preparación privada; sin reserva ni búsqueda de motociclista todavía.</Text>
