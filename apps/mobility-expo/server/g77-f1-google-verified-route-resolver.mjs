@@ -8,6 +8,8 @@
  * of arbitrary addresses. Independently proven Place IDs, zonal eligibility,
  * and road-specific toll facts are required before G73 can persist a route.
  */
+import {createHmac} from 'node:crypto';
+
 const ENDPOINT='https://routes.googleapis.com/directions/v2:computeRoutes';
 const FIELD_MASK='routes.distanceMeters,routes.duration,fallbackInfo';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -18,6 +20,11 @@ const HUMAN=x=>typeof x==='string'&&x.length>=3&&x.length<=120&&x===x.trim()&&
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const integer=(x,lo,hi)=>Number.isSafeInteger(x)&&x>=lo&&x<=hi;
 const SERVICES=new Set(['economico','confort','xl']);
+const privateTag=(secret,placeId)=>{
+ const digest=createHmac('sha256',secret).update('QORE_G77_PLACE_V1\\0')
+  .update(placeId,'utf8').digest('hex').slice(0,32);
+ return 'LOC_'+[...digest].map(h=>String.fromCharCode(65+parseInt(h,16))).join('');
+};
 const validEpoch=x=>integer(x,0,9e15);
 const durationSeconds=x=>{
  if(typeof x!=='string'||!/^\d+(?:\.\d{1,9})?s$/.test(x))return null;
@@ -48,6 +55,8 @@ function validateCharges(p,ctx,at){
 }
 /** Bounded text input even when a stub has no readable stream. */
 async function boundedJson(reply,maxBytes=8192){
+ if(!/^application\\/json(?:\\s*;|$)/i.test(reply.headers?.get?.('content-type')??''))
+  throw Error('Invalid routing response MIME');
  const length=reply.headers?.get?.('content-length');
  if(length!==null&&length!==undefined&&(!/^\d+$/.test(length)||
     Number(length)>maxBytes))throw Error('Routing response too large');
@@ -75,11 +84,12 @@ async function boundedJson(reply,maxBytes=8192){
  try{return JSON.parse(value);}catch{throw Error('Unparseable routing result');}
 }
 export function createG77VerifiedAutoRouteResolver({
- apiKey,billableProviderApproved=false,resolveCoveredPlaces,
+ apiKey,tagSecret,billableProviderApproved=false,resolveCoveredPlaces,
  verifyRouteTolls,request=fetch,now=Date.now
 }={}){
  if(billableProviderApproved!==true)throw Error('G77 paid Routes API not approved');
- if(typeof apiKey!=='string'||apiKey.length<20||apiKey.length>300||
+ if(typeof tagSecret!=='string'||tagSecret.length<32||
+  typeof apiKey!=='string'||apiKey.length<20||apiKey.length>300||
   /\s/.test(apiKey)||typeof request!=='function'||
   typeof resolveCoveredPlaces!=='function'||typeof verifyRouteTolls!=='function'||
   typeof now!=='function')
@@ -96,6 +106,12 @@ export function createG77VerifiedAutoRouteResolver({
   // billable routing call; this is not a driver availability assertion.
   const ctx=Object.freeze({actorId,origin,destination,service});
   const coverage=await resolveCoveredPlaces(ctx);
+  const beforeBillable=now();
+  if(!validEpoch(beforeBillable)||beforeBillable<at||
+   beforeBillable-at>30000||
+   coverage?.verifiedAtMs>beforeBillable||
+   beforeBillable-coverage?.verifiedAtMs>60000)
+   throw Error('Stale route coverage before billable provider');
   if(!validateCoverage(coverage,ctx,at))
    throw Error('No independently verified route coverage');
   const body={
@@ -126,7 +142,7 @@ export function createG77VerifiedAutoRouteResolver({
   const seconds=durationSeconds(route.duration);
   if(seconds===null)throw Error('No valid traffic-aware road duration');
   const atCharges=now();
-  if(!validEpoch(atCharges)||atCharges<at||atCharges-at>30000)
+  if(!validEpoch(atCharges)||atCharges<beforeBillable||atCharges-beforeBillable>30000)
    throw Error('Road or zone evidence too old');
   // Google Routes does not by itself supply an independently approved QORE
   // toll value; reject guesses even if value is zero.
@@ -135,10 +151,13 @@ export function createG77VerifiedAutoRouteResolver({
   const charges=await verifyRouteTolls(tollScope);
   if(!validateCharges(charges,tollScope,atCharges))
    throw Error('Tolls cannot be independently verified');
+  const originTag=privateTag(tagSecret,coverage.originPlaceId),
+   destinationTag=privateTag(tagSecret,coverage.destinationPlaceId);
+  if(originTag===destinationTag)throw Error('G77 private tag collision');
   return Object.freeze({
    routingVerified:true,coverageVerified:true,trafficAware:true,
-   fallbackUsed:false,originTag:coverage.originTag,
-   destinationTag:coverage.destinationTag,zoneTag:coverage.zoneTag,
+   fallbackUsed:false,originTag,
+   destinationTag,zoneTag:coverage.zoneTag,
    distanceMeters:route.distanceMeters,durationSeconds:seconds,
    tollsPyg:charges.tollsPyg
   });
