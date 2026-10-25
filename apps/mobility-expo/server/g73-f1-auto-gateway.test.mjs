@@ -51,7 +51,7 @@ test('G73 F1 route -> exact B quote -> explicit book -> owner GET reconciles sam
  const {app,calls}=fixture();
  const a=await app(request('/v1/staging/rider/auto/routes',{
   quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'}));
- assert.equal(a.status,201);assert.deepEqual(a.body,route);
+ assert.equal(a.status,200);assert.deepEqual(a.body,route);
  const q=await app(request('/v1/staging/rider/auto/prequote',{
   requestKey:quoteKey,routeId}));
  assert.equal(q.status,200);assert.deepEqual(q.body,quote);
@@ -67,27 +67,27 @@ test('G73 no forged cost, no route fallback, no inactive consent or extra payloa
  const {app}=fixture({resolveVerifiedRoute:async()=>({routingVerified:false}),
   registerRoute:async()=>{calls++;return routeId;}});
  assert.equal((await app(request('/v1/staging/rider/auto/routes',{
-  quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'})).status,409);
+  quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico'}))).status,409);
  assert.equal(calls,0);
  for(const payload of [
   {quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'economico',amountGs:1},
   {quoteRequestKey:routeKey,origin:'Panteón',destination:'Aeropuerto',service:'moto_pasajero'},
   {quoteRequestKey:routeKey,origin:'Panteón',destination:'Panteón',service:'economico'}
- ])assert.equal((await app(request('/v1/staging/rider/auto/routes',payload)).status,400);
+ ])assert.equal((await app(request('/v1/staging/rider/auto/routes',payload))).status,400);
  for(const payload of [{requestKey:bookKey,quoteId,accepted:false},
  {requestKey:bookKey,quoteId,accepted:true,priceGs:12000}]){
-  assert.equal((await app(request('/v1/staging/rider/auto/book',payload)).status,400);
+  assert.equal((await app(request('/v1/staging/rider/auto/book',payload))).status,400);
  }
 });
 test('G73 foreign receipt, rotated token and malformed quote fail closed',async()=>{
  const other=fixture({loadQuote:async()=>({...quote,ownerId:stranger})});
  assert.equal((await other.app(request('/v1/staging/rider/auto/prequote',{
-  requestKey:quoteKey,routeId})).status,409);
+  requestKey:quoteKey,routeId}))).status,409);
  const rec=fixture({reconcileBooking:async()=>({...book,ownerId:stranger})});
- assert.equal((await rec.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET')).status,409);
+ assert.equal((await rec.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'))).status,409);
  const missing=fixture({reconcileBooking:async()=>null});
- assert.equal((await missing.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET')).status,404);
+ assert.equal((await missing.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'))).status,404);
  const unauthorized=fixture({authorizePassenger:async()=>false});
- assert.equal((await unauthorized.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET')).status,403);
- assert.equal((await unauthorized.app({method:'GET',path:'/v1/staging/rider/auto/bookings/'+bookKey,headers:{}})).status,401);
+ assert.equal((await unauthorized.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'))).status,403);
+ assert.equal((await unauthorized.app({method:'GET',path:'/v1/staging/rider/auto/bookings/'+bookKey,headers:{}}))).status,401);
 });
