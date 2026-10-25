@@ -182,7 +182,7 @@ export async function prepareQoreG4StagingRuntime({
      &&g77RouteOptions.billableProviderApproved===true
      &&typeof g77RouteOptions.apiKey==='string'
      &&g77RouteOptions.apiKey.length>=20&&g77RouteOptions.apiKey.length<=300
-     &&!/\\s/.test(g77RouteOptions.apiKey)
+     &&!/\s/.test(g77RouteOptions.apiKey)
      &&typeof g77RouteOptions.tagSecret==='string'
      &&g77RouteOptions.tagSecret.length>=32
      &&typeof g77RouteOptions.resolveCoveredPlaces==='function'
