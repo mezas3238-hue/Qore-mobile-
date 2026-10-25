@@ -517,3 +517,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G75_F1_ADMIN_RIDE_VERIFICATION_POSTGRES_CI_ONLY.sql
       - name: G75 certify exact B Admin 19-field F1 proof and revoked privileged role
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G75_F1_ADMIN_RIDE_VERIFICATION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G78 prove real F1 Client booking cannot be hijacked by Driver with no verified KYC
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G78_F1_DENY_UNVERIFIED_DRIVER_ASSIGNMENT_ASSERT_POSTGRES_CI_ONLY.sql
