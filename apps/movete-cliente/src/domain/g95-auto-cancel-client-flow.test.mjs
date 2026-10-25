@@ -141,3 +141,19 @@ test('G95 rejects fabricated receipts, lost proof, missing G4 and JWT rotation',
  assert.equal(h.c.snapshot().g95Cancellation.phase,'idle');
  assert.equal(h.calls.filter(x=>x.path.endsWith('/cancel')).length,0);
 });
+
+test('G95 cancellation confirmation can be discarded BEFORE any network action',async()=>{
+ const f=setup();await tracked(f);
+ assert.equal(f.c.prepareG95Cancel({requestKey:cancelKey}).ok,true);
+ assert.equal(f.c.abandonG95PreparedCancel().ok,true);
+ assert.equal(f.c.snapshot().g95Cancellation.phase,'idle');
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/cancel')).length,0);
+ assert.equal(f.c.prepareG95Cancel({requestKey:id(20)}).ok,true);
+ assert.equal(f.c.abandonG95PreparedCancel().ok,true);
+ const g=setup({lostAck:true});await tracked(g);
+ g.c.prepareG95Cancel({requestKey:cancelKey});
+ await g.c.sendG95Cancel();
+ assert.equal(g.c.abandonG95PreparedCancel().ok,false);
+ assert.equal(g.c.prepareG95Cancel({requestKey:id(20)}).ok,false);
+ assert.equal(g.calls.filter(x=>x.path.endsWith('/cancel')).length,1);
+});

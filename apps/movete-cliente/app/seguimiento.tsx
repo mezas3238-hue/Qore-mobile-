@@ -226,7 +226,7 @@ export default function ClientTracking(){
      <Action label={g95Busy?'Enviando…':'Confirmar cancelación G95'}
       disabled={g95Busy} busy={g95Busy} onPress={()=>{void sendG95Ui();}}/>
      <Action label="Volver sin enviar" secondary disabled={g95Busy}
-      onPress={()=>setG95Confirm(false)}/>
+      onPress={()=>{client.abandonG95PreparedCancel();setG95Confirm(false);}}/>
     </View>}
     {g95ForTrip&&g95.requiresReconciliation&&<Action
      label={g95Busy?'Comprobando…':'Recuperar cancelación sin volver a enviar'}

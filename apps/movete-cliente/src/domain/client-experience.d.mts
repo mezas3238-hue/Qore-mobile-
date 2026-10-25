@@ -144,6 +144,7 @@ export type ClientExperience={
  refreshAutoDispatch():Promise<ClientResult>;
  refreshAutoFinancialStatus():Promise<ClientResult>;
  prepareG95Cancel(args:{requestKey:string}):ClientResult;
+ abandonG95PreparedCancel():ClientResult;
  sendG95Cancel():Promise<ClientResult>;
  reconcileG95Cancel():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;

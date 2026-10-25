@@ -825,6 +825,11 @@ export function createClientExperience({authProvider=null,gateway=null,
   g95Epoch++;g95={phase:'ready',requestKey,scope:s,receipt:null,error:null};
   notify();return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
  }
+ function abandonG95PreparedCancel(){
+  if(g95.phase!=='ready')return fail('G95_CANNOT_DISCARD_AFTER_NETWORK');
+  g95Epoch++;g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
+  notify();return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+ }
  async function sendG95Cancel(){
   if(g95.phase!=='ready')return fail('G95_NOT_PREPARED');
   const s=preparedG95Scope();
@@ -1062,7 +1067,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    notify();return result;
   },
   refreshAutoDispatch,refreshAutoFinancialStatus,
-  prepareG95Cancel,sendG95Cancel,reconcileG95Cancel,
+  prepareG95Cancel,abandonG95PreparedCancel,sendG95Cancel,reconcileG95Cancel,
   clearAutoPrequote:()=>{
    const result=prequoteAuto.discard();
    if(result.ok){subsidyEpoch++;subsidyReceipt=null;
