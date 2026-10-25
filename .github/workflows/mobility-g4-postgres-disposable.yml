@@ -553,3 +553,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G94_F1_AUTO_CANCELLATION_FINANCIAL_REVERSAL_POSTGRES_CI_ONLY.sql
       - name: G94 certify one Owner AUTO cancellation reversal, replay, isolation and legacy
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G94_F1_AUTO_CANCELLATION_FINANCIAL_REVERSAL_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G95 install Passenger cancel tied to G73 booking and G94 reversal (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G95_F1_PASSENGER_CANCEL_ATOMIC_POSTGRES_CI_ONLY.sql
+      - name: G95 certify original trip, one cancel event, financial void, replay, privacy and no promotion
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G95_F1_PASSENGER_CANCEL_ATOMIC_ASSERT_POSTGRES_CI_ONLY.sql
