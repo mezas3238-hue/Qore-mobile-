@@ -279,11 +279,14 @@ export async function prepareQoreG4StagingRuntime({
   allowRequest,
   loadOwnTrip:async({tripId,passengerId})=>{
    if(!UUID.test(tripId)||!UUID.test(passengerId))return null;
-   let result;
-   try{result=await persistence.snapshot({
+   // Never translate a failed PostgreSQL query into HTTP 404. Only a
+   // confirmed absence of an owner-scoped row may produce "not found".
+   const result=await persistence.snapshot({
     mode:'SYNTHETIC_STAGING',liveEnabled:false,
     actorId:passengerId,tripId,
-   });}catch{return null;}
+   });
+   if(result===null)return null;
+   if(result?.ok!==true||!result.trip)throw Error('Unverified Rider SQL snapshot');
    const data=result.trip;
    return {
     id:data.id,passengerId:data.passengerId,driverId:data.driverId,

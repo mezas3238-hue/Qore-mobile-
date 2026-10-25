@@ -141,7 +141,12 @@ export function createSupabaseStagingDispatchRepository(client){
     .or(`passenger_id.eq.${params.actorId},driver_id.eq.${params.actorId}`)
     .maybeSingle();
    const {data,error}=await query;
-   if(error||!data)throw Error('Trip snapshot unavailable');
+   // G89: SQL outages must not be disguised as an unauthorized/missing ride.
+   // An explicit no-row SELECT is an ordinary 404, never a database failure.
+   if(error)throw Error('Trip snapshot unavailable');
+   if(data===null)return null;
+   if(!data||typeof data!=='object'||Array.isArray(data))
+    throw Error('Trip snapshot malformed');
    return ok({trip:safeSnapshot(data,params.tripId,params.actorId)});
   },
  });

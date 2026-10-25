@@ -96,7 +96,8 @@ test('snapshot authorizes in the database using persisted participants',async()=
  assert.equal(m.state.filter.id,trip);
  assert.equal(m.state.filter.or,
   `passenger_id.eq.${passenger},driver_id.eq.${passenger}`);
- await assert.rejects(repo.snapshot({...base(stranger),tripId:trip}),/unavailable/);
+ assert.equal(await repo.snapshot({...base(stranger),tripId:trip}),null,
+  'Only a confirmed owner-scoped no-row is not found');
 });
 
 test('cancelled snapshot accepts either never-assigned or previously-assigned durable rows',async()=>{
@@ -112,4 +113,21 @@ test('RPC errors and malformed database receipts fail closed',async()=>{
  const m=mockClient(),repo=createSupabaseStagingDispatchRepository(m.client);
  m.client.rpc=async()=>({data:null,error:{message:'denied'}});
  await assert.rejects(repo.accept({...base(driver),offerId:offer,decisionKey:key}),/rejected/);
+});
+
+test('G89 DB read errors and malformed SQL receipts remain outages, not missing rides',async()=>{
+ const m=mockClient(),repo=createSupabaseStagingDispatchRepository(m.client);
+ const original=m.client.from;
+ m.client.from=table=>{
+  const chain=original(table);
+  const selecting=chain.select;
+  chain.select=(cols)=>{
+   const q=selecting(cols);
+   q.maybeSingle=async()=>({data:null,error:{code:'57014',message:'Connection lost'}});
+   return q;
+  };
+  return chain;
+ };
+ await assert.rejects(repo.snapshot({...base(passenger),tripId:trip}),
+  /Trip snapshot unavailable/);
 });

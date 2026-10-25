@@ -27,7 +27,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
    adminRole:null,adminReceipt:null,g77RegisteredRoute:null,
-   g84Enabled:false,g84OfferKey:null,
+   g84Enabled:false,g84OfferKey:null,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -75,6 +75,7 @@ function mockSupabase(){
          return {data:o.id===filter.id&&o.driver_id===filter.driver_id?{...o}:null,error:null};
         }
         if(table==='mobility_stage_auto_demo_trips'){
+         if(state.g89TripReadError)return {data:null,error:{code:'08006',message:'offline'}};
          const t=state.trip;
          const actor=filter.$or?.match(/passenger_id\.eq\.([^,]+)/)?.[1];
          const ok=t.id===filter.id&&
@@ -980,4 +981,23 @@ test('G84 G82 candidate shortage or SQL denial cannot invalidate confirmed G73 b
    assert.equal(rec.body.serverPersisted,true);
   });
  }
+});
+
+test('G89 authenticated Client distinguishes confirmed missing trip from database outage',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const real=await req(base,statusPath,'rider');
+  assert.equal(real.status,200);
+  m.state.trip.id=offer; // Separate, synthetic persisted trip, not rider's requested ID.
+  const missing=await req(base,statusPath,'rider');
+  assert.equal(missing.status,404);
+  assert.equal(missing.body.error,'Trip not found');
+  m.state.g89TripReadError=true;
+  const offline=await req(base,statusPath,'rider');
+  assert.equal(offline.status,503);
+  assert.equal(offline.body.error,'Trip status temporarily unavailable');
+  assert.equal((await req(base,statusPath,'stranger')).status,403);
+  assert.doesNotMatch(JSON.stringify(offline),/Connection lost|offline|08006|password|JWT/);
+ });
 });
