@@ -99,6 +99,18 @@ test('assigned state accepted only with independently persisted driver link',asy
  assert.equal(r.ok,true);assert.equal(r.data.assignmentPersisted,true);
  assert.equal(r.data.revision,2);assert.equal(r.data.driverId,undefined);
 });
+test('completed or cancelled ride retains historical assignment flag without exposing former Driver',async()=>{
+ for(const status of ['completed','cancelled']){
+  const f=setup({response:()=>http(dto({
+   status,assignmentPersisted:true,driverId:null,revision:5
+  }))});
+  const result=await f.gateway.read(trip);
+  assert.equal(result.ok,true);
+  assert.equal(result.data.status,status);
+  assert.equal(result.data.assignmentPersisted,true);
+  assert.equal(result.data.driverId,undefined);
+ }
+});
 test('404, 503, redirects, invalid MIME, oversize body never show synthetic trip',async()=>{
  for(const status of [404,503]){
   const f=setup({response:()=>http({error:'private'},status)});
