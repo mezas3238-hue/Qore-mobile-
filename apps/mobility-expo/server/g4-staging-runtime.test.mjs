@@ -27,6 +27,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
    adminRole:null,adminReceipt:null,g77RegisteredRoute:null,
+   g84Enabled:false,g84OfferKey:null,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -111,6 +112,23 @@ function mockSupabase(){
    },
    async rpc(name,params){
     state.rpcs.push({name,params});
+    if(state.g84Enabled&&name==='mobility_stage_g73_book'){
+     assert.equal(params._passenger_id,passenger);
+     return {data:ride,error:null};
+    }
+    if(state.g84Enabled&&name==='mobility_stage_g73_booking_receipt'){
+     return {data:{mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+      ownerId:passenger,requestKey:requestKey,quoteId:fareQuote,
+      routeId:offer,tripId:ride,revision:1,serverPersisted:true,
+      status:'ACCEPTED_QA'},error:null};
+    }
+    if(state.g84Enabled&&name==='mobility_stage_g82_offer_first_eligible_auto_qa'){
+     assert.equal(params._passenger_id,passenger);
+     assert.equal(params._booking_key,requestKey);
+     assert.equal(params._ttl_seconds,30);
+     state.g84OfferKey=params._offer_key;
+     return {data:offer,error:null};
+    }
     if(name==='mobility_stage_g73_route'){
      state.g77RegisteredRoute=params;
      return {data:offer,error:null};
@@ -874,5 +892,58 @@ test('G64 owner-only reader requires independently verified driver session',asyn
   const m=mockSupabase();
   await assert.rejects(()=>prepare(m,{readDriverDecisionOwnerQa:reader}));
   assert.equal(m.state.clients.length,0);
+ }
+});
+
+test('G84 real HTTP booking from Client invokes one private G82 SQL offer for original G73 trip',async()=>{
+ const m=mockSupabase();m.state.g84Enabled=true;
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const request={requestKey,quoteId:fareQuote,accepted:true};
+  const first=await req(base,'/v1/staging/rider/auto/book','rider','POST',request);
+  assert.equal(first.status,201);
+  assert.equal(first.body.tripId,ride);
+  assert.equal(first.body.status,'ACCEPTED_QA');
+  assert.equal(first.body.serverPersisted,true);
+  const calls=m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa');
+  assert.equal(calls.length,1);
+  assert.match(calls[0].params._offer_key,/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
+  assert.equal(calls[0].params._offer_key,m.state.g84OfferKey);
+  const original=m.state.g84OfferKey;
+  const second=await req(base,'/v1/staging/rider/auto/book','rider','POST',request);
+  assert.equal(second.status,201);
+  assert.equal(second.body.tripId,ride);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa').length,2);
+  assert.equal(m.state.g84OfferKey,original,'retry must use exact same server-only offer key');
+  const get=await req(base,'/v1/staging/rider/auto/bookings/'+requestKey);
+  assert.equal(get.status,200);
+  assert.equal(get.body.tripId,ride);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa').length,2,
+   'read-only booking reconciliation must not trigger offer');
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_request'),false,
+   'old unpriced booking RPC forbidden');
+ });
+});
+test('G84 G82 candidate shortage or SQL denial cannot invalidate confirmed G73 booking',async()=>{
+ for(const result of [{data:null,error:null},{data:null,error:{code:'P8201'}}]){
+  const m=mockSupabase();m.state.g84Enabled=true;
+  const original=m.createClient;
+  m.createClient=(url,key)=>{
+   const client=original(url,key);
+   if(key===serviceKey){
+    const call=client.rpc;
+    client.rpc=async(n,p)=>n==='mobility_stage_g82_offer_first_eligible_auto_qa'?
+     result:call(n,p);
+   }
+   return client;
+  };
+  const runtime=await prepare(m);
+  await http(runtime,async base=>{
+   const rec=await req(base,'/v1/staging/rider/auto/book','rider','POST',
+    {requestKey,quoteId:fareQuote,accepted:true});
+   assert.equal(rec.status,201);
+   assert.equal(rec.body.tripId,ride);
+   assert.equal(rec.body.serverPersisted,true);
+  });
  }
 });

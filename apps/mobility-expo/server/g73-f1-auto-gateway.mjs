@@ -53,11 +53,13 @@ const saneBook=(x,uid,key)=>exact(x,bookFields)&&
  x.revision>=1&&x.serverPersisted===true&&x.status==='ACCEPTED_QA';
 export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorizePassenger,
  allowRequest,resolveVerifiedRoute,registerRoute,loadRoute,quoteRoute,loadQuote,
- bookQuote,reconcileBooking,now=Date.now}={}){
+ bookQuote,reconcileBooking,dispatchBookedAuto=null,now=Date.now}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
- .every(fn=>typeof fn==='function'))throw Error('G73 backend adapters required');
+ .every(fn=>typeof fn==='function')||
+ !(dispatchBookedAuto===null||typeof dispatchBookedAuto==='function'))
+ throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
   const isQuote=method==='POST'&&path===QUOTE;
@@ -133,6 +135,14 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     const rec=await reconcileBooking({actorId:user.id,requestKey:body.requestKey});
     if(!saneBook(rec,user.id,body.requestKey)||rec.tripId!==tripId||
       rec.quoteId!==body.quoteId)throw Error('Booking not confirmed');
+    // Dispatch is an independent, non-commercial side effect. Its receipt
+    // cannot change the fact that the G73 booking is already committed.
+    // G82 resolves Driver candidates itself; no client Driver ID is accepted.
+    if(dispatchBookedAuto!==null){
+     try{await dispatchBookedAuto({passengerId:user.id,
+      bookingKey:body.requestKey,tripId:rec.tripId});}
+     catch{/* Booking stays persisted/searching; private offer is uncertain. */}
+    }
     return respond(201,rec);
    }
    const rec=await reconcileBooking({actorId:user.id,requestKey:match[1]});

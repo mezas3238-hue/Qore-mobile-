@@ -91,3 +91,35 @@ test('G73 foreign receipt, rotated token and malformed quote fail closed',async(
  assert.equal((await unauthorized.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'))).status,403);
  assert.equal((await unauthorized.app({method:'GET',path:'/v1/staging/rider/auto/bookings/'+bookKey,headers:{}})).status,401);
 });
+
+test('G84 booking triggers private dispatch only after persisted consent and same-trip receipt',async()=>{
+ const dispatched=[],f=fixture({dispatchBookedAuto:async x=>dispatched.push(x)});
+ const b=await f.app(request('/v1/staging/rider/auto/book',{
+  requestKey:bookKey,quoteId,accepted:true}));
+ assert.equal(b.status,201);
+ assert.deepEqual(b.body,book,'passenger booking DTO must remain stable');
+ assert.deepEqual(dispatched,[{passengerId:actor,bookingKey:bookKey,tripId}]);
+ const rec=await f.app(request('/v1/staging/rider/auto/bookings/'+bookKey,null,'GET'));
+ assert.equal(rec.status,200);
+ assert.equal(dispatched.length,1,'reconcile GET must never offer twice');
+});
+test('G84 private dispatch outage never rolls back committed booking or invents offer',async()=>{
+ let calls=0;
+ const f=fixture({dispatchBookedAuto:async()=>{calls++;throw Error('G82 transient DB outage');}});
+ const b=await f.app(request('/v1/staging/rider/auto/book',{
+  requestKey:bookKey,quoteId,accepted:true}));
+ assert.equal(b.status,201);
+ assert.deepEqual(b.body,book);
+ assert.equal(calls,1);
+ assert.equal((await f.app(request('/v1/staging/rider/auto/bookings/'+bookKey,
+  null,'GET'))).status,200);
+ const forged=fixture({dispatchBookedAuto:async()=>{calls++;},
+  reconcileBooking:async()=>({...book,tripId:stranger})});
+ const out=await forged.app(request('/v1/staging/rider/auto/book',{
+  requestKey:bookKey,quoteId,accepted:true}));
+ assert.equal(out.status,409,'mismatching booking id cannot trigger dispatch');
+ assert.equal(calls,1);
+ for(const bad of [false,{},'enabled']){
+  assert.throws(()=>fixture({dispatchBookedAuto:bad}));
+ }
+});

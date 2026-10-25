@@ -21,7 +21,9 @@ import {createSupabaseStagingMerchantRepository} from './g6-supabase-merchant-re
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
 import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repository.mjs';
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
+import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
+import {createG82PrivateAutoCandidateDispatch} from './g82-f1-auto-candidate-dispatch.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -232,6 +234,7 @@ export async function prepareQoreG4StagingRuntime({
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
+ const candidateDispatch=createG82PrivateAutoCandidateDispatch(admin);
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
@@ -397,6 +400,20 @@ export async function prepareQoreG4StagingRuntime({
  // All billable routing is OFF unless explicitly approved by Owner.
  const resolvedAutoRoute=preparedG77Route??
   verifiedAutoRoute??unavailablePricingContext;
+
+ // Stable server-derived G82 idempotency UUID. Never supplied by a handset:
+ // repeated G73 POSTs cannot create independent offer keys. No secret/auth
+ // semantics are attributed to this deterministic identifier.
+ const privateAutoOfferKey=(passengerId,bookingKey)=>{
+  const value=createHash('sha256')
+   .update('QORE:MOVETE:F1:G82:BOOKING:v1:')
+   .update(passengerId).update(':').update(bookingKey).digest();
+  value[6]=(value[6]&15)|80;
+  value[8]=(value[8]&63)|128;
+  const hex=value.subarray(0,16).toString('hex');
+  return hex.slice(0,8)+'-'+hex.slice(8,12)+'-'+hex.slice(12,16)+
+   '-'+hex.slice(16,20)+'-'+hex.slice(20);
+ };
  const f1Auto=createQoreG73AutoGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
@@ -407,6 +424,9 @@ export async function prepareQoreG4StagingRuntime({
   loadQuote:params=>f1AutoPersistence.quoteReceipt(params),
   bookQuote:params=>f1AutoPersistence.book(params),
   reconcileBooking:params=>f1AutoPersistence.bookingReceipt(params),
+  dispatchBookedAuto:async({passengerId,bookingKey})=>
+   candidateDispatch.offerFirstEligible({passengerId,bookingKey,
+    offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}),
  });
  // G76: only an independently authenticated and AAL2-verified Admin may
  // access SQL G75. Unconfigured remains HTTP 503; nothing is exposed LIVE.
