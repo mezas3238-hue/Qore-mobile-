@@ -42,6 +42,7 @@ import {createDriverEnrollmentRepository} from './g18-driver-enrollment-reposito
 import {createDriverEnrollmentGateway} from './g18-driver-enrollment-gateway.mjs';
 import {createDriverKycReadinessRepository} from './g20-driver-kyc-readiness-repository.mjs';
 import {createDriverKycReadinessGateway} from './g20-driver-kyc-readiness-gateway.mjs';
+import {createDriverKycExpiryStatusQa} from './driver-kyc-expiry-status-qa.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,7 +153,7 @@ export async function prepareQoreG4StagingRuntime({
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
  verifiedAutoRoute=null,g77RouteOptions=null,
- privateEvidenceAdapters=null,adminF1Trust=null,now=Date.now,
+ privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -189,6 +190,12 @@ export async function prepareQoreG4StagingRuntime({
      &&typeof g77RouteOptions.verifyRouteTolls==='function'
      &&typeof g77RouteOptions.request==='function'
      &&verifiedAutoRoute===null))||
+   !(driverKycTrust===null||(
+     Object.getPrototypeOf(driverKycTrust)===Object.prototype&&
+     Object.keys(driverKycTrust).length===4&&
+     ['verifyDriverSession','verifySessionNotRevoked',
+      'resolveActiveVehicle','queryOwnerValidity']
+      .every(k=>typeof driverKycTrust[k]==='function')))||
    !(adminF1Trust===null||(Object.getPrototypeOf(adminF1Trust)===Object.prototype
     &&Object.keys(adminF1Trust).length===3
     &&['verifyAdminSession','verifySessionNotRevoked','verifyBackofficeMfa']
@@ -467,6 +474,27 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ // G80: the expiry oracle intentionally uses a separately authorized,
+ // owner-only source. The Supabase service key CANNOT call the protected
+ // mobility_stage_kyc_expiry_snapshot_owner_qa() PostgreSQL function.
+ // No default role-claim, token decode or KYC approval is invented.
+ const driverKycValidity=driverKycTrust===null?null:createDriverKycExpiryStatusQa({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,now,
+  verifyAccessToken:async token=>{
+   const provider=await verified(token);
+   const attested=await driverKycTrust.verifyDriverSession(token);
+   if(!provider||provider.id!==attested?.id||provider.is_anonymous===true||
+      !(typeof provider.email_confirmed_at==='string'||
+        typeof provider.phone_confirmed_at==='string'))
+    throw Error('G80 IdP session identity mismatch');
+   return attested;
+  },
+  verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p),
+  resolveExclusiveRole:id=>singleRole(admin,id),
+  resolveActiveVehicle:id=>driverKycTrust.resolveActiveVehicle(id),
+  queryOwnerValidity:scope=>driverKycTrust.queryOwnerValidity(scope),
+  allowRequest:({actorId})=>allowRequest({userId:actorId})
+ });
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -531,6 +559,11 @@ export async function prepareQoreG4StagingRuntime({
    driverDocumentHandler:guard(driverDocuments),
    driverEnrollmentHandler:guard(driverEnrollment),
    driverLicenseReadinessHandler:guard(driverKycReadiness),
+   ...(driverKycValidity===null?{}:{driverKycValidityHandler:guard(input=>{
+    const bearer=typeof input?.headers?.authorization==='string'?
+     /^Bearer ([A-Za-z0-9._~-]{20,7900})$/.exec(input.headers.authorization)?.[1]:null;
+    return driverKycValidity({bearer});
+   })}),
   }),
  };
 }
