@@ -43,12 +43,21 @@ export default function ClientTracking(){
  },[foreground,view.privateViewRevision,view.tracking.tripId,
   view.tracking.subscriptionActive,view.rideContinuation.tripId]));
  const canSync=view.authenticated&&state.subscriptionActive&&!state.syncing;
+ const g95=view.g95Cancellation;
+ const [g95Confirm,setG95Confirm]=useState(false);
+ const [g95Message,setG95Message]=useState('');
+ const [g95Busy,setG95Busy]=useState(false);
+ const g95Lock=useRef(false);
+ const g95ForTrip=g95.tripId===state.tripId&&state.tripId!==null;
+ const canG95=view.authenticated&&g95ForTrip&&g95.contractReady
+  &&state.subscriptionActive&&!state.syncing&&CANCELLABLE.has(state.state);
  const canCancel=view.authenticated&&state.subscriptionActive&&!state.syncing
-  &&CANCELLABLE.has(state.state)&&view.cancellation.contractReady;
+  &&CANCELLABLE.has(state.state)&&view.cancellation.contractReady
+  &&!g95ForTrip;
  const phase=view.cancellation.phase;
  // JWT rotation, assignment/status revision, or a new trip invalidates an
  // open cancellation confirmation even if the user subject is unchanged.
- useEffect(()=>{setConfirm(false);setMessage('');},
+ useEffect(()=>{setConfirm(false);setMessage('');setG95Confirm(false);setG95Message('');},
   [view.privateViewRevision,state.tripId,state.state,state.revision,state.syncing]);
  useEffect(()=>{
   if(!confirm)return;
@@ -58,6 +67,36 @@ export default function ClientTracking(){
   },50);
   return ()=>clearTimeout(timer);
  },[confirm]);
+ function prepareG95Ui(){
+  if(!canG95||g95Lock.current)return;
+  const result=client.prepareG95Cancel({requestKey:Crypto.randomUUID()});
+  if(result.ok){setG95Message('');setG95Confirm(true);}
+  else setG95Message('No se pudo preparar cancelación; actualizá el viaje.');
+ }
+ async function sendG95Ui(){
+  if(g95Lock.current||!g95ForTrip||g95.phase!=='ready')return;
+  g95Lock.current=true;setG95Busy(true);setG95Confirm(false);
+  try{
+   const result=await client.sendG95Cancel(),after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.tracking.tripId!==state.tripId)return;
+   setG95Message(result.ok
+    ?'Cancelación persistida QA. Verificá estado G4 y contabilidad G94; no es reembolso.'
+    :'Respuesta ambigua. No se repetirá el POST: recuperá el recibo por GET.');
+  }finally{g95Lock.current=false;setG95Busy(false);}
+ }
+ async function reconcileG95Ui(){
+  if(g95Lock.current||!g95ForTrip||!g95.requiresReconciliation)return;
+  g95Lock.current=true;setG95Busy(true);
+  try{
+   const result=await client.reconcileG95Cancel(),after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.tracking.tripId!==state.tripId)return;
+   setG95Message(result.ok
+    ?'Anulación recuperada por GET privado. Verificá G4/G94, no hay reembolso.'
+    :'El servidor no confirmó la anulación; no se enviará un POST nuevo.');
+  }finally{g95Lock.current=false;setG95Busy(false);}
+ }
  async function verifyOwnCompletedHistory(){
   if(historyLock.current||!view.completedRideHistory.readReady
    ||view.completedRideHistory.verified)return;
@@ -177,7 +216,28 @@ export default function ClientTracking(){
     <Action label={state.syncing?'Sincronizando…':'Actualizar desde el servidor'} disabled={!canSync}
      busy={state.syncing}
       onPress={()=>{void client.syncTracking();}}/>
-    {!view.cancellation.contractReady&&CANCELLABLE.has(state.state)&&
+    {canG95&&<Action label="Solicitar cancelación AUTO G95 — QA" secondary
+     hint="Una única solicitud con confirmación humana; sin pago."
+     onPress={prepareG95Ui}/>}
+    {g95ForTrip&&g95.phase==='ready'&&g95Confirm&&<View
+     accessibilityViewIsModal importantForAccessibility="yes">
+     <Text accessibilityRole="header" style={styles.heading}>¿Confirmás cancelar el automóvil?</Text>
+     <Text style={styles.text}>Solo se enviará una solicitud con clave fija. La anulación QA no equivale a reembolso.</Text>
+     <Action label={g95Busy?'Enviando…':'Confirmar cancelación G95'}
+      disabled={g95Busy} busy={g95Busy} onPress={()=>{void sendG95Ui();}}/>
+     <Action label="Volver sin enviar" secondary disabled={g95Busy}
+      onPress={()=>setG95Confirm(false)}/>
+    </View>}
+    {g95ForTrip&&g95.requiresReconciliation&&<Action
+     label={g95Busy?'Comprobando…':'Recuperar cancelación sin volver a enviar'}
+     disabled={g95Busy} busy={g95Busy}
+     hint="GET privado sobre la reserva existente, ningún POST adicional."
+     onPress={()=>{void reconcileG95Ui();}}/>}
+    {g95ForTrip&&g95.phase==='confirmed'&&<Text style={styles.small}>
+     G95 persistido en QA; consultá GET G4 y G94 para estado/contabilidad, sin reembolso real.
+    </Text>}
+    {g95Message!==''&&<Text accessibilityRole="alert" style={styles.small}>{g95Message}</Text>}
+    {!view.cancellation.contractReady&&!canG95&&CANCELLABLE.has(state.state)&&
      <Text style={styles.small}>Cancelar viaje todavía no está disponible: falta certificar Auth, permisos y la API de pruebas.</Text>}
     {canCancel&&phase==='idle'&&
      <Action label="Solicitar cancelación" secondary disabled={cancelBusy} onPress={prepareCancel}/>}

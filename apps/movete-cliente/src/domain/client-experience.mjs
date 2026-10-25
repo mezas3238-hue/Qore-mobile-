@@ -55,6 +55,8 @@ export function createClientExperience({authProvider=null,gateway=null,
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
  let subsidyReceipt=null,subsidyEpoch=0,subsidyBusy=false;
  let financialAnchor=null,financial={busy:false,data:null,error:null},financialEpoch=0;
+ let g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
+ let g95Epoch=0;
  const g93Required=autoG73HttpOptions?.subsidyContractCertified===true;
  const emptyDispatch=()=>Object.freeze({readReady:false,busy:false,error:null,
   tripId:null,tripState:null,dispatchState:null,attempts:null,
@@ -65,6 +67,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
+  g95Epoch++;g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
   subsidyEpoch++;subsidyReceipt=null;subsidyBusy=false;
   financialEpoch++;financialAnchor=null;financial={busy:false,data:null,error:null};
   dispatchEpoch++;dispatch={busy:false,data:null,error:null,scope:null};
@@ -781,6 +784,86 @@ export function createClientExperience({authProvider=null,gateway=null,
   return Object.freeze({ok:true,tripId:s.tripId,
    financialState:result.data.financialState,qaOnly:true,productionEnabled:false});
  }
+ function g95Scope(){
+  const proof=dispatchProof(),tracked=tracking.snapshot();
+  if(!proof||autoG73Http?.isCancellationConfigured()!==true
+   ||!tracked.subscriptionActive||tracked.tripId!==proof.tripId
+   ||!Number.isSafeInteger(tracked.revision)
+   ||tracked.revision<proof.serverRevision
+   ||!Number.isSafeInteger(tracked.lastFetchedAt)
+   ||tracked.lastFetchedAt>now()||now()-tracked.lastFetchedAt>60000)return null;
+  return Object.freeze({ownerId:proof.subject,sessionRevision:proof.sessionRevision,
+   requestKey:proof.requestKey,tripId:proof.tripId,quoteId:proof.quoteId,
+   serverRevision:proof.serverRevision,tripState:tracked.state});
+ }
+ function preparedG95Scope(){
+  const s=g95Scope(),a=g95.scope;
+  return s&&a&&a.ownerId===s.ownerId
+   &&a.sessionRevision===s.sessionRevision&&a.requestKey===s.requestKey
+   &&a.tripId===s.tripId&&a.quoteId===s.quoteId
+   &&a.serverRevision===s.serverRevision?a:null;
+ }
+ function publicG95(){
+  const s=g95Scope(),same=Boolean(preparedG95Scope());
+  return Object.freeze({
+   contractReady:Boolean(s&&g95.phase==='idle'
+    &&['searching','assigned','arriving'].includes(s.tripState)),
+   phase:same?g95.phase:'idle',
+   requiresReconciliation:same&&g95.phase==='ambiguous',
+   tripId:s?.tripId??null,busy:same&&['sending','reconciling'].includes(g95.phase),
+   financialState:same?g95.receipt?.financialState??null:null,
+   error:same?g95.error:null,qaOnly:true,productionEnabled:false});
+ }
+ function prepareG95Cancel({requestKey}={}){
+  if(g95.phase!=='idle')return fail('G95_ALREADY_ATTEMPTED');
+  const s=g95Scope();
+  if(!s||!['searching','assigned','arriving'].includes(s.tripState))
+   return fail('G95_VERIFIED_ACTIVE_AUTO_REQUIRED');
+  if(typeof requestKey!=='string'
+   ||!/^([a-f0-9]{8}-)(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(requestKey)
+   ||requestKey===s.requestKey)return fail('G95_INVALID_REQUEST_KEY');
+  g95Epoch++;g95={phase:'ready',requestKey,scope:s,receipt:null,error:null};
+  notify();return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+ }
+ async function sendG95Cancel(){
+  if(g95.phase!=='ready')return fail('G95_NOT_PREPARED');
+  const s=preparedG95Scope();
+  if(!s||!['searching','assigned','arriving'].includes(g95Scope()?.tripState))
+   return fail('G95_FRESH_RIDE_REQUIRED');
+  const seq=++g95Epoch,key=g95.requestKey;
+  g95={...g95,phase:'sending',error:null};notify();
+  let result;
+  try{result=await autoG73Http.cancelAuto({...s,cancellationKey:key});}
+  catch{result=fail('NETWORK_OR_TIMEOUT');}
+  if(seq!==g95Epoch||!preparedG95Scope())return fail('STALE_SESSION_RESPONSE');
+  if(result?.ok===true&&result.qaOnly===true&&result.productionEnabled===false){
+   g95={...g95,phase:'confirmed',receipt:result.data,error:null};
+   financialEpoch++;financial={busy:false,data:null,error:null};notify();
+   return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+  }
+  g95={...g95,phase:'ambiguous',error:'G95_GET_RECONCILIATION_REQUIRED'};
+  notify();return fail('G95_GET_RECONCILIATION_REQUIRED');
+ }
+ async function reconcileG95Cancel(){
+  if(g95.phase!=='ambiguous')return fail('G95_NO_AMBIGUITY');
+  const s=preparedG95Scope();
+  if(!s)return fail('G95_SCOPE_NOT_VERIFIED');
+  const seq=++g95Epoch;
+  g95={...g95,phase:'reconciling',error:null};notify();
+  let result;
+  try{result=await autoG73Http.readCancellation(s);}
+  catch{result=fail('NETWORK_OR_TIMEOUT');}
+  if(seq!==g95Epoch||!preparedG95Scope())return fail('STALE_SESSION_RESPONSE');
+  if(result?.ok===true&&result.qaOnly===true&&result.productionEnabled===false
+   &&result.data.cancellationKey===g95.requestKey){
+   g95={...g95,phase:'confirmed',receipt:result.data,error:null};
+   financialEpoch++;financial={busy:false,data:null,error:null};notify();
+   return Object.freeze({ok:true,recoveredWithoutPost:true,
+    qaOnly:true,productionEnabled:false});
+  }
+  g95={...g95,phase:'ambiguous',error:'G95_GET_STILL_UNCONFIRMED'};
+  notify();return fail('G95_GET_STILL_UNCONFIRMED');
+ }
  function verifiedAutoSubsidy(){
   const user=actor(),quote=prequoteAuto.snapshot().quote,proof=subsidyReceipt;
   if(!g93Required||!user||!quote||!proof||proof.subject!==user.subject
@@ -820,7 +903,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
     autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
-    autoDispatch:emptyDispatch(),autoFinance:publicAutoFinance(),history:null,
+    autoDispatch:emptyDispatch(),autoFinance:publicAutoFinance(),g95Cancellation:publicG95(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -844,6 +927,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    quote:quote.current(),
    autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
    autoDispatch:autoDispatchSnapshot(),autoFinance:publicAutoFinance(),
+   g95Cancellation:publicG95(),
    history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
@@ -978,6 +1062,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    notify();return result;
   },
   refreshAutoDispatch,refreshAutoFinancialStatus,
+  prepareG95Cancel,sendG95Cancel,reconcileG95Cancel,
   clearAutoPrequote:()=>{
    const result=prequoteAuto.discard();
    if(result.ok){subsidyEpoch++;subsidyReceipt=null;

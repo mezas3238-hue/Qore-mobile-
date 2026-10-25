@@ -20,7 +20,8 @@ export function createF1AuthorizedQaHttpOptions({
  origin,pinnedOrigin,
  ownerApproved=false,backendContractVerified=false,
  persistedRuntimeVerified=false,routeProviderVerified=false,
- subsidyContractVerified=false,financialContractVerified=false,fetchImpl=fetch
+ subsidyContractVerified=false,financialContractVerified=false,
+ cancellationContractVerified=false,fetchImpl=fetch
 }={}){
  const url=pinned(origin);
  if(ownerApproved!==true||backendContractVerified!==true||
@@ -34,6 +35,7 @@ export function createF1AuthorizedQaHttpOptions({
   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
   routeProviderCertified:true,subsidyContractCertified:true,
   financialContractCertified:financialContractVerified===true,
+  cancellationContractCertified:cancellationContractVerified===true,
   origin:url,pinnedOrigin:url,fetchImpl
  });
 }

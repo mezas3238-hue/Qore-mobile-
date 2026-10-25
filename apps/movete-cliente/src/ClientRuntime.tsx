@@ -39,7 +39,8 @@ export function ClientRuntimeProvider({children,experience}:{
   persistedRuntimeVerified:process.env.EXPO_PUBLIC_F1_PG_RUNTIME_VERIFIED==='true',
   routeProviderVerified:process.env.EXPO_PUBLIC_F1_ROUTE_PROVIDER_VERIFIED==='true',
   subsidyContractVerified:process.env.EXPO_PUBLIC_F1_G93_SUBSIDY_CONTRACT_VERIFIED==='true',
-  financialContractVerified:process.env.EXPO_PUBLIC_F1_G94_FINANCIAL_STATUS_VERIFIED==='true'
+  financialContractVerified:process.env.EXPO_PUBLIC_F1_G94_FINANCIAL_STATUS_VERIFIED==='true',
+  cancellationContractVerified:process.env.EXPO_PUBLIC_F1_G95_CANCEL_CONTRACT_VERIFIED==='true'
  }),[]);
  // Independent G26 history + G11 status attestations. A G73 booking gate,
  // /liveness response or Expo web export NEVER enable this recovery path.

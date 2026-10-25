@@ -31,6 +31,9 @@ export type ClientSnapshot={
    'SEARCHING_DRIVER'|'OFFER_PENDING'|'RETRY_PENDING'|'SEARCH_EXHAUSTED'|'CLOSED'|null;
   attempts:number|null;offerPendingAcceptance:boolean;
   needsRideVerification:boolean;productionEnabled:false};
+ g95Cancellation:{contractReady:boolean;phase:string;
+  requiresReconciliation:boolean;tripId:string|null;busy:boolean;
+  financialState:string|null;error:string|null;qaOnly:true;productionEnabled:false};
  autoFinance:{readReady:boolean;busy:boolean;error:string|null;
   tripId:string|null;tripState:string|null;tripRevision:number|null;
   financialState:'RESERVED_QA'|'VOIDED_QA'|'COMPLETED_UNSETTLED_QA'|null;
@@ -140,6 +143,9 @@ export type ClientExperience={
  reconcileQuotedAuto():Promise<ClientResult>;
  refreshAutoDispatch():Promise<ClientResult>;
  refreshAutoFinancialStatus():Promise<ClientResult>;
+ prepareG95Cancel(args:{requestKey:string}):ClientResult;
+ sendG95Cancel():Promise<ClientResult>;
+ reconcileG95Cancel():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
@@ -196,7 +202,7 @@ export declare function createClientExperience(options?:{
  autoG73HttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   routeProviderCertified?:boolean;subsidyContractCertified?:boolean;
-  financialContractCertified?:boolean;
+  financialContractCertified?:boolean;cancellationContractCertified?:boolean;
   origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,init:unknown)=>Promise<unknown>|unknown;
   timeoutMs?:number;maxBytes?:number;
