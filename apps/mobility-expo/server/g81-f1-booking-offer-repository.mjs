@@ -9,7 +9,13 @@ export function createG81BookedAutoOfferRepository(client){
  if(!client||typeof client.rpc!=='function')
   throw Error('G81 requires server-only privileged SQL client');
  return Object.freeze({
-  async offerBookedAuto({passengerId,bookingKey,driverId,vehicleId,offerKey,ttlSeconds}={}){
+  async offerBookedAuto(input={}){
+   const required=['passengerId','bookingKey','driverId','vehicleId','offerKey','ttlSeconds'];
+   if(!input||typeof input!=='object'||Array.isArray(input)||
+      Object.keys(input).length!==required.length||
+      !required.every(k=>Object.hasOwn(input,k)))
+    throw Error('G81 rejects extra client-supplied dispatch fields');
+   const {passengerId,bookingKey,driverId,vehicleId,offerKey,ttlSeconds}=input;
    if(![passengerId,bookingKey,driverId,vehicleId,offerKey].every(isId)||
      passengerId===driverId||!Number.isSafeInteger(ttlSeconds)||
      ttlSeconds<5||ttlSeconds>30)
