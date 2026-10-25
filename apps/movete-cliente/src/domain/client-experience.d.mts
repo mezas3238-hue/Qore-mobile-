@@ -33,6 +33,7 @@ export type ClientSnapshot={
   needsRideVerification:boolean;productionEnabled:false};
  g95Cancellation:{contractReady:boolean;phase:string;
   requiresReconciliation:boolean;canVerify:boolean;
+  statusReadReady:boolean;statusIndependentlyVerified:boolean;
   independentlyVerified:boolean;tripId:string|null;busy:boolean;
   financialState:string|null;error:string|null;qaOnly:true;productionEnabled:false};
  autoFinance:{readReady:boolean;busy:boolean;error:string|null;
@@ -149,6 +150,7 @@ export type ClientExperience={
  sendG95Cancel():Promise<ClientResult>;
  reconcileG95Cancel():Promise<ClientResult>;
  restoreG95Cancellation():Promise<ClientResult>;
+ verifyRecoveredG95RideStatus():Promise<ClientResult>;
  verifyG95Cancellation():Promise<ClientResult>;
  clearAutoPrequote():ClientResult;
  prepareRide(body:unknown):ClientResult;
