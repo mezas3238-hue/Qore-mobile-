@@ -1,6 +1,8 @@
 import 'react-native-url-polyfill/auto';
 import {Platform} from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as Crypto from 'expo-crypto';
+import {createEncryptedChunkStore} from './domain/encrypted-chunk-store.mjs';
 import {createClient} from '@supabase/supabase-js';
 import {createNativePassengerAuth} from './domain/native-passenger-auth.mjs';
 import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
@@ -21,22 +23,15 @@ export function getNativePassengerAuth():NativePassengerAuth|null{
   publishableKey:process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
  });
  if(!config.ok)return (singleton=null);
- const storage={
-  async getItem(key:string){
-   return SecureStore.getItemAsync(key);
-  },
-  async setItem(key:string,value:string){
-   // Native Keychain/Keystore only. No persistent cleartext fallback.
-   if(encodeURIComponent(value).replace(/%[0-9A-F]{2}/gi,'_').length>1900)
-    throw Error('Supabase native session exceeds secure storage limit');
-   return SecureStore.setItemAsync(key,value,{
-    keychainAccessible:SecureStore.WHEN_UNLOCKED
-   });
-  },
-  async removeItem(key:string){
-   return SecureStore.deleteItemAsync(key);
-  }
- };
+ const storage=createEncryptedChunkStore({
+  prefix:'movete-facil-cliente-vault-v1',
+  randomUUID:()=>Crypto.randomUUID(),
+  get:key=>SecureStore.getItemAsync(key),
+  put:(key,value)=>SecureStore.setItemAsync(key,value,{
+   keychainAccessible:SecureStore.WHEN_UNLOCKED
+  }),
+  del:key=>SecureStore.deleteItemAsync(key)
+ });
  const supabase=createClient(config.url,config.publishableKey,{
   auth:{storage,persistSession:true,autoRefreshToken:true,
    detectSessionInUrl:false,flowType:'pkce',storageKey:'movete-facil-cliente-auth'}
