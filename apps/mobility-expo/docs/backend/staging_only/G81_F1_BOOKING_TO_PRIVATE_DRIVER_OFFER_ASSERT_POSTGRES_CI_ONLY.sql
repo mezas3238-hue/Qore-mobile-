@@ -197,6 +197,22 @@ BEGIN
  OR receipt->>'driverId' IS NOT NULL OR receipt->>'assignmentPersisted'<>'false'
  THEN RAISE EXCEPTION 'G81 leaked an unaccepted Driver into Admin'; END IF;
  RAISE NOTICE 'G81 PASS: one booked G73 trip, private offer and outbox; KYC and legal fences remain';
+ -- G91: immediate G84 offer is private and unassigned, while its
+ -- G85 durable job is still PENDING (no dispatcher drain yet).
+ -- G90 must display OFFER_PENDING without revealing the Driver or offer key.
+ IF (SELECT status FROM public.mobility_stage_g85_auto_dispatch_jobs
+     WHERE booking_key=b)<>'PENDING'
+ THEN RAISE EXCEPTION 'G91 fixture expected unprocessed G84 dispatch'; END IF;
+ receipt:=public.mobility_stage_g90_passenger_dispatch_status_qa(p,b);
+ IF receipt->>'dispatchState'<>'OFFER_PENDING'
+ OR receipt->>'offerPendingAcceptance'<>'true'
+ OR receipt->>'attempts'<>'0'
+ OR receipt ? 'driverId' OR receipt ? 'vehicleId' OR receipt ? 'offerId'
+ OR (SELECT count(*) FROM pg_catalog.jsonb_object_keys(receipt))<>9
+ OR public.mobility_stage_g90_passenger_dispatch_status_qa(
+  '81810000-0000-4818-8818-000000000003'::uuid,b) IS NOT NULL
+ THEN RAISE EXCEPTION 'G91 existing immediate offer invisible or Rider privacy leak'; END IF;
+ RAISE NOTICE 'G81/G91 PASS: a durable G84 offer is visible to Rider before G85 runs';
 END $verify$;
 -- G85 must observe this already-offered G84/G81 trip, not create a second
 -- offer or mutate Passenger state when the offline worker catches up.

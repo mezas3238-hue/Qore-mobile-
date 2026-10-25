@@ -34,13 +34,25 @@ BEGIN
   ON o.id=j.offer_id AND o.trip_id=t.id
  WHERE q.passenger_id=_passenger_id AND q.booking_key=_booking_key;
  IF NOT FOUND THEN RETURN NULL; END IF;
- open_offer:=r.trip_state='searching' AND r.queue_status='OFFERED'
-  AND r.offer_status='offered'
-  AND r.expires_at>pg_catalog.clock_timestamp();
+ -- G91: G84 can commit a G4 offer and its outbox *before* the
+ -- G85 continuation worker reconciles PENDING -> OFFERED. The Rider must
+ -- see an existing, still-valid offer immediately rather than false "search".
+ -- Owner is validated in the G73 trip/booking JOIN above; never return IDs.
+ open_offer:=r.trip_state='searching' AND (
+  (r.queue_status='OFFERED' AND r.offer_status='offered'
+   AND r.expires_at>pg_catalog.clock_timestamp())
+  OR EXISTS (
+    SELECT 1 FROM public.mobility_stage_auto_demo_offers active
+    JOIN public.mobility_stage_auto_demo_push_outbox pushed
+     ON pushed.offer_id=active.id AND pushed.driver_id=active.driver_id
+    WHERE active.trip_id=r.trip_id
+      AND active.status='offered'
+      AND active.expires_at>pg_catalog.clock_timestamp()
+  ));
  state:=CASE
   WHEN r.trip_state<>'searching' THEN 'CLOSED'
-  WHEN r.queue_status='EXHAUSTED' THEN 'SEARCH_EXHAUSTED'
   WHEN open_offer THEN 'OFFER_PENDING'
+  WHEN r.queue_status='EXHAUSTED' THEN 'SEARCH_EXHAUSTED'
   WHEN r.queue_status IN ('WAITING','OFFERED') THEN 'RETRY_PENDING'
   WHEN r.queue_status='PENDING' THEN 'SEARCHING_DRIVER'
   ELSE 'CLOSED' END;
