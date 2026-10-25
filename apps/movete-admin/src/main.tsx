@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
+import {AdminAuthPanel} from './AdminAuthPanel';
 import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
@@ -555,7 +556,8 @@ function App(){
      <h1 ref={pageHeadingRef} tabIndex={-1}>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión de QA por proveedor (sin backend certificado)':'Sin autenticación administrativa activa'}</p></div>
      <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
-     <span><strong>Entorno de validación técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. No ingreses credenciales reales.</span></div>
+     <span><strong>Entorno de validación técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. Solo ingresar credenciales de cuentas STAGING autorizadas cuando el proyecto de identidad esté configurado.</span></div>
+    <AdminAuthPanel/>
     {operation!==null&&<div className="refresh-panel" aria-label="Actualización segura del panel">
      <div>
       <strong>Consulta segura del servidor</strong>
