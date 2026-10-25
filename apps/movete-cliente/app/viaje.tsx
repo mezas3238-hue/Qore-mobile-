@@ -266,7 +266,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
      disabled={!free} onPress={()=>selectService(option.code)}/>
     <Text style={styles.small}>{option.description}. Disponibilidad y tarifa pendientes del servidor.</Text>
    </View>)}
-   <Text style={styles.small}>No hay motos de pasajeros. Motocicletas solo para envíos habilitados.</Text>
+   <Text style={styles.small}>Este formulario corresponde exclusivamente a AUTO pasajeros. Para viaje de pasajeros en MOTO usá el servicio MOTO independiente desde Inicio; su reserva comercial requiere aprobación.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 3 · Revisá antes de continuar</Text>
@@ -326,6 +326,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     <Text style={styles.small}>Importe calculado por el servidor (QA, sin cobro)</Text>
     <Text accessibilityLiveRegion="polite" style={styles.heading}>{quoted.amountLabel}</Text>
     <Text style={styles.small}>Cotización vigente hasta {new Date(quoted.quote.expiresAt).toLocaleTimeString('es-PY')}. Aceptar el precio no envía todavía una reserva.</Text>
+    <Text style={styles.small}>Esta respuesta G73 QA todavía no certifica desglose de tarifa original, subsidio del 10 % ni total final promocional. Se necesita un DTO firmado por backend A antes de presentarlos o aplicarlos en producción.</Text>
     {quoted.canAccept&&<Action label="Acepto esta tarifa en guaraníes"
      hint="Aceptación explícita de importe y versión exactos; sin despacho ni cobro"
      onPress={acceptVerifiedFare}/>}

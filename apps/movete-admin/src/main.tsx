@@ -11,9 +11,10 @@ import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
 import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
-type Page='resumen'|'propietario'|'viajes'|'kyc'|'zonas'|'incidentes'|'auditoria';
+type Page='resumen'|'servicios'|'propietario'|'viajes'|'kyc'|'zonas'|'incidentes'|'auditoria';
 const sections:{id:Page;label:string;hint:string}[]=[
  {id:'resumen',label:'Resumen',hint:'Indicadores operativos'},
+ {id:'servicios',label:'Cuatro servicios',hint:'Cobertura verificada y bloqueos por modalidad'},
  {id:'propietario',label:'Propietario',hint:'Ingresos, comisiones y control estratégico'},
  {id:'viajes',label:'Viajes AUTO',hint:'Verificación de un viaje F1 desde el servidor'},
  {id:'kyc',label:'Documentos y KYC',hint:'Revisión por responsable'},
@@ -408,7 +409,8 @@ function AuditReadOnly({audit,allowed}:{
 }
 
 const readOperation:Record<Page,string|null>={
- resumen:null,propietario:'finance',viajes:null,kyc:'kyc',zonas:'zones',incidentes:'incidents',auditoria:'audit'
+ resumen:null,servicios:null,propietario:'finance',viajes:null,
+ kyc:'kyc',zonas:'zones',incidentes:'incidents',auditoria:'audit'
 };
 const safeFeedback:Record<string,string>={
  AUTH_REQUIRED:'La sesión caducó. Volvé a autenticarte.',
@@ -474,6 +476,44 @@ function F1RideAuditPanel({client,state}:{client:AdminExperience;state:AdminSnap
    GPS, pagos ni acciones de despacho. El rol, MFA y consistencia
    de viaje/propietario/ruta/cotización deben verificarse en backend A.</p>
  </Panel>;
+}
+
+function FourServicesReadOnly({state}:{state:AdminSnapshot}){
+ const allowed=state.account?.role==='admin'&&state.account.mfaVerified===true;
+ const zones=allowed&&state.zones&&state.zones.expiresAt>Date.now()
+  ?state.zones:null;
+ const services=[
+  {id:'AUTO_RIDE',label:'AUTO · Pasajeros',
+   detail:'El viaje F1 G73/G90 y el registro Admin G75 requieren entorno autorizado y pruebas en dos teléfonos.'},
+  {id:'MOTO_RIDE',label:'MOTO · Pasajeros',
+   detail:'Categoría independiente de MOTO DELIVERY. Falta contrato, habilitación legal/seguro, tarifa, KYC y dispositivo.'},
+  {id:'AUTO_DELIVERY',label:'ENVÍOS · Auto',
+   detail:'El envío precisa cotización, custodia, aceptación, evidencia de entrega y persistencia.'},
+  {id:'MOTO_DELIVERY',label:'ENVÍOS · Moto',
+   detail:'Carga en moto, no transporte de pasajero. Mantener controles de elegibilidad y peso.'},
+  {id:'COMMERCE',label:'COMERCIOS · Pedidos',
+   detail:'Supermercados, farmacias OTC, restaurantes y otros. Stock, pedido y entrega deben ser del backend.'}
+ ] as const;
+ return <div className="metric-grid" aria-label="Estado seguro de los cuatro servicios">
+  {services.map(item=>{
+   const observed=zones?.items.filter(z=>z.serviceKind===item.id)??[];
+   return <Panel key={item.id} className="metric">
+    <small>{item.id}</small><strong>{item.label}</strong>
+    <p>{item.detail}</p>
+    {allowed&&zones&&item.id!=='MOTO_RIDE'&&item.id!=='COMMERCE'
+     ?<span>{observed.length} zonas reportadas en esta página de servidor; cobertura no significa disponibilidad ni aprobación comercial.</span>
+     :<span>Sin lectura certificada de cobertura específica de este servicio.</span>}
+    <div className="empty-chip">NO LIVE · Sin controles de activación</div>
+   </Panel>;
+  })}
+  <Panel className="metric">
+   <small>Seguridad del panel</small><strong>Activación bloqueada</strong>
+   <p>No se muestran usuarios, disponibilidad, tarifas ni ventas inventadas.
+    MOTO_RIDE no aparece todavía en el DTO de zonas de Admin.</p>
+   <span>{allowed?'Admin con MFA; operaciones sujetas a permisos específicos.':
+    'Acceso restringido: se necesita rol Admin y MFA.'}</span>
+  </Panel>
+ </div>;
 }
 
 function App(){
@@ -591,7 +631,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='servicios'?<FourServicesReadOnly state={adminState}/>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}

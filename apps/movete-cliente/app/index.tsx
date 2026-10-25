@@ -10,14 +10,15 @@ export default function ClientHome(){
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>Movete Fácil Cliente</Text>
-   <Text style={styles.heroSub}>Automóviles, envíos y comercios en una sola app de cliente. Las operaciones se habilitan solo con contratos y autorización certificados.</Text>
+   <Text style={styles.heroSub}>Cuatro servicios: AUTO pasajeros, MOTO pasajeros, ENVÍOS y COMERCIOS. Cada operación requiere backend verificado y autorización.</Text>
   </View>
   {simpleMode&&<Panel>
    <Text accessibilityRole="header" style={styles.heading}>Acciones principales</Text>
    <Text style={styles.text}>Elegí qué necesitás. Los viajes, envíos y pagos siguen sujetos a confirmación del servidor.</Text>
-   <Action large label="Preparar viaje en automóvil" onPress={()=>router.push('/viaje')}/>
-   <Action large label="Preparar envío" onPress={()=>router.push('/envios')}/>
-   <Action large label="Ver comercios" onPress={()=>router.push('/comercios')}/>
+   <Action large label="AUTO · Viajar en automóvil" onPress={()=>router.push('/viaje')}/>
+   <Action large label="MOTO · Viajar como pasajero" onPress={()=>router.push('/moto')}/>
+   <Action large label="ENVÍOS · Paquetes en auto o moto" onPress={()=>router.push('/envios')}/>
+   <Action large label="COMERCIOS · Pedidos a domicilio" onPress={()=>router.push('/comercios')}/>
    <Action large label="Seguridad y ayuda" onPress={()=>router.push('/soporte')}/>
    <Action large label="Mi cuenta" onPress={()=>router.push('/cuenta')}/>
    <Action secondary label="Mostrar todas las opciones"
@@ -26,15 +27,16 @@ export default function ClientHome(){
   </Panel>}
   {!simpleMode&&<>
   <Panel>
-   <Text accessibilityRole="header" style={styles.heading}>Tu próximo viaje en automóvil</Text>
-   <Text style={styles.text}>Indicá origen, destino y el tipo de servicio que preferís. La tarifa y la disponibilidad deben venir del servidor.</Text>
-   <Action label="Preparar viaje" onPress={()=>router.push('/viaje')}/>
-   <Text style={styles.small}>Motocicleta para pasajeros permanece deshabilitada hasta completar todos los permisos y seguros.</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Viajes de pasajeros</Text>
+   <Text style={styles.text}>Elegí AUTO o MOTO. Sus rutas y tarifas son independientes. Un borrador no genera reserva.</Text>
+   <Action label="AUTO · Solicitar automóvil" onPress={()=>router.push('/viaje')}/>
+   <Action label="MOTO · Preparar viaje como pasajero" secondary onPress={()=>router.push('/moto')}/>
+   <Text style={styles.small}>MOTO pasajeros tiene su propio recorrido, pero sigue sin reservas comerciales por falta de aprobación legal, seguros y contrato backend.</Text>
   </Panel>
   <Panel>
-   <Text accessibilityRole="header" style={styles.heading}>Más servicios</Text>
-   <Action secondary label="Envíos particulares" onPress={()=>router.push('/envios')}/>
-   <Action secondary label="Comercios y pedidos" onPress={()=>router.push('/comercios')}/>
+   <Text accessibilityRole="header" style={styles.heading}>Envíos y comercios</Text>
+   <Action secondary label="ENVÍOS · Auto o moto de carga" onPress={()=>router.push('/envios')}/>
+   <Action secondary label="COMERCIOS · Supermercados, farmacias y restaurantes" onPress={()=>router.push('/comercios')}/>
    <Action secondary label="Cotizaciones en Gs" onPress={()=>router.push('/cotizacion')}/>
   </Panel>
   {view.authenticated&&view.chat.contractReady&&view.chatHints.length>0&&
