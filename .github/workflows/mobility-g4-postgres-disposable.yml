@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
+      - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
@@ -566,7 +567,7 @@ jobs:
       - name: G96 assert same G73 trip, one cancel/void, closed queue, withdrawn offer and late ACK denial
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_ASSERT_POSTGRES_CI_ONLY.sql
 
-      - name: G98 real PG16-backed F1 HTTP quote, subsidy, booked trip, cancel, dispatch closure and 4 reverse entries
+      - name: G104 G98 PG16: AUTO Client booking, Driver offer/accept/complete, Admin same-trip plus G95 cancellation
         run: node apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
 
       - name: G100 install independently quoted MOTO passenger booking and subsidy ledger (disposable only)

@@ -12,6 +12,10 @@ import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
+import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
+import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
+import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
+import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
 
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -33,6 +37,21 @@ const token='g98-verified-qa-session-'+p.replaceAll('-','');
 const otherToken='g98-verified-qa-session-'+outsider.replaceAll('-','');
 const adminToken='g99-admin-aal2-qa-'+adminId.replaceAll('-','');
 const f1='/v1/staging/rider/auto';
+// Dedicated G104 synthetic Driver: no real identity, map, phone or payments.
+const drv='98980000-0000-4989-8989-000000000006';
+const veh='98980000-0000-4989-8989-000000000007';
+const drvSess='98980000-0000-4989-8989-000000000008';
+const drvToken='g104-driver-synthetic-'+drv.replaceAll('-','');
+const newIds={
+ route:'98980000-0000-4989-8989-000000000016',
+ quote:'98980000-0000-4989-8989-000000000017',
+ book:'98980000-0000-4989-8989-000000000018',
+ offer:'98980000-0000-4989-8989-000000000019',
+ accept:'98980000-0000-4989-8989-000000000021',
+ arrive:'98980000-0000-4989-8989-000000000022',
+ pickup:'98980000-0000-4989-8989-000000000023',
+ complete:'98980000-0000-4989-8989-000000000024'
+};
 const noop=async()=>({status:404,body:{error:'Not found'}});
 function psql(script){
  const out=execFileSync('psql',['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-c',script],
@@ -178,9 +197,123 @@ async function main(){
   allowRequest:()=>true,
   loadAdminRideReceipt:x=>adminSql.read(x)
  });
+ // A real G2/G17/G20 preflight, but every Driver fixture is fictitious.
+ psql("INSERT INTO auth.users(id) VALUES('"+drv+"');"+
+  "DELETE FROM public.user_roles WHERE user_id='"+drv+"';"+
+  "INSERT INTO public.user_roles(user_id,role) VALUES('"+drv+"','driver');"+
+  "INSERT INTO public.mobility_vehicles"+
+  "(id,driver_id,vehicle_kind,service_kind,country_code,municipality_code,"+
+  "plate_normalized,brand,model,manufacture_year,passenger_capacity,review_status)"+
+  " VALUES('"+veh+"','"+drv+"','AUTO','economico','PY',"+
+  "'ASUNCION','G104QA1','DEMO','SEDAN',2024,4,'approved');"+
+  "INSERT INTO public.mobility_driver_compliance"+
+  "(driver_id,license_class,license_valid_through,license_verified_at,"+
+  "license_verified_by,driver_review_status) VALUES('"+drv+"','B',"+
+  "CURRENT_DATE+90,clock_timestamp()-interval '1 day',"+
+  "'00000000-0000-4000-8000-000000000101','approved');"+
+  "INSERT INTO public.mobility_vehicle_compliance"+
+  "(vehicle_id,registration_valid_through,registration_verified_at,"+
+  "insurance_valid_through,insurance_verified_at,paid_passenger_insurance_covered,"+
+  "inspection_valid_through,inspection_verified_at,"+
+  "municipal_authorization_valid_through,municipal_authorization_verified_at,"+
+  "reviewed_by,reviewed_at) VALUES('"+veh+"',"+
+  "CURRENT_DATE+90,clock_timestamp()-interval '1 day',"+
+  "CURRENT_DATE+90,clock_timestamp()-interval '1 day',true,"+
+  "CURRENT_DATE+90,clock_timestamp()-interval '1 day',"+
+  "CURRENT_DATE+90,clock_timestamp()-interval '1 day',"+
+  "'00000000-0000-4000-8000-000000000101',clock_timestamp()-interval '2 minutes');"+
+  "INSERT INTO public.driver_locations(driver_id,available,lat,lng,updated_at)"+
+  " VALUES('"+drv+"',true,-25.3,-57.57,clock_timestamp()-interval '5 seconds');"+
+  "INSERT INTO public.mobility_location_consents(driver_id,opted_in_at)"+
+  " VALUES('"+drv+"',clock_timestamp()-interval '1 day');");
+ psql("SET ROLE service_role; WITH d AS (SELECT "+
+  "public.mobility_stage_register_driver_document('"+drv+"',"+
+  "'98980000-0000-4989-8989-000000000026','licencia',"+
+  "'"+drv+"/licencia-G104Qa1234567890.jpg',"+
+  "'image/jpeg',9200,repeat('e',64)) AS id)"+
+  " SELECT public.mobility_stage_review_driver_document(d.id,"+
+  "'00000000-0000-4000-8000-000000000101',true,'DOCUMENT_VALID',"+
+  "'98980000-0000-4989-8989-000000000027') FROM d;");
+ assert.equal(psql("SET ROLE service_role; SELECT public.mobility_vehicle_preflight("+
+  "'"+drv+"','"+veh+"','economico')::text"),'true');
+ const verifyDriver=async value=>{
+  if(value!==drvToken)throw Error('Only fixture Driver token allowed');
+  return {id:drv,is_anonymous:false,email_confirmed_at:'2026-10-25T00:00:00Z'};
+ };
+ const driverTrip=createG65PrivateDriverTripStatusQa({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  verifyAccessToken:async value=>{
+   const u=await verifyDriver(value);
+   return {id:u.id,sessionId:drvSess,is_anonymous:false,
+    tokenIatMs:Date.now()-1000,expiresAtMs:Date.now()+120000};
+  },
+  verifySessionNotRevoked:async()=>true,
+  resolveExclusiveRole:async id=>id===drv?'driver':null,
+  allowRequest:()=>true,
+  loadAssignedTrip:async({actorId,tripId})=>{
+   if(actorId!==drv||!uuid.test(tripId))return null;
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT "+
+    "jsonb_build_object('tripId',t.id,'driverId',t.driver_id,"+
+    "'vehicleId',t.vehicle_id,'passengerId',t.passenger_id,"+
+    "'status',t.status,'revision',t.revision,'service',t.service)"+
+    " FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+tripId+"'"+
+    " AND t.driver_id='"+drv+"'),'null'::jsonb)::text;");
+  }
+ });
+ const driverOffer=createQoreOfferGateway({
+  projectRef:'staging1234567890abcd',verifyAccessToken:verifyDriver,
+  authorizeDriver:async id=>id===drv,allowRequest:()=>true,
+  loadOfferForDriver:async({driverId,offerId})=>{
+   if(driverId!==drv||!uuid.test(offerId))return null;
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT "+
+    "jsonb_build_object('offerId',o.id,'driverId',o.driver_id,"+
+    "'tripId',o.trip_id,'status',o.status,"+
+    "'expiresAtMs',(extract(epoch from o.expires_at)*1000)::bigint,"+
+    "'service',t.service,'originTag',t.origin_tag,"+
+    "'destinationTag',t.destination_tag)"+
+    " FROM public.mobility_stage_auto_demo_offers o"+
+    " JOIN public.mobility_stage_auto_demo_trips t ON t.id=o.trip_id"+
+    " WHERE o.id='"+offerId+"' AND o.driver_id='"+drv+"'),"+
+    "'null'::jsonb)::text;");
+  },
+  acceptOffer:async x=>psql("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_auto_demo_accept_offer('"+x._offer_id+"',"+
+   "'"+x._driver_id+"','"+x._decision_key+"')"),
+  declineOffer:async()=>{throw Error('Not used in G104');}
+ });
+ const driverInbox=createDriverPrivateInboxGateway({
+  projectRef:'staging1234567890abcd',verifyAccessToken:verifyDriver,
+  authorizeDriver:async id=>id===drv,allowRequest:()=>true,
+  listForDriver:async({driverId})=>{
+   if(driverId!==drv)throw Error('Foreign Driver');
+   const offers=sqlJson("SET ROLE service_role; SELECT COALESCE("+
+    "jsonb_agg(jsonb_build_object('kind','AUTO_RIDE',"+
+    "'offerId',q.offer_id,'serviceId',q.trip_id,"+
+    "'expiresAtMs',(extract(epoch from q.expires_at)*1000)::bigint)),"+
+    "'[]'::jsonb)::text FROM public.mobility_stage_poll_driver_auto_offers("+
+    "'"+drv+"') q;");
+   return {ok:true,liveEnabled:false,offers};
+  }
+ });
+ const driverCommand=createQoreTripCommandGateway({
+  projectRef:'staging1234567890abcd',verifyAccessToken:verifyDriver,
+  resolveRole:async id=>id===drv?'driver':null,allowRequest:()=>true,
+  requestTrip:async()=>{throw Error('Passenger must use G73 PG booking');},
+  transitionTrip:async({actorId,tripId,event,eventKey})=>{
+   const next={arrive:'arriving',pickup:'in_progress',complete:'completed'}[event];
+   if(actorId!==drv||!uuid.test(tripId)||!uuid.test(eventKey)||!next)
+    throw Error('Wrong actor or event');
+   const eventId=psql("SET ROLE service_role; SELECT "+
+    "public.mobility_stage_auto_demo_transition('"+tripId+"',"+
+    "'"+drv+"','"+next+"'::public.mobility_stage_trip_status,"+
+    "'"+eventKey+"')");
+   return {ok:true,liveEnabled:false,eventId};
+  }
+ });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:rider,adminF1AuditHandler:adminGateway,
-  offerHandler:noop,tripCommandHandler:noop,
+  offerHandler:driverOffer,tripCommandHandler:driverCommand,
+  driverInboxHandler:driverInbox,driverTripStatusHandler:driverTrip,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
   safetyHandler:noop,merchantManagementHandler:noop,deliveryOfferHandler:noop,
   f1AutoHandler:gateway
@@ -298,6 +431,108 @@ async function main(){
   assert.equal(adminAfter.data.revision,riderAfter.data.revision);
   assert.equal(adminAfter.data.driverId,null);
   assert.equal(adminAfter.data.assignmentPersisted,false);
+  // G104: same persisted AUTO trip from passenger booking through Driver
+  // acceptance + all three transitions, with both Client and Admin verifying.
+  const route2=await http(base,f1+'/routes',{method:'POST',
+   body:{quoteRequestKey:newIds.route,origin:'Centro, Asunción',
+    destination:'Aeropuerto, Asunción',service:'economico'}});
+  assert.equal(route2.status,200,JSON.stringify(route2.data));
+  const quote2=await http(base,f1+'/prequote',{method:'POST',
+   body:{requestKey:newIds.quote,routeId:route2.data.routeId}});
+  assert.equal(quote2.status,200,JSON.stringify(quote2.data));
+  const subsidy2=await http(base,f1+'/prequotes/'+quote2.data.quoteId+'/subsidy',
+   {method:'POST'});
+  assert.equal(subsidy2.status,200,JSON.stringify(subsidy2.data));
+  assert.equal(subsidy2.data.commissionBps,1500);
+  assert.equal(subsidy2.data.subsidyBps,1000);
+  const booked2=await http(base,f1+'/book',{method:'POST',
+   body:{requestKey:newIds.book,quoteId:quote2.data.quoteId,accepted:true}});
+  assert.equal(booked2.status,201,JSON.stringify(booked2.data));
+  const secondTrip=booked2.data.tripId;
+  assert.ok(uuid.test(secondTrip)&&secondTrip!==tripId);
+  assert.equal((await http(base,'/v1/staging/driver/trips/'+secondTrip+'/status',
+   {auth:drvToken})).status,404);
+  assert.equal((await http(base,'/v1/staging/driver/inbox',
+   {auth:token})).status,401);
+  const offerId=psql("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_auto_demo_offer('"+secondTrip+"','"+drv+"',"+
+   "'"+veh+"','"+newIds.offer+"',30)");
+  assert.ok(uuid.test(offerId));
+  const inbox=await http(base,'/v1/staging/driver/inbox',{auth:drvToken});
+  assert.equal(inbox.status,200,JSON.stringify(inbox.data));
+  assert.ok(inbox.data.offers.some(x=>x.offerId===offerId&&x.serviceId===secondTrip));
+  const received=await http(base,'/v1/staging/driver/offers/'+offerId,
+   {auth:drvToken});
+  assert.equal(received.status,200,JSON.stringify(received.data));
+  assert.equal(received.data.tripId,secondTrip);
+  assert.equal((await http(base,'/v1/staging/driver/offers/accept',{
+   method:'POST',auth:token,body:{offerId,requestKey:newIds.accept}
+  })).status,401);
+  const a=await http(base,'/v1/staging/driver/offers/accept',{
+   method:'POST',auth:drvToken,body:{offerId,requestKey:newIds.accept}});
+  assert.equal(a.status,200,JSON.stringify(a.data));
+  assert.equal(a.data.outcome,'accepted');
+  const replay=await http(base,'/v1/staging/driver/offers/accept',{
+   method:'POST',auth:drvToken,body:{offerId,requestKey:newIds.accept}});
+  assert.equal(replay.status,200,JSON.stringify(replay.data));
+  assert.equal(replay.data.eventId,a.data.eventId);
+  const assigned=await http(base,'/v1/staging/rider/trips/'+secondTrip+'/status');
+  assert.equal(assigned.status,200);
+  assert.equal(assigned.data.state,'assigned');
+  assert.equal(assigned.data.revision,2);
+  assert.equal(assigned.data.assignmentPersisted,true);
+  assert.equal(assigned.data.driver,null);
+  assert.equal(assigned.data.location,null);
+  const adminSecond='/v1/staging/admin/rides/'+secondTrip+'/f1-verification';
+  const admAccepted=await http(base,adminSecond,{auth:adminToken});
+  assert.equal(admAccepted.status,200,JSON.stringify(admAccepted.data));
+  assert.equal(admAccepted.data.driverId,drv);
+  assert.equal(admAccepted.data.status,'accepted');
+  assert.equal(admAccepted.data.amountGs,quote2.data.amountGs);
+  for(const [i,event,next] of [
+   [0,'arrive','arriving'],[1,'pickup','in_progress'],[2,'complete','completed']
+  ]){
+   const changed=await http(base,'/v1/staging/trips/'+secondTrip+'/transition',{
+    method:'POST',auth:drvToken,body:{event,eventKey:newIds[event]}});
+   assert.equal(changed.status,200,JSON.stringify(changed.data));
+   const driver=await http(base,'/v1/staging/driver/trips/'+secondTrip+'/status',
+    {auth:drvToken});
+   const client=await http(base,'/v1/staging/rider/trips/'+secondTrip+'/status');
+   const admin=await http(base,adminSecond,{auth:adminToken});
+   assert.equal(driver.status,200);
+   assert.equal(client.status,200);
+   assert.equal(admin.status,200);
+   assert.equal(driver.data.state,next);
+   assert.equal(client.data.state,next);
+   assert.equal(admin.data.status,next);
+   assert.equal(driver.data.revision,i+3);
+   assert.equal(client.data.revision,i+3);
+   assert.equal(admin.data.revision,i+3);
+   assert.equal(admin.data.driverId,drv);
+   assert.equal(admin.data.tripId,secondTrip);
+   assert.equal(client.data.location,null,'No GPS evidence exists');
+  }
+  const financial2=await http(base,f1+'/bookings/'+newIds.book+'/financial-status');
+  assert.equal(financial2.status,200,JSON.stringify(financial2.data));
+  assert.equal(financial2.data.tripId,secondTrip);
+  assert.equal(financial2.data.tripState,'completed');
+  assert.equal(financial2.data.financialState,'COMPLETED_UNSETTLED_QA');
+  assert.equal(financial2.data.pspCollected,false);
+  assert.equal(financial2.data.pspRefunded,false);
+  const dbTrip=sqlJson("SET ROLE service_role; SELECT "+
+   "jsonb_build_object('tripId',t.id,'state',t.status,'revision',t.revision,"+
+   "'driverId',t.driver_id,'events',(SELECT count(*) "+
+   "FROM public.mobility_stage_auto_demo_events e WHERE e.trip_id=t.id),"+
+   "'acceptedOffers',(SELECT count(*) FROM public.mobility_stage_auto_demo_offers o"+
+   " WHERE o.trip_id=t.id AND o.status='accepted'))::text"+
+   " FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+secondTrip+"'");
+  assert.equal(dbTrip.tripId,secondTrip);
+  assert.equal(dbTrip.state,'completed');
+  assert.equal(dbTrip.revision,5);
+  assert.equal(dbTrip.driverId,drv);
+  assert.equal(Number(dbTrip.events),4);
+  assert.equal(Number(dbTrip.acceptedOffers),1);
+  console.log('G104 PASS: disposable PG16 booking -> Driver private inbox/accept -> 3 Driver state changes -> passenger/admin same trip/revision + G94 completed unsettled; NO real GPS or payments');
   // Provider revocation and stored backoffice suspension must both deny reads.
   adminSessionRevoked=true;
   assert.equal((await http(base,adminPath,{auth:adminToken})).status,401);
