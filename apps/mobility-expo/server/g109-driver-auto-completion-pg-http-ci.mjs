@@ -78,7 +78,10 @@ async function main(){
  const tripId=psql("SET ROLE service_role; SELECT id::text "+
   "FROM public.mobility_stage_auto_demo_trips WHERE request_key='"+fixture+"'");
  assert(UUID.test(tripId),'G20 historical fixture missing');
- const snapshot=()=>read("SET ROLE service_role; SELECT jsonb_build_object("+
+ // Auditor-only CI snapshot: G36 slot registry is intentionally denied to
+ // service_role. The synthetic database owner inspects it here, while every
+ // HTTP endpoint and Driver mutation continues through service_role RPCs.
+ const snapshot=()=>read("SELECT jsonb_build_object("+
   "'tripId',t.id,'status',t.status,'revision',t.revision,"+
   "'driverId',t.driver_id,'passengerId',t.passenger_id,"+
   "'events',(SELECT count(*) FROM public.mobility_stage_auto_demo_events e "+
