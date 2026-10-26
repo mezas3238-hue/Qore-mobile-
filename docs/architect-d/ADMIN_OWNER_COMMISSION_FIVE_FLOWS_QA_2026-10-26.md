@@ -30,3 +30,6 @@ Ninguna celda significa GO comercial. `PASS` E2E requiere mismo ID leído en Cli
 - Ejecutar `npm run check && npm run build` en `apps/movete-admin` con el HEAD exacto de D. **No declarar CI SUCCESS hasta que exista URL de ejecución verificada.**
 - El workflow `movete-admin-web-qa.yml` de A filtra PRs cuyo destino es la rama A. El PR D exige como base la rama B, por lo que A debe habilitar el job de verificación para PR D (sin ampliar ownership D).
 - A debe proporcionar entorno HTTPS STAGING autorizado e integrable, roles Owner/Admin AAL2 reales, revocación, SQL persistente y endpoints de consulta por serviceId de los cinco flujos, con estado G38/G71, historial y liquidación. Hasta entonces **NO_GO**.
+
+## Habilitación futura — solo con certificación independiente
+Las cuatro variables de G116 constan en `apps/movete-admin/.env.example`, todas bloqueadas inicialmente. La presencia de banderas públicas jamás sustituye Auth/JWT de servidor. Configurar `VITE_G116_OWNER_COMMISSION_ENABLED` o `VITE_G116_OWNER_CONTRACT_VERIFIED` como verdaderas **solo después** de aprobar formalmente el entorno STAGING. El formulario no muestra tasas reales hasta que su propio GET autorizado obtenga un recibo válido.
