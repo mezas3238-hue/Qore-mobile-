@@ -8,6 +8,7 @@ import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experie
 import {DELIVERY_CATEGORIES,validateDeliveryForm} from '../src/domain/delivery-form.mjs';
 import {prepareLocalDeliveryRequest} from '../src/domain/client-request-preparation.mjs';
 import {projectDeliveryDraftUi} from '../src/domain/delivery-draft-ui-policy.mjs';
+import {projectOwnDeliveryActivity} from '../src/domain/own-delivery-activity.mjs';
 type Kind='AUTO'|'MOTO';
 
 export default function ClientDeliveries(){
@@ -172,6 +173,7 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
     style={[styles.text,{color:palette.primary}]}>{result}</Text>}
   </Panel>
   <BookingRecoveryPanel client={client} view={view} operation="deliveryRequest"/>
+  <OwnDeliveryActivityPanel client={client} view={view}/>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Mensajes con el repartidor</Text>
    <Text style={styles.text}>El chat de tu envío o pedido se abrirá desde su seguimiento una vez que el servidor confirme quién lo repartirá. También funcionará con repartidores en moto de carga.</Text>
@@ -184,4 +186,84 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    <Text style={styles.small}>Se requiere cotización válida en Gs., permisos, confirmación expresa del cliente y backend de envíos certificado. No hay pagos, despachos ni rutas GPS activadas.</Text>
   </Panel>
  </ScrollView>;
+}
+
+
+/**
+ * B#16 — Server-authoritative history + sender-scoped G68 custody.
+ * Selection never guesses the vehicle from the local draft or tracks Driver.
+ */
+function OwnDeliveryActivityPanel({client,view}:{client:ClientExperience;view:ClientSnapshot}){
+ const projection=projectOwnDeliveryActivity(view);
+ const [feedback,setFeedback]=useState('');
+ const running=useRef(false);
+ async function refreshHistory(){
+  if(running.current||!projection.canLoad)return;
+  running.current=true;setFeedback('');
+  const revision=view.privateViewRevision,owner=view.account?.subject;
+  try{
+   const result=await client.loadHistoryPage({reset:true});
+   const latest=client.snapshot();
+   if(latest.privateViewRevision!==revision||latest.account?.subject!==owner)return;
+   setFeedback(result.ok?'Historial propio actualizado desde el servidor.':
+    'No fue posible confirmar el historial. No se inventarán envíos ni precios.');
+  }finally{running.current=false;}
+ }
+ async function verifyCustody(deliveryId:string,historyRevision:number){
+  if(running.current||!projection.custodyReady)return;
+  const latest=client.snapshot(),owner=view.account?.subject;
+  if(!latest.authenticated||latest.privateViewRevision!==view.privateViewRevision
+   ||latest.account?.subject!==owner||latest.history?.ownerId!==owner
+   ||!latest.history.items.some(row=>row.kind==='DELIVERY'
+    &&row.serviceId===deliveryId&&row.revision===historyRevision))return;
+  running.current=true;setFeedback('');
+  try{
+   const result=await client.readOwnDeliveryCustody(deliveryId);
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.account?.subject!==owner||after.history?.ownerId!==owner)return;
+   setFeedback(result.ok?'Custodia consultada al servidor; el vehículo y la prueba provienen del registro privado.':
+    'No se pudo verificar este envío en el servidor. No se confirma entrega, ubicación ni pago.');
+  }finally{running.current=false;}
+ }
+ return <Panel>
+  <Text accessibilityRole="header" style={styles.heading}>Mis envíos registrados</Text>
+  <Text style={styles.small}>La lista proviene del historial privado del servidor.
+   No incluye solicitudes preparadas únicamente en este teléfono.
+   AUTO y MOTO envíos se identifican por el vehículo del comprobante de custodia, no por suposiciones.</Text>
+  <Action label={view.historyLoading?'Consultando historial…':'Consultar mis envíos en el servidor'}
+   busy={view.historyLoading} disabled={!projection.canLoad}
+   hint="Lectura privada. No crea solicitudes ni cargos."
+   onPress={()=>{void refreshHistory();}}/>
+  {!projection.ready&&<Text accessibilityRole="alert" style={styles.small}>
+   Historial HTTPS del pasajero sin certificar o sesión no disponible. La lectura permanece bloqueada.
+  </Text>}
+  {projection.ready&&projection.rows.length===0&&
+   <Text style={styles.small}>No hay envíos propios confirmados en la página cargada.
+    Consultá el historial cuando el backend esté disponible.</Text>}
+  {projection.rows.map(row=><View key={row.deliveryId}>
+   <Text style={styles.text}>Envío #{row.shortRef} · {row.status} · revisión {row.revision}</Text>
+   <Action label={view.senderCustody.loading?'Consultando custodia…':'Verificar estado de este envío'}
+    disabled={!row.canVerify||view.senderCustody.loading}
+    busy={view.senderCustody.loading}
+    hint="El vehículo y la entrega se muestran solo cuando G68 los verifica con tu sesión."
+    onPress={()=>{void verifyCustody(row.deliveryId,row.revision);}}/>
+   {projection.selected?.deliveryId===row.deliveryId&&<View>
+    <Text accessibilityLiveRegion="polite" style={styles.text}>
+     {projection.selected.vehicleLabel} · {projection.selected.stateLabel} ·
+     revisión {projection.selected.revision}.
+    </Text>
+    <Text style={styles.small}>{projection.selected.complete
+     ?'Entrega con prueba de custodia verificada por el servidor de QA.'
+     :'Entrega final todavía no confirmada con prueba independiente.'}
+     {' '}Sin GPS ni ETA certificados; este estado no confirma cobro ni liquidación.
+    </Text>
+   </View>}
+  </View>)}
+  {feedback!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{feedback}</Text>}
+  <Text style={styles.small}>
+   Seguimiento y comprobantes solo cuando el backend verifique identidad, titularidad y estado.
+   El historial completo se consulta en la pantalla «Mi historial».
+  </Text>
+ </Panel>;
 }
