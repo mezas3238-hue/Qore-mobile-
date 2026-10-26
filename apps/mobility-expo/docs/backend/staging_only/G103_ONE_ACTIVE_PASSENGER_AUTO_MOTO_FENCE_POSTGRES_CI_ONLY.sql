@@ -41,12 +41,16 @@ BEGIN
  -- A historical G3 replay should remain idempotent even if its original
  -- AUTO ride was later canceled/completed and MOTO is now active. No INSERT
  -- will occur because G3 uses ON CONFLICT(request_key) DO NOTHING.
- IF TG_OP='INSERT' AND TG_TABLE_NAME='mobility_stage_auto_demo_trips'
-  AND EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips a
+ IF TG_OP='INSERT' AND TG_TABLE_NAME='mobility_stage_auto_demo_trips' THEN
+  -- PostgreSQL can evaluate boolean operands out of source order. Isolate
+  -- the AUTO-only columns in this nested branch: MOTO has booking_key,
+  -- not request_key, and must never evaluate AUTO's row structure.
+  IF EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips a
    WHERE a.request_key=NEW.request_key AND a.passenger_id=NEW.passenger_id
    AND a.service=NEW.service
    AND a.origin_tag=NEW.origin_tag AND a.destination_tag=NEW.destination_tag)
- THEN RETURN NEW; END IF;
+  THEN RETURN NEW; END IF;
+ END IF;
  -- Acquire the same strong row lock for AUTO and MOTO. This is intentionally
  -- *before* the cross-table check: two concurrent inserts cannot both pass.
  PERFORM 1 FROM auth.users u WHERE u.id=NEW.passenger_id FOR UPDATE;
