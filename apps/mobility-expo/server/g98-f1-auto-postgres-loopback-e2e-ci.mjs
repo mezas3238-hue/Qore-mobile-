@@ -102,6 +102,7 @@ async function main(){
  assertLocalDatabase();
  psql("DO $g$ BEGIN IF current_database()<>'qore_disposable_chain' OR current_setting('application_name')<>'qore_ci_disposable_chain' THEN RAISE EXCEPTION 'G98 refusal'; END IF; END $g$;"+
   "INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+outsider+"'),('"+adminId+"'),('"+driverId+"');"+
+  "DELETE FROM public.user_roles WHERE user_id='"+driverId+"';"+
   "INSERT INTO public.user_roles(user_id,role) VALUES ('"+driverId+"','driver');"+
   "DELETE FROM public.user_roles WHERE user_id IN ('"+owner+"','"+adminId+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+owner+"','owner','active','"+owner+"');"+
