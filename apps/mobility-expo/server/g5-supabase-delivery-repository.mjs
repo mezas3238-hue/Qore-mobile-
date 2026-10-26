@@ -100,6 +100,30 @@ export function createSupabaseStagingDeliveryRepository(client){
     revision:data.revision});
   },
 
+  // G122: server-only persisted tariff matching. Never trust a client quote amount.
+  async confirmQuote(params){
+   assertBase(params);
+   if(!validId(params.deliveryId)||!validId(params.quoteId)||
+     !validId(params.confirmationKey)||!int(params.acceptedTotalGs,1,100000000)||
+     typeof params.acceptedFareVersion!=='string'||
+     !/^[a-zA-Z0-9._-]{1,48}$/.test(params.acceptedFareVersion))
+    throw Error('Invalid delivery quote confirmation');
+   const {data,error}=await client.rpc('mobility_stage_g122_accept_delivery_quote_qa',{
+    _sender:params.actorId,_delivery:params.deliveryId,_quote:params.quoteId,
+    _confirmation_key:params.confirmationKey,
+    _accepted_total_gs:params.acceptedTotalGs,
+    _accepted_fare_version:params.acceptedFareVersion
+   });
+   if(error||!plain(data)||!validId(data.consentId)||
+     data.deliveryId!==params.deliveryId||data.quoteId!==params.quoteId||
+     data.confirmationKey!==params.confirmationKey||
+     !VEHICLES.has(data.vehicleKind)||data.acceptedTotalGs!==params.acceptedTotalGs||
+     data.fareVersion!==params.acceptedFareVersion||
+     data.status!=='confirmed_qa'||data.liveEnabled!==false||
+     data.serverPersisted!==true)throw Error('Delivery quote consent rejected');
+   return ok({...data});
+  },
+
   async accept(params){
    assertBase(params);
    if(!validId(params.deliveryId)||!validId(params.vehicleId)||

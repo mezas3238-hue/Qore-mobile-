@@ -105,3 +105,28 @@ test('G121 repository never reads delivery without both owner and requestKey',as
  assert.deepEqual(calls,['request_key','sender_id']);
  assert.equal(await repo.reconcile({...base(outsider),requestKey:key}),null);
 });
+
+test('G122 quote consent binds actor and request into server-only RPC',async()=>{
+ const calls=[];
+ const client={from(){throw Error('No raw data writes')},
+  async rpc(name,data){
+   calls.push({name,data});return {error:null,data:{
+    consentId:proof,deliveryId:delivery,quoteId:vehicle,
+    confirmationKey:key,vehicleKind:'AUTO',acceptedTotalGs:17000,
+    fareVersion:'qa-auto-rule',status:'confirmed_qa',
+    serverPersisted:true,liveEnabled:false
+   }};
+  }};
+ const r=createSupabaseStagingDeliveryRepository(client);
+ const result=await r.confirmQuote({...base(sender),deliveryId:delivery,
+  quoteId:vehicle,confirmationKey:key,acceptedTotalGs:17000,
+  acceptedFareVersion:'qa-auto-rule'});
+ assert.equal(result.consentId,proof);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].name,'mobility_stage_g122_accept_delivery_quote_qa');
+ assert.equal(calls[0].data._sender,sender);
+ assert.equal(calls[0].data._accepted_total_gs,17000);
+ await assert.rejects(r.confirmQuote({...base(sender),deliveryId:delivery,
+  quoteId:vehicle,confirmationKey:key,acceptedTotalGs:0,
+  acceptedFareVersion:'qa-auto-rule'}),/Invalid/i);
+});

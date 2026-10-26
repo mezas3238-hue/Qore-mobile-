@@ -112,3 +112,35 @@ test('G121 GET recovery strictly authenticates sender and never rebooks',async()
  assert.equal((await f.gateway({method:'GET',path,headers:headers(courier)})).status,403);
  assert.equal((await f.gateway({method:'GET',path,headers:{}})).status,401);
 });
+
+test('G122 price consent requires passenger, exact DTO and verified immutable SQL receipt',async()=>{
+ const f=fixture(),route='/v1/staging/sender/deliveries/quotes/confirm';
+ const fields={deliveryId:delivery,quoteId:proof,confirmationKey:key,
+  acceptedTotalGs:9000,acceptedFareVersion:'cargo-moto-qa'};
+ assert.equal((await f.gateway({method:'POST',path:route,headers:headers(sender),
+  body:fields})).status,503,'must stay off before approved SQL adapter');
+ assert.equal((await f.gateway({method:'POST',path:route,headers:headers(sender),
+  body:{...fields,acceptedTotalGs:0}})).status,400);
+ assert.equal((await f.gateway({method:'POST',path:route,headers:headers(courier),
+  body:fields})).status,403);
+ assert.equal((await f.gateway({method:'POST',path:route,headers:{},
+  body:fields})).status,401);
+ const base={projectRef:ref,
+  verifyAccessToken:async()=>({id:sender,is_anonymous:false,
+   email_confirmed_at:'2026-10-26T00:00:00Z'}),
+  resolveRole:async()=> 'passenger',allowRequest:()=>true,
+  requestDelivery:async()=>{},acceptDelivery:async()=>{},
+  transitionDelivery:async()=>{},loadDelivery:async()=>{},
+  confirmQuote:async input=>({ok:true,liveEnabled:false,
+   consentId:vehicle,deliveryId:input.deliveryId,quoteId:input.quoteId,
+   confirmationKey:input.confirmationKey,vehicleKind:'MOTO',
+   acceptedTotalGs:input.acceptedTotalGs,
+   fareVersion:input.acceptedFareVersion,status:'confirmed_qa',serverPersisted:true})
+ };
+ const api=createQoreDeliveryCommandGateway(base);
+ const res=await api({method:'POST',path:route,headers:headers(sender),body:fields});
+ assert.equal(res.status,200);
+ assert.equal(res.body.paymentAuthorized,false);
+ assert.equal(res.body.dispatchEnabled,false);
+ assert.equal(res.body.acceptedTotalGs,9000);
+});

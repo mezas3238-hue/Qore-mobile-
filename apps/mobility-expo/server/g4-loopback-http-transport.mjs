@@ -29,6 +29,7 @@ const adminF1AuditRoute=/^\/v1\/staging\/admin\/rides\/[0-9a-f-]{36}\/f1-verific
 const riderCancelRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/cancel$/i;
 const tripTransitionRoute=/^\/v1\/staging\/trips\/[0-9a-f-]{36}\/transition$/i;
 const deliveryRequestRoute=/^\/v1\/staging\/sender\/deliveries\/request$/;
+const deliveryQuoteConfirmRoute=/^\/v1\/staging\/sender\/deliveries\/quotes\/confirm$/;
 const deliveryRecoverRoute=/^\/v1\/staging\/sender\/deliveries\/requests\/[0-9a-f-]{36}$/i;
 const deliveryTransitionRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/transition$/i;
 const deliveryStatusRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/status$/i;
@@ -137,7 +138,7 @@ export function createQoreRadarLoopbackTransport({
   const deliveryGet=req.method==='GET'&&
    (deliveryStatusRoute.test(path)||deliveryRecoverRoute.test(path));
   const deliveryPost=req.method==='POST'&&
-   (deliveryRequestRoute.test(path)||deliveryTransitionRoute.test(path));
+   (deliveryRequestRoute.test(path)||deliveryQuoteConfirmRoute.test(path)||deliveryTransitionRoute.test(path));
   const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
   const merchantPost=req.method==='POST'&&
    (merchantRequestRoute.test(path)||merchantTransitionRoute.test(path)||

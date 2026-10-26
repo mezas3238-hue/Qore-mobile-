@@ -3,6 +3,7 @@ import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST='/v1/staging/sender/deliveries/request';
+const CONFIRM='/v1/staging/sender/deliveries/quotes/confirm';
 const RECONCILE=/^\/v1\/staging\/sender\/deliveries\/requests\/([0-9a-f-]{36})$/i;
 const ACCEPT=/^\/v1\/staging\/courier\/deliveries\/([0-9a-f-]{36})\/accept$/i;
 const TRANSITION=/^\/v1\/staging\/deliveries\/([0-9a-f-]{36})\/transition$/i;
@@ -31,6 +32,12 @@ const requestBody=body=>fields(body,['requestKey','vehicleKind','category','gram
  integer(body.lengthCm,1,200)&&integer(body.widthCm,1,200)&&
  integer(body.heightCm,1,200)&&tag(body.pickupTag)&&tag(body.deliveryTag)&&
  body.pickupTag!==body.deliveryTag&&body.restrictedItemDeclared===false;
+const confirmBody=body=>fields(body,['deliveryId','quoteId','confirmationKey',
+ 'acceptedTotalGs','acceptedFareVersion'])&&UUID.test(body.deliveryId??'')&&
+ UUID.test(body.quoteId??'')&&UUID.test(body.confirmationKey??'')&&
+ integer(body.acceptedTotalGs,1,100000000)&&
+ typeof body.acceptedFareVersion==='string'&&
+ /^[a-zA-Z0-9._-]{1,48}$/.test(body.acceptedFareVersion);
 const acceptBody=body=>fields(body,['vehicleId','requestKey'])&&
  UUID.test(body.vehicleId??'')&&UUID.test(body.requestKey??'');
 const transitionBody=body=>{
@@ -45,7 +52,7 @@ const response=(status,body)=>({status,body});
 export function createQoreDeliveryCommandGateway({
  projectRef,verifyAccessToken,resolveRole,allowRequest,
  requestDelivery,acceptDelivery,transitionDelivery,loadDelivery,
- reconcileDelivery=null,
+ reconcileDelivery=null,confirmQuote=null,
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,resolveRole,allowRequest,requestDelivery,acceptDelivery,
@@ -53,11 +60,13 @@ export function createQoreDeliveryCommandGateway({
   throw Error('Authenticated delivery adapters required');
  return async({method,path,headers,body})=>{
   const create=method==='POST'&&path===REQUEST;
+  const confirm=method==='POST'&&path===CONFIRM;
   const recover=method==='GET'&&typeof path==='string'?RECONCILE.exec(path):null;
   const accept=method==='POST'&&typeof path==='string'?ACCEPT.exec(path):null;
   const transition=method==='POST'&&typeof path==='string'?TRANSITION.exec(path):null;
   const status=method==='GET'&&typeof path==='string'?STATUS.exec(path):null;
-  if(!create&&!accept&&!transition&&!status&&!recover)return response(404,{error:'Not found'});
+  if(!create&&!confirm&&!accept&&!transition&&!status&&!recover)return response(404,{error:'Not found'});
+  if(confirm&&!confirmBody(body))return response(400,{error:'Invalid price consent'});
   if(create&&!requestBody(body))return response(400,{error:'Invalid delivery request'});
   if(accept&&!acceptBody(body))return response(400,{error:'Invalid delivery acceptance'});
   if(transition&&!transitionBody(body))return response(400,{error:'Invalid delivery transition'});
@@ -74,12 +83,12 @@ export function createQoreDeliveryCommandGateway({
   }
   if(role!=='passenger'&&role!=='driver')
    return response(403,{error:'Single sender or courier role required'});
-  if((create||recover)&&role!=='passenger')return response(403,{error:'Sender role required'});
+  if((create||recover||confirm)&&role!=='passenger')return response(403,{error:'Sender role required'});
   if(accept&&role!=='driver')return response(403,{error:'Courier role required'});
   if(transition&&((SENDER_EVENTS.has(body.event)&&role!=='passenger')||
     (COURIER_EVENTS.has(body.event)&&role!=='driver')))
    return response(403,{error:'Role cannot perform delivery transition'});
-  const operation=create?'delivery_request':recover?'delivery_reconcile':accept?'delivery_accept':
+  const operation=create?'delivery_request':confirm?'delivery_price_confirm':recover?'delivery_reconcile':accept?'delivery_accept':
    transition?'delivery_'+body.event:'delivery_status';
   try{
    if(allowRequest({userId:user.id,operation})!==true)
@@ -104,6 +113,29 @@ export function createQoreDeliveryCommandGateway({
      serverPersisted:true,ownerId:user.id,requestKey:proof.requestKey,
      deliveryId:proof.deliveryId,vehicleKind:proof.vehicleKind,
      status:proof.status,revision:proof.revision});
+   }
+   if(confirm){
+    // G122: consent is a price MATCH against immutable server quote; no PSP.
+    if(typeof confirmQuote!=='function')
+     return response(503,{error:'Delivery price consent unavailable'});
+    const confirmed=await confirmQuote({actorId:user.id,...body});
+    if(!plain(confirmed)||confirmed.ok!==true||
+      confirmed.liveEnabled!==false||!UUID.test(confirmed.consentId??'')||
+      confirmed.deliveryId!==body.deliveryId||
+      confirmed.quoteId!==body.quoteId||
+      confirmed.confirmationKey!==body.confirmationKey||
+      !VEHICLES.has(confirmed.vehicleKind)||
+      confirmed.acceptedTotalGs!==body.acceptedTotalGs||
+      confirmed.fareVersion!==body.acceptedFareVersion||
+      confirmed.status!=='confirmed_qa'||confirmed.serverPersisted!==true)
+     throw Error('Unverified price consent receipt');
+    return response(200,{mode:'STAGING_DEMO_ONLY',
+     liveDeliveriesEnabled:false,paymentAuthorized:false,dispatchEnabled:false,
+     ownerId:user.id,consentId:confirmed.consentId,
+     deliveryId:confirmed.deliveryId,quoteId:confirmed.quoteId,
+     confirmationKey:confirmed.confirmationKey,
+     vehicleKind:confirmed.vehicleKind,acceptedTotalGs:confirmed.acceptedTotalGs,
+     fareVersion:confirmed.fareVersion,status:'confirmed_qa',serverPersisted:true});
    }
    if(create){
     const result=await requestDelivery({actorId:user.id,...body});

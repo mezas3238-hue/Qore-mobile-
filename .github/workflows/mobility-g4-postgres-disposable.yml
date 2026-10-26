@@ -623,6 +623,10 @@ jobs:
       - name: G116 prove Owner commission changes, frozen prior prices, audit and financial safety
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G116_OWNER_CONFIGURABLE_COMMISSION_ASSERT_POSTGRES_CI_ONLY.sql
 
+      - name: G122 install immutably approved per-vehicle delivery fare consent SQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G122_DELIVERY_VEHICLE_FARE_CONSENT_POSTGRES_CI_ONLY.sql
+      - name: G122 HTTP original AUTO and MOTO delivery + G7 quote + exact price consent PostgreSQL
+        run: node apps/mobility-expo/server/g122-delivery-price-consent-pg-http-ci.mjs
       - name: G121 private AUTO/MOTO package lost-ACK booking recovery in disposable PG16
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
