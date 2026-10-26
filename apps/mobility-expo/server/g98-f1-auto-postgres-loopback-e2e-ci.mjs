@@ -456,6 +456,111 @@ async function main(){
   assert.equal(adminAfter.data.revision,riderAfter.data.revision);
   assert.equal(adminAfter.data.driverId,null);
   assert.equal(adminAfter.data.assignmentPersisted,false);
+  // G107 uses the actual Architect B Passenger state machine and strict
+  // parsers, not copies, against A's HTTP loopback and disposable PG16.
+  // CI explicitly checks out pinned B commit to ci-b-client below.
+  const root=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  const {createClientExperience}=await import(new URL('client-experience.mjs',root));
+  const {createF1AutoRideContinuation}=await import(new URL('f1-auto-ride-continuation.mjs',root));
+  const fakeOrigin='https://qore-cross-branch-ci.invalid';
+  let posts=0,gets=0;
+  const crossFetch=(url,opts)=>{
+   const parsed=new URL(url);
+   if(parsed.origin!==fakeOrigin||parsed.search||parsed.hash||
+      !(parsed.pathname.startsWith('/v1/staging/rider/auto/')||
+        parsed.pathname.startsWith('/v1/staging/rider/trips/')))
+    throw Error('G107 forbidden outbound request');
+   if(opts.method==='POST')posts++;
+   if(opts.method==='GET')gets++;
+   return fetch(base+parsed.pathname,{...opts,redirect:'error'});
+  };
+  const bridge=createClientExperience({
+   authProvider:{readSession:async()=>({role:'passenger',subject:p,token,
+    expiresAt:Date.now()+600000}),signOut:async()=>{}},
+   autoG73HttpOptions:{
+    enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+    routeProviderCertified:true,subsidyContractCertified:true,
+    financialContractCertified:true,cancellationContractCertified:true,
+    origin:fakeOrigin,pinnedOrigin:fakeOrigin,fetchImpl:crossFetch,
+    timeoutMs:15000
+   },
+   statusGatewayOptions:{
+    enabled:true,contractCertified:true,origin:fakeOrigin,
+    pinnedOrigin:fakeOrigin,fetchImpl:crossFetch,timeoutMs:15000
+   }
+  });
+  assert.equal((await bridge.refreshSession()).ok,true);
+  const bQuote=await bridge.requestAutoQuote({
+   origin:'Centro de Asunción',destination:'Aeropuerto Internacional',
+   service:'economico',
+   quoteRequestKey:'98980000-0000-4989-8989-000000000030'
+  });
+  assert.equal(bQuote.ok,true,JSON.stringify(bQuote));
+  const quote=bridge.snapshot().autoPrequote.quote;
+  assert.ok(quote&&uuid.test(quote.quoteId));
+  assert.equal((await bridge.loadAutoSubsidy()).ok,true);
+  const discount=bridge.snapshot().autoPrequote.subsidy;
+  assert.equal(discount.commissionBps,1500);
+  assert.equal(discount.subsidyBps,1000);
+  assert.equal(discount.customerPaysGs,
+   discount.originalFareGs-discount.customerSubsidyGs);
+  assert.equal(bridge.acceptAutoPrequote({
+   quoteId:quote.quoteId,amountGs:quote.amountGs,
+   fareVersion:quote.fareVersion,campaignId:discount.campaignId,
+   customerPaysGs:discount.customerPaysGs
+  }).ok,true);
+  const receipt=await bridge.reserveQuotedAuto({
+   requestKey:'98980000-0000-4989-8989-000000000032'
+  });
+  assert.equal(receipt.ok,true,JSON.stringify(receipt));
+  const secondTrip=receipt.tripId;
+  assert.ok(uuid.test(secondTrip)&&secondTrip!==tripId);
+  let opened=null;
+  const continuation=createF1AutoRideContinuation({
+   readSnapshot:()=>bridge.snapshot(),
+   verifyRide:()=>bridge.continueVerifiedRide(),
+   onVerified:id=>{opened=id;}
+  });
+  const posted=posts,read=gets;
+  assert.equal((await continuation.tryResume()).ok,true);
+  assert.equal(opened,secondTrip);
+  assert.equal(bridge.snapshot().tracking.tripId,secondTrip);
+  assert.equal(bridge.snapshot().tracking.state,'searching');
+  assert.equal(bridge.snapshot().tracking.assignedDriver,null);
+  assert.equal(posts,posted,'Only GET is allowed during continuation');
+  assert.equal(gets,read+1);
+  assert.equal((await continuation.tryResume()).ok,false);
+  assert.equal(gets,read+1,'No duplicate tracking GET');
+  const auditB=await http(base,
+   '/v1/staging/admin/rides/'+secondTrip+'/f1-verification',{auth:adminToken});
+  assert.equal(auditB.status,200);
+  assert.equal(auditB.data.tripId,secondTrip);
+  assert.equal(auditB.data.passengerId,p);
+  assert.equal(auditB.data.status,'searching');
+  assert.equal(auditB.data.driverId,null);
+  assert.equal(auditB.data.amountGs,discount.originalFareGs);
+  assert.equal((await bridge.refreshAutoFinancialStatus()).ok,true);
+  assert.equal(bridge.snapshot().autoFinance.financialState,'RESERVED_QA');
+  assert.equal(bridge.prepareG95Cancel({
+   requestKey:'98980000-0000-4989-8989-000000000033'
+  }).ok,true);
+  const canceledB=await bridge.sendG95Cancel();
+  assert.equal(canceledB.ok,true,JSON.stringify(canceledB));
+  const verifiedB=await bridge.verifyG95Cancellation();
+  assert.equal(verifiedB.ok,true,JSON.stringify(verifiedB));
+  assert.equal(bridge.snapshot().tracking.state,'cancelled');
+  assert.equal(bridge.snapshot().autoFinance.financialState,'VOIDED_QA');
+  assert.equal(bridge.snapshot().autoFinance.pspCollected,false);
+  const auditFinal=await http(base,
+   '/v1/staging/admin/rides/'+secondTrip+'/f1-verification',{auth:adminToken});
+  assert.equal(auditFinal.status,200);
+  assert.equal(auditFinal.data.tripId,secondTrip);
+  assert.equal(auditFinal.data.status,'cancelled');
+  assert.equal(auditFinal.data.revision,bridge.snapshot().tracking.revision);
+  assert.equal(posts,5,'One route, quote, subsidy, booking and cancel');
+  assert.equal(gets,4,'One status, financial, canceled status, voided financial');
+  continuation.close();
+  console.log('G107 CROSS-BRANCH PASS: B Client G73/G93 booking and subsidy -> A PostgreSQL G3 -> B G4 tracking -> Admin G75 -> B G95 cancel -> G94 void; no paid, GPS, LIVE or Driver assignment');
   // Provider revocation and stored backoffice suspension must both deny reads.
   adminSessionRevoked=true;
   assert.equal((await http(base,adminPath,{auth:adminToken})).status,401);
