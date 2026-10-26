@@ -10,6 +10,12 @@ import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.
 
 export default function ChoosePassengerVehicle(){
  const {view}=useClientView();
+ // A JWT/Passenger epoch change must erase unsent address fields from the
+ // visible form, not only from its in-memory intent cache.
+ return <PrivatePassengerVehicleForm key={view.privateViewRevision}
+  privateRevision={view.privateViewRevision}/>;
+}
+function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number}){
  const intent=usePassengerRideIntent();
  const [vehicle,setVehicle]=useState<PassengerVehicleKind|null>(null);
  const [origin,setOrigin]=useState('');
@@ -21,7 +27,7 @@ export default function ChoosePassengerVehicle(){
   // Navegar no cotiza, reserva ni inicia un despacho.
   if(!choice.ok||!routeReview.ok)return;
   const saved=intent.save({
-   ownerRevision:view.privateViewRevision,kind:choice.kind,
+   ownerRevision:privateRevision,kind:choice.kind,
    origin:routeReview.route.origin,destination:routeReview.route.destination
   });
   if(!saved.ok){setFeedback('La ruta no pudo prepararse. Revisá las direcciones.');return;}

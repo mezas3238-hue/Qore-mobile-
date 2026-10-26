@@ -1150,7 +1150,27 @@ export function createClientExperience({authProvider=null,gateway=null,
    if(typeof listener!=='function')return ()=>{};
    observers.add(listener);return ()=>observers.delete(listener);
   },
-  refreshSession:async()=>{const result=await session.refresh();notify();return result;},
+  refreshSession:async()=>{
+   const previous=session.privacyRevision();
+   const result=await session.refresh();
+   if(result.ok===true&&session.privacyRevision()!==previous){
+    // Bootstrapping solely at app mount misses later Passenger sign-in and
+    // JWT rotation. Read persisted opaque keys at this Auth boundary.
+    const scope=session.privacyRevision(),owner=result.subject;
+    if(motoRecoveryStore!==null&&motoFlow.snapshot().phase==='idle')
+     await motoFlow.restore(); // GET only; any failure blocks the next POST.
+    if(scope!==session.privacyRevision()||actor()?.subject!==owner){
+     notify();return fail('STALE_SESSION_RESPONSE');
+    }
+    if(canSaveG95&&autoG73Http?.isCancellationConfigured()===true
+      &&g95.phase==='idle')
+     await restoreG95Cancellation(); // read-only reconciliation, no POST.
+    if(scope!==session.privacyRevision()||actor()?.subject!==owner){
+     notify();return fail('STALE_SESSION_RESPONSE');
+    }
+   }
+   notify();return result;
+  },
   signOut:async()=>{const result=await signOut();notify();return result;},
   clear:()=>{session.clear();clearPrivate();notify();},
   requestMotoQuote:args=>motoFlow.requestQuote(args),
