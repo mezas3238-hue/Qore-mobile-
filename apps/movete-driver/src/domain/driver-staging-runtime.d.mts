@@ -11,6 +11,7 @@ import type {DriverDocumentUploadAdapters}
  from './driver-document-upload.mjs';
 import type {DriverKycExpirySnapshot}
  from './driver-kyc-expiry.mjs';
+import type {DriverCurrentTripReader} from '../DriverCurrentTripProvider';
 import type {DriverCustodyAdapters} from './driver-custody-controller.mjs';
 export declare const DRIVER_STAGING_RUNTIME_LIVE_ENABLED:false;
 export type DriverStagingRuntimeOptions=Readonly<{
@@ -39,6 +40,7 @@ export type DriverStagingRuntime=Readonly<{
  authAdapter:DriverHttpsStagingAuthAdapter;
  chatAdapters:DriverChatHttpsStagingAdapters;
  offerActions:DriverOfferActionsAdapters;
+ currentTripReader:DriverCurrentTripReader;
  tripActions:DriverTripAdapters;
  custodyActions:DriverCustodyAdapters;
  kycValidityAdapter:Readonly<{readStatus:(x:{accessToken:string})=>Promise<DriverKycExpirySnapshot>}>|null;

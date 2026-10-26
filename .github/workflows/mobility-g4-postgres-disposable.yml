@@ -182,8 +182,12 @@ jobs:
       PGAPPNAME: qore_ci_disposable_chain
     steps:
       - uses: actions/checkout@v4
-      - name: G104 fail fast on full AUTO journey syntax before PostgreSQL migration
-        run: node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
+      - name: G106 fail fast on authenticated Driver recovery and full AUTO journey syntax
+        run: |
+          node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
+          node --check apps/mobility-expo/server/g106-driver-current-trip-qa.mjs
+          node --check apps/mobility-expo/server/g106-driver-current-trip-repository.mjs
+          node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
       - name: Guard isolated local chain database
         run: |
           test "$PGHOST" = "localhost"

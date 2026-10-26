@@ -21,6 +21,7 @@ import {readPrivateCourierCustody,transitionPrivateCourierCustody}
 import {readDriverKycExpiry} from './driver-kyc-expiry.mjs';
 import {submitPrivateDriverEvidence}
  from './driver-document-upload.mjs';
+import {readDriverCurrentTrip} from './driver-current-trip-http.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -78,6 +79,12 @@ export function createDriverStagingRuntime({
    accessToken,request:workspaceRequest,now
   })
  }):null;
+ const currentTripReader=Object.freeze({
+  readCurrent:({accessToken})=>readDriverCurrentTrip({
+   apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+   accessToken,request
+  })
+ });
  const offerActions=Object.freeze({
   makeRequestKey:chatAdapters.makeRequestKey,
   now,
@@ -136,7 +143,7 @@ export function createDriverStagingRuntime({
   documentUploads,kycValidityAdapter,
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
-  offerActions,tripActions,custodyActions,
+  offerActions,tripActions,custodyActions,currentTripReader,
   productionEnabled:false,qaOnly:true
  });
 }

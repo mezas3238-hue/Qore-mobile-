@@ -13,6 +13,7 @@ import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
+import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 
 if(process.env.PGHOST!=='localhost'||
@@ -225,6 +226,29 @@ async function main(){
     tripId+"' AND t.driver_id='"+actorId+"'),'null'::jsonb)::text;");
   }
  });
+ // G106: restart recovery resolves ONLY server-verified Driver assignment
+ // from the same durable G3 table; no client-provided trip ID or PII.
+ const driverCurrent=createG106PrivateDriverCurrentTripQa({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  verifyAccessToken:async value=>{
+   const actor=await driverIdentity(value);
+   const now=Date.now();
+   return {id:actor.id,sessionId:driverSessionId,
+    tokenIatMs:now-60000,expiresAtMs:now+600000,is_anonymous:false};
+  },
+  verifySessionNotRevoked:async ({userId,sessionId})=>
+   userId===driverId&&sessionId===driverSessionId,
+  resolveExclusiveRole:resolveDbRole,allowRequest:()=>true,
+  loadCurrentAssignedTrip:async ({actorId})=>{
+   if(!uuid.test(actorId))return null;
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT "+
+    "pg_catalog.jsonb_build_object('tripId',t.id,'driverId',t.driver_id,"+
+    "'status',t.status,'revision',t.revision) FROM "+
+    "public.mobility_stage_auto_demo_trips t WHERE t.driver_id='"+
+    actorId+"' AND t.status IN ('accepted','arriving','in_progress') "+
+    "LIMIT 1),'null'::jsonb)::text;");
+  }
+ });
  const tripCommands=createQoreTripCommandGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:driverIdentity,
@@ -246,6 +270,7 @@ async function main(){
   riderHandler:rider,adminF1AuditHandler:adminGateway,
   offerHandler:noop,tripCommandHandler:tripCommands,
   driverTripStatusHandler:driverStatus,
+  driverCurrentTripHandler:driverCurrent,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
   safetyHandler:noop,merchantManagementHandler:noop,deliveryOfferHandler:noop,
   f1AutoHandler:gateway
@@ -307,6 +332,14 @@ async function main(){
   assert.equal(deniedState.revision,1);
   assert.equal(deniedState.driverId,null);
   assert.equal(Number(deniedState.offers),0);
+  // G106 crash recovery GET is scoped by SQL Driver and must show no
+  // assignment for a just-booked but unaccepted (G38 fenced) Passenger trip.
+  const recoveryPath='/v1/staging/driver/trips/current';
+  const recoveredBefore=await http(base,recoveryPath,{auth:driverToken});
+  assert.equal(recoveredBefore.status,200,JSON.stringify(recoveredBefore.data));
+  assert.equal(recoveredBefore.data.activeTrip,null);
+  assert.equal(recoveredBefore.data.liveTripsEnabled,false);
+  assert.equal((await http(base,recoveryPath,{auth:token})).status,401);
   // G105 real HTTP -> Auth -> SQL: the Driver must NOT read/advance an
   // unassigned original trip. A forged tripId or client role is not proof.
   const driverTripPath='/v1/staging/driver/trips/'+tripId+'/status';
@@ -406,6 +439,10 @@ async function main(){
   assert.equal(riderAfter.data.state,'cancelled');
   assert.equal(riderAfter.data.revision,2);
   assert.equal(riderAfter.data.driver,null);
+  // An app restart cannot rediscover a canceled trip as active.
+  const recoveredAfter=await http(base,recoveryPath,{auth:driverToken});
+  assert.equal(recoveredAfter.status,200,JSON.stringify(recoveredAfter.data));
+  assert.equal(recoveredAfter.data.activeTrip,null);
   // Driver cannot resurrect a canceled Passenger trip after G95 SQL commit.
   assert.equal((await http(base,driverTripPath,{auth:driverToken})).status,404);
   assert.equal((await http(base,driverTransitionPath,{
@@ -445,6 +482,7 @@ async function main(){
   assert.equal(Number(ledger.offsets),4);
   assert.equal(ledger.queueState,'CLOSED');
   assert.equal(Number(ledger.outstandingOffers),0);
+  console.log('G106 PASS: Driver current-trip recovery uses verified Auth and same real PostgreSQL; empty before/after cancellation, forbidden to Passenger');
   console.log('G105 PASS: Driver HTTP/Auth/real PostgreSQL denies forged advancement of the same G73 trip before and after G95 cancellation; zero assignment/forged events');
   console.log('G99 PASS: REAL local HTTP+PostgreSQL16 same G73 trip across Client+Admin before/after G95 cancellation; 4 G94 void entries, G96 dispatch CLOSED, Passenger privacy, Admin MFA/revocation QA, NO PSP / NO LIVE');
  }finally{

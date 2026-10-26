@@ -1,4 +1,5 @@
 import React,{createContext,useContext,useMemo} from 'react';
+import {DriverCurrentTripProvider} from './DriverCurrentTripProvider';
 import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
@@ -37,7 +38,9 @@ export function DriverApplicationProviders({
   readInbox={runtime?.workspaceReaders.readInbox}
   readDocuments={runtime?.workspaceReaders.readDocuments}
   readLicense={runtime?.workspaceReaders.readLicense}>
-  <DriverKycExpiryProvider
+  <DriverCurrentTripProvider
+   authAdapter={identity} reader={runtime?.currentTripReader??null}>
+ <DriverKycExpiryProvider
    authAdapter={identity}
    adapter={runtime?.kycValidityAdapter??null}>
  <DriverDocumentUploadProvider
@@ -62,5 +65,6 @@ export function DriverApplicationProviders({
   </DriverOfferActionsProvider>
  </DriverDocumentUploadProvider>
  </DriverKycExpiryProvider>
+ </DriverCurrentTripProvider>
  </DriverWorkspaceProvider></NativeAuthContext.Provider>;
 }

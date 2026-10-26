@@ -3,6 +3,7 @@ import {ScrollView,Switch,Text,TextInput,View} from 'react-native';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
+import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
 export default function DriverHome(){
@@ -52,6 +53,7 @@ export default function DriverHome(){
  }
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
+ const currentTrip=useDriverCurrentTrip();
  const phase:Record<string,string>={
   'not-configured':'STAGING sin conectar — no hay sesión de conductor',
   'signed-out':'Sesión de conductor cerrada',
@@ -107,6 +109,27 @@ export default function DriverHome(){
    }]}>{kyc.notice.text}</Text>
    <Action label="Renovar o comprobar documentos" secondary
     onPress={()=>router.push('/documentos')}/>
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>Recuperar mi viaje activo</Text>
+   <Text style={styles.small}>Después de cerrar o reiniciar la aplicación, el servidor identifica exclusivamente el viaje AUTO que sigue asignado a esta cuenta Driver. No se usan identificadores guardados en el teléfono.</Text>
+   {!currentTrip.enabled?<Text style={styles.text}>Función disponible al conectar backend STAGING autorizado y PostgreSQL. No hay viaje comercial habilitado.</Text>:
+    currentTrip.state.phase==='active'&&currentTrip.state.trip?
+     <>
+      <Text style={styles.text}>Viaje asignado confirmado por servidor · etapa {currentTrip.state.trip.status} · revisión {currentTrip.state.trip.revision}</Text>
+      <Action label="Continuar mi viaje asignado" onPress={()=>router.push({
+       pathname:'/viaje',params:{tripId:currentTrip.state.trip!.tripId}
+      })}/>
+     </>:
+     <Text style={styles.text}>{
+      currentTrip.state.phase==='none'?'El servidor no encontró un viaje AUTO activo para esta cuenta.':
+      currentTrip.state.phase==='loading'?'Consultando asignación privada…':
+      currentTrip.state.phase==='offline'?'No se pudo verificar la asignación. No mostramos datos antiguos.':
+      'Iniciá sesión Driver verificada para recuperar tu viaje.'
+     }</Text>}
+   <Action label="Consultar mi asignación en el servidor" secondary
+    disabled={!currentTrip.enabled||currentTrip.state.phase==='loading'}
+    onPress={()=>{void currentTrip.refresh();}}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mi disponibilidad</Text>
