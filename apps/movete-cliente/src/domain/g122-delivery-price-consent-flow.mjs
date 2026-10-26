@@ -62,6 +62,7 @@ function validQuote(x,owner,deliveryId,now){
   ||!Number.isSafeInteger(q.providerPyg)
   ||q.providerPyg+q.commissionPyg!==q.totalPyg
   ||typeof q.expiresAt!=='string'
+  ||!Number.isFinite(Date.parse(q.expiresAt))
   ||Math.abs(Date.parse(q.expiresAt)-x.expiresAt)>1000)return false;
  return true;
 }

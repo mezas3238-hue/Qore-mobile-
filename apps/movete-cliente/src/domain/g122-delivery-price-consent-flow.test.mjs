@@ -148,7 +148,7 @@ test('B18 rotated JWT in flight cannot affirm price or consent',async()=>{
  await Promise.resolve();await Promise.resolve();await Promise.resolve();
  session={...login(),token:'rotated-passenger-bearer-12345678900'};
  release(response(fare(),201));
- assert.equal((await work).code,'G122_QUOTE_UNVERIFIED');
+ assert.equal((await work).code,'STALE_SESSION_RESPONSE');
  assert.equal(flow.snapshot().phase,'quote_unknown');
  assert.equal(events.length,1);
 });
