@@ -1,9 +1,11 @@
-import React from 'react';
+import React,{useMemo} from 'react';
 import {Stack} from 'expo-router';
 import {StatusBar} from 'expo-status-bar';
 import {DriverApplicationProviders} from '../src/DriverApplicationProviders';
+import {getApprovedNativeDriverStagingRuntime} from '../src/NativeDriverStagingRuntime';
 export default function DriverLayout(){
- return <DriverApplicationProviders>
+ const runtime=useMemo(()=>getApprovedNativeDriverStagingRuntime(),[]);
+ return <DriverApplicationProviders runtime={runtime}>
   <StatusBar style="dark"/>
   <Stack screenOptions={{headerTintColor:'#112F37',headerStyle:{backgroundColor:'#F2F7F6'},headerTitleStyle:{fontWeight:'700'}}}>
    <Stack.Screen name="index" options={{title:'Movete Fácil Driver'}}/>

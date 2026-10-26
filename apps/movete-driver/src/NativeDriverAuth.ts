@@ -12,14 +12,18 @@ import type {NativeDriverAuth} from './domain/native-driver-auth.mjs';
  * independent role checks. No server secrets and no Driver network action
  * until backend STAGING is independently authorized and mounted. */
 let instance:NativeDriverAuth|null|undefined;
-export function getNativeDriverAuth():NativeDriverAuth|null{
- if(instance!==undefined)return instance;
- if(Platform.OS==='web')return (instance=null);
+let nativeSupabase:ReturnType<typeof createClient>|null|undefined;
+/** One native SDK instance for login and for a separately approved QA API.
+ * A second client would race token refresh and break Driver session isolation.
+ * Never provides service_role or a backend authorization by itself. */
+export function getNativeDriverSupabase():ReturnType<typeof createClient>|null{
+ if(nativeSupabase!==undefined)return nativeSupabase;
+ if(Platform.OS==='web')return (nativeSupabase=null);
  const config=verifyNativeDriverConfig({
   url:process.env.EXPO_PUBLIC_SUPABASE_URL,
   publishableKey:process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
  });
- if(!config.ok)return (instance=null);
+ if(!config.ok)return (nativeSupabase=null);
  const storage=createEncryptedChunkStore({
   prefix:'movete-facil-driver-vault-v1',
   randomUUID:()=>Crypto.randomUUID(),
@@ -29,11 +33,17 @@ export function getNativeDriverAuth():NativeDriverAuth|null{
   }),
   del:key=>SecureStore.deleteItemAsync(key)
  });
- const supabase=createClient(config.url,config.publishableKey,{
+ nativeSupabase=createClient(config.url,config.publishableKey,{
   auth:{storage,persistSession:true,autoRefreshToken:true,
    detectSessionInUrl:false,flowType:'pkce',
    storageKey:'movete-facil-driver-auth'}
  });
+ return nativeSupabase;
+}
+export function getNativeDriverAuth():NativeDriverAuth|null{
+ if(instance!==undefined)return instance;
+ const supabase=getNativeDriverSupabase();
+ if(!supabase)return (instance=null);
  instance=createNativeDriverAuth({supabase});
  return instance;
 }
