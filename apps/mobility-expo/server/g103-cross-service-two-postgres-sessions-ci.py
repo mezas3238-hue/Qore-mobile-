@@ -15,7 +15,7 @@ assert os.environ.get("PGHOST") == "localhost"
 assert os.environ.get("PGAPPNAME") == "qore_ci_disposable_chain"
 assert re.fullmatch(r"[0-9]{4,5}", os.environ.get("PGPORT", ""))
 UID = re.compile(r"^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$", re.I)
-OWNER = "10310000-0000-4103-8103-000000000002"
+OWNER = "10310000-0000-4103-8103-000000000999"
 CAMPAIGN = "10310000-0000-4103-8103-000000000020"
 
 
