@@ -16,3 +16,10 @@ export declare function readDriverKycExpiry(opts:{
 export declare function driverKycScreenNotice(
  data:DriverKycExpirySnapshot|null
 ):Readonly<{severity:'warning'|'info';text:string}>;
+
+// Fresh server preflight is an extra client guard; Backend A still decides.
+export declare function verifyDriverKycForOffer(args?:{
+ getSession?:()=>unknown|Promise<unknown>;
+ readStatus?:(params:{accessToken:string})=>unknown|Promise<unknown>;
+ isCurrent?:()=>boolean;now?:()=>number;
+}):Promise<Readonly<{ok:boolean;code:string}>>;

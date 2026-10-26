@@ -1,4 +1,4 @@
-import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
+import React,{createContext,useContext,useEffect,useMemo,useRef,useState} from 'react';
 import {createDriverOfferActionsController}
  from './domain/driver-offer-actions.mjs';
 import type {DriverOfferActionsController,DriverOfferActionsAdapters,
@@ -6,6 +6,7 @@ import type {DriverOfferActionsController,DriverOfferActionsAdapters,
  from './domain/driver-offer-actions.mjs';
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 import {useDriverWorkspace} from './DriverWorkspaceProvider';
+import {useDriverKycExpiry} from './DriverKycExpiryProvider';
 
 type State=Omit<DriverOfferActionsSnapshot,'phase'>&{
  phase:DriverOfferActionsSnapshot['phase']|'not-configured';
@@ -27,6 +28,10 @@ export function DriverOfferActionsProvider({
  qaAdapters?:DriverOfferActionsAdapters|null;
 }){
  const {state:workspace}=useDriverWorkspace();
+ const kyc=useDriverKycExpiry();
+ const preflightLock=useRef(false);
+ const kycReady=kyc.phase==='connected'&&kyc.snapshot?.state==='READY_QA'
+  &&kyc.snapshot.accountBlocked===false;
  const controller:DriverOfferActionsController|null=useMemo(
   ()=>qaAdapters?createDriverOfferActionsController(qaAdapters):null,
   [qaAdapters]);
@@ -57,12 +62,12 @@ export function DriverOfferActionsProvider({
   if(!controller||!authAdapter||state.phase!=='ready')return;
   if(workspace.phase==='connected'){
    controller.setOffers(workspace.offers,
-    {currentLicenseApproved:workspace.currentLicenseApproved});
+    {currentLicenseApproved:workspace.currentLicenseApproved&&kycReady});
   }else{
    // A stale inbox must not remain actionable during offline, refresh or logout.
    controller.setOffers([],{currentLicenseApproved:false});
   }
- },[controller,authAdapter,workspace,state.phase]);
+ },[controller,authAdapter,workspace,state.phase,kycReady]);
  const context=useMemo<ContextValue>(()=>({
   state,enabled:!!controller&&!!authAdapter,
   reconcilePending:async offerId=>{
@@ -70,13 +75,16 @@ export function DriverOfferActionsProvider({
    await controller?.reconcilePending(offerId);
   },
   decide:async(offerId,action)=>{
-   // No actions when the workspace is offline/reauthenticating.
-   if(workspace.phase!=='connected'||!workspace.currentLicenseApproved)return null;
-   const snapshot=await controller?.decide({offerId,action});
-   // Only return this exact operation's state, never a stale UI snapshot.
-   return snapshot?.decisions.find(d=>d.offerId===offerId&&d.action===action)??null;
+   if(preflightLock.current||workspace.phase!=='connected'
+    ||!workspace.currentLicenseApproved||!kycReady)return null;
+   preflightLock.current=true; // closes rapid double-tap during KYC GET
+   try{
+    if(action==='accept'&&!await kyc.verifyForOffer())return null;
+    const snapshot=await controller?.decide({offerId,action});
+    return snapshot?.decisions.find(d=>d.offerId===offerId&&d.action===action)??null;
+   }finally{preflightLock.current=false;}
   }
- }),[state,controller,authAdapter,workspace]);
+ }),[state,controller,authAdapter,workspace,kycReady,kyc]);
  return <Context.Provider value={context}>{children}</Context.Provider>;
 }
 export function useDriverOfferActions(){

@@ -83,3 +83,29 @@ export function driverKycScreenNotice(data){
  return Object.freeze({severity:'info',
   text:'Tu expediente está vigente en las pruebas de STAGING. Esto no habilita servicios comerciales.'});
 }
+
+// C / #17: fresh, verified KYC before each explicit offer acceptance.
+// This browser/device-side fence is NOT commercial authorization.
+// Never expose bearer, userId or document data in the result.
+const DRIVER_ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const validDriver=s=>s&&s.role==='driver'&&DRIVER_ID.test(s.userId??'')
+ &&typeof s.accessToken==='string'&&/^[A-Za-z0-9._~-]{20,7900}$/.test(s.accessToken);
+export async function verifyDriverKycForOffer({
+ getSession,readStatus,isCurrent=()=>true,now=Date.now
+}={}){
+ const reject=code=>Object.freeze({ok:false,code});
+ if([getSession,readStatus,isCurrent,now].some(fn=>typeof fn!=='function'))
+  return reject('KYC_NOT_CONFIGURED');
+ try{
+  const before=await getSession();
+  if(!isCurrent()||!validDriver(before))return reject('DRIVER_SESSION_REQUIRED');
+  const data=assertDriverKycExpirySnapshot(
+   await readStatus({accessToken:before.accessToken}),now());
+  const after=await getSession();
+  if(!isCurrent()||!validDriver(after)||after.userId!==before.userId
+   ||after.accessToken!==before.accessToken)return reject('STALE_DRIVER_SESSION');
+  if(data.state!=='READY_QA'||data.accountBlocked!==false
+   ||data.qaOnboardingActive!==true)return reject('DOCUMENTS_BLOCKED');
+  return Object.freeze({ok:true,code:'READY_QA'});
+ }catch{return reject('KYC_READ_UNVERIFIED');}
+}
