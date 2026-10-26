@@ -9,6 +9,11 @@ const subject=id(1),trip=id(3),delivery=id(4),key=id(5);
 const token='qa-passenger-token-with-enough-length';
 const identity=()=>({role:'passenger',subject,token,authRevision:4,
  sessionRevision:9,expiresAt:T+120000});
+const qaRecoveryStore=()=>{
+ let record=null;
+ return {read:async()=>record,write:async value=>{record=value;},
+  clear:async()=>{record=null;}};
+};
 const ride=()=>({requestKey:key,originTag:'San Lorenzo centro',
  destinationTag:'Villa Morra Asuncion',service:'economico'});
 const shipment=()=>({requestKey:key,vehicleKind:'MOTO',
@@ -337,7 +342,7 @@ test('R57 certified read-only recovery updates prior request, no new POST',async
 test('R57 an inconclusive read is not rollback permission',async()=>{
  let posts=0,reads=0;
  const client=createClientExperience({
-  now:()=>T,authProvider:{readSession:async()=>({
+  now:()=>T,deliveryRecoveryStore:qaRecoveryStore(),authProvider:{readSession:async()=>({
    subject,role:'passenger',token,expiresAt:T+120000
   }),signOut:async()=>{}},
   bookingHttpOptions:{...base(),reconciliationContractCertified:true,
@@ -395,8 +400,7 @@ test('R58 unknown reconciliation shows in-flight and remains locked',async()=>{
  assert.equal((await client.retry()).code,'NO_READY_REQUEST');
 });
 test('R58 revoking read certification hides consultation but preserves fail-closed request',async()=>{
- const client=createClientExperience({now:()=>T,
-  authProvider:{readSession:async()=>({
+ const client=createClientExperience({now:()=>T,deliveryRecoveryStore:qaRecoveryStore(),authProvider:{readSession:async()=>({
    subject,role:'passenger',token,expiresAt:T+120000
   }),signOut:async()=>{}},
   bookingHttpOptions:{...base(),

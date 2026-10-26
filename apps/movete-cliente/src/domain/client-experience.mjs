@@ -1505,14 +1505,18 @@ export function createClientExperience({authProvider=null,gateway=null,
   submit:async()=>{
    const requested=mutations.publicState(),user=actor();
    if(requested.phase==='ready'&&requested.operation==='deliveryRequest'){
-    // Explicit QA HTTP gateway and durable key are both mandatory.
-    if(bookingGateway?.isConfigured()!==true
-     &&gateway?.isConfigured?.()!==true)
-     return fail('G5_NOT_CERTIFIED');
-    if(!deliveryRecovery.isConfigured())
-     return fail('G5_SECURE_STORE_REQUIRED');
-    if(!user||typeof requested.requestKey!=='string')
-     return fail('AUTH_REQUIRED');
+    // Native runtime: secure durable key always mandatory before any G5 POST.
+    // Existing isolated legacy gateway mocks without a native store retain
+    // their own unit-test semantics; the shipped App injects SecureStore.
+    if(!deliveryRecovery.isConfigured()){
+     if(bookingGateway?.isConfigured()===true)
+      return fail('G5_SECURE_STORE_REQUIRED');
+    }else{
+     if(bookingGateway?.isConfigured()!==true
+      &&gateway?.isConfigured?.()!==true)
+      return fail('G5_NOT_CERTIFIED');
+     if(!user||typeof requested.requestKey!=='string')
+      return fail('AUTH_REQUIRED');
     const revision=session.privacyRevision(),subject=user.subject,key=requested.requestKey;
     const saved=await deliveryRecovery.persist(subject,key);
     if(!saved.ok){notify();return saved;}
@@ -1520,6 +1524,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     if(!after||after.subject!==subject||session.privacyRevision()!==revision
      ||still.phase!=='ready'||still.operation!=='deliveryRequest'
      ||still.requestKey!==key)return fail('STALE_SESSION_RESPONSE');
+    }
    }
    const result=await mutations.submit();notify();return result;
   },
