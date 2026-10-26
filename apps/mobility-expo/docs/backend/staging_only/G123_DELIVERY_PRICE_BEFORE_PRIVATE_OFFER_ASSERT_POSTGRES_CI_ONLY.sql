@@ -72,6 +72,29 @@ BEGIN
  RAISE NOTICE 'G123 priced cargo PASS: G122 MOTO/AUTO acceptance recognized; both G121 unpriced offers rejected, KYC still blocks, no phantom offers';
 END $test$;
 
+-- A historical G36/G38.0 accepted offer was valid before G122 existed,
+-- but its old decision cannot be replayed through the new public RPC without
+-- original sender fare consent. Legacy privileged cores remain sealed.
+DO $test$
+DECLARE old_offer public.mobility_stage_delivery_offers%ROWTYPE;
+ refused boolean:=false;
+BEGIN
+ SELECT o.* INTO old_offer FROM public.mobility_stage_delivery_offers o
+ JOIN public.mobility_stage_deliveries d ON d.id=o.delivery_id
+ WHERE d.request_key='b6360000-0000-4636-8636-000000000013'
+  AND o.status='accepted'
+  AND o.decision_key IS NOT NULL
+ LIMIT 1;
+ IF NOT FOUND THEN RAISE EXCEPTION 'G123 old accepted offer fixture missing'; END IF;
+ BEGIN
+  PERFORM public.mobility_stage_delivery_accept_offer(
+   old_offer.id,old_offer.courier_id,old_offer.decision_key);
+ EXCEPTION WHEN SQLSTATE 'P1231' THEN refused:=true; END;
+ IF NOT refused THEN RAISE EXCEPTION
+  'G123 historical accepted offer replay bypassed sender price consent'; END IF;
+ RAISE NOTICE 'G123 stale accepted replay PASS: legacy cargo decisions cannot bypass missing sender fare consent';
+END $test$;
+
 -- Safeguard SQL mutation directly at trigger boundary. The test changes only
 -- disposable synthetic quotes (PostgreSQL owner), not quoted historical money.
 DO $test$

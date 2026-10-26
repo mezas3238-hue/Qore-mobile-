@@ -115,15 +115,50 @@ CREATE FUNCTION public.mobility_stage_delivery_accept_offer(
  _offer uuid,_courier uuid,_decision uuid)
  RETURNS uuid LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=''
 AS $f$
-DECLARE target uuid;
+DECLARE offered public.mobility_stage_delivery_offers%ROWTYPE;
+ d public.mobility_stage_deliveries%ROWTYPE;
 BEGIN
- SELECT delivery_id INTO target FROM public.mobility_stage_delivery_offers
+ SELECT * INTO offered FROM public.mobility_stage_delivery_offers
  WHERE id=_offer AND courier_id=_courier;
- IF NOT FOUND THEN
-  RAISE EXCEPTION 'G123 private offer or courier unknown'
-   USING ERRCODE='P1231'; END IF;
- PERFORM 1 FROM public.mobility_stage_deliveries WHERE id=target FOR UPDATE;
- IF NOT public.mobility_stage_g123_delivery_priced_qa(target)
+ IF NOT FOUND THEN RAISE EXCEPTION 'G123 private offer or courier unknown'
+  USING ERRCODE='P1231'; END IF;
+ SELECT * INTO d FROM public.mobility_stage_deliveries
+ WHERE id=offered.delivery_id FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'G123 delivery missing'
+  USING ERRCODE='P1231'; END IF;
+
+ -- An already accepted offer can be RECONCILED by the exact original key.
+ -- This never starts another assignment, never bypasses the existing G71
+ -- KYC verification, and checks original fare CONSENT even if the quote
+ -- expired AFTER the legitimately accepted offer.
+ IF offered.status='accepted' AND offered.decision_key=_decision
+  AND offered.decision_event_id IS NOT NULL
+  AND d.courier_id=_courier AND d.vehicle_id=offered.vehicle_id
+  AND d.status IN ('accepted','picked_up','delivered','disputed','returned')
+ THEN
+  PERFORM 1 FROM public.mobility_stage_g122_delivery_price_consents c
+  JOIN public.mobility_stage_fare_quotes q
+   ON q.id=c.quote_id AND q.subject_id=d.id AND q.customer_id=d.sender_id
+   AND q.subject_kind='DELIVERY' AND q.mode='DELIVERY'
+   AND q.total_pyg=c.accepted_total_gs
+  JOIN public.mobility_stage_fare_rules r
+   ON r.id=q.rule_id AND r.rule_key=c.accepted_fare_version
+  JOIN public.mobility_stage_g122_delivery_rate_vehicle_qa bind
+   ON bind.rule_id=q.rule_id AND bind.vehicle_kind=d.requested_vehicle_kind
+  WHERE c.delivery_id=d.id AND c.sender_id=d.sender_id
+   AND c.vehicle_kind=d.requested_vehicle_kind
+   AND c.confirmed_at<=offered.offered_at
+  FOR SHARE OF c,q,r,bind;
+  IF NOT FOUND THEN
+   RAISE EXCEPTION 'G123 old accepted offer lacks original price consent'
+    USING ERRCODE='P1231'; END IF;
+  -- G71 and G10 own all role/KYC and accepted-event replay validation.
+  RETURN public.mobility_stage_g123_previous_delivery_accept_qa(
+   _offer,_courier,_decision);
+ END IF;
+ -- First accept (including forged/stale offer) must still require an
+ -- unexpired consented quote and the existing legal/KYC gates.
+ IF NOT public.mobility_stage_g123_delivery_priced_qa(d.id)
  THEN RAISE EXCEPTION 'G123 original delivery fare consent unavailable'
   USING ERRCODE='P1231'; END IF;
  RETURN public.mobility_stage_g123_previous_delivery_accept_qa(
