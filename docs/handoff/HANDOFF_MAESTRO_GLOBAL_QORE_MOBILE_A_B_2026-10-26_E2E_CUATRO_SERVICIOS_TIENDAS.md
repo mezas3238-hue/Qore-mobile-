@@ -242,6 +242,16 @@ Antes de tocar una ruta, leer head del PR y verificar quién la posee. En issue 
 
 ---
 
+### ALERTA DE INTEGRACIÓN ACTIVA A+B — PIN ANTIGUO DEL CLIENTE
+
+Verificación específica hecha directamente sobre `.github/workflows/mobility-g4-postgres-disposable.yml` en HEAD A `7c93a6e...`:
+- Línea aproximada 606: `actions/checkout@v4` apunta a **`ref: 459b5e6ac2d501e35bbbf1f616ea5f18684192ca`** de B.
+- **HEAD B actual confirmado:** `5aa117dda5af35ff2d934d4b926a8faae0704791`.
+- Por consiguiente, los **4/4 SUCCESS de A** prueban el código de la rama A con una versión de **Cliente B anterior al HEAD actual**. Los **3/3 SUCCESS de B** prueban Cliente/Admin por separado. No declarar certificación cruzada de los **dos HEAD actuales** hasta actualizar el checkout con un SHA nuevo tras revisar contratos y volver a ejecutar la cadena PostgreSQL16, sin merge.
+- Esta es una tarea **P0 inmediata, no un bloqueo externo**, que debe resolverse antes de afirmar que G110/G113 y Cliente B más reciente se prueban juntos. No alterar ramas ajenas: A modifica su CI consumiendo el commit B, siempre de forma aislada.
+
+---
+
 ## 12. PRIMEROS 30 MINUTOS DEL SUCESOR (SIN PEDIR PERMISO PARA LEER/EDITAR QA)
 
 1. Leer este handoff y los dos PR. Verificar HEAD de A y B y CI SUCCESS/FAIL por SHA exacto, sin asumir que los SHAs anteriores son actuales.
