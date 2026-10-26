@@ -333,6 +333,7 @@ async function main(){
    "'CENTRO_FIXTURE','AEROPUERTO','ASUNCION_FIXTURE',5000,600,0); "+
    "q:=public.mobility_stage_g73_quote('"+outsider+"',r,"+
    "'98980000-0000-4989-8989-000000000033'); "+
+   "PERFORM public.mobility_stage_g93_preview_auto_qa('"+outsider+"',q); "+
    "t:=public.mobility_stage_g73_book('"+outsider+"',q,'"+olderKey+"'); "+
    "IF t IS NULL THEN RAISE EXCEPTION 'G112 older booking missing'; "+
    "END IF; END $older$;");
