@@ -12,6 +12,8 @@ import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
+import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
+import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -24,6 +26,9 @@ const owner='98980000-0000-4989-8989-000000000002';
 const outsider='98980000-0000-4989-8989-000000000003';
 const adminId='98980000-0000-4989-8989-000000000004';
 const adminSessionId='98980000-0000-4989-8989-000000000005';
+const driverId='98980000-0000-4989-8989-000000000006';
+const driverSessionId='98980000-0000-4989-8989-000000000007';
+const forgedDriverTransitionKey='98980000-0000-4989-8989-000000000026';
 const campaign='98980000-0000-4989-8989-000000000020';
 const routeKey='98980000-0000-4989-8989-000000000010';
 const quoteKey='98980000-0000-4989-8989-000000000011';
@@ -32,6 +37,7 @@ const cancelKey='98980000-0000-4989-8989-000000000013';
 const token='g98-verified-qa-session-'+p.replaceAll('-','');
 const otherToken='g98-verified-qa-session-'+outsider.replaceAll('-','');
 const adminToken='g99-admin-aal2-qa-'+adminId.replaceAll('-','');
+const driverToken='g105-private-driver-session-'+driverId.replaceAll('-','');
 const f1='/v1/staging/rider/auto';
 const noop=async()=>({status:404,body:{error:'Not found'}});
 function psql(script){
@@ -95,7 +101,8 @@ async function http(base,path,{method='GET',body,auth=token}={}){
 async function main(){
  assertLocalDatabase();
  psql("DO $g$ BEGIN IF current_database()<>'qore_disposable_chain' OR current_setting('application_name')<>'qore_ci_disposable_chain' THEN RAISE EXCEPTION 'G98 refusal'; END IF; END $g$;"+
-  "INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+outsider+"'),('"+adminId+"');"+
+  "INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+outsider+"'),('"+adminId+"'),('"+driverId+"');"+
+  "INSERT INTO public.user_roles(user_id,role) VALUES ('"+driverId+"','driver');"+
   "DELETE FROM public.user_roles WHERE user_id IN ('"+owner+"','"+adminId+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+owner+"','owner','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+adminId+"','admin','active','"+owner+"');"+
@@ -178,9 +185,66 @@ async function main(){
   allowRequest:()=>true,
   loadAdminRideReceipt:x=>adminSql.read(x)
  });
+
+ // G105: Driver is a distinct, server-verified actor reading the SAME
+ // persistent G73 booking as Passenger and Admin. No fake assignment.
+ const driverIdentity=async value=>{
+  if(value!==driverToken)throw Error('G105 untrusted synthetic Driver token');
+  return {id:driverId,is_anonymous:false,
+   email_confirmed_at:'2026-10-26T00:00:00Z'};
+ };
+ const resolveDbRole=async id=>{
+  if(!uuid.test(id))throw Error('Invalid SQL actor');
+  const result=psql("SET ROLE service_role; SELECT CASE WHEN "+
+   "count(*) FILTER (WHERE role='driver')=1 AND count(*)=1 THEN 'driver' "+
+   "WHEN count(*) FILTER (WHERE role='passenger')=1 AND count(*)=1 THEN 'passenger' "+
+   "ELSE 'none' END FROM public.user_roles WHERE user_id='"+id+"'");
+  return result==='none'?null:result;
+ };
+ const driverStatus=createG65PrivateDriverTripStatusQa({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  verifyAccessToken:async value=>{
+   const actor=await driverIdentity(value);
+   const now=Date.now();
+   return {id:actor.id,sessionId:driverSessionId,
+    tokenIatMs:now-60000,expiresAtMs:now+600000,is_anonymous:false};
+  },
+  verifySessionNotRevoked:async ({userId,sessionId})=>
+   userId===driverId&&sessionId===driverSessionId,
+  resolveExclusiveRole:resolveDbRole,allowRequest:()=>true,
+  loadAssignedTrip:async ({actorId,tripId})=>{
+   if(!uuid.test(actorId)||!uuid.test(tripId))return null;
+   // Query is constrained by BOTH original trip ID and SQL-assigned Driver.
+   // No unassigned Passenger details reach the phone.
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT "+
+    "pg_catalog.jsonb_build_object('tripId',t.id,'driverId',t.driver_id,"+
+    "'vehicleId',t.vehicle_id,'passengerId',t.passenger_id,"+
+    "'status',t.status,'revision',t.revision,'service',t.service) "+
+    "FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+
+    tripId+"' AND t.driver_id='"+actorId+"'),'null'::jsonb)::text;");
+  }
+ });
+ const tripCommands=createQoreTripCommandGateway({
+  projectRef:'staging1234567890abcd',
+  verifyAccessToken:driverIdentity,
+  resolveRole:resolveDbRole,allowRequest:()=>true,
+  requestTrip:async()=>{throw Error('G105 Driver cannot create Passenger booking');},
+  transitionTrip:async ({actorId,tripId,event,eventKey})=>{
+   if(![actorId,tripId,eventKey].every(x=>uuid.test(x)))
+    throw Error('G105 invalid SQL actor/trip/event');
+   const next={arrive:'arriving',pickup:'in_progress',complete:'completed'}[event];
+   if(!next)throw Error('G105 forbidden transition');
+   const eventId=psql("SET ROLE service_role; SELECT "+
+    "public.mobility_stage_auto_demo_transition('"+tripId+"','"+
+    actorId+"','"+next+"'::public.mobility_stage_trip_status,'"+
+    eventKey+"')::text");
+   return {ok:true,liveEnabled:false,eventId};
+  }
+ });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:rider,adminF1AuditHandler:adminGateway,
-  offerHandler:noop,tripCommandHandler:noop,
+  offerHandler:noop,tripCommandHandler:tripCommands,
+  driverTripStatusHandler:driverStatus,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
   safetyHandler:noop,merchantManagementHandler:noop,deliveryOfferHandler:noop,
   f1AutoHandler:gateway
@@ -242,6 +306,32 @@ async function main(){
   assert.equal(deniedState.revision,1);
   assert.equal(deniedState.driverId,null);
   assert.equal(Number(deniedState.offers),0);
+  // G105 real HTTP -> Auth -> SQL: the Driver must NOT read/advance an
+  // unassigned original trip. A forged tripId or client role is not proof.
+  const driverTripPath='/v1/staging/driver/trips/'+tripId+'/status';
+  assert.equal((await http(base,driverTripPath,{auth:driverToken})).status,404);
+  assert.equal((await http(base,driverTripPath,{auth:token})).status,401);
+  const driverTransitionPath='/v1/staging/trips/'+tripId+'/transition';
+  const illegalAdvance=await http(base,driverTransitionPath,{
+   method:'POST',auth:driverToken,
+   body:{event:'arrive',eventKey:forgedDriverTransitionKey}});
+  assert.equal(illegalAdvance.status,409,JSON.stringify(illegalAdvance.data));
+  assert.doesNotMatch(JSON.stringify(illegalAdvance.data),
+   /passengerId|originTag|destinationTag|driverId|vehicleId/);
+  assert.equal((await http(base,driverTransitionPath,{
+   method:'POST',auth:driverToken,
+   body:{event:'arrive',eventKey:forgedDriverTransitionKey,
+    driverId,vehicleId:candidateVehicle}})).status,400);
+  const deniedAfterAdvance=sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'tripState',t.status,'revision',t.revision,'driverId',t.driver_id,"+
+   "'events',(SELECT count(*) FROM public.mobility_stage_auto_demo_events e"+
+   " WHERE e.trip_id=t.id))::text "+
+   "FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+tripId+"'");
+  assert.equal(deniedAfterAdvance.tripState,'searching');
+  assert.equal(deniedAfterAdvance.revision,1);
+  assert.equal(deniedAfterAdvance.driverId,null);
+  assert.equal(Number(deniedAfterAdvance.events),0);
+
   // Two distinct HTTP clients read exactly the same G73 -> G3 trip.
   const riderBefore=await http(base,
    '/v1/staging/rider/trips/'+tripId+'/status');
@@ -315,6 +405,12 @@ async function main(){
   assert.equal(riderAfter.data.state,'cancelled');
   assert.equal(riderAfter.data.revision,2);
   assert.equal(riderAfter.data.driver,null);
+  // Driver cannot resurrect a canceled Passenger trip after G95 SQL commit.
+  assert.equal((await http(base,driverTripPath,{auth:driverToken})).status,404);
+  assert.equal((await http(base,driverTransitionPath,{
+   method:'POST',auth:driverToken,
+   body:{event:'arrive',eventKey:forgedDriverTransitionKey}})).status,409);
+
   const adminAfter=await http(base,adminPath,{auth:adminToken});
   assert.equal(adminAfter.status,200,JSON.stringify(adminAfter.data));
   assert.equal(adminAfter.data.tripId,tripId);
@@ -348,6 +444,7 @@ async function main(){
   assert.equal(Number(ledger.offsets),4);
   assert.equal(ledger.queueState,'CLOSED');
   assert.equal(Number(ledger.outstandingOffers),0);
+  console.log('G105 PASS: Driver HTTP/Auth/real PostgreSQL denies forged advancement of the same G73 trip before and after G95 cancellation; zero assignment/forged events');
   console.log('G99 PASS: REAL local HTTP+PostgreSQL16 same G73 trip across Client+Admin before/after G95 cancellation; 4 G94 void entries, G96 dispatch CLOSED, Passenger privacy, Admin MFA/revocation QA, NO PSP / NO LIVE');
  }finally{
   if(server.listening)await new Promise((resolve,reject)=>
