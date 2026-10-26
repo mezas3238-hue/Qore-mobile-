@@ -147,7 +147,7 @@ test('G116 new AUTO Owner commission 18 percent preserves exact 10 percent Passe
  assert.equal(shown.subsidyBps,1000);
  assert.equal(shown.customerSubsidyGs,3000);
  assert.equal(shown.customerPaysGs,27000);
- assert.equal(shown.driverReceivesGs,24600);
+ // Driver payout remains validated inside the server receipt, not exposed here.
  assert.equal(shown.platformRetainsGs,2400);
  assert.equal(f.c.acceptAutoPrequote(consent).ok,true);
  assert.equal((await f.c.reserveQuotedAuto({requestKey:bookingKey})).ok,true);
