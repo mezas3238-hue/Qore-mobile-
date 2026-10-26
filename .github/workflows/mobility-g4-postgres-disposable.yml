@@ -16,6 +16,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
+      - 'apps/mobility-expo/server/g124-*'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
   pull_request:
     paths:
@@ -29,6 +31,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
+      - 'apps/mobility-expo/server/g124-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'
