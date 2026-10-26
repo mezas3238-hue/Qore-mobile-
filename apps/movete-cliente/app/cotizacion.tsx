@@ -1,13 +1,17 @@
 import React,{useRef,useState} from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
+import {router} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView} from '../src/ClientRuntime';
 import {createSecureCancellationKey} from '../src/domain/secure-cancel-key.mjs';
+import {projectMobilityFareChoices,formatFareGuaranies}
+ from '../src/domain/mobility-fare-choices.mjs';
 
 export default function Fare(){
  const {client,view}=useClientView();
  const quote=view.authenticated?view.quote:null;
+ const alternatives=projectMobilityFareChoices(view,Date.now());
  const [message,setMessage]=useState('');
  const locked=useRef(false);
  const fare=view.fareRequest,tracking=view.tracking;
@@ -44,6 +48,56 @@ export default function Fare(){
   keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
   <View style={styles.hero}><Text accessibilityRole="header" style={styles.heroText}>Tarifa en guaraníes</Text>
    <Text style={styles.heroSub}>Solo tarifas verificadas por el servidor. Nunca estimaciones inventadas.</Text></View>
+  <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>
+    Elegí el tipo de movilidad
+   </Text>
+   <Text style={styles.text}>
+    AUTO pasajeros, MOTO pasajeros, ENVÍOS AUTO, ENVÍOS MOTO y COMERCIOS.
+    Cada modalidad necesita su tarifa, ruta y autorización del servidor.
+   </Text>
+   {alternatives.map(item=><View key={item.kind} style={{
+    borderTopWidth:1,borderTopColor:'#DCE5F1',paddingTop:12,gap:5}}>
+    <Text style={styles.heading}>{item.label}</Text>
+    <Text accessibilityLiveRegion="polite" style={styles.text}>
+     {item.priced?formatFareGuaranies(item.customerPaysGs):
+      'Sin tarifa confirmada'}
+    </Text>
+    {item.priced&&item.originalFareGs!==item.customerPaysGs
+     &&item.category==='RIDE'&&<>
+     <Text style={styles.small}>
+      Tarifa original: {formatFareGuaranies(item.originalFareGs)}
+     </Text>
+     <Text style={styles.small}>
+      Subsidio de pasajero 10 %: {formatFareGuaranies(item.customerSubsidyGs)}
+     </Text>
+    </>}
+    {item.priced&&<Text style={styles.small}>
+      Cotización de QA vigente hasta {new Date(item.expiresAt).toLocaleTimeString('es-PY')}.
+      No garantiza cobertura, conductor ni despacho.
+    </Text>}
+    <Text style={styles.small}>
+      {item.category==='DELIVERY'
+       ?'Cotización de carga propia. No aplica el subsidio de pasajeros.'
+       :item.category==='COMMERCE'
+       ?'Total pendiente de productos, entrega y validación de comercio.'
+       :'Tarifa de pasajero independiente; sujeto a seguridad y permisos.'}
+    </Text>
+    <Action secondary label={item.category==='RIDE'
+     ?'Revisar viaje '+item.vehicleKind
+     :item.category==='DELIVERY'
+      ?'Revisar ENVÍOS '+item.vehicleKind
+      :'Ver COMERCIOS'}
+     hint="Abre el formulario; no realiza reserva ni pago"
+     onPress={()=>router.push(item.category==='RIDE'?'/transporte'
+      :item.category==='DELIVERY'?'/envios':'/comercios')}/>
+   </View>)}
+   <Text style={styles.small}>
+    Los precios mostrados corresponden a cotizaciones individuales. No son
+    comparables entre sí hasta verificar el mismo origen, destino y momento
+    en cada servicio. Sin ruteo confirmado nunca calculamos el precio móvil.
+   </Text>
+  </Panel>
   {quote?<Panel>
    <Text accessibilityRole="header" style={styles.heading}>{quote.formattedAmount}</Text>
    <Text style={styles.text}>Modalidad: {quote.fareMode}</Text>
