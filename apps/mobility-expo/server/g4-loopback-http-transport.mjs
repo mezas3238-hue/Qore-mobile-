@@ -23,7 +23,7 @@ const f1AutoSubsidyPostRoute=/^\/v1\/staging\/rider\/auto\/prequotes\/[0-9a-f-]{
 const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}(?:\/(?:dispatch|financial-status|cancellation))?$/i;
 // G101 MOTO passenger is a different ride kind from AUTO/DELIVERY.
 const f1MotoPostRoute=/^\/v1\/staging\/rider\/moto\/(?:quotes|book|bookings\/[0-9a-f-]{36}\/cancel)$/i;
-const f1MotoGetRoute=/^\/v1\/staging\/rider\/moto\/bookings\/[0-9a-f-]{36}(?:\/cancellation)?$/i;
+const f1MotoGetRoute=/^\/v1\/staging\/rider\/moto\/bookings\/[0-9a-f-]{36}(?:\/(?:cancellation|status))?$/i;
 const ownerCommissionRoute=/^\/v1\/staging\/owner\/commissions\/(AUTO_RIDE|MOTO_RIDE)$/;
 const adminF1AuditRoute=/^\/v1\/staging\/admin\/rides\/[0-9a-f-]{36}\/f1-verification$/i;
 const riderCancelRoute=/^\/v1\/staging\/rider\/trips\/[0-9a-f-]{36}\/cancel$/i;

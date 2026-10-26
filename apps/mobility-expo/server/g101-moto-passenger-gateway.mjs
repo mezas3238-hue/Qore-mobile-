@@ -1,8 +1,8 @@
 /**
  * G101: MOTO_RIDE Passenger-only HTTP contract. Separate from AUTO and
  * DELIVERY; no Driver acceptance, user-supplied price or PSP. Loopback QA.
- * SQL G100 is the price/accounting authority (12% nominal commission,
- * fixed 10%-of-original-fare Customer subsidy, 2% platform remainder).
+ * SQL G100/G116 is the price/accounting authority (Owner-variable commission,
+ * fixed 10%-of-original-fare Customer subsidy; historical quotes immutable).
  */
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -20,6 +20,7 @@ const BOOK='/v1/staging/rider/moto/book';
 const BOOKING=/^\/v1\/staging\/rider\/moto\/bookings\/([0-9a-f-]{36})$/i;
 const CANCEL=/^\/v1\/staging\/rider\/moto\/bookings\/([0-9a-f-]{36})\/cancel$/i;
 const CANCEL_READ=/^\/v1\/staging\/rider\/moto\/bookings\/([0-9a-f-]{36})\/cancellation$/i;
+const STATUS_READ=/^\/v1\/staging\/rider\/moto\/bookings\/([0-9a-f-]{36})\/status$/i;
 const QUOTE_FIELDS=['mode','commercialEnabled','ownerId','serviceKind',
  'service','quoteId','quoteRequestKey','campaignId','currency','amountGs',
  'commissionBps','subsidyBps','customerPaysGs','customerSubsidyGs',
@@ -31,6 +32,28 @@ const TRIP_FIELDS=['mode','commercialEnabled','ownerId','serviceKind',
  'customerPaysGs','customerSubsidyGs','driverReceivesGs','platformRetainsGs',
  'commissionBps','subsidyBps','financialState','reversalEntriesBalanced',
  'driverAssigned','pspCollected','pspRefunded','serverPersisted'];
+const STATUS_FIELDS=['mode','commercialEnabled','ownerId','bookingKey','tripId',
+ 'serviceKind','tripState','tripRevision','driverAssigned','driverIdentityExposed',
+ 'gpsVerified','etaAvailable','commissionBps','subsidyBps','amountGs',
+ 'customerPaysGs','customerSubsidyGs','financialState','pspCollected','serverPersisted'];
+const STAGES=new Map([['searching',1],['accepted',2],['arriving',3],
+ ['in_progress',4],['completed',5],['cancelled',2]]);
+const validStatus=(x,owner,bookingKey)=>exact(x,STATUS_FIELDS)
+ &&x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false
+ &&x.ownerId===owner&&x.bookingKey===bookingKey&&id(x.tripId)
+ &&x.serviceKind==='MOTO_RIDE'&&STAGES.has(x.tripState)
+ &&Number.isSafeInteger(x.tripRevision)
+ &&x.tripRevision===STAGES.get(x.tripState)
+ &&x.driverAssigned===!['searching','cancelled'].includes(x.tripState)
+ &&x.driverIdentityExposed===false&&x.gpsVerified===false
+ &&x.etaAvailable===false&&x.pspCollected===false&&x.serverPersisted===true
+ &&integer(x.amountGs)&&x.amountGs>0&&integer(x.customerPaysGs)
+ &&integer(x.customerSubsidyGs)&&Number.isSafeInteger(x.commissionBps)
+ &&x.commissionBps>=1000&&x.commissionBps<=3000&&x.subsidyBps===1000
+ &&x.customerSubsidyGs===Math.floor((x.amountGs*1000+5000)/10000)
+ &&x.customerPaysGs===x.amountGs-x.customerSubsidyGs
+ &&x.financialState===(x.tripState==='cancelled'?'VOIDED_QA'
+   :x.tripState==='completed'?'COMPLETED_UNSETTLED_QA':'RESERVED_QA');
 function money(x){
  if(!plain(x)||!integer(x.amountGs)||x.amountGs<=0||
  !integer(x.customerPaysGs)||!integer(x.customerSubsidyGs)||
@@ -107,6 +130,12 @@ export function createG101MotoPassengerRepository(client){
    return rpc('mobility_stage_g100_moto_booking_receipt_qa',{
     _passenger:actorId,_booking:bookingKey});
   },
+  status:({actorId,bookingKey})=>{
+   if(!id(actorId)||!id(bookingKey))
+    throw Error('Invalid MOTO Rider status request');
+   return rpc('mobility_stage_g118_moto_status_qa',{
+    _passenger:actorId,_booking:bookingKey});
+  },
   cancel:({actorId,bookingKey,requestKey})=>{
    if(!id(actorId)||!id(bookingKey)||!id(requestKey))
     throw Error('Invalid MOTO Passenger cancellation');
@@ -132,9 +161,10 @@ export function createG101MotoPassengerGateway({
   const cancel=method==='POST'&&typeof path==='string'?CANCEL.exec(path):null;
   const get=method==='GET'&&typeof path==='string'?BOOKING.exec(path):null;
   const recover=method==='GET'&&typeof path==='string'?CANCEL_READ.exec(path):null;
-  if(!quote&&!book&&!cancel&&!get&&!recover)
+  const status=method==='GET'&&typeof path==='string'?STATUS_READ.exec(path):null;
+  if(!quote&&!book&&!cancel&&!get&&!recover&&!status)
    return response(404,{error:'MOTO Passenger route unavailable'});
-  if((get||recover)&&(body!==undefined&&body!==null))
+  if((get||recover||status)&&(body!==undefined&&body!==null))
    return response(400,{error:'GET body forbidden'});
   if(quote&&(!exact(body,['requestKey','origin','destination'])||
    !id(body.requestKey)||!safeText(body.origin)||!safeText(body.destination)||
@@ -147,7 +177,7 @@ export function createG101MotoPassengerGateway({
    !exact(body,['requestKey','confirmed'])||!id(body.requestKey)||
    body.confirmed!==true))
    return response(400,{error:'Explicit MOTO cancellation required'});
-  if((get&&!id(get[1]))||(recover&&!id(recover[1])))
+  if((get&&!id(get[1]))||(recover&&!id(recover[1]))||(status&&!id(status[1])))
    return response(400,{error:'Invalid booked MOTO reference'});
   const t=headerToken(headers);
   if(!t)return response(401,{error:'Verified Passenger token required'});
@@ -193,6 +223,15 @@ export function createG101MotoPassengerGateway({
     if(!validTrip(out,u.id,cancel[1],body.requestKey)||
      out.tripState!=='cancelled')
      return response(409,{error:'MOTO cancellation not reconciled'});
+    return response(200,out);
+   }
+   if(status){
+    if(typeof repository.status!=='function')
+     return response(503,{error:'MOTO G118 state unavailable'});
+    const out=await repository.status({actorId:u.id,bookingKey:status[1]});
+    if(out===null)return response(404,{error:'MOTO booking not owned'});
+    if(!validStatus(out,u.id,status[1]))
+     return response(409,{error:'MOTO persisted state invalid'});
     return response(200,out);
    }
    const key=(get??recover)[1];
