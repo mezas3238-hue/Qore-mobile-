@@ -93,10 +93,21 @@ BEGIN
  OR NOT EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips t
   WHERE t.id=trip AND t.status='accepted' AND t.revision=2
   AND t.driver_id=d AND t.passenger_id=p)
- OR NOT EXISTS(SELECT 1 FROM public.mobility_stage_g36_driver_slots s
-  WHERE s.driver_id=d AND s.assignment_kind='AUTO_RIDE'
-  AND s.assignment_id=trip)
  THEN RAISE EXCEPTION 'G109 synthetic accepted QA trip not persisted'; END IF;
  RAISE NOTICE 'G109 fixture PASS: only disposable PRE-G38 synthetic accepted AUTO';
 END $prepare$;
+RESET ROLE;
+-- The G36 registry is intentionally invisible to service_role. Audit its
+-- existence only as the disposable CI database owner, never by granting
+-- access to the HTTP application or changing RLS.
+DO $audit$
+DECLARE t uuid;
+BEGIN
+ SELECT id INTO t FROM public.mobility_stage_auto_demo_trips
+ WHERE request_key='10900000-0000-4109-8109-000000000023';
+ IF NOT EXISTS(SELECT 1 FROM public.mobility_stage_g36_driver_slots s
+  WHERE s.driver_id='10900000-0000-4109-8109-000000000022'
+  AND s.assignment_kind='AUTO_RIDE' AND s.assignment_id=t)
+ THEN RAISE EXCEPTION 'G109 QA accepted Driver slot was not persisted'; END IF;
+END $audit$;
 COMMIT;
