@@ -15,8 +15,7 @@ export default function ClientHome(){
   {simpleMode&&<Panel>
    <Text accessibilityRole="header" style={styles.heading}>Acciones principales</Text>
    <Text style={styles.text}>Elegí qué necesitás. Los viajes, envíos y pagos siguen sujetos a confirmación del servidor.</Text>
-   <Action large label="AUTO · Viajar en automóvil" onPress={()=>router.push('/viaje')}/>
-   <Action large label="MOTO · Viajar como pasajero" onPress={()=>router.push('/moto')}/>
+   <Action large label="VIAJAR · Elegí AUTO o MOTO" onPress={()=>router.push('/transporte')}/>
    <Action large label="ENVÍOS · Paquetes en auto o moto" onPress={()=>router.push('/envios')}/>
    <Action large label="COMERCIOS · Pedidos a domicilio" onPress={()=>router.push('/comercios')}/>
    <Action large label="Seguridad y ayuda" onPress={()=>router.push('/soporte')}/>
@@ -28,9 +27,8 @@ export default function ClientHome(){
   {!simpleMode&&<>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Viajes de pasajeros</Text>
-   <Text style={styles.text}>Elegí AUTO o MOTO. Sus rutas y tarifas son independientes. Un borrador no genera reserva.</Text>
-   <Action label="AUTO · Solicitar automóvil" onPress={()=>router.push('/viaje')}/>
-   <Action label="MOTO · Preparar viaje como pasajero" secondary onPress={()=>router.push('/moto')}/>
+   <Text style={styles.text}>Elegí expresamente el tipo de vehículo: AUTO o MOTO para pasajeros. El servicio de ENVÍOS es independiente.</Text>
+   <Action large label="Elegir AUTO o MOTO para viajar" onPress={()=>router.push('/transporte')}/>
    <Text style={styles.small}>MOTO pasajeros tiene su propio recorrido, pero sigue sin reservas comerciales por falta de aprobación legal, seguros y contrato backend.</Text>
   </Panel>
   <Panel>
