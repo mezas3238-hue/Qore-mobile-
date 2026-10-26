@@ -3,6 +3,12 @@
 name: QORE G4 PostgreSQL disposable smoke
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'feature/mobility-monorepo-isolated-20261016'
+    paths:
+      - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - '.github/workflows/mobility-g4-postgres-disposable.yml'
   pull_request:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
