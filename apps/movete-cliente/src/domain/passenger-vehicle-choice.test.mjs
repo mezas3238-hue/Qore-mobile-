@@ -37,3 +37,15 @@ test('Inicio lleva al selector en ambos modos, y selector usa los formularios re
  assert.match(screen,/disabled=\{!choice.ok\}/);
  assert.doesNotMatch(screen,/requestMotoQuote|bookMoto|reserveQuotedAuto|fetch\(/);
 });
+
+test('R80 MOTO route fields lock with a server quote and discard never books',()=>{
+ const screen=readFileSync(new URL('../../app/moto.tsx',import.meta.url),'utf8');
+ const flow=readFileSync(new URL('./g100-moto-passenger-flow.mjs',import.meta.url),'utf8');
+ assert.match(screen,/const canEdit=moto\.phase==='idle'&&!sending/);
+ assert.equal((screen.match(/editable=\{canEdit\}/g)??[]).length,2);
+ assert.match(screen,/disabled=\{!canEdit\}/);
+ assert.match(screen,/client\.discardMotoQuote\(\)/);
+ assert.match(screen,/quoteExpired/);
+ assert.match(flow,/\['quoted','accepted'\]\.includes\(state\.phase\)/);
+ assert.doesNotMatch(screen,/resetMoto\(\)/);
+});
