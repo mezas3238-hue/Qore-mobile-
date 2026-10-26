@@ -187,7 +187,7 @@ BEGIN
  SELECT count(*) INTO reversals FROM public.mobility_stage_g100_moto_entries
  WHERE quote_id=q.id AND phase='reverse';
  IF reservations<>4 OR (t.status='cancelled' AND reversals<>4)
-  OR (t.status='searching' AND reversals<>0)
+  OR (t.status<>'cancelled' AND reversals<>0)
   OR EXISTS(SELECT 1 FROM public.mobility_stage_g100_moto_entries r
    LEFT JOIN public.mobility_stage_g100_moto_entries v
     ON v.quote_id=r.quote_id AND v.account=r.account AND v.phase='reverse'
@@ -204,9 +204,11 @@ BEGIN
   'customerPaysGs',q.customer_pays_gs,'customerSubsidyGs',q.subsidy_gs,
   'driverReceivesGs',q.driver_receives_gs,'platformRetainsGs',q.platform_retains_gs,
   'commissionBps',q.commission_bps,'subsidyBps',1000,
-  'financialState',CASE WHEN t.status='cancelled' THEN 'VOIDED_QA' ELSE 'RESERVED_QA' END,
+  'financialState',CASE WHEN t.status='cancelled' THEN 'VOIDED_QA'
+   WHEN t.status='completed' THEN 'COMPLETED_UNSETTLED_QA' ELSE 'RESERVED_QA' END,
   'reversalEntriesBalanced',(t.status='cancelled' AND reversals=4),
-  'driverAssigned',false,'pspCollected',false,'pspRefunded',false,
+  'driverAssigned',(t.status IN('accepted','arriving','in_progress','completed')),
+   'pspCollected',false,'pspRefunded',false,
   'serverPersisted',true);
 END $f$;
 

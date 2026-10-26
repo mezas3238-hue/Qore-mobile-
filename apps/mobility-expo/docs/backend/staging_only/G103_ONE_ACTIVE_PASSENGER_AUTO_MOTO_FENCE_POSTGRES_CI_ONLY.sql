@@ -13,7 +13,7 @@ DO $g$ BEGIN
  IF EXISTS (
   SELECT 1 FROM public.mobility_stage_auto_demo_trips a
   JOIN public.mobility_stage_g100_moto_trips m
-   ON m.passenger_id=a.passenger_id AND m.status='searching'
+   ON m.passenger_id=a.passenger_id AND m.status IN ('searching','accepted','arriving','in_progress')
   WHERE a.status IN ('searching','accepted','arriving','in_progress')
  ) THEN RAISE EXCEPTION 'G103 refused existing cross-service conflict'; END IF;
 END $g$;
@@ -34,7 +34,7 @@ BEGIN
   IF NEW.status NOT IN ('searching','accepted','arriving','in_progress')
   THEN RETURN NEW; END IF;
  ELSIF TG_TABLE_NAME='mobility_stage_g100_moto_trips' THEN
-  IF NEW.status<>'searching' THEN RETURN NEW; END IF;
+  IF NEW.status NOT IN ('searching','accepted','arriving','in_progress') THEN RETURN NEW; END IF;
  ELSE
   RAISE EXCEPTION 'G103 invalid booking table' USING ERRCODE='P1031';
  END IF;
@@ -58,7 +58,7 @@ BEGIN
   USING ERRCODE='P1031'; END IF;
  IF TG_TABLE_NAME='mobility_stage_auto_demo_trips' THEN
   SELECT EXISTS(SELECT 1 FROM public.mobility_stage_g100_moto_trips m
-   WHERE m.passenger_id=NEW.passenger_id AND m.status='searching')
+   WHERE m.passenger_id=NEW.passenger_id AND m.status IN ('searching','accepted','arriving','in_progress'))
   INTO booking_exists;
  ELSE
   SELECT EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips a
