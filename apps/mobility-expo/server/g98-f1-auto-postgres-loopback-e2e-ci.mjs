@@ -498,7 +498,8 @@ async function main(){
   assert.equal(bQuote.ok,true,JSON.stringify(bQuote));
   const quote=bridge.snapshot().autoPrequote.quote;
   assert.ok(quote&&uuid.test(quote.quoteId));
-  assert.equal((await bridge.loadAutoSubsidy()).ok,true);
+  const subsidyCheck=await bridge.loadAutoSubsidy();
+  assert.equal(subsidyCheck.ok,true,JSON.stringify(subsidyCheck));
   const discount=bridge.snapshot().autoPrequote.subsidy;
   assert.equal(discount.commissionBps,1500);
   assert.equal(discount.subsidyBps,1000);
