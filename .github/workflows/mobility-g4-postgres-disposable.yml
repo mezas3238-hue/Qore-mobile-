@@ -633,6 +633,10 @@ jobs:
 
       - name: G103 two real PostgreSQL sessions race AUTO versus MOTO and retry after winner cancellation
         run: python3 apps/mobility-expo/server/g103-cross-service-two-postgres-sessions-ci.py
+      - name: G118 install MOTO legal-fenced state and real PostgreSQL Driver timeline
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_POSTGRES_CI_ONLY.sql
+      - name: G118 assert private booking, unmintable municipal gate and durable MOTO Driver state
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G109 end-to-end Driver AUTO legacy QA lifecycle, Rider consistency and slot release
         run: node apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs
       - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
