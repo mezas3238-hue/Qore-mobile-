@@ -8,8 +8,16 @@ import {getNativeG101RecoveryStore} from './NativeG101RecoveryStore';
 import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
 import {createF1AuthorizedQaHttpOptions} from './domain/f1-authorized-qa-http-options.mjs';
 import {createF1AuthorizedHistoryRecoveryOptions} from './domain/f1-authorized-history-recovery-options.mjs';
+import {createPassengerRideIntent} from './domain/passenger-ride-intent.mjs';
+import type {PassengerRideIntent} from './domain/passenger-ride-intent.mjs';
 
 const ExperienceContext=createContext<ClientExperience|null>(null);
+const PassengerRideIntentContext=createContext<PassengerRideIntent|null>(null);
+export function usePassengerRideIntent():PassengerRideIntent{
+ const value=useContext(PassengerRideIntentContext);
+ if(!value)throw Error('Ruta de pasajeros requiere ClientRuntimeProvider');
+ return value;
+}
 const NativeAuthContext=createContext<NativePassengerAuth|null>(null);
 export const useNativePassengerAuth=()=>useContext(NativeAuthContext);
 // Preferencia de presentación en RAM: no guarda identidades, rutas ni tokens.
@@ -93,12 +101,23 @@ export function ClientRuntimeProvider({children,experience}:{
   })();
   return ()=>{active=false;};
  },[client,nativeAuth,qaHttp,g95RecoveryStore,motoG101,motoRecoveryStore]);
+ // Solo RAM, nunca enlaces, AsyncStorage ni campos de URL con direcciones.
+ const passengerRideIntent=useMemo(()=>createPassengerRideIntent(),[]);
+ useEffect(()=>{
+  let previous=client.snapshot().privateViewRevision;
+  return client.subscribe(()=>{
+   const current=client.snapshot().privateViewRevision;
+   if(current!==previous){passengerRideIntent.clear();previous=current;}
+  });
+ },[client,passengerRideIntent]);
  const [simpleMode,setSimpleMode]=useState(false);
  const simplePreferences=useMemo(()=>({simpleMode,setSimpleMode}),[simpleMode]);
  return <ExperienceContext.Provider value={client}>
-  <NativeAuthContext.Provider value={nativeAuth}>
-   <SimpleModeContext.Provider value={simplePreferences}>{children}</SimpleModeContext.Provider>
-  </NativeAuthContext.Provider>
+  <PassengerRideIntentContext.Provider value={passengerRideIntent}>
+   <NativeAuthContext.Provider value={nativeAuth}>
+    <SimpleModeContext.Provider value={simplePreferences}>{children}</SimpleModeContext.Provider>
+   </NativeAuthContext.Provider>
+  </PassengerRideIntentContext.Provider>
  </ExperienceContext.Provider>;
 }
 export function useClientView(){

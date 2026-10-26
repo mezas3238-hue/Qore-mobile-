@@ -1,17 +1,32 @@
 /** Explicit AUTO/MOTO passenger choice, without mixing cargo/merchant modes. */
 import React,{useState} from 'react';
 import {router} from 'expo-router';
-import {ScrollView,Text,View} from 'react-native';
+import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
+import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
+import {reviewLocalRouteDraft} from '../src/domain/client-route-editor.mjs';
 import {selectPassengerVehicle} from '../src/domain/passenger-vehicle-choice.mjs';
 import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.mjs';
 
 export default function ChoosePassengerVehicle(){
+ const {view}=useClientView();
+ const intent=usePassengerRideIntent();
  const [vehicle,setVehicle]=useState<PassengerVehicleKind|null>(null);
+ const [origin,setOrigin]=useState('');
+ const [destination,setDestination]=useState('');
+ const [feedback,setFeedback]=useState('');
  const choice=selectPassengerVehicle(vehicle);
+ const routeReview=reviewLocalRouteDraft({origin,destination,stops:[],revision:0});
  function continueToRide(){
-  // Navigates to existing independent flows. NEVER triggers POST or booking.
-  if(!choice.ok)return;
+  // Navegar no cotiza, reserva ni inicia un despacho.
+  if(!choice.ok||!routeReview.ok)return;
+  const saved=intent.save({
+   ownerRevision:view.privateViewRevision,kind:choice.kind,
+   origin:routeReview.route.origin,destination:routeReview.route.destination
+  });
+  if(!saved.ok){setFeedback('La ruta no pudo prepararse. Revisá las direcciones.');return;}
+  setFeedback('');
+  // Solo route names: NUNCA se incluyen direcciones en URL, analytics o logs.
   if(choice.kind==='AUTO')router.push('/viaje');
   else if(choice.kind==='MOTO')router.push('/moto');
  }
@@ -33,13 +48,30 @@ export default function ChoosePassengerVehicle(){
    <Text style={styles.small}>Elegir un vehículo no garantiza un conductor disponible, cobertura, precio ni reserva. La tarifa final en guaraníes debe venir del servidor autorizado.</Text>
   </Panel>
   <Panel>
-   <Text accessibilityRole="header" style={styles.heading}>2 · Continuá con tu viaje</Text>
+   <Text accessibilityRole="header" style={styles.heading}>2 · Origen y destino</Text>
+   <Text style={styles.text}>¿Dónde te buscamos?</Text>
+   <TextInput style={styles.field} value={origin} maxLength={120}
+    accessibilityLabel="Origen de transporte" placeholder="Ej.: Centro de Asunción"
+    onChangeText={value=>{setOrigin(value);setFeedback('');}}/>
+   <Text style={styles.text}>¿A dónde vas?</Text>
+   <TextInput style={styles.field} value={destination} maxLength={120}
+    accessibilityLabel="Destino de transporte" placeholder="Ej.: Villa Morra"
+    onChangeText={value=>{setDestination(value);setFeedback('');}}/>
+   <Action secondary label="Intercambiar origen y destino"
+    onPress={()=>{setOrigin(destination);setDestination(origin);setFeedback('');}}/>
+   <Text style={styles.small}>La ruta se mantiene temporalmente en este teléfono y se completa en el formulario elegido. No hay verificación GPS, conductor ni precio todavía.</Text>
+  </Panel>
+  <Panel>
+   <Text accessibilityRole="header" style={styles.heading}>3 · Continuá con tu viaje</Text>
    <Text accessibilityLiveRegion="polite" style={styles.text}>
-    {choice.ok?'Seleccionaste '+choice.label+'. Revisarás origen, destino y disponibilidad en el recorrido correspondiente.':'Seleccioná AUTO o MOTO para continuar.'}
+    {choice.ok?(routeReview.ok
+     ?'Seleccionaste '+choice.label+'. Tu ruta está revisada localmente; continuá para cotizar solo si el servidor lo permite.'
+     :'Seleccionaste '+choice.label+'. Indicá un origen y destino diferentes y válidos.'):'Seleccioná AUTO o MOTO para continuar.'}
    </Text>
    <Action large label={choice.ok?'Continuar con '+choice.kind:'Primero elegí un vehículo'}
-    disabled={!choice.ok} onPress={continueToRide}
+    disabled={!choice.ok||!routeReview.ok} onPress={continueToRide}
     hint="Abre el formulario del vehículo elegido, sin reservar ni cobrar"/>
+   {feedback!==''&&<Text accessibilityRole="alert" style={styles.small}>{feedback}</Text>}
    <Action secondary label="Volver al inicio" onPress={()=>router.back()}/>
   </Panel>
  </ScrollView>;

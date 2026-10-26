@@ -3,22 +3,23 @@ import React,{useState} from 'react';
 import * as Crypto from 'expo-crypto';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
-import {useClientView} from '../src/ClientRuntime';
+import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewMotoRideDraft} from '../src/domain/moto-ride-draft.mjs';
 
 export default function PassengerMoto(){
  const {client,view}=useClientView();
  // Remount on subject/JWT revision: never preserve a previous rider's route.
- return <PrivateMoto key={view.privateViewRevision} authenticated={view.authenticated}
-  client={client} moto={view.motoPassenger}/>;
+ return <PrivateMoto key={view.privateViewRevision} revision={view.privateViewRevision}
+  authenticated={view.authenticated} client={client} moto={view.motoPassenger}/>;
 }
 type Client=ReturnType<typeof useClientView>['client'];
 type MotoView=ReturnType<typeof useClientView>['view']['motoPassenger'];
-function PrivateMoto({authenticated,client,moto}:{
- authenticated:boolean;client:Client;moto:MotoView;
+function PrivateMoto({authenticated,client,moto,revision}:{
+ authenticated:boolean;client:Client;moto:MotoView;revision:number;
 }){
- const [origin,setOrigin]=useState('');
- const [destination,setDestination]=useState('');
+ const rideIntent=usePassengerRideIntent();
+ const [origin,setOrigin]=useState(()=>rideIntent.read(revision,'MOTO')?.origin??'');
+ const [destination,setDestination]=useState(()=>rideIntent.read(revision,'MOTO')?.destination??'');
  const [safetyAcknowledged,setSafetyAcknowledged]=useState(false);
  const [reviewed,setReviewed]=useState<ReturnType<typeof reviewMotoRideDraft>|null>(null);
  const [feedback,setFeedback]=useState('');

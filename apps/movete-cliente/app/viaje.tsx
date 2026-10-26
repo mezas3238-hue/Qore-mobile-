@@ -4,7 +4,7 @@ import * as Crypto from 'expo-crypto';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
 import {BookingRecoveryPanel} from '../src/BookingRecoveryPanel';
-import {useClientView} from '../src/ClientRuntime';
+import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
 import {validateRideDraft} from '../src/domain/capabilities.mjs';
 import {prepareLocalRideRequest} from '../src/domain/client-request-preparation.mjs';
@@ -28,7 +28,15 @@ export default function RideRequest(){
  return <PrivateRideForm key={view.privateViewRevision} client={client} view={view}/>;
 }
 function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnapshot}){
- const [route,setRoute]=useState<LocalRouteDraft>(()=>emptyLocalRouteDraft());
+ const rideIntent=usePassengerRideIntent();
+ const [route,setRoute]=useState<LocalRouteDraft>(()=>{
+  const saved=rideIntent.read(view.privateViewRevision,'AUTO');
+  if(!saved)return emptyLocalRouteDraft();
+  const first=editLocalRouteDraft(emptyLocalRouteDraft(),{type:'origin',value:saved.origin});
+  if(!first.ok)return emptyLocalRouteDraft();
+  const second=editLocalRouteDraft(first.route,{type:'destination',value:saved.destination});
+  return second.ok?second.route:emptyLocalRouteDraft();
+ });
  const pickup=route.origin,destination=route.destination;
  const [service,setService]=useState<Service>('economico');
  const [validated,setValidated]=useState(false);
