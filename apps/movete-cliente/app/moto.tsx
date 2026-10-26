@@ -170,7 +170,7 @@ function PrivateMoto({authenticated,client,moto}:{
         'No se pudo limpiar la clave segura. No se admite otra reserva.');
       }finally{setSending(false);}
      })();}}/>
-   </View>
+   </View>}
    {feedback!==''&&<Text accessibilityRole="alert" style={styles.small}>{feedback}</Text>}
    <Text style={styles.small}>MOTO no está disponible comercialmente. G100 solo tiene contratos SQL de laboratorio; sin API HTTPS ni mapas, asignación, ETA, KYC del motorista o pagos reales.</Text>
   </Panel>
