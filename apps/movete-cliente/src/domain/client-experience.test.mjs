@@ -545,7 +545,7 @@ test('jamás descarta requestKey tras timeout: riesgo de doble despacho',async()
  const api=f.api;await api.refreshSession();api.prepareRide(ride);
  assert.equal((await api.submit()).code,'NETWORK_OR_TIMEOUT');
  assert.equal(api.discardPreparedMutation({operation:'rideRequest',requestKey:key}).code,'NOT_UNSENT_REQUEST');
- assert.equal(api.snapshot().mutation.phase,'retryable');
+ assert.equal(api.snapshot().mutation.phase,'failed');
  assert.equal(api.snapshot().mutation.requestKey,key);
 });
 test('HTTP 201 sin recibo certificado mantiene reserva en estado incierto',async()=>{

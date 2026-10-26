@@ -146,8 +146,8 @@ test('NUNCA reemplaza requestKey mientras el servidor pudo procesar un timeout',
  c.prepare({operation:'rideRequest',body:ride,subject});
  assert.equal((await c.submit()).code,'NETWORK_OR_TIMEOUT');
  assert.equal(c.prepare({operation:'rideRequest',body:{...ride,
-  requestKey:'123e4567-e89b-42d3-a456-426614174023'},subject}).code,'EXPLICIT_RETRY_REQUIRED');
- assert.equal(c.prepare({operation:'deliveryRequest',body:{...ride},subject}).code,'EXPLICIT_RETRY_REQUIRED');
+  requestKey:'123e4567-e89b-42d3-a456-426614174023'},subject}).code,'RECONCILE_BEFORE_NEW_REQUEST');
+ assert.equal(c.prepare({operation:'deliveryRequest',body:{...ride},subject}).code,'RECONCILE_BEFORE_NEW_REQUEST');
  assert.equal((await c.retry()).code,'NO_READY_REQUEST');
  assert.deepEqual(requests,[key]);
 });
