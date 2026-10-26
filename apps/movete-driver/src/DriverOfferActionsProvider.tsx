@@ -12,7 +12,7 @@ type State=Omit<DriverOfferActionsSnapshot,'phase'>&{
 };
 type ContextValue={
  state:State;enabled:boolean;
- decide:(offerId:string,action:OfferAction)=>Promise<void>;
+ decide:(offerId:string,action:OfferAction)=>Promise<DriverOfferDecisionStatus|null>;
  reconcilePending:(offerId:string)=>Promise<void>;
 };
 const OFF:State=Object.freeze({phase:'not-configured',
@@ -71,8 +71,10 @@ export function DriverOfferActionsProvider({
   },
   decide:async(offerId,action)=>{
    // No actions when the workspace is offline/reauthenticating.
-   if(workspace.phase!=='connected'||!workspace.currentLicenseApproved)return;
-   await controller?.decide({offerId,action});
+   if(workspace.phase!=='connected'||!workspace.currentLicenseApproved)return null;
+   const snapshot=await controller?.decide({offerId,action});
+   // Only return this exact operation's state, never a stale UI snapshot.
+   return snapshot?.decisions.find(d=>d.offerId===offerId&&d.action===action)??null;
   }
  }),[state,controller,authAdapter,workspace]);
  return <Context.Provider value={context}>{children}</Context.Provider>;

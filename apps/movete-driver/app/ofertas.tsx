@@ -6,6 +6,7 @@ import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
 import {verifyAcceptedDriverAutoResume} from '../src/domain/driver-accepted-ride-resume.mjs';
+import {acceptAndRecoverDriverAuto} from '../src/domain/driver-auto-accept-flow.mjs';
 import type {DriverOfferDecisionStatus} from '../src/domain/driver-offer-actions.mjs';
 import {router,useFocusEffect} from 'expo-router';
 
@@ -44,6 +45,26 @@ export default function DriverOffers(){
    foreground.remove();
   };
  },[poll]));
+ async function acceptVerifiedAutoOffer(offerId:string){
+  // Exactly one user-initiated POST. Navigation requires a second private,
+  // owner-scoped SQL read matching the accepted offer's serviceId.
+  if(resumeLock.current||!enabled||!currentTrip.enabled||
+   actions.phase!=='ready'||state.phase!=='connected'||
+   !state.currentLicenseApproved||kyc.snapshot?.state!=='READY_QA'||
+   kyc.snapshot?.accountBlocked!==false)return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const result=await acceptAndRecoverDriverAuto({
+    offerId,decide,recoverCurrent:currentTrip.refresh
+   });
+   if(result.ok)router.push({pathname:'/viaje',
+    params:{tripId:result.tripId}});
+   else if(result.reason==='UNVERIFIED_ASSIGNMENT')
+    setResumeMessage('La decisión puede estar confirmada, pero no se verificó la asignación actual en el servidor. Consultá tu viaje antes de continuar; no se repetirá la aceptación.');
+   else if(result.reason==='NOT_CONFIRMED')
+    setResumeMessage('No se confirmó la aceptación. Consultá el comprobante de la oferta; no se enviará otra aceptación automáticamente.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
  async function continueAcceptedAuto(decision:DriverOfferDecisionStatus){
   // G4 receipt alone cannot unlock the trip. G106 independently verifies
   // this exact ID against the currently authenticated Driver in PostgreSQL.
@@ -82,7 +103,9 @@ export default function DriverOffers(){
        const allowed=enabled&&actions.phase==='ready'&&
         state.currentLicenseApproved&&kyc.snapshot?.state==='READY_QA'&&
         kyc.snapshot?.accountBlocked===false&&actions.offers.some(x=>x.offerId===offer.offerId)&&
-        !decision&&!actions.busy&&offer.expiresAtMs>clock+3000;
+        !decision&&!actions.busy&&!resuming&&
+        (offer.kind!=='AUTO_RIDE'||currentTrip.enabled)&&
+        offer.expiresAtMs>clock+3000;
        return <>
         {decision&&<Text style={styles.text}>
          {decision.phase==='confirmed'?'Decisión confirmada por el servidor de pruebas.':
@@ -107,7 +130,8 @@ export default function DriverOffers(){
           onPress={()=>{void reconcilePending(offer.offerId);}}/>}
         {allowed&&<>
          <Action label="Aceptar oferta de prueba" onPress={()=>{
-          void decide(offer.offerId,'accept');
+          if(offer.kind==='AUTO_RIDE')void acceptVerifiedAutoOffer(offer.offerId);
+          else void decide(offer.offerId,'accept');
          }}/>
          <Action label="Rechazar oferta de prueba" secondary onPress={()=>{
           void decide(offer.offerId,'decline');
