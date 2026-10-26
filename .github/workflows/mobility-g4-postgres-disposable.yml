@@ -607,7 +607,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: mezas3238-hue/Qore-mobile-
-          ref: 5aa117dda5af35ff2d934d4b926a8faae0704791
+          ref: d5ec636aa1e2ecbc84164d1cb1d4d040b0580fd6
           path: ci-b-client
           persist-credentials: false
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation
@@ -619,6 +619,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G100_MOTO_PASSENGER_QUOTE_BOOK_CANCEL_LEDGER_POSTGRES_CI_ONLY.sql
       - name: G100 assert MOTO passenger 12-10-2%, cancel reversal, actor privacy and separation from AUTO/DELIVERY
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G100_MOTO_PASSENGER_QUOTE_BOOK_CANCEL_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G116 prove Owner commission changes, frozen prior prices, audit and financial safety
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G116_OWNER_CONFIGURABLE_COMMISSION_ASSERT_POSTGRES_CI_ONLY.sql
 
       - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
         run: node apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs
