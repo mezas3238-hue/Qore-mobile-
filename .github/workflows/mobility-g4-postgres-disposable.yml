@@ -607,7 +607,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: mezas3238-hue/Qore-mobile-
-          ref: 8e5fc26ec533f3f60ba4fb7666c2c72d07068289
+          ref: 067fe837bcb8285721554cfde1710f9ba76476f2
           path: ci-b-client
           persist-credentials: false
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation
@@ -622,6 +622,8 @@ jobs:
 
       - name: G116 prove Owner commission changes, frozen prior prices, audit and financial safety
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G116_OWNER_CONFIGURABLE_COMMISSION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
+        run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs
 
       - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
         run: node apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs
