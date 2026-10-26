@@ -3,7 +3,7 @@
  * Server derives actor from verified Auth; no client supplied actor or tripId.
  * No GPS, payment, Passenger PII, commercial authority or server default.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const PATH='/v1/staging/driver/trips/current';
 const ACTIVE=new Set(['accepted','arriving','in_progress']);

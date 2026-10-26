@@ -1,6 +1,6 @@
 /** Server-only PostgreSQL projection; the G3 unique active-Driver index
  * rejects competing assignments. Never select Passenger or location data. */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTIVE=['accepted','arriving','in_progress'];
 export function createG106DriverCurrentTripRepository({db}={}){
  if(!db||typeof db.from!=='function')
