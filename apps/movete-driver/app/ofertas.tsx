@@ -1,9 +1,12 @@
-import React,{useCallback,useState} from 'react';
+import React,{useCallback,useRef,useState} from 'react';
 import {AppState,ScrollView,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
+import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
+import {verifyAcceptedDriverAutoResume} from '../src/domain/driver-accepted-ride-resume.mjs';
+import type {DriverOfferDecisionStatus} from '../src/domain/driver-offer-actions.mjs';
 import {router,useFocusEffect} from 'expo-router';
 
 /**
@@ -15,6 +18,10 @@ export default function DriverOffers(){
  const {state,refresh,poll}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
  const {state:actions,enabled,decide,reconcilePending}=useDriverOfferActions();
+ const currentTrip=useDriverCurrentTrip();
+ const resumeLock=useRef(false);
+ const [resuming,setResuming]=useState(false);
+ const [resumeMessage,setResumeMessage]=useState('');
  const [clock,setClock]=useState(()=>Date.now());
  // The server suggests 5s polling for short-lived private offers. Refresh
  // only while this screen is focused AND the device is in foreground.
@@ -37,6 +44,21 @@ export default function DriverOffers(){
    foreground.remove();
   };
  },[poll]));
+ async function continueAcceptedAuto(decision:DriverOfferDecisionStatus){
+  // G4 receipt alone cannot unlock the trip. G106 independently verifies
+  // this exact ID against the currently authenticated Driver in PostgreSQL.
+  if(resumeLock.current||!currentTrip.enabled||actions.phase!=='ready'||
+   state.phase!=='connected')return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const result=await verifyAcceptedDriverAutoResume({
+    decision,recoverCurrent:currentTrip.refresh
+   });
+   if(result.ok)router.push({pathname:'/viaje',
+    params:{tripId:result.tripId}});
+   else setResumeMessage('El servidor no confirmó un viaje AUTO activo asignado a tu cuenta. Consultá nuevamente antes de continuar.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
  const available=state.phase==='connected'?
   state.offers.filter(item=>item.expiresAtMs>clock+3000):[];
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
@@ -68,6 +90,11 @@ export default function DriverOffers(){
           decision.phase==='uncertain'?'Resultado incierto: el servidor podría haber guardado la decisión. No volvemos a enviarla automáticamente. Actualizá el estado y consultá soporte.':
           'No se pudo verificar una clave segura para esta decisión.'}
         </Text>}
+        {decision?.phase==='confirmed'&&decision.action==='accept'&&
+         decision.kind==='AUTO_RIDE'&&enabled&&currentTrip.enabled&&
+         <Action label={resuming?'Verificando viaje…':'Verificar y continuar mi viaje'}
+          secondary disabled={resuming||actions.phase!=='ready'}
+          onPress={()=>{void continueAcceptedAuto(decision);}}/>}
         {decision?.phase==='uncertain'&&enabled&&
          state.phase==='connected'&&<Action
           label="Consultar comprobante del servidor"
@@ -111,10 +138,10 @@ export default function DriverOffers(){
        d.phase==='sending'?' consultando':' bloqueado'}
      </Text>
      {d.phase==='confirmed'&&d.action==='accept'&&
-      d.kind==='AUTO_RIDE'&&enabled&&<Action
-       label="Abrir estado del viaje"
-       secondary onPress={()=>router.push({pathname:'/viaje',
-        params:{tripId:d.serviceId}})}/>}
+      d.kind==='AUTO_RIDE'&&enabled&&currentTrip.enabled&&<Action
+       label={resuming?'Verificando viaje…':'Verificar y continuar mi viaje'}
+       secondary disabled={resuming||actions.phase!=='ready'}
+       onPress={()=>{void continueAcceptedAuto(d);}}/>}
      {d.phase==='confirmed'&&d.action==='accept'&&
       d.kind==='DELIVERY'&&enabled&&<Action
        label="Abrir custodia de envío"
@@ -125,6 +152,9 @@ export default function DriverOffers(){
       disabled={actions.busy}
       onPress={()=>{void reconcilePending(d.offerId);}}/>}
     </View>)}
+  </Panel>}
+  {resumeMessage!==''&&<Panel>
+   <Text accessibilityRole="alert" style={styles.text}>{resumeMessage}</Text>
   </Panel>}
   <Panel>
    <Text style={styles.heading}>Seguridad de las asignaciones</Text>

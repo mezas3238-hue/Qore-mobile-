@@ -11,7 +11,7 @@ type State=Readonly<{
  trip:DriverCurrentTrip|null;
 }>;
 type ContextValue=Readonly<{
- state:State;enabled:boolean;refresh:()=>Promise<void>;
+ state:State;enabled:boolean;refresh:()=>Promise<DriverCurrentTrip|null>;
 }>;
 const OFF:State=Object.freeze({phase:'not-configured',trip:null});
 const SIGNED_OUT:State=Object.freeze({phase:'signed-out',trip:null});
@@ -32,19 +32,21 @@ export function DriverCurrentTripProvider({
  const refresh=useCallback(async()=>{
   const sequence=++generation.current;
   setState({phase:enabled?'loading':'not-configured',trip:null});
-  if(!authAdapter||!reader)return;
+  if(!authAdapter||!reader)return null;
   try{
    const session=await authAdapter.getSession();
-   if(generation.current!==sequence)return;
-   if(!session){setState(SIGNED_OUT);return;}
+   if(generation.current!==sequence)return null;
+   if(!session){setState(SIGNED_OUT);return null;}
    if(session.role!=='driver'){
-    setState({phase:'authorization-required',trip:null});return;
+    setState({phase:'authorization-required',trip:null});return null;
    }
    const trip=await reader.readCurrent({accessToken:session.accessToken});
-   if(generation.current!==sequence)return;
+   if(generation.current!==sequence)return null;
    setState({phase:trip?'active':'none',trip});
+   return trip;
   }catch{
    if(generation.current===sequence)setState({phase:'offline',trip:null});
+   return null;
   }
  },[authAdapter,reader,enabled]);
  useEffect(()=>{
