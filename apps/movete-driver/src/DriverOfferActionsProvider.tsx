@@ -8,6 +8,8 @@ import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 import {useDriverWorkspace} from './DriverWorkspaceProvider';
 import {useDriverKycExpiry} from './DriverKycExpiryProvider';
 import type {DriverPrivateDeliveryDetail} from './domain/driver-private-delivery-detail.mjs';
+import {verifyFreshDeliveryAccept}
+ from './domain/driver-delivery-accept-preflight.mjs';
 
 type State=Omit<DriverOfferActionsSnapshot,'phase'>&{
  phase:DriverOfferActionsSnapshot['phase']|'not-configured';
@@ -138,6 +140,19 @@ export function DriverOfferActionsProvider({
    preflightLock.current=true; // closes rapid double-tap during KYC GET
    try{
     if(action==='accept'&&!await kyc.verifyForOffer())return null;
+    const candidate=latestWorkspace.current.offers.find(x=>x.offerId===offerId);
+    if(action==='accept'&&candidate?.kind==='DELIVERY'){
+     const proof=await verifyFreshDeliveryAccept({
+      offer:candidate,preview:detail.item,
+      getSession:()=>authAdapter?.getSession(),
+      readDetail:qaAdapters?.readDeliveryDetail,
+      getWorkspace:()=>latestWorkspace.current
+     });
+     if(!proof.ok)return null;
+    }
+    // If a delivery disappeared mid-preflight, do not accidentally post
+    // by relying on an earlier component render's offer snapshot.
+    if(action==='accept'&&!candidate)return null;
     const snapshot=await controller?.decide({offerId,action});
     return snapshot?.decisions.find(d=>d.offerId===offerId&&d.action===action)??null;
    }finally{preflightLock.current=false;}
