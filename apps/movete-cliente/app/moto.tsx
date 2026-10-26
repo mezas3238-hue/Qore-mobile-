@@ -25,8 +25,19 @@ function PrivateMoto({authenticated,client,moto}:{
  const [sending,setSending]=useState(false);
  const [confirmBook,setConfirmBook]=useState(false);
  const [confirmCancel,setConfirmCancel]=useState(false);
+ // A reviewed route must not diverge from a priced or possibly booked quote.
+ const canEdit=moto.phase==='idle'&&!sending;
+ const quoteExpired=Boolean(moto.quote&&moto.quote.expiresAt<=Date.now());
+ function discardQuote(){
+  if(sending)return;
+  const result=client.discardMotoQuote();
+  if(result.ok){
+   setReviewed(null);setConfirmBook(false);
+   setFeedback('Cotización MOTO descartada sin crear una reserva. Podés cambiar la ruta o elegir AUTO.');
+  }else setFeedback('No se puede borrar una reserva enviada o de resultado incierto. Recuperá su estado antes de continuar.');
+ }
  async function quoteMoto(){
-  if(!authenticated||!moto.contractReady||!reviewed?.ok||sending)return;
+  if(!authenticated||!moto.contractReady||!reviewed?.ok||sending||!canEdit)return;
   setSending(true);setFeedback('');
   try{
    const result=await client.requestMotoQuote({
@@ -64,6 +75,7 @@ function PrivateMoto({authenticated,client,moto}:{
   }finally{setSending(false);}
  }
  function edit(setter:(value:string)=>void,value:string){
+  if(!canEdit)return;
   setter(value);setReviewed(null);
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
@@ -75,11 +87,11 @@ function PrivateMoto({authenticated,client,moto}:{
   </View>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Origen y destino</Text>
-   <TextInput style={styles.field} value={origin} maxLength={120}
+   <TextInput style={styles.field} value={origin} maxLength={120} editable={canEdit}
     accessibilityLabel="Origen del viaje MOTO"
     placeholder="¿Dónde te buscamos?"
     onChangeText={value=>edit(setOrigin,value)}/>
-   <TextInput style={styles.field} value={destination} maxLength={120}
+   <TextInput style={styles.field} value={destination} maxLength={120} editable={canEdit}
     accessibilityLabel="Destino del viaje MOTO"
     placeholder="¿A dónde vas?"
     onChangeText={value=>edit(setDestination,value)}/>
@@ -89,13 +101,13 @@ function PrivateMoto({authenticated,client,moto}:{
    <Text accessibilityRole="header" style={styles.heading}>Seguridad del pasajero</Text>
    <Text style={styles.text}>El servicio requiere motociclista autorizado, documentación y seguro válidos, casco homologado y verificación de las condiciones legales de cada zona. No garantizamos cobertura ni disponibilidad.</Text>
    <Action label={safetyAcknowledged?'Requisitos de seguridad: leídos':'Leer y reconocer requisitos de seguridad'}
-    selected={safetyAcknowledged} secondary={!safetyAcknowledged}
+    selected={safetyAcknowledged} secondary={!safetyAcknowledged} disabled={!canEdit}
     onPress={()=>{setSafetyAcknowledged(!safetyAcknowledged);setReviewed(null);}}/>
    <Text style={styles.small}>Reconocer estas condiciones no sustituye la comprobación legal del servidor, KYC, permiso de pasajeros o seguro.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Revisá tu ruta MOTO</Text>
-   <Action label="Revisar ruta local (sin reservar)" onPress={()=>
+   <Action label="Revisar ruta local (sin reservar)" disabled={!canEdit} onPress={()=>
     setReviewed(reviewMotoRideDraft({origin,destination,safetyAcknowledged}))}/>
    {reviewed&&<View accessibilityLiveRegion="polite">
     {reviewed.ok?<Text style={styles.text}>Origen: {reviewed.origin}\nDestino: {reviewed.destination}\nModalidad: MOTO pasajeros (MOTO_RIDE). Ruta revisada solo en este teléfono.</Text>:
@@ -108,25 +120,30 @@ function PrivateMoto({authenticated,client,moto}:{
     <Action label={sending?'Consultando…':'Cotizar MOTO con servidor'} disabled={sending||!reviewed?.ok||moto.phase!=='idle'}
      busy={sending} onPress={()=>{void quoteMoto();}}/>}
    {moto.quote&&<View>
+    {quoteExpired&&<Text accessibilityRole="alert" style={styles.small}>Esta cotización ya venció. Descartala y pedí una nueva antes de contratar.</Text>}
     <Text style={styles.text}>Tarifa original: {moto.quote.originalFareGs.toLocaleString('es-PY')} Gs.</Text>
     <Text style={styles.text}>Subsidio al cliente (10 %): {moto.quote.customerSubsidyGs.toLocaleString('es-PY')} Gs.</Text>
     <Text style={styles.text}>Total para el cliente: {moto.quote.customerPaysGs.toLocaleString('es-PY')} Gs.</Text>
     <Text style={styles.small}>Comisión nominal 12 %, retención plataforma 2 %. Cifras recibidas y comprobadas contra el servidor en QA, no calculadas como cotización local.</Text>
-    {moto.phase==='quoted'&&<Action label="Aceptar esta cotización MOTO" disabled={sending}
+    {moto.phase==='quoted'&&<Action label="Aceptar esta cotización MOTO" disabled={sending||quoteExpired}
      onPress={()=>{
       const result=client.acceptMotoQuote({quoteId:moto.quote!.quoteId,customerPaysGs:moto.quote!.customerPaysGs});
       setFeedback(result.ok?'Cotización aceptada; confirmá expresamente la reserva.':'La cotización cambió o venció.');
      }}/>}
     {moto.phase==='accepted'&&!confirmBook&&<Action label="Revisar reserva MOTO"
-     disabled={sending} onPress={()=>setConfirmBook(true)}/>}
+     disabled={sending||quoteExpired} onPress={()=>setConfirmBook(true)}/>}
     {moto.phase==='accepted'&&confirmBook&&<View>
      <Text style={styles.text}>¿Confirmás pedir MOTO por el total mostrado? Ningún conductor está asignado todavía.</Text>
-     <Action label="Confirmar reserva MOTO QA" disabled={sending} busy={sending}
+     <Action label="Confirmar reserva MOTO QA" disabled={sending||quoteExpired} busy={sending}
       onPress={()=>{void bookMoto();}}/>
      <Action label="Volver sin reservar" secondary disabled={sending}
       onPress={()=>setConfirmBook(false)}/>
     </View>}
    </View>}
+   {['quoted','accepted'].includes(moto.phase)&&<Action secondary
+    label="Descartar cotización MOTO sin reservar" disabled={sending}
+    onPress={discardQuote}/>}
+   {moto.phase!=='idle'&&<Text style={styles.small}>La ruta y la aceptación de seguridad permanecen bloqueadas mientras exista una cotización o reserva. Descartá la cotización sin reservar para volver a editarlas.</Text>}
    {moto.phase==='booked'&&<View>
     <Text style={styles.text}>Reserva MOTO registrada en QA. Sin asignación de conductor ni ETA certificada.</Text>
     {!confirmCancel?<Action label="Solicitar cancelación MOTO" secondary
