@@ -180,3 +180,31 @@ test('R80: a quote cannot be discarded from a different or expired actor session
  assert.equal(f.app.discardQuote().code,'MOTO_QUOTE_NOT_DISCARDABLE');
  assert.equal(f.calls.length,1);
 });
+
+test('G116 MOTO Owner-configured 14 percent flows through quote, booking and cancellation without local pricing',async()=>{
+ const variableQuote={...quote,commissionBps:1400,
+  driverReceivesGs:9460,platformRetainsGs:440};
+ const variableBook={...booked,commissionBps:1400,
+  driverReceivesGs:9460,platformRetainsGs:440};
+ const variableCancel={...cancelled,commissionBps:1400,
+  driverReceivesGs:9460,platformRetainsGs:440};
+ const f=setup({quoteReply:variableQuote,bookReply:variableBook,
+  cancelReply:variableCancel});
+ await quoted(f);
+ const displayed=f.app.snapshot().quote;
+ assert.equal(displayed.commissionBps,1400);
+ assert.equal(displayed.subsidyBps,1000);
+ assert.equal(displayed.customerSubsidyGs,1100);
+ assert.equal(displayed.customerPaysGs,9900);
+ assert.equal(displayed.driverReceivesGs,9460);
+ assert.equal(displayed.platformRetainsGs,440);
+ assert.equal(f.app.acceptQuote({quoteId,customerPaysGs:9900}).ok,true);
+ assert.equal((await f.app.book({bookingKey})).ok,true);
+ assert.equal((await f.app.cancel({cancellationKey:cancelKey})).ok,true);
+ const tampered=setup({quoteReply:variableQuote,
+  bookReply:{...variableBook,commissionBps:1200}});
+ await quoted(tampered);
+ tampered.app.acceptQuote({quoteId,customerPaysGs:9900});
+ assert.equal((await tampered.app.book({bookingKey})).code,'MOTO_BOOK_READBACK_REQUIRED',
+  'A different commission cannot silently replace confirmed quote terms');
+});

@@ -135,3 +135,25 @@ test('R71 synthetic legacy G73 without G93 flag is separate from actual native d
  // This legacy behavior exists only for injected QA fixtures. The actual
  // native G73 build requires the distinct G93 flag, checked elsewhere.
 });
+
+test('G116 new AUTO Owner commission 18 percent preserves exact 10 percent Passenger subsidy',async()=>{
+ const dynamic={...subsidy(),commissionBps:1800,nominalCommissionGs:5400,
+  driverReceivesGs:24600,platformRetainsGs:2400};
+ const f=setup({preview:dynamic});
+ await quoted(f);
+ assert.equal((await f.c.loadAutoSubsidy()).ok,true);
+ const shown=f.c.snapshot().autoPrequote.subsidy;
+ assert.equal(shown.commissionBps,1800);
+ assert.equal(shown.subsidyBps,1000);
+ assert.equal(shown.customerSubsidyGs,3000);
+ assert.equal(shown.customerPaysGs,27000);
+ assert.equal(shown.driverReceivesGs,24600);
+ assert.equal(shown.platformRetainsGs,2400);
+ assert.equal(f.c.acceptAutoPrequote(consent).ok,true);
+ assert.equal((await f.c.reserveQuotedAuto({requestKey:bookingKey})).ok,true);
+ assert.equal(f.calls.filter(x=>x.path.endsWith('/book')).length,1);
+ const invalid=setup({preview:{...dynamic,platformRetainsGs:1500}});
+ await quoted(invalid);
+ assert.equal((await invalid.c.loadAutoSubsidy()).ok,false,
+  'Client rejects rate change not matched by server ledger amounts');
+});
