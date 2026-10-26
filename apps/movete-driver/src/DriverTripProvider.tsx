@@ -1,4 +1,4 @@
-import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
+import React,{createContext,useCallback,useContext,useEffect,useMemo,useState} from 'react';
 import {createDriverTripLifecycleController} from './domain/driver-trip-lifecycle.mjs';
 import type {DriverTripAdapters,DriverTripController,DriverTripSnapshot}
  from './domain/driver-trip-lifecycle.mjs';
@@ -6,7 +6,7 @@ import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 type TripContext={
  state:DriverTripSnapshot;enabled:boolean;
  open:(tripId:string)=>Promise<void>;
- refresh:()=>Promise<void>;advance:()=>Promise<void>;
+ refresh:()=>Promise<void>;poll:()=>Promise<void>;advance:()=>Promise<void>;
 };
 const OFF:DriverTripSnapshot=Object.freeze({
  phase:'signed-out',tripId:null,status:null,revision:null,
@@ -41,12 +41,14 @@ export function DriverTripProvider({
   void verify();
   return ()=>{active=false;epoch++;unsubscribe?.();stopSnapshot();controller.clear();};
  },[controller,authAdapter]);
+ const open=useCallback(async(tripId:string)=>{await controller?.open(tripId);},[controller]);
+ const refresh=useCallback(async()=>{await controller?.refresh();},[controller]);
+ const poll=useCallback(async()=>{await controller?.poll();},[controller]);
+ const advance=useCallback(async()=>{await controller?.advance();},[controller]);
  const ctx=useMemo<TripContext>(()=>({
   state,enabled:!!controller&&!!authAdapter,
-  open:async tripId=>{await controller?.open(tripId);},
-  refresh:async()=>{await controller?.refresh();},
-  advance:async()=>{await controller?.advance();}
- }),[state,controller,authAdapter]);
+  open,refresh,poll,advance
+ }),[state,controller,authAdapter,open,refresh,poll,advance]);
  return <Context.Provider value={ctx}>{children}</Context.Provider>;
 }
 export function useDriverTrip(){

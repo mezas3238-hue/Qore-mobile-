@@ -23,6 +23,8 @@ export type DriverTripController=Readonly<{
   DriverTripSnapshot;
  open:(tripId:string)=>Promise<DriverTripSnapshot>;
  refresh:()=>Promise<DriverTripSnapshot>;
+ /** Read-only foreground status sync, never a second mutation. */
+ poll:()=>Promise<DriverTripSnapshot>;
  advance:()=>Promise<DriverTripSnapshot>;
 }>;
 export declare function createDriverTripLifecycleController(

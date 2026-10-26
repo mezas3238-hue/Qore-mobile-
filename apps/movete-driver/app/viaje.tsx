@@ -1,6 +1,6 @@
-import React,{useEffect} from 'react';
-import {ScrollView,Text,View} from 'react-native';
-import {router,useLocalSearchParams} from 'expo-router';
+import React,{useCallback,useEffect} from 'react';
+import {AppState,ScrollView,Text,View} from 'react-native';
+import {router,useFocusEffect,useLocalSearchParams} from 'expo-router';
 import {Action,Panel,styles} from '../src/DriverUI';
 import {useDriverTrip} from '../src/DriverTripProvider';
 
@@ -22,12 +22,26 @@ const labels:Record<string,string>={
 export default function DriverTripScreen(){
  const args=useLocalSearchParams<{tripId?:string}>();
  const tripId=typeof args.tripId==='string'?args.tripId:null;
- const {state,enabled,open,refresh,advance}=useDriverTrip();
+ const {state,enabled,open,refresh,poll,advance}=useDriverTrip();
  useEffect(()=>{
   if(enabled&&tripId&&state.phase==='ready'){
    void open(tripId);
   }
  },[enabled,tripId,state.phase,open]);
+ // GET-only synchronization for passenger cancellation or other persisted
+ // lifecycle updates. The controller fences overlapping reads and unknown
+ // COMMITs. No background tracking, geolocation or automatic state mutation.
+ useFocusEffect(useCallback(()=>{
+  let focused=true;
+  const sync=()=>{if(focused&&AppState.currentState==='active')
+   void poll();};
+  sync();
+  const interval=setInterval(sync,5000);
+  const sub=AppState.addEventListener('change',s=>{
+   if(s==='active')sync();
+  });
+  return ()=>{focused=false;clearInterval(interval);sub.remove();};
+ },[poll]));
  const loaded=state.tripId===tripId;
  const canAct=enabled&&loaded&&state.phase==='active'&&
   state.nextEvent!==null&&!state.uncertain;
@@ -38,7 +52,7 @@ export default function DriverTripScreen(){
   </View>
   <Panel>
    <Text style={styles.heading}>Estado confirmado por el servidor</Text>
-   <Text style={styles.small}>No se muestran GPS, tiempos estimados, cobros ni datos del pasajero sin fuentes autorizadas.</Text>
+   <Text style={styles.small}>El estado del viaje se sincroniza con el servidor mientras esta pantalla esté abierta. Si el pasajero cancela, se bloquean las acciones pendientes. No se muestran GPS, tiempos estimados, cobros ni datos del pasajero sin fuentes autorizadas.</Text>
    {!enabled?
     <Text style={styles.text}>No hay backend HTTPS STAGING autorizado. Esta función está bloqueada.</Text>:
     !tripId?

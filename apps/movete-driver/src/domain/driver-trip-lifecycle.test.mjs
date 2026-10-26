@@ -182,3 +182,81 @@ test('G65 unverified server status fails closed instead of advancing',async()=>{
  assert.throws(()=>createDriverTripLifecycleController({liveEnabled:true,
   makeRequestKey:()=>key,readStatus:async()=>{},transition:async()=>{}}));
 });
+
+test('G65 foreground sync notices passenger cancellation and disables Driver commands',async()=>{
+ let statusValue='accepted',revision=2,posts=0,reads=0;
+ const ctl=createDriverTripLifecycleController({
+  makeRequestKey:()=>key,
+  readStatus:async()=>{reads++;return {tripId:trip,phase:statusValue,revision,
+   nextEvent:next[statusValue],qaOnly:true,productionEnabled:false};},
+  transition:async()=>{posts++;throw Error('No transition expected');}
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ assert.equal((await ctl.open(trip)).phase,'active');
+ statusValue='cancelled';revision=3;
+ const received=await ctl.poll();
+ assert.equal(received.phase,'terminal');
+ assert.equal(received.status,'cancelled');
+ assert.equal(received.nextEvent,null);
+ await ctl.advance();
+ await ctl.poll();
+ assert.equal(posts,0);
+ assert.equal(reads,2);
+});
+test('G65 quiet sync coalesces GETs and cannot overwrite later active navigation',async()=>{
+ let release,reads=0,send=0;
+ const pendingStatus=new Promise(resolve=>{release=resolve;});
+ const ctl=createDriverTripLifecycleController({
+  makeRequestKey:()=>key,
+  readStatus:async()=>{
+   reads++;
+   return reads===2?pendingStatus:{tripId:trip,phase:'accepted',revision:2,
+    nextEvent:'arrive',qaOnly:true,productionEnabled:false};
+  },
+  transition:async()=>{send++;throw Error('Unexpected POST');}
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ await ctl.open(trip);
+ const observed=[];
+ ctl.subscribe(s=>observed.push(s.phase));
+ const slow=ctl.poll();
+ await Promise.resolve();await Promise.resolve();
+ assert.equal((await ctl.poll()).phase,'active');
+ assert.equal(reads,2);
+ assert.deepEqual(observed,[]);
+ // Separate authoritative refresh supersedes passive response.
+ const manual=ctl.refresh();
+ assert.equal((await manual).phase,'active');
+ release({tripId:trip,phase:'arriving',revision:3,nextEvent:'pickup',
+  qaOnly:true,productionEnabled:false});
+ await slow;
+ assert.equal(ctl.current().status,'accepted');
+ assert.equal(send,0);
+});
+test('G65 unreadable or regressed foreground status fails closed; uncertain POST never auto-read',async()=>{
+ let failRead=false,revision=2,phase='accepted',reads=0,posts=0;
+ const ctl=createDriverTripLifecycleController({
+  makeRequestKey:()=>key,
+  readStatus:async()=>{reads++;if(failRead)throw Error('offline');
+   return {tripId:trip,phase,revision,nextEvent:next[phase],
+    qaOnly:true,productionEnabled:false};},
+  transition:async()=>{posts++;throw Error('lost after possible DB COMMIT');}
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ await ctl.open(trip);
+ assert.equal((await ctl.poll()).phase,'active');
+ revision=1;
+ assert.equal((await ctl.poll()).phase,'unverified');
+ assert.equal(ctl.current().nextEvent,null);
+ revision=2;
+ assert.equal((await ctl.refresh()).phase,'active');
+ const uncertain=await ctl.advance();
+ assert.equal(uncertain.phase,'uncertain');
+ const before=reads;
+ await ctl.poll();
+ assert.equal(reads,before);
+ assert.equal(posts,1);
+ failRead=true;
+ assert.equal((await ctl.refresh()).phase,'uncertain');
+ assert.equal(ctl.current().nextEvent,null);
+});

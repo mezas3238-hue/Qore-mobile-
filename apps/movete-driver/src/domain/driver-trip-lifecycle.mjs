@@ -18,7 +18,7 @@ export function createDriverTripLifecycleController({
  if(liveEnabled!==false||[readStatus,transition,makeRequestKey]
   .some(x=>typeof x!=='function'))
   throw Error('G65 requires verified status, DB command and CSPRNG');
- let identity=null,epoch=0,activeTrip=null,pending=null;
+ let identity=null,epoch=0,activeTrip=null,pending=null,polling=false;
  let state=initial();
  const listeners=new Set();
  const publish=patch=>{
@@ -27,16 +27,16 @@ export function createDriverTripLifecycleController({
   return state;
  };
  const invalidate=()=>{
-  epoch++;identity=null;activeTrip=null;pending=null;
+  epoch++;identity=null;activeTrip=null;pending=null;polling=false;
   state=initial();
   for(const fn of listeners)try{fn(state)}catch{}
   return state;
  };
- async function refresh(){
+ async function refresh({quiet=false}={}){
   if(!identity||!activeTrip)return state;
   const stamp=++epoch,who=identity,id=activeTrip;
   const isCurrent=()=>epoch===stamp&&identity===who&&activeTrip===id;
-  if(!pending)publish({phase:'loading'});
+  if(!pending&&!quiet)publish({phase:'loading'});
   let row;
   try{row=await readStatus({accessToken:who.accessToken,tripId:id});}
   catch{
@@ -49,6 +49,11 @@ export function createDriverTripLifecycleController({
    row.nextEvent!==EVENT[row.phase]||
    !Number.isSafeInteger(row.revision)||row.revision<2||
    row.qaOnly!==true||row.productionEnabled!==false)
+   return publish({phase:pending?'uncertain':'unverified',
+    status:null,revision:null,nextEvent:null,uncertain:!!pending});
+  // Reject a lagging/read-replica response rather than re-enabling an
+  // already superseded Driver action after an external cancellation.
+  if(Number.isSafeInteger(state.revision)&&row.revision<state.revision)
    return publish({phase:pending?'uncertain':'unverified',
     status:null,revision:null,nextEvent:null,uncertain:!!pending});
   const phase=row.phase;
@@ -101,6 +106,15 @@ export function createDriverTripLifecycleController({
    return refresh();
   },
   refresh,
+  async poll(){
+   // Foreground screen must opt in. No request after an uncertain POST,
+   // while loading, or after a confirmed terminal outcome.
+   if(!identity||!activeTrip||polling||pending||state.phase!=='active')
+    return state;
+   polling=true;
+   try{return await refresh({quiet:true});}
+   finally{polling=false;}
+  },
   async advance(){
    if(!identity||!activeTrip||pending||state.phase!=='active'||
     !Object.hasOwn(EVENT,state.status)||
