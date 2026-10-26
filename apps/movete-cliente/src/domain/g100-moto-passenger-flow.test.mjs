@@ -151,3 +151,32 @@ test('R78 MOTO strict off switches, invalid route, actor rotation and private cl
  f.app.clear();
  assert.equal(f.app.snapshot().phase,'idle');
 });
+
+test('R80: MOTO discard only before booking, without POST or losing uncertain receipts',async()=>{
+ const f=setup();await quoted(f);
+ assert.equal(f.app.discardQuote().ok,true);
+ assert.equal(f.app.snapshot().phase,'idle');
+ assert.equal(f.app.snapshot().quote,null);
+ assert.deepEqual(f.calls.map(x=>x.kind),['quote']);
+ assert.equal(f.app.acceptQuote({quoteId,customerPaysGs:9900}).ok,false);
+ await quoted(f);
+ assert.equal(f.app.acceptQuote({quoteId,customerPaysGs:9900}).ok,true);
+ assert.equal(f.app.discardQuote().ok,true);
+ assert.equal(f.app.snapshot().tripId,null);
+ assert.deepEqual(f.calls.map(x=>x.kind),['quote','quote']);
+ const g=setup({bookReply:null});await quoted(g);
+ assert.equal(g.app.acceptQuote({quoteId,customerPaysGs:9900}).ok,true);
+ assert.equal((await g.app.book({bookingKey})).code,'MOTO_BOOK_READBACK_REQUIRED');
+ assert.equal(g.app.discardQuote().code,'MOTO_QUOTE_NOT_DISCARDABLE');
+ assert.equal(g.app.snapshot().phase,'bookingUnknown');
+ assert.equal((await g.app.readBooking()).ok,true);
+ assert.equal(g.app.discardQuote().ok,false);
+ assert.equal(g.app.snapshot().tripId,tripId);
+ assert.equal(g.calls.filter(x=>x.kind==='book').length,1);
+});
+test('R80: a quote cannot be discarded from a different or expired actor session',async()=>{
+ const f=setup();await quoted(f);
+ f.change({sessionRevision:2});
+ assert.equal(f.app.discardQuote().code,'MOTO_QUOTE_NOT_DISCARDABLE');
+ assert.equal(f.calls.length,1);
+});
