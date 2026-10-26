@@ -84,6 +84,14 @@ export function createG100MotoPassengerFlow({
   &&a.sessionRevision===s.sessionRevision;};
  const publish=s=>{state=s;onChange();};
  function clear(silent=false){epoch++;if(silent===true)state={phase:'idle'};else publish({phase:'idle'});}
+ // Passenger may abandon an unbooked quote and choose AUTO instead.
+ // Once booking has been sent or outcome is unknown, never erase recovery scope.
+ function discardQuote(){
+  if(!['quoted','accepted'].includes(state.phase)||!same(state))
+   return fail('MOTO_QUOTE_NOT_DISCARDABLE');
+  epoch++;publish({phase:'idle'});
+  return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+ }
  function snapshot(){
   const s=state,a=actor(),mine=Boolean(ready&&a&&s.subject===a.subject
    &&s.sessionRevision===a.sessionRevision);
@@ -192,6 +200,6 @@ export function createG100MotoPassengerFlow({
   publish({...s,phase:'cancelUnknown',error:'MOTO_CANCEL_STILL_UNKNOWN'});
   return fail('MOTO_CANCEL_STILL_UNKNOWN');
  }
- return Object.freeze({snapshot,clear,requestQuote,acceptQuote,book,readBooking,
+ return Object.freeze({snapshot,clear,discardQuote,requestQuote,acceptQuote,book,readBooking,
   cancel,readCancellation,productionEnabled:false});
 }
