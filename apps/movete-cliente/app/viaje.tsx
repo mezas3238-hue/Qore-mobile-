@@ -1,5 +1,5 @@
-import React,{useRef,useState} from 'react';
-import {ScrollView,Text,TextInput,View} from 'react-native';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
+import {AppState,ScrollView,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
@@ -10,6 +10,7 @@ import {validateRideDraft} from '../src/domain/capabilities.mjs';
 import {prepareLocalRideRequest} from '../src/domain/client-request-preparation.mjs';
 import {projectRideDraftUi} from '../src/domain/ride-draft-ui-policy.mjs';
 import {projectAutoPrequoteScreen} from '../src/domain/f1-auto-prequote-screen-policy.mjs';
+import {createF1AutoRideContinuation} from '../src/domain/f1-auto-ride-continuation.mjs';
 import {emptyLocalRouteDraft,editLocalRouteDraft,reviewLocalRouteDraft,
  canPrepareCurrentRideContract,MAX_LOCAL_STOPS} from '../src/domain/client-route-editor.mjs';
 import type {LocalRouteEdit,LocalRouteDraft} from '../src/domain/client-route-editor.mjs';
@@ -44,6 +45,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const lock=useRef(false);
  const consultationLock=useRef(false);
  const [consulting,setConsulting]=useState(false);
+ const [autoChecking,setAutoChecking]=useState(false);
  const dispatch=view.autoDispatch,finance=view.autoFinance;
  const [financeBusy,setFinanceBusy]=useState(false);
  const financeLock=useRef(false);
@@ -55,6 +57,28 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   prequote:view.autoPrequote,authenticated:view.authenticated,
   mutationPhase:mutation.phase,now:Date.now()
  });
+ // One verified Passenger status GET follows a successfully booked AUTO trip.
+ // This does NOT send a second booking or infer Driver/GPS from G90 dispatch.
+ const autoContinuation=useMemo(()=>createF1AutoRideContinuation({
+  readSnapshot:()=>client.snapshot(),
+  verifyRide:()=>client.continueVerifiedRide(),
+  isForeground:()=>AppState.currentState==='active',
+  onBusy:setAutoChecking,
+  onFailure:()=>setFeedback('La reserva quedó registrada, pero el seguimiento todavía no está verificado. Podés consultar sin generar otra solicitud.'),
+  onVerified:()=>router.push('/seguimiento')
+ }),[client]);
+ useEffect(()=>()=>autoContinuation.close(),[autoContinuation]);
+ useEffect(()=>{
+  if(quoted.phase!=='confirmed'||!view.rideContinuation.canVerify)return;
+  void autoContinuation.tryResume();
+  // If booking completed while backgrounded, issue the single safe GET on
+  // foreground return. No background timer, no payment or assignment claim.
+  const foreground=AppState.addEventListener('change',state=>{
+   if(state==='active')void autoContinuation.tryResume();
+  });
+  return ()=>foreground.remove();
+ },[autoContinuation,quoted.phase,view.rideContinuation.canVerify,
+  view.rideContinuation.tripId,view.privateViewRevision]);
  const ui=projectRideDraftUi({
   phase:mutation.phase,operation:mutation.operation,
   authenticated:view.authenticated,validated,
@@ -114,7 +138,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   await client.refreshAutoDispatch();
  }
  async function consultVerifiedRide(){
-  if(consultationLock.current||!view.rideContinuation.canVerify)return;
+  if(autoChecking||consultationLock.current||!view.rideContinuation.canVerify)return;
   const before=client.snapshot();
   if(!before.rideContinuation.canVerify||before.rideContinuation.tripId!==view.rideContinuation.tripId
    ||before.privateViewRevision!==view.privateViewRevision)return;
@@ -339,8 +363,8 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   {view.rideContinuation.canVerify&&<Panel>
    <Text accessibilityRole="header" style={styles.heading}>Viaje registrado en STAGING</Text>
    <Text style={styles.small}>Hay un recibo de solicitud persistida en QA. Consultaremos el estado con el servidor antes de abrir seguimiento; todavía no confirma tarifa, conductor ni operación comercial.</Text>
-   <Action label={consulting?'Verificando viaje…':'Verificar viaje y abrir seguimiento'}
-    busy={consulting} disabled={consulting}
+   <Action label={consulting||autoChecking?'Verificando viaje…':'Verificar viaje y abrir seguimiento'}
+    busy={consulting||autoChecking} disabled={consulting||autoChecking}
     hint="GET autoritativo del pasajero, sin nuevo despacho ni cobro."
     onPress={()=>{void consultVerifiedRide();}}/>
   </Panel>}
@@ -415,7 +439,7 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
     {dispatch.needsRideVerification&&view.rideContinuation.canVerify
      &&view.rideContinuation.tripId===dispatch.tripId&&
      <Action label="Verificar viaje y abrir seguimiento"
-      busy={consulting} disabled={consulting||dispatch.busy}
+      busy={consulting||autoChecking} disabled={consulting||autoChecking||dispatch.busy}
       hint="GET privado G4 del mismo tripId; G90 no certifica una asignación."
       onPress={()=>{void consultVerifiedRide();}}/>}
     <Text style={styles.small}>La búsqueda finalizada no confirma por sí misma un conductor. El estado, GPS y ETA necesitan verificación independiente del servidor.</Text>
