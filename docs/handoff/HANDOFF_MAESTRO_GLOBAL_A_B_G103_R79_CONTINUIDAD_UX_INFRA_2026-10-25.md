@@ -45,9 +45,9 @@ Debe haber 2 apps Expo nativas INDEPENDIENTES: Cliente y Driver, además de Admi
 ### Arquitecto B
 - PR #8 OPEN / DRAFT, HEAD 57ea8169ee19c3d3242418ed26dcb02173e5ace7; último trabajo identificado R79.
 - 3/3 workflows SUCCESS SOBRE SU HEAD:
-  - Frontera de archivos: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40250109358.
-  - Admin Web QA 268/268 Node PASS: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40250109317.
-  - Aislamiento apps: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40250109391.
+  - Frontera de archivos: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40252578910.
+  - Admin Web QA 268/268 Node PASS: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40252578855.
+  - Aislamiento apps: https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40252578856.
 - R78/R79: pantalla y flujo MOTO Cliente conectados por adaptador HTTP bajo flags bloqueados; no hay servidor HTTPS externo ni autorización legal MOTO instalable. Ver docs/architect-b/R78_MOTO_G100_PASSENGER_QUOTE_BOOK_CANCEL_2026-10-25.md y R79_MOTO_G101_HTTP_PASSENGER_2026-10-25.md.
 - El Home Cliente consultado en apps/movete-cliente/app/index.tsx AÚN PRESENTA botones separados hacia /viaje y /moto. Eso NO ES TODAVÍA el selector unificado comparable al patrón mostrado por el Owner. Corregir en B, no declarar diseño final por existir los botones.
 
@@ -291,6 +291,7 @@ A entregar antes de gastar: comparativa por proveedor de región y latencia real
 - docs/architect-b/HANDOFF_MAESTRO_ARQUITECTO_B_R1_R66_F1_PRIORIDAD_FUNCIONES_CERTIFICADAS_2026-10-24.md.
 - docs/architect-b/R78_MOTO_G100_PASSENGER_QUOTE_BOOK_CANCEL_2026-10-25.md.
 - docs/architect-b/R79_MOTO_G101_HTTP_PASSENGER_2026-10-25.md.
+- docs/architect-b/HANDOFF_MAESTRO_GLOBAL_A_B_G103_R79_CONTINUIDAD_SIN_PAUSAS_2026-10-25.md (handoff complementario B, publicado en su PR #8).
 - apps/movete-cliente/app/index.tsx, viaje.tsx, moto.tsx, envios.tsx, comercios.tsx, historial.tsx.
 - apps/movete-cliente/src/domain/g100-moto-passenger-flow.mjs, g101-moto-passenger-http-gateway.mjs.
 - apps/movete-admin/**.
