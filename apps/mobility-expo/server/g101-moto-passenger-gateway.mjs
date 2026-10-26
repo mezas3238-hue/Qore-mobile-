@@ -35,10 +35,10 @@ function money(x){
  if(!plain(x)||!integer(x.amountGs)||x.amountGs<=0||
  !integer(x.customerPaysGs)||!integer(x.customerSubsidyGs)||
  !integer(x.driverReceivesGs)||!integer(x.platformRetainsGs)||
- x.commissionBps!==1200||x.subsidyBps!==1000||
+ (!Number.isSafeInteger(x.commissionBps)||x.commissionBps<1000||x.commissionBps>3000)||x.subsidyBps!==1000||
  x.customerSubsidyGs!==Math.floor((x.amountGs*1000+5000)/10000)||
- x.driverReceivesGs!==x.amountGs-Math.floor((x.amountGs*1200+5000)/10000)||
- x.platformRetainsGs!==Math.floor((x.amountGs*1200+5000)/10000)-
+ x.driverReceivesGs!==x.amountGs-Math.floor((x.amountGs*x.commissionBps+5000)/10000)||
+ x.platformRetainsGs!==Math.floor((x.amountGs*x.commissionBps+5000)/10000)-
   x.customerSubsidyGs||
  x.customerPaysGs!==x.amountGs-x.customerSubsidyGs||
  x.customerPaysGs!==x.driverReceivesGs+x.platformRetainsGs)

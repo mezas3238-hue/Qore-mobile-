@@ -42,6 +42,8 @@ CREATE TABLE public.mobility_stage_g93_auto_quote_terms (
  service_kind text NOT NULL DEFAULT 'AUTO_RIDE' CHECK(service_kind='AUTO_RIDE'),
  original_fare_gs integer NOT NULL CHECK(original_fare_gs BETWEEN 1 AND 100000000),
  commission_gs integer NOT NULL CHECK(commission_gs BETWEEN 0 AND 100000000),
+ commission_bps integer NOT NULL CHECK(commission_bps BETWEEN 1000 AND 3000),
+ commission_version integer NOT NULL CHECK(commission_version>0),
  subsidy_gs integer NOT NULL CHECK(subsidy_gs BETWEEN 0 AND 100000000),
  customer_pays_gs integer NOT NULL CHECK(customer_pays_gs BETWEEN 0 AND 100000000),
  driver_receives_gs integer NOT NULL CHECK(driver_receives_gs BETWEEN 0 AND 100000000),
@@ -94,7 +96,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
   'mode','STAGING_DEMO_ONLY','commercialEnabled',false,
   'ownerId',t.passenger_id,'quoteId',t.quote_id,'campaignId',c.id,
   'serviceKind',t.service_kind,'currency','PYG','originalFareGs',t.original_fare_gs,
-  'commissionBps',1500,'subsidyBps',1000,
+  'commissionBps',t.commission_bps,'subsidyBps',1000,
   'nominalCommissionGs',t.commission_gs,'customerSubsidyGs',t.subsidy_gs,
   'customerPaysGs',t.customer_pays_gs,
   'driverReceivesGs',t.driver_receives_gs,
@@ -120,6 +122,7 @@ RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $
 DECLARE q public.mobility_stage_g72_auto_prequotes%ROWTYPE;
  c public.mobility_stage_g93_ride_campaigns%ROWTYPE;
  t public.mobility_stage_g93_auto_quote_terms%ROWTYPE;
+ policy public.mobility_stage_g116_commission_policy%ROWTYPE;
  nominal bigint; subsidy bigint;
 BEGIN
  IF current_database()<>'qore_disposable_chain'
@@ -140,17 +143,31 @@ BEGIN
  FOR SHARE;
  IF NOT FOUND OR public.mobility_stage_g27_backoffice_role_of(c.approved_by) IS DISTINCT FROM 'owner'
  THEN RAISE EXCEPTION 'G93 no verified Owner campaign' USING ERRCODE='P9301'; END IF;
- nominal:=(q.total_pyg::bigint*1500+5000)/10000;
+ -- Previously disclosed terms survive subsequent policy changes.
+ SELECT * INTO t FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id=q.id;
+ IF FOUND THEN
+  IF t.passenger_id<>_passenger_id OR t.campaign_id<>c.id
+   OR t.original_fare_gs<>q.total_pyg
+  THEN RAISE EXCEPTION 'G116 conflicting immutable AUTO quote'
+   USING ERRCODE='P9301'; END IF;
+  RETURN public.mobility_stage_g93_terms_receipt_qa(_passenger_id,_quote_id);
+ END IF;
+ SELECT * INTO policy FROM public.mobility_stage_g116_commission_policy
+ WHERE service_kind='AUTO_RIDE' FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'G116 AUTO policy unavailable'
+ USING ERRCODE='P9301'; END IF;
+ nominal:=(q.total_pyg::bigint*policy.commission_bps+5000)/10000;
  subsidy:=(q.total_pyg::bigint*1000+5000)/10000;
  INSERT INTO public.mobility_stage_g93_auto_quote_terms(
  quote_id,passenger_id,campaign_id,original_fare_gs,commission_gs,subsidy_gs,
- customer_pays_gs,driver_receives_gs,platform_retains_gs)
+ commission_bps,commission_version,customer_pays_gs,driver_receives_gs,platform_retains_gs)
  VALUES(q.id,q.passenger_id,c.id,q.total_pyg,nominal,subsidy,
- q.total_pyg-subsidy,q.total_pyg-nominal,nominal-subsidy)
+ policy.commission_bps,policy.version,q.total_pyg-subsidy,q.total_pyg-nominal,nominal-subsidy)
  ON CONFLICT(quote_id) DO NOTHING;
  SELECT * INTO t FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id=q.id;
  IF t.campaign_id<>c.id OR t.passenger_id<>q.passenger_id
  OR t.original_fare_gs<>q.total_pyg OR t.commission_gs<>nominal OR t.subsidy_gs<>subsidy
+ OR t.commission_bps<>policy.commission_bps OR t.commission_version<>policy.version
  THEN RAISE EXCEPTION 'G93 replay changed fixed quote terms' USING ERRCODE='P9301'; END IF;
  RETURN public.mobility_stage_g93_terms_receipt_qa(_passenger_id,_quote_id);
 END $f$;
@@ -179,7 +196,7 @@ BEGIN
  OR public.mobility_stage_g27_backoffice_role_of(c.approved_by) IS DISTINCT FROM 'owner'
  OR t.passenger_id<>NEW.passenger_id OR t.original_fare_gs<>NEW.total_pyg
  OR NEW.booking_key IS NULL OR NEW.trip_id IS NULL
- OR t.commission_gs<>(NEW.total_pyg::bigint*1500+5000)/10000
+ OR t.commission_gs<>(NEW.total_pyg::bigint*t.commission_bps+5000)/10000
  OR t.subsidy_gs<>(NEW.total_pyg::bigint*1000+5000)/10000
  THEN RAISE EXCEPTION 'G93 unverified subsidy ledger terms' USING ERRCODE='P9301'; END IF;
  INSERT INTO public.mobility_stage_g93_auto_ledger(
