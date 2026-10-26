@@ -472,10 +472,10 @@ async function main(){
    method:'POST',auth:drvToken,body:{offerId,requestKey:newIds.accept}});
   assert.equal(a.status,200,JSON.stringify(a.data));
   assert.equal(a.data.outcome,'accepted');
-  const replay=await http(base,'/v1/staging/driver/offers/accept',{
+  const driverReplay=await http(base,'/v1/staging/driver/offers/accept',{
    method:'POST',auth:drvToken,body:{offerId,requestKey:newIds.accept}});
-  assert.equal(replay.status,200,JSON.stringify(replay.data));
-  assert.equal(replay.data.eventId,a.data.eventId);
+  assert.equal(driverReplay.status,200,JSON.stringify(driverReplay.data));
+  assert.equal(driverReplay.data.eventId,a.data.eventId);
   const assigned=await http(base,'/v1/staging/rider/trips/'+secondTrip+'/status');
   assert.equal(assigned.status,200);
   assert.equal(assigned.data.state,'assigned');
