@@ -15,6 +15,7 @@ import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
+import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
 
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -110,6 +111,17 @@ async function main(){
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+adminId+"','admin','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_g93_ride_campaigns(id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days) VALUES('"+campaign+"','AUTO_RIDE','G98_AUTO_60_QA','"+owner+"',true,pg_catalog.transaction_timestamp()-interval '1 hour',pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);");
  const db=createQoreG73AutoRepository({rpc});
+ let g111WorkerRuns=0,g111Receipt=null;
+ const dispatcher=createG111AfterBookingAutoDispatch({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  readPrivateDispatchStatus:({actorId,requestKey})=>
+   db.dispatchStatus({actorId,requestKey}),
+  runOneDueDispatch:async()=>{
+   ++g111WorkerRuns;
+   return sqlJson("SET ROLE service_role; SELECT "+
+    "public.mobility_stage_g85_run_one_dispatch_qa()::text;");
+  }
+ });
  const gateway=createQoreG73AutoGateway({
   projectRef:'staging1234567890abcd',now:Date.now,
   verifyAccessToken:async value=>{
@@ -132,6 +144,10 @@ async function main(){
   loadQuote:x=>db.quoteReceipt(x),
   bookQuote:x=>db.book(x),
   reconcileBooking:x=>db.bookingReceipt(x),
+  dispatchBookedAuto:async input=>{
+   g111Receipt=await dispatcher.dispatchBookedAuto(input);
+   if(g111Receipt.ok!==true)throw Error('G111 private dispatch unresolved');
+  },
   readDispatchStatus:x=>db.dispatchStatus(x),
   readSubsidyPreview:x=>db.previewAutoSubsidy(x),
   readAutoFinancialState:x=>db.autoFinancialState(x),
@@ -308,6 +324,12 @@ async function main(){
   assert.equal(booked.status,201,JSON.stringify(booked.data));
   assert.ok(uuid.test(booked.data.tripId));
   const tripId=booked.data.tripId;
+  assert.equal(g111WorkerRuns,1,
+   'G111 must execute one actual G85 SQL worker after G73 booking');
+  assert.equal(g111Receipt?.ok,true,JSON.stringify(g111Receipt));
+  assert.equal(g111Receipt.productionEnabled,false);
+  assert(['RETRY_PENDING','OFFER_PENDING'].includes(
+   g111Receipt.dispatchState),'G111 must not forge Driver assignment');
   // G104: full Driver assignment is NOT an authorized QA outcome.
   // G71 requires an independently attested eight-document dossier and
   // G38 blocks zones without real legal evidence. Do not weaken either.
@@ -331,7 +353,9 @@ async function main(){
   assert.equal(deniedState.tripState,'searching');
   assert.equal(deniedState.revision,1);
   assert.equal(deniedState.driverId,null);
-  assert.equal(Number(deniedState.offers),0);
+  // G82 may create a private OFFER (never acceptance) for a documented
+  // candidate; G38 still blocks assignment without legal proof.
+  assert(Number(deniedState.offers)>=0&&Number(deniedState.offers)<=1);
   // G106 crash recovery GET is scoped by SQL Driver and must show no
   // assignment for a just-booked but unaccepted (G38 fenced) Passenger trip.
   const recoveryPath='/v1/staging/driver/trips/current';
@@ -403,9 +427,20 @@ async function main(){
   assert.equal(before.status,200,JSON.stringify(before.data));
   assert.equal(before.data.tripId,tripId);
   assert.equal(before.data.tripState,'searching');
-  assert.equal(before.data.dispatchState,'SEARCHING_DRIVER');
+  assert.equal(before.data.dispatchState,g111Receipt.dispatchState);
+  assert.equal(before.data.attempts,1);
+  assert.equal(before.data.offerPendingAcceptance,
+   g111Receipt.dispatchState==='OFFER_PENDING');
   assert.equal((await http(base,f1+'/bookings/'+bookingKey+'/financial-status',
    {auth:otherToken})).status,404);
+  // Repeating the same booked key remains idempotent: G111 sees a stored
+  // G90 queue and cannot run another G85 dispatch attempt.
+  const duplicate=await http(base,f1+'/book',{
+   method:'POST',body:{requestKey:bookingKey,quoteId:q.data.quoteId,
+    accepted:true}});
+  assert.equal(duplicate.status,201,JSON.stringify(duplicate.data));
+  assert.equal(duplicate.data.tripId,tripId);
+  assert.equal(g111WorkerRuns,1,'G111 replay sent a duplicate Driver offer');
   const canceled=await http(base,f1+'/bookings/'+bookingKey+'/cancel',{
    method:'POST',body:{requestKey:cancelKey,confirmed:true}});
   assert.equal(canceled.status,200,JSON.stringify(canceled.data));
@@ -588,6 +623,7 @@ async function main(){
   assert.equal(Number(ledger.offsets),4);
   assert.equal(ledger.queueState,'CLOSED');
   assert.equal(Number(ledger.outstandingOffers),0);
+  console.log('G111 PASS: real G73 HTTP booking invokes exactly one trusted G85 PostgreSQL worker, G90 state reflects private offer or legal backoff, replay adds zero attempts, G95 closes queue; no LIVE/PSP');
   console.log('G106 PASS: Driver current-trip recovery uses verified Auth and same real PostgreSQL; empty before/after cancellation, forbidden to Passenger');
   console.log('G105 PASS: Driver HTTP/Auth/real PostgreSQL denies forged advancement of the same G73 trip before and after G95 cancellation; zero assignment/forged events');
   console.log('G99 PASS: REAL local HTTP+PostgreSQL16 same G73 trip across Client+Admin before/after G95 cancellation; 4 G94 void entries, G96 dispatch CLOSED, Passenger privacy, Admin MFA/revocation QA, NO PSP / NO LIVE');
