@@ -4,6 +4,7 @@ import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
 import {AdminAuthPanel} from './AdminAuthPanel';
 import {OwnerCommissionEditor} from './OwnerCommissionEditor';
+import {OwnerCargoRateEditor} from './OwnerCargoRateEditor';
 import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
@@ -154,6 +155,7 @@ function OwnerPanel({finance,authorized,ownerSubject}:{finance:OwnerFinance|null
    <p className="training-disclaimer">Un guion indica dato no verificado, no cero. No se accede a cuentas bancarias ni información personal de conductores.</p>
   </Panel>
   <OwnerCommissionEditor key={ownerSubject??'no-owner'} authorized={authorized}/>
+  <OwnerCargoRateEditor key={'cargo-'+(ownerSubject??'no-owner')} authorized={authorized}/>
   <Panel><h2>Control estratégico</h2>
    <p>Las tarifas, comisiones, zonas y liquidaciones necesitan autorización de servidor, revisión y bitácora. Esta interfaz no habilita modificaciones.</p>
    <div className="empty-chip">SOLO LECTURA · NO LIVE</div></Panel>

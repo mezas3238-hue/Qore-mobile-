@@ -57,3 +57,10 @@ reescrito/truncado, resurrección terminal y modificaciones de ledger
 conciliado. Sesión cambiada, cierre y revocación limpian la referencia.
 No sustituye pruebas PG16 ni autoriza mover fondos. Nuevos tests Node sobre
 transiciones positivas y casos adversariales (pendientes de CI D→B).
+
+## Owner: tarifas de envíos AUTO/MOTO G124 — interfaz y contrato
+- Backend A declara GET/POST `/v1/staging/owner/delivery-rates/{AUTO|MOTO}/{CARGO_ZONE}` por Owner exclusivo y MFA AAL2 con PostgreSQL; no es contrato de viajeros ni de comercios.
+- D añadió editor separado para base, km, minuto, mínimo, comisión 0-3000 bps y vigencia 1-90 días; **primero GET autorizado** para zona aprobada. El código de zona no concede cobertura.
+- DTO POST exacto `{requestKey,basePyg,perKmPyg,perMinutePyg,minimumPyg,commissionBps,durationDays}`. No acepta `subsidyBps` ni asume que el 10% de pasajeros aplica a carga.
+- Cliente comprueba rol Owner AAL2 antes y después del HTTP, coincidencia del vehículo+zona, versión, vencimiento, recibo G124, respuesta acotada y timeout. Resultado incierto bloquea nuevo POST hasta un GET fresco. Pasado no se recalcula.
+- OFF por defecto en `.env.example`. No se activó STAGING externo ni LIVE. Exigir certificación end-to-end y ejecución Admin CI antes de usarlo con tarifas vigentes.
