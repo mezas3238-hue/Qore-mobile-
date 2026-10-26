@@ -4,6 +4,7 @@ import {createClientExperience} from './domain/client-experience.mjs';
 import type {ClientExperience,ClientSnapshot} from './domain/client-experience.mjs';
 import {getNativePassengerAuth} from './NativePassengerAuth';
 import {getNativeG95RecoveryStore} from './NativeG95RecoveryStore';
+import {getNativeG101RecoveryStore} from './NativeG101RecoveryStore';
 import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
 import {createF1AuthorizedQaHttpOptions} from './domain/f1-authorized-qa-http-options.mjs';
 import {createF1AuthorizedHistoryRecoveryOptions} from './domain/f1-authorized-history-recovery-options.mjs';
@@ -31,6 +32,7 @@ export function ClientRuntimeProvider({children,experience}:{
 }){
  const nativeAuth=useMemo(()=>getNativePassengerAuth(),[]);
  const g95RecoveryStore=useMemo(()=>getNativeG95RecoveryStore(),[]);
+ const motoRecoveryStore=useMemo(()=>getNativeG101RecoveryStore(),[]);
  // Stage enrollment is a manual, independently reviewed decision. A simple
  // Render /liveness 200 cannot switch on pricing, booking or GPS.
  const qaHttp=useMemo(()=>createF1AuthorizedQaHttpOptions({
@@ -64,20 +66,20 @@ export function ClientRuntimeProvider({children,experience}:{
    &&process.env.EXPO_PUBLIC_MOTO_ROUTE_PROVIDER_VERIFIED==='true'
    &&process.env.EXPO_PUBLIC_MOTO_PASSENGER_RLS_VERIFIED==='true'
    &&process.env.EXPO_PUBLIC_MOTO_IDEMPOTENCY_VERIFIED==='true';
-  return approved?{
+  return approved&&motoRecoveryStore?{
    enabled:true,contractCertified:true,externalRuntimeVerified:true,
    motoLegalVerified:true,motoRouteVerified:true,
    passengerRlsVerified:true,idempotencyVerified:true,
    origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
    pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
   }:null;
- },[]);
+ },[motoRecoveryStore]);
  const client=useMemo(()=>experience??createClientExperience({
   authProvider:nativeAuth,autoG73HttpOptions:qaHttp,g95RecoveryStore,
-  motoPassengerHttpOptions:motoG101,
+  motoPassengerHttpOptions:motoG101,motoRecoveryStore,
   historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
   statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
- }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101]);
+ }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore]);
  useEffect(()=>{
   if(!nativeAuth)return;
   let active=true;
@@ -86,9 +88,11 @@ export function ClientRuntimeProvider({children,experience}:{
    if(active&&auth.ok===true&&g95RecoveryStore
     &&qaHttp?.cancellationContractCertified===true)
     await client.restoreG95Cancellation();
+   if(active&&auth.ok===true&&motoG101&&motoRecoveryStore)
+    await client.restoreMotoPassenger();
   })();
   return ()=>{active=false;};
- },[client,nativeAuth,qaHttp,g95RecoveryStore]);
+ },[client,nativeAuth,qaHttp,g95RecoveryStore,motoG101,motoRecoveryStore]);
  const [simpleMode,setSimpleMode]=useState(false);
  const simplePreferences=useMemo(()=>({simpleMode,setSimpleMode}),[simpleMode]);
  return <ExperienceContext.Provider value={client}>

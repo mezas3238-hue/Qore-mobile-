@@ -40,7 +40,7 @@ import {createG101MotoPassengerHttpGateway} from './g101-moto-passenger-http-gat
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -123,7 +123,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   }):null;
  motoFlow=createG100MotoPassengerFlow({
   ...(motoPassengerOptions??motoHttp?.flowOptions()??{}),
-  getActor:actorSession,now,onChange:notify
+  recoveryStore:motoRecoveryStore,getActor:actorSession,now,onChange:notify
  });
  // F1 G73 canonical HTTP is OFF unless a *separately certified* HTTPS,
  // JWT, route provider, PostgreSQL and shared STAGING runtime is configured.
@@ -1136,8 +1136,14 @@ export function createClientExperience({authProvider=null,gateway=null,
   clearPrivate();
   let purged=!canSaveG95;
   if(canSaveG95){try{await g95RecoveryStore.clear();purged=true;}catch{}}
+  let motoPurged=motoRecoveryStore===null;
+  if(motoRecoveryStore&&typeof motoRecoveryStore.clear==='function'){
+   try{await motoRecoveryStore.clear();motoPurged=true;}catch{}
+  }
   const result=await session.logout();
-  return purged?result:Object.freeze({...result,g95SecurePurgeUnconfirmed:true});
+  return purged&&motoPurged?result:Object.freeze({...result,
+   ...(purged?{}:{g95SecurePurgeUnconfirmed:true}),
+   ...(motoPurged?{}:{motoSecurePurgeUnconfirmed:true})});
  }
  return Object.freeze({
   subscribe(listener){
@@ -1153,6 +1159,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   readMotoBooking:()=>motoFlow.readBooking(),
   cancelMoto:args=>motoFlow.cancel(args),
   readMotoCancellation:()=>motoFlow.readCancellation(),
+  restoreMotoPassenger:()=>motoFlow.restore(),
+  clearConfirmedMotoCancellation:()=>motoFlow.clearConfirmedCancellation(),
   // Quote discard is permitted before POST only; preserve any booked/unknown trip.
   resetMoto:()=>motoFlow.discardQuote(),
   discardMotoQuote:()=>motoFlow.discardQuote(),

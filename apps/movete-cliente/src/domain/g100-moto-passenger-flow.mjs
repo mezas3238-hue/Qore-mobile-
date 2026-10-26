@@ -65,16 +65,32 @@ function bookingOK(x,scope,phase){
 export function createG100MotoPassengerFlow({
  enabled=false,contractCertified=false,externalRuntimeVerified=false,
  motoLegalVerified=false,motoRouteVerified=false,
- getActor=null,quoteGateway=null,bookGateway=null,
+ getActor=null,recoveryStore=null,quoteGateway=null,bookGateway=null,
  bookingReadGateway=null,cancelGateway=null,cancelReadGateway=null,
  now=Date.now,onChange=()=>{}
 }={}){
- const ready=enabled===true&&contractCertified===true
+ const persistent=recoveryStore!==null;
+ const canSave=Boolean(recoveryStore&&['read','write','clear'].every(k=>typeof recoveryStore[k]==='function'));
+ const ready=(!persistent||canSave)&&enabled===true&&contractCertified===true
   &&externalRuntimeVerified===true&&motoLegalVerified===true
   &&motoRouteVerified===true&&typeof getActor==='function'
   &&[quoteGateway,bookGateway,bookingReadGateway,cancelGateway,
     cancelReadGateway].every(fn=>typeof fn==='function');
- let state={phase:'idle'},epoch=0;
+ let state={phase:'idle'},epoch=0,bootstrapped=!canSave;
+ const makeRecord=(s,cancellationKey=null)=>Object.freeze({
+  version:1,ownerId:s.subject,quoteId:s.quote.quoteId,
+  bookingKey:s.bookingKey,cancellationKey,
+  tripId:cancellationKey?s.tripId:null,createdAt:now()
+ });
+ const savedOK=(r,owner)=>keys(r,['version','ownerId','quoteId',
+  'bookingKey','cancellationKey','tripId','createdAt'])
+  &&r.version===1&&r.ownerId===owner
+  &&valid(r.quoteId)&&valid(r.bookingKey)&&r.quoteId!==r.bookingKey
+  &&(r.cancellationKey===null&&r.tripId===null
+   ||valid(r.cancellationKey)&&valid(r.tripId)
+    &&r.cancellationKey!==r.bookingKey&&r.cancellationKey!==r.quoteId)
+  &&Number.isSafeInteger(r.createdAt)
+  &&r.createdAt>=now()-604800000&&r.createdAt<=now()+60000;
  const actor=()=>{try{
   const a=getActor();return obj(a)&&a.role==='passenger'&&valid(a.subject)
    &&Number.isSafeInteger(a.sessionRevision)&&a.sessionRevision>=0
@@ -83,7 +99,7 @@ export function createG100MotoPassengerFlow({
  const same=(s)=>{const a=actor();return a&&a.subject===s.subject
   &&a.sessionRevision===s.sessionRevision;};
  const publish=s=>{state=s;onChange();};
- function clear(silent=false){epoch++;if(silent===true)state={phase:'idle'};else publish({phase:'idle'});}
+ function clear(silent=false){epoch++;bootstrapped=!canSave;if(silent===true)state={phase:'idle'};else publish({phase:'idle'});}
  // Passenger may abandon an unbooked quote and choose AUTO instead.
  // Once booking has been sent or outcome is unknown, never erase recovery scope.
  function discardQuote(){
@@ -95,21 +111,21 @@ export function createG100MotoPassengerFlow({
  function snapshot(){
   const s=state,a=actor(),mine=Boolean(ready&&a&&s.subject===a.subject
    &&s.sessionRevision===a.sessionRevision);
-  return Object.freeze({contractReady:ready&&Boolean(a),
-   phase:mine?s.phase:'idle',busy:mine&&['quoting','booking','cancelling','reading'].includes(s.phase),
+  return Object.freeze({contractReady:ready&&bootstrapped&&Boolean(a),
+   phase:mine?s.phase:'idle',busy:mine&&['quoting','booking','cancelling','reading','restoring','resetting'].includes(s.phase),
    quote:mine&&s.quote?Object.freeze({
     quoteId:s.quote.quoteId,originalFareGs:s.quote.amountGs,
     customerPaysGs:s.quote.customerPaysGs,customerSubsidyGs:s.quote.customerSubsidyGs,
     driverReceivesGs:s.quote.driverReceivesGs,platformRetainsGs:s.quote.platformRetainsGs,
     commissionBps:1200,subsidyBps:1000,expiresAt:s.quote.expiresAt
    }):null,tripId:mine?s.tripId??null:null,
-   needsReadback:mine&&['bookingUnknown','cancelUnknown'].includes(s.phase),
+   needsReadback:mine&&['bookingUnknown','cancelUnknown','restoreUnknown'].includes(s.phase),
    cancelled:mine&&s.phase==='cancelled',
    error:mine?s.error??null:null,qaOnly:true,productionEnabled:false});
  }
  async function requestQuote({origin,destination,quoteRequestKey,safetyAcknowledged}={}){
   const a=actor();
-  if(!ready||!a)return fail('MOTO_G100_NOT_CERTIFIED');
+  if(!ready||!bootstrapped||!a)return fail('MOTO_G100_NOT_CERTIFIED');
   if(state.phase!=='idle')return fail('MOTO_TRANSACTION_ALREADY_ACTIVE');
   if(!cleanText(origin)||!cleanText(destination)
    ||origin.toLocaleLowerCase('es')===destination.toLocaleLowerCase('es')
@@ -142,6 +158,15 @@ export function createG100MotoPassengerFlow({
    ||s.quote.expiresAt<=now())return fail('MOTO_BOOK_NOT_READY');
   const seq=++epoch,next={...s,phase:'booking',bookingKey};
   publish(next);
+  if(canSave){
+   try{await recoveryStore.write(makeRecord(next));}
+   catch{
+    if(seq===epoch&&same(s))publish({...next,phase:'bookingUnknown',
+     error:'MOTO_SECURE_SAVE_FAILED_NO_POST'});
+    return fail('MOTO_SECURE_SAVE_FAILED_NO_POST');
+   }
+   if(seq!==epoch||!same(s))return fail('MOTO_STALE_SESSION');
+  }
   let result;try{result=await bookGateway(Object.freeze({
    ownerId:s.subject,sessionRevision:s.sessionRevision,
    quoteId:s.quote.quoteId,bookingKey}));}catch{}
@@ -173,6 +198,15 @@ export function createG100MotoPassengerFlow({
    return fail('MOTO_CANCEL_NOT_READY');
   const seq=++epoch,next={...s,phase:'cancelling',cancellationKey};
   publish(next);
+  if(canSave){
+   try{await recoveryStore.write(makeRecord(next,cancellationKey));}
+   catch{
+    if(seq===epoch&&same(s))publish({...next,phase:'cancelUnknown',
+     error:'MOTO_SECURE_SAVE_FAILED_NO_POST'});
+    return fail('MOTO_SECURE_SAVE_FAILED_NO_POST');
+   }
+   if(seq!==epoch||!same(s))return fail('MOTO_STALE_SESSION');
+  }
   let result;try{result=await cancelGateway(Object.freeze({
    ownerId:s.subject,sessionRevision:s.sessionRevision,
    bookingKey:s.bookingKey,cancellationKey}));}catch{}
@@ -200,6 +234,73 @@ export function createG100MotoPassengerFlow({
   publish({...s,phase:'cancelUnknown',error:'MOTO_CANCEL_STILL_UNKNOWN'});
   return fail('MOTO_CANCEL_STILL_UNKNOWN');
  }
- return Object.freeze({snapshot,clear,discardQuote,requestQuote,acceptQuote,book,readBooking,
-  cancel,readCancellation,productionEnabled:false});
+ // Crash-safe R81: never re-send a POST after process death. Validate server GET.
+ async function restore(){
+  if(!canSave||!ready)return fail('MOTO_RECOVERY_NOT_CONFIGURED');
+  if(!['idle','restoreUnknown'].includes(state.phase))return fail('MOTO_RECOVERY_BUSY');
+  const a=actor();if(!a)return fail('MOTO_RECOVERY_AUTH_REQUIRED');
+  const seq=++epoch,s={phase:'restoring',subject:a.subject,
+   sessionRevision:a.sessionRevision};
+  bootstrapped=false;publish(s);
+  let record;try{record=await recoveryStore.read();}
+  catch{
+   if(seq===epoch&&same(s))publish({...s,phase:'restoreUnknown',
+    error:'MOTO_SECURE_READ_FAILED'});
+   return fail('MOTO_SECURE_READ_FAILED');
+  }
+  if(seq!==epoch||!same(s))return fail('MOTO_STALE_SESSION');
+  if(record==null){
+   bootstrapped=true;publish({phase:'idle'});
+   return Object.freeze({ok:true,nothingToRecover:true,qaOnly:true});
+  }
+  if(!savedOK(record,a.subject)){
+   publish({...s,phase:'restoreUnknown',error:'MOTO_SAVED_SCOPE_INVALID'});
+   return fail('MOTO_SAVED_SCOPE_INVALID');
+  }
+  const cancelling=valid(record.cancellationKey);
+  let response;try{
+   response=await (cancelling?cancelReadGateway:bookingReadGateway)(
+    Object.freeze({ownerId:a.subject,sessionRevision:a.sessionRevision,
+     bookingKey:record.bookingKey}));
+  }catch{}
+  if(seq!==epoch||!same(s))return fail('MOTO_STALE_SESSION');
+  const data=response?.data;
+  const quote=obj(data)?{
+   quoteId:record.quoteId,amountGs:data.amountGs,
+   customerPaysGs:data.customerPaysGs,customerSubsidyGs:data.customerSubsidyGs,
+   driverReceivesGs:data.driverReceivesGs,platformRetainsGs:data.platformRetainsGs,
+   expiresAt:0
+  }:null;
+  const scope={...s,bookingKey:record.bookingKey,
+   cancellationKey:record.cancellationKey,quote};
+  if(response?.ok!==true||!quote||!bookingOK(data,scope,cancelling?'cancel':'book')
+   ||cancelling&&data.tripId!==record.tripId){
+   publish({...s,phase:'restoreUnknown',error:'MOTO_PRIVATE_GET_UNVERIFIED'});
+   return fail('MOTO_PRIVATE_GET_UNVERIFIED');
+  }
+  bootstrapped=true;
+  publish({...s,phase:cancelling?'cancelled':'booked',quote,
+   bookingKey:record.bookingKey,tripId:data.tripId,
+   cancellationKey:record.cancellationKey,error:null});
+  return Object.freeze({ok:true,recoveredWithoutPost:true,
+   qaOnly:true,productionEnabled:false});
+ }
+ async function clearConfirmedCancellation(){
+  const s=state;
+  if(s.phase!=='cancelled'||!same(s))return fail('MOTO_CONFIRMED_CANCEL_REQUIRED');
+  const seq=++epoch;publish({...s,phase:'resetting'});
+  if(canSave){
+   try{await recoveryStore.clear();}
+   catch{
+    if(seq===epoch&&same(s))publish({...s,phase:'cancelled',
+     error:'MOTO_SECURE_PURGE_FAILED'});
+    return fail('MOTO_SECURE_PURGE_FAILED');
+   }
+  }
+  if(seq!==epoch||!same(s))return fail('MOTO_STALE_SESSION');
+  clear();bootstrapped=true;
+  return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+ }
+ return Object.freeze({snapshot,clear,discardQuote,restore,clearConfirmedCancellation,
+  requestQuote,acceptQuote,book,readBooking,cancel,readCancellation,productionEnabled:false});
 }

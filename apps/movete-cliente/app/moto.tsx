@@ -27,7 +27,8 @@ function PrivateMoto({authenticated,client,moto}:{
  const [confirmCancel,setConfirmCancel]=useState(false);
  // A reviewed route must not diverge from a priced or possibly booked quote.
  const canEdit=moto.phase==='idle'&&!sending;
- const quoteExpired=Boolean(moto.quote&&moto.quote.expiresAt<=Date.now());
+ const quoteExpired=Boolean(moto.quote&&['quoted','accepted'].includes(moto.phase)
+  &&moto.quote.expiresAt<=Date.now());
  function discardQuote(){
   if(sending)return;
   const result=client.discardMotoQuote();
@@ -65,11 +66,12 @@ function PrivateMoto({authenticated,client,moto}:{
   }finally{setSending(false);}
  }
  async function readBack(){
-  if(!moto.contractReady||!moto.needsReadback||sending)return;
+  if(!moto.needsReadback||sending)return;
   setSending(true);
   try{
-   const result=moto.phase==='bookingUnknown'
-    ?await client.readMotoBooking():await client.readMotoCancellation();
+   const result=moto.phase==='restoreUnknown'?await client.restoreMotoPassenger()
+    :moto.phase==='bookingUnknown'?await client.readMotoBooking()
+    :await client.readMotoCancellation();
    setFeedback(result.ok?'El servidor confirmó el comprobante MOTO original.':
     'El servidor aún no confirmó la operación; no enviaremos otro POST.');
   }finally{setSending(false);}
@@ -156,7 +158,19 @@ function PrivateMoto({authenticated,client,moto}:{
    </View>}
    {moto.needsReadback&&<Action label="Recuperar comprobante MOTO sin reenviar"
     disabled={sending} busy={sending} onPress={()=>{void readBack();}}/>}
-   {moto.cancelled&&<Text style={styles.text}>Viaje MOTO cancelado en QA, asiento revertido. No se efectuó reembolso bancario.</Text>}
+   {moto.cancelled&&<View>
+    <Text style={styles.text}>Viaje MOTO cancelado en QA, asiento revertido. No se efectuó reembolso bancario.</Text>
+    <Action label="Cerrar comprobante MOTO cancelado y preparar otro viaje"
+     secondary disabled={sending} onPress={()=>{void (async()=>{
+      setSending(true);
+      try{
+       const result=await client.clearConfirmedMotoCancellation();
+       if(result.ok){setReviewed(null);setConfirmBook(false);setConfirmCancel(false);}
+       setFeedback(result.ok?'Cancelación cerrada en el teléfono; permanece el registro del servidor.':
+        'No se pudo limpiar la clave segura. No se admite otra reserva.');
+      }finally{setSending(false);}
+     })();}}/>
+   </View>
    {feedback!==''&&<Text accessibilityRole="alert" style={styles.small}>{feedback}</Text>}
    <Text style={styles.small}>MOTO no está disponible comercialmente. G100 solo tiene contratos SQL de laboratorio; sin API HTTPS ni mapas, asignación, ETA, KYC del motorista o pagos reales.</Text>
   </Panel>

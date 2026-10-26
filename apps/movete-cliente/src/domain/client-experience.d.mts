@@ -122,6 +122,8 @@ export type ClientExperience={
  readMotoBooking():Promise<ClientResult>;
  cancelMoto(args:{cancellationKey:string}):Promise<ClientResult>;
  readMotoCancellation():Promise<ClientResult>;
+ restoreMotoPassenger():Promise<ClientResult>;
+ clearConfirmedMotoCancellation():Promise<ClientResult>;
  resetMoto():ClientResult;
  discardMotoQuote():ClientResult;
  signOut():Promise<ClientResult>;
@@ -211,6 +213,8 @@ export declare function createClientExperience(options?:{
   fetchImpl?:(url:string,request:unknown)=>Promise<unknown>;
   timeoutMs?:number;maxBytes?:number
  }|null;
+ motoRecoveryStore?:{read:()=>Promise<unknown>;write:(value:unknown)=>Promise<void>;
+ clear:()=>Promise<void>}|null;
  motoPassengerOptions?:{
   enabled?:boolean;contractCertified?:boolean;externalRuntimeVerified?:boolean;
   motoLegalVerified?:boolean;motoRouteVerified?:boolean;
