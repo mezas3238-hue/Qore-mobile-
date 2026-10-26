@@ -30,8 +30,12 @@ export function getApprovedNativeDriverStagingRuntime():DriverStagingRuntime|nul
     if(identity.error||identity.data?.user?.id!==userId)return false;
     const roles=await supabase.from('user_roles').select('role')
      .eq('user_id',userId).limit(3);
-    return !roles.error&&Array.isArray(roles.data)&&roles.data.length===1
-     &&roles.data[0]?.role==='driver';
+    // Supabase's untyped table projection can infer never[] at compile time.
+    // Treat the result as untrusted and inspect the exact public role shape.
+    const rows:unknown=roles.data;
+    return !roles.error&&Array.isArray(rows)&&rows.length===1
+     &&rows[0]!==null&&typeof rows[0]==='object'
+     &&(rows[0] as {role?:unknown}).role==='driver';
    }catch{return false;}
   },
   // No trusted navigation/vehicle-motion provider exists. Keep chat sends
