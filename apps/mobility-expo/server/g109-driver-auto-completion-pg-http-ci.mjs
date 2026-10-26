@@ -266,6 +266,52 @@ async function main(){
   const transition='/v1/staging/trips/'+tripId+'/transition';
   const current='/v1/staging/driver/trips/current';
   const history='/v1/staging/rider/history';
+  // G114: ACTUAL Architect B Passenger codecs use A authenticated HTTP
+  // and the SAME accepted pre-G38 fixture that A native Driver completes.
+  // This is NONCOMMERCIAL CI, not legal approval of a new G73 booking.
+  const bRoot=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  const [{createRiderStatusGateway},{createClientHistoryGateway},
+   {createRiderPollingCoordinator}]=await Promise.all([
+    import(new URL('ride-status-gateway.mjs',bRoot)),
+    import(new URL('client-history-gateway.mjs',bRoot)),
+    import(new URL('rider-polling.mjs',bRoot))
+   ]);
+  const bOrigin='https://qore-g114-loopback-ci.invalid';
+  let clientActor=rider;
+  const bSession=async()=>({
+   role:'passenger',subject:clientActor,
+   token:clientActor===rider?riderToken:foreignToken,
+   authRevision:1,expiresAt:Date.now()+600000
+  });
+  let bReads=0;
+  const bFetch=(url,options)=>{
+   const requested=new URL(url);
+   assert.equal(requested.origin,bOrigin,'G114 B Client cannot call external services');
+   assert.equal(requested.search,'');
+   assert.equal(requested.hash,'');
+   assert([cl,history].includes(requested.pathname),'G114 GET allowlist');
+   assert.equal(options.method,'GET','G114 Passenger is read-only');
+   bReads++;
+   return fetch(origin+requested.pathname,{...options,redirect:'error'});
+  };
+  const bStatus=createRiderStatusGateway({
+   enabled:true,contractCertified:true,origin:bOrigin,
+   pinnedOrigin:bOrigin,getSession:bSession,fetchImpl:bFetch
+  });
+  const bHistory=createClientHistoryGateway({
+   enabled:true,contractCertified:true,origin:bOrigin,
+   pinnedOrigin:bOrigin,getSession:bSession,fetchImpl:bFetch
+  });
+  assert(bStatus.isConfigured()&&bHistory.isConfigured());
+  const bPolling=createRiderPollingCoordinator({
+   gateway:{send:(operation,input)=>{
+    assert.equal(operation,'rideStatus');
+    assert.equal(input.id,tripId);
+    return bStatus.fetchStatus(input.id);
+   }},
+   getSession:bSession
+  });
+  assert.equal(bPolling.begin(tripId,rider).ok,true);
   const states=[
    ['accepted','assigned',2,'arrive'],
    ['arriving','arriving',3,'pickup'],
@@ -290,6 +336,24 @@ async function main(){
    assert.equal(completedHistory[0].kind,'RIDE');
    assert.equal(completedHistory[0].status,historyState);
    assert.equal(completedHistory[0].revision,revision);
+   // B Client's real HTTP decoder, polling reducer and own-history read
+   // must observe each committed Driver transition without fake GPS/ETA.
+   const bTick=await bPolling.tick();
+   assert.equal(bTick.ok,true,JSON.stringify(bTick));
+   const clientView=bPolling.snapshot();
+   assert.equal(clientView.tripId,tripId);
+   assert.equal(clientView.revision,revision);
+   assert.equal(clientView.state,riderState);
+   assert.equal(clientView.assignedDriver,null);
+   assert.equal(clientView.position,null);
+   assert.equal(clientView.etaMinutes,null);
+   const bPage=await bHistory.fetchPage(null);
+   assert.equal(bPage.ok,true,JSON.stringify(bPage));
+   assert.equal(bPage.data.ownerId,rider);
+   const bItems=bPage.data.items.filter(x=>x.serviceId===tripId);
+   assert.equal(bItems.length,1);
+   assert.equal(bItems[0].revision,revision);
+   assert.equal(bItems[0].status,historyState);
    assert(!JSON.stringify(h.data).includes(driver),
     'G26 must not expose Driver identity in Passenger history');
    assert.equal(d.data.tripId,tripId);
@@ -403,6 +467,22 @@ async function main(){
   assert.equal(terminal.revision,5);
   assert.equal(Number(terminal.events),4);
   assert.equal(Number(terminal.slot),0);
+  // Switching Passenger identity must clear B's existing subscription.
+  const beforeSwitch=bReads;
+  clientActor=outsider;
+  const deniedB=await bStatus.fetchStatus(tripId);
+  assert.equal(deniedB.ok,false);
+  assert.equal(deniedB.code,'TRIP_NOT_FOUND');
+  const switchedB=await bPolling.tick();
+  assert.equal(switchedB.ok,false);
+  assert.equal(switchedB.code,'SESSION_CHANGED');
+  assert.equal(bPolling.snapshot().tripId,null);
+  assert.equal(bReads,beforeSwitch+1,
+   'B must not fetch the previous account after identity rotation');
+  const foreignOwnB=await bHistory.fetchPage(null);
+  assert.equal(foreignOwnB.ok,true);
+  assert(!foreignOwnB.data.items.some(x=>x.serviceId===tripId));
+  console.log('G114 CROSS-BRANCH PASS: real B Passenger status+polling+history and real A Driver G65 share four durable PG16 revisions of one pre-G38 synthetic AUTO trip; private session rotation, no fake GPS/ETA, no LIVE.');
   console.log('G110 PASS: G26 original own-history SQL repository + authenticated HTTP GET reflect same AUTO trip at every revision, completed final state, foreign Passenger denied, no Driver PII');
   console.log('G111 PASS: Native Driver G65 controller and native HTTP codecs -> original A PG16 accepted, arrive, pickup, complete; 3 unique POST, 4 server-confirmed GET, read-only terminal, Driver slot released, no LIVE');
   console.log('G109 PASS: real HTTP + PostgreSQL16 independently isolated pre-G38 QA acceptance -> arriving -> in_progress -> completed; Driver/Rider same persisted revision; G36 slot released; idempotent keys; no GPS, payments, new legal assignment or LIVE.');
