@@ -33,7 +33,8 @@ VALUES
  ('11600000-0000-4116-8116-000000001002','MOTO_RIDE','G116_MOTO_60_QA',
  '11600000-0000-4116-8116-000000000001',true,
  pg_catalog.transaction_timestamp()-interval '1 hour',
- pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);
+ pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60)
+ON CONFLICT DO NOTHING; -- Existing G98 AUTO campaign remains authoritative.
 DO $test$
 DECLARE
  owner_id uuid:='11600000-0000-4116-8116-000000000001';
