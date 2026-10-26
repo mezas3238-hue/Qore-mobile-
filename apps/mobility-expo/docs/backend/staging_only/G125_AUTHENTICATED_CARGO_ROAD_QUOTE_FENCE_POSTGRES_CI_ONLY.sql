@@ -48,7 +48,7 @@ BEGIN
  OR current_setting('application_name')<>'qore_ci_disposable_chain'
  OR _sender IS NULL OR _delivery IS NULL OR _evidence IS NULL
  OR _vehicle NOT IN ('AUTO','MOTO') OR _zone !~ '^(AUTO|MOTO)_[A-Z_]{3,20}$'
- OR _zone<>_vehicle||'_'||pg_catalog.substring(_zone FROM pg_catalog.length(_vehicle)+2)
+ OR _zone<>_vehicle||'_'||pg_catalog.substr(_zone,pg_catalog.length(_vehicle)+2)
  OR _pickup !~ '^[A-Z_]{3,60}$' OR _destination !~ '^[A-Z_]{3,60}$'
  OR _pickup=_destination OR _meters NOT BETWEEN 1 AND 500000
  OR _seconds NOT BETWEEN 1 AND 86400 OR _tolls NOT BETWEEN 0 AND 1000000
@@ -87,7 +87,7 @@ BEGIN
  ELSE
   SELECT * INTO p FROM public.mobility_stage_g124_delivery_tariff_policy
    WHERE vehicle_kind=_vehicle::public.mobility_vehicle_kind
-   AND cargo_zone=pg_catalog.substring(_zone FROM pg_catalog.length(_vehicle)+2)
+   AND cargo_zone=pg_catalog.substr(_zone,pg_catalog.length(_vehicle)+2)
    FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'G125 no Owner cargo tariff'
    USING ERRCODE='P1251'; END IF;
