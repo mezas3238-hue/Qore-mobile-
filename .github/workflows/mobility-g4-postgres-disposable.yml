@@ -10,6 +10,7 @@ on:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
   pull_request:
@@ -18,6 +19,7 @@ on:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
@@ -322,6 +324,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G37_TRIP_DELIVERY_DML_STATE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G37 reverify G36 two PostgreSQL sessions and both private-offer race orders after DML revoke
         run: python3 apps/mobility-expo/server/g36-cross-service-driver-race-ci.py
+      - name: G109 create independent disposable accepted AUTO fixture BEFORE G38 legal fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql
 
       - name: G38.0 separate delivered/disputed case from occupied Driver slot
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G38_0_DISPUTE_CASE_NO_SLOT_POSTGRES_CI_ONLY.sql

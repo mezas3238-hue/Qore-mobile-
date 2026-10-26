@@ -1,5 +1,5 @@
 /**
- * G109: positive, NONCOMMERCIAL completion on the historical G20 disposable
+ * G109: positive, NONCOMMERCIAL completion on an isolated QA accepted
  * PostgreSQL fixture accepted BEFORE the G38 legal/geofence fence was installed.
  *
  * This DOES NOT create an acceptance, bypass G38, activate LIVE dispatch, or
@@ -23,9 +23,9 @@ import {createQoreTripCommandGateway}
  from './g4-trip-command-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-const fixture='00000000-0000-4000-8000-000000000243';
-const driver='00000000-0000-4000-8000-000000000181';
-const rider='00000000-0000-4000-8000-000000000241';
+const fixture='10900000-0000-4109-8109-000000000023';
+const driver='10900000-0000-4109-8109-000000000022';
+const rider='10900000-0000-4109-8109-000000000021';
 const outsider='00000000-0000-4000-8000-000000000182';
 const session='10900000-0000-4109-8109-000000000003';
 const keys=[
@@ -70,14 +70,14 @@ async function http(origin,path,{auth=driverToken,method='GET',body}={}){
 async function main(){
  assert.equal(psql("SELECT (current_database()='qore_disposable_chain' AND "+
   "current_setting('application_name')='qore_ci_disposable_chain')::text"),'true');
- // This trip was accepted by G20 with a valid reviewed synthetic license.
+ // This independent QA trip was accepted before G38 with a synthetic G20-reviewed license.
  // G38 is installed NOW and MUST remain installed while completing it.
  assert.equal(psql("SELECT (to_regclass('public.mobility_stage_g38_trusted_offer_proofs') "+
   "IS NOT NULL AND to_regclass('public.mobility_stage_g36_driver_slots') "+
   "IS NOT NULL)::text"),'true');
  const tripId=psql("SET ROLE service_role; SELECT id::text "+
   "FROM public.mobility_stage_auto_demo_trips WHERE request_key='"+fixture+"'");
- assert(UUID.test(tripId),'G20 historical fixture missing');
+ assert(UUID.test(tripId),'G109 independent QA fixture missing');
  // Auditor-only CI snapshot: G36 slot registry is intentionally denied to
  // service_role. The synthetic database owner inspects it here, while every
  // HTTP endpoint and Driver mutation continues through service_role RPCs.
@@ -90,7 +90,7 @@ async function main(){
   "AND s.assignment_id=t.id AND s.assignment_kind='AUTO_RIDE'))::text "+
   "FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+tripId+"'");
  const before=snapshot();
- assert.equal(before.status,'accepted','G109 must not create/fake an acceptance');
+ assert.equal(before.status,'accepted','G109 must not create an acceptance after G38');
  assert.equal(before.revision,2);
  assert.equal(before.driverId,driver);assert.equal(before.passengerId,rider);
  assert.equal(Number(before.events),1);
@@ -266,7 +266,7 @@ async function main(){
   assert.equal(terminal.revision,5);
   assert.equal(Number(terminal.events),4);
   assert.equal(Number(terminal.slot),0);
-  console.log('G109 PASS: real HTTP + PostgreSQL16 G20 historical QA acceptance -> arriving -> in_progress -> completed; Driver/Rider same persisted revision; G36 slot released; idempotent keys; no GPS, payments, new legal assignment or LIVE.');
+  console.log('G109 PASS: real HTTP + PostgreSQL16 independently isolated pre-G38 QA acceptance -> arriving -> in_progress -> completed; Driver/Rider same persisted revision; G36 slot released; idempotent keys; no GPS, payments, new legal assignment or LIVE.');
  }finally{
   server.close();
   if(server.listening)await once(server,'close');
