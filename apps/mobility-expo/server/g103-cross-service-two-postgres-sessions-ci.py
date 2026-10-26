@@ -59,6 +59,8 @@ def seed():
           " VALUES(" + sql_uuid(OWNER) + ",'owner','active'," + sql_uuid(OWNER) + ");"
           "UPDATE public.mobility_stage_g93_ride_campaigns SET active=false "
           "WHERE service_kind='MOTO_RIDE' AND active;"
+          "UPDATE public.mobility_stage_g93_ride_campaigns SET active=false "
+          "WHERE service_kind='AUTO_RIDE' AND active;"
           "INSERT INTO public.mobility_stage_fare_rules"
           "(rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,"
           "minimum_pyg,commission_bps,valid_from,valid_until,active,approved_by,approved_at)"

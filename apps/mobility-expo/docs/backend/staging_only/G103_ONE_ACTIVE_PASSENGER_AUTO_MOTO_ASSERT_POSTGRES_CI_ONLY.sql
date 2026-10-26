@@ -23,6 +23,10 @@ INSERT INTO public.mobility_stage_fare_rules(
 -- approval; ROLLBACK restores the earlier campaign after this assertion.
 UPDATE public.mobility_stage_g93_ride_campaigns SET active=false
  WHERE service_kind='MOTO_RIDE' AND active;
+-- G98 leaves an independently approved synthetic AUTO campaign; isolate
+-- this G103 cross-service test without relaxing G93 booking disclosure.
+UPDATE public.mobility_stage_g93_ride_campaigns SET active=false
+ WHERE service_kind='AUTO_RIDE' AND active;
 INSERT INTO public.mobility_stage_g93_ride_campaigns
  (id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days)
  VALUES('10300000-0000-4103-8103-000000000020','MOTO_RIDE',
