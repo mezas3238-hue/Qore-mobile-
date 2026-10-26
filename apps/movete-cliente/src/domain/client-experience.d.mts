@@ -21,7 +21,7 @@ export type ClientSnapshot={
  motoPassenger:{contractReady:boolean;phase:string;busy:boolean;
   quote:{quoteId:string;originalFareGs:number;customerPaysGs:number;
    customerSubsidyGs:number;driverReceivesGs:number;platformRetainsGs:number;
-   commissionBps:1200;subsidyBps:1000;expiresAt:number}|null;
+   commissionBps:number;subsidyBps:1000;expiresAt:number}|null;
   tripId:string|null;needsReadback:boolean;cancelled:boolean;
   error:string|null;qaOnly:true;productionEnabled:false};
  autoRouteQuote:{available:boolean;busy:boolean;productionEnabled:false};
