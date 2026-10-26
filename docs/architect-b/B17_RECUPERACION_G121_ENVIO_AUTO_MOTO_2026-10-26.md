@@ -1,0 +1,11 @@
+# B17 — recuperación G121 real de solicitudes de envíos AUTO/MOTO (QA, 26/10/2026)
+
+**Función entregada en App Cliente:** después de perder el ACK de un POST de envío, la pantalla permite consultar **solo** el registro persistido del propio pasajero con `GET /v1/staging/sender/deliveries/requests/{requestKey}`. La prueba del servidor incluye `deliveryId`, vehículo y revisión. El resultado **no** borra el estado incierto de reserva, no vuelve a enviar POST y no permite cobro, precio o despacho.
+
+**Cadena de verdad:** A G121 [CI PostgreSQL16](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/40412870942), HEAD A `33071bbe93f1f91e0127171e4a7ea43fe2969848`. B: `g121-delivery-registration-gateway.mjs` y su prueba; `client-experience.mjs` / `ClientRuntime.tsx` / `BookingRecoveryPanel.tsx`; pruebas integradas `g121-delivery-client-experience.test.mjs`. El JWT Passenger, el titular, clave y revisión de sesión se verifican antes y después del GET; respuesta DTO exacta (9 campos). Solo HTTPS fijado y sin URLs con direcciones. OFF por defecto.
+
+**Habilitación de lectura** requiere certificados externos independientes: `EXPO_PUBLIC_G121_OWNER_APPROVED`, `EXPO_PUBLIC_G121_CONTRACT_VERIFIED`, `EXPO_PUBLIC_G121_EXTERNAL_RUNTIME_VERIFIED`, `EXPO_PUBLIC_G121_PASSENGER_RLS_VERIFIED` todos true, además de `EXPO_PUBLIC_F1_STAGING_ORIGIN` igual al pin HTTPS. Ninguna bandera debe elevarse por pruebas CI localhost. El enlace del panel aparece únicamente para una mutación `deliveryRequest` fallida, misma sesión y misma clave. No se integra booking comercial.
+
+**Bloqueo real**: G122 del A confirma después de una solicitud G5 y cotización G7, pero G122 carece todavía de ruta de precios reales de Paraguay/Owner, bloqueo de dispatch G123 y contrato comercial pre-reserva completo. Se requiere una cotización de envío autoritativa y aceptación antes de ofrecer conductor. Mantener `app/envios.tsx` botón cotizar/solicitar deshabilitado. G38/legal y G71/KYC siguen NO_GO.
+
+**Pruebas necesarias para E2E de negocio (pendientes):** mismo deliveryId en Cliente B, oferta aceptable por Driver C legalmente habilitado, custodia/estado y backoffice D en PostgreSQL compartido; TTL, consentimiento, validación tarifa Gs, cliente revocado, fallos red, cancelación y ledger. Sin merge, deployment, cobros ni LIVE.

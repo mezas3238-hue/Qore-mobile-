@@ -1,5 +1,6 @@
 import {createClientSessionController} from './client-session.mjs';
 import {createPassengerBookingStagingGateway} from './passenger-booking-staging-gateway.mjs';
+import {createG121DeliveryRegistrationGateway} from './g121-delivery-registration-gateway.mjs';
 import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
@@ -41,7 +42,7 @@ import {createG119MotoStatusGateway} from './g119-moto-ride-status-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,deliveryRegistrationOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -53,6 +54,8 @@ export function createClientExperience({authProvider=null,gateway=null,
  let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null,motoHttp=null,motoRideGateway=null;
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
+ let registrationEpoch=0,registration={busy:false,receipt:null};
+ let g121Registration=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
@@ -73,6 +76,8 @@ export function createClientExperience({authProvider=null,gateway=null,
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
+  registrationEpoch++;registration={busy:false,receipt:null};
+  g121Registration?.cancelPending();
   g95Restored=null;
   g95Epoch++;g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
   subsidyEpoch++;subsidyReceipt=null;subsidyBusy=false;
@@ -357,6 +362,15 @@ export function createClientExperience({authProvider=null,gateway=null,
    ?statusGateway.fetchStatus(args?.id)
    :gateway?.send?.(operation,args)??fail('GATEWAY_UNAVAILABLE')
  }:gateway;
+ g121Registration=createG121DeliveryRegistrationGateway({
+  ...(deliveryRegistrationOptions??{}),now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ });
  // R56: real HTTP booking is opt-in and checked against a STRICT G11 QA
  // receipt. Generic 201 never certifies an actual trip or delivery.
  // No booking is wired in the default ClientRuntimeProvider.
@@ -1126,6 +1140,49 @@ export function createClientExperience({authProvider=null,gateway=null,
   motoRide={busy:false,data:result.data,error:null};notify();
   return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
  }
+ function publicDeliveryRegistration(){
+  const pending=mutations.publicState(),user=actor(),saved=registration.receipt;
+  const belongs=Boolean(user&&pending.operation==='deliveryRequest'
+   &&pending.requestKey&&saved?.requestKey===pending.requestKey
+   &&saved.ownerId===user.subject
+   &&saved.sessionRevision===session.privacyRevision());
+  return Object.freeze({
+   readReady:Boolean(user&&g121Registration?.isConfigured()),
+   busy:Boolean(user&&registration.busy),
+   deliveryId:belongs?saved.deliveryId:null,
+   vehicleKind:belongs?saved.vehicleKind:null,
+   revision:belongs?saved.revision:null,
+   requestKey:belongs?saved.requestKey:null,
+   registrationOnly:true,qaOnly:true,productionEnabled:false
+  });
+ }
+ async function readUnconfirmedDeliveryRegistration(){
+  const user=actor(),pending=mutations.publicState();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(!g121Registration?.isConfigured())return fail('G121_NOT_CERTIFIED');
+  if(pending.phase!=='failed'||pending.operation!=='deliveryRequest'
+   ||!pending.requestKey)return fail('G121_NO_UNCONFIRMED_DELIVERY');
+  if(registration.busy)return fail('G121_IN_FLIGHT');
+  const epoch=++registrationEpoch,owner=user.subject;
+  const sessionRevision=session.privacyRevision(),requestKey=pending.requestKey;
+  registration={busy:true,receipt:null};notify();
+  let result;
+  try{result=await g121Registration.read({
+   requestKey,expectedSubject:owner,expectedSessionRevision:sessionRevision
+  });}catch{result=fail('G121_UNAVAILABLE');}
+  const current=actor(),mutation=mutations.publicState();
+  if(epoch!==registrationEpoch||!current||current.subject!==owner
+   ||session.privacyRevision()!==sessionRevision
+   ||mutation.operation!=='deliveryRequest'||mutation.phase!=='failed'
+   ||mutation.requestKey!==requestKey)return fail('STALE_SESSION_RESPONSE');
+  if(result.ok){
+   registration={busy:false,receipt:Object.freeze({
+    requestKey,ownerId:owner,sessionRevision,
+    deliveryId:result.deliveryId,vehicleKind:result.vehicleKind,revision:result.revision
+   })};
+  }else registration={busy:false,receipt:null};
+  notify();return result;
+ }
  function snapshot(){
   const user=actor();
   guardCustodyScope();
@@ -1137,6 +1194,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    clearPrivate();
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
+    deliveryRegistration:publicDeliveryRegistration(),
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
@@ -1160,6 +1218,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    mutation:mutations.publicState(),
    bookingRecovery:Object.freeze({readReady:Boolean(bookingGateway?.reconciliationConfigured?.()),
     productionEnabled:false}),
+   deliveryRegistration:publicDeliveryRegistration(),
    rideContinuation:rideContinuation(),
    rideHistoryRecovery:rideHistoryRecovery(),
    completedRideHistory:completedRideHistory(),
@@ -1350,6 +1409,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
+  readUnconfirmedDeliveryRegistration,
   prepareFare:body=>{const result=prepare('fareQuote',body);notify();return result;},
   prepareServerFare:args=>{const result=prepareServerFare(args);notify();return result;},
   submitServerFare:async()=>{const result=await fareFlow.submit();notify();return result;},

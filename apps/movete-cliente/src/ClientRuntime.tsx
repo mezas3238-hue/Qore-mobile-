@@ -82,12 +82,23 @@ export function ClientRuntimeProvider({children,experience}:{
    pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
   }:null;
  },[motoRecoveryStore]);
+ // G121 is a read-only opt-in, never inferred from CI/liveness.
+ const g121Options=useMemo(()=>({
+  enabled:process.env.EXPO_PUBLIC_G121_OWNER_APPROVED==='true',
+  ownerApproved:process.env.EXPO_PUBLIC_G121_OWNER_APPROVED==='true',
+  contractCertified:process.env.EXPO_PUBLIC_G121_CONTRACT_VERIFIED==='true',
+  externalRuntimeVerified:process.env.EXPO_PUBLIC_G121_EXTERNAL_RUNTIME_VERIFIED==='true',
+  passengerRlsVerified:process.env.EXPO_PUBLIC_G121_PASSENGER_RLS_VERIFIED==='true',
+  origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+  pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
+ }),[]);
  const client=useMemo(()=>experience??createClientExperience({
   authProvider:nativeAuth,autoG73HttpOptions:qaHttp,g95RecoveryStore,
+  deliveryRegistrationOptions:g121Options,
   motoPassengerHttpOptions:motoG101,motoRecoveryStore,
   historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
   statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
- }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore]);
+ }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options]);
  useEffect(()=>{
   if(!nativeAuth)return;
   let active=true;

@@ -5,6 +5,9 @@ export type ClientSnapshot={
  account:{subject:string;role:'passenger'}|null;
  mutation:{phase:string;operation:string|null;requestKey:string|null;error:string|null};
  bookingRecovery:{readReady:boolean;productionEnabled:false};
+ deliveryRegistration:{readReady:boolean;busy:boolean;deliveryId:string|null;
+  vehicleKind:'AUTO'|'MOTO'|null;revision:number|null;requestKey:string|null;
+  registrationOnly:true;qaOnly:true;productionEnabled:false};
  rideContinuation:{canVerify:boolean;tripId:string|null;qaOnly:true;productionEnabled:false};
  rideHistoryRecovery:{readReady:boolean;busy:boolean;qaOnly:true;productionEnabled:false};
  completedRideHistory:{readReady:boolean;verifying:boolean;verified:boolean;tripId:string|null;qaOnly:true;productionEnabled:false};
@@ -179,6 +182,7 @@ export type ClientExperience={
  prepareRide(body:unknown):ClientResult;
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
  prepareDelivery(body:unknown):ClientResult;
+ readUnconfirmedDeliveryRegistration():Promise<ClientResult>;
  prepareFare(body:unknown):ClientResult;
  prepareServerFare(args:{tripId:string;requestKey:string}):ClientResult;
  submitServerFare():Promise<ClientResult>;
@@ -275,6 +279,12 @@ export declare function createClientExperience(options?:{
   quoteGateway?:(scope:unknown)=>Promise<unknown>|unknown;
   bookingGateway?:(scope:unknown)=>Promise<unknown>|unknown;
   reconciliationGateway?:(scope:unknown)=>Promise<unknown>|unknown;
+ }|null;
+ deliveryRegistrationOptions?:{
+  enabled?:boolean;ownerApproved?:boolean;contractCertified?:boolean;
+  externalRuntimeVerified?:boolean;passengerRlsVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,req:unknown)=>Promise<unknown>;
  }|null;
  bookingHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
