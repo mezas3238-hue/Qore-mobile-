@@ -27,6 +27,8 @@ export type DriverWorkspaceController=Readonly<{
  subscribe(listener:(value:DriverWorkspaceSnapshot)=>void):()=>void;
  invalidate():DriverWorkspaceSnapshot;
  refresh():Promise<DriverWorkspaceSnapshot>;
+ /** Foreground-only, coalesced QA refresh without loading flicker. */
+ poll():Promise<DriverWorkspaceSnapshot>;
 }>;
 export type DriverWorkspaceControllerOptions={
  authAdapter?:DriverAuthSessionAdapter|null;

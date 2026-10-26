@@ -44,7 +44,7 @@ export function createDriverWorkspaceController({
  if(![request,now,readInbox,readDocuments,readLicense].every(fn=>typeof fn==='function'))
   throw Error('Trusted Driver QA workspace functions required');
  const enabled=config({authAdapter,apiOrigin,request,now});
- let epoch=0;
+ let epoch=0,pollPending=false;
  let current=make(enabled?'signed-out':'not-configured');
  const listeners=new Set();
  function emit(next){
@@ -55,8 +55,64 @@ export function createDriverWorkspaceController({
   return current;
  }
  function reset(phase=enabled?'signed-out':'not-configured'){
-  epoch++;
+  epoch++;pollPending=false;
   return emit(make(phase));
+ }
+ // Full private snapshot refresh. Quiet polling revalidates ALL three server
+ // sources without showing a loading flash every five seconds.
+ async function readVerified(quiet=false){
+  if(!enabled)return reset('not-configured');
+  const nonce=++epoch;
+  if(!quiet)emit(make('loading'));
+  let session;
+  try{
+   session=await authAdapter.getSession();
+   if(nonce!==epoch)return current;
+   if(session===null||session===undefined)return emit(make('signed-out'));
+   if(!cleanSession(session))return emit(make('authorization-required'));
+   const connection={apiOrigin,accessToken:session.accessToken,request,
+    approvedStagingHost,allowedByOwner};
+   const [offers,documents,license]=await Promise.all([
+    readInbox({...connection,now}),
+    readDocuments(connection),
+    readLicense(connection)
+   ]);
+   if(nonce!==epoch)return current;
+   if(!Array.isArray(offers)||offers.length>10||
+      !Array.isArray(documents)||documents.length>8||
+      !isObject(license)||typeof license.currentLicenseApproved!=='boolean'||
+      license.driverEligible!==false||license.liveEnabled!==false)
+    throw Error('Invalid private Driver state');
+   const safeOffers=offers.map(offer=>{
+    if(!isObject(offer)||!['AUTO_RIDE','DELIVERY'].includes(offer.kind)||
+      typeof offer.offerId!=='string'||!UUID.test(offer.offerId)||
+      typeof offer.serviceId!=='string'||!UUID.test(offer.serviceId)||
+      !Number.isSafeInteger(offer.expiresAtMs)||
+      offer.expiresAtMs<=now()+3000)
+     throw Error('Invalid offer in Driver workspace');
+    return Object.freeze({kind:offer.kind,offerId:offer.offerId,
+     serviceId:offer.serviceId,expiresAtMs:offer.expiresAtMs});
+   });
+   const safeDocs=documents.map(doc=>{
+    if(!isObject(doc)||typeof doc.kind!=='string'||
+      !['licencia','identidad_frente','identidad_dorso','cedula_verde',
+       'seguro','inspeccion','habilitacion','rostro_selfie'].includes(doc.kind)||
+      !['pending','approved','rejected'].includes(doc.status)||
+      !Number.isSafeInteger(doc.submittedAtMs)||
+      !(doc.reviewedAtMs===null||Number.isSafeInteger(doc.reviewedAtMs)))
+     throw Error('Invalid Driver document state');
+    return Object.freeze({kind:doc.kind,status:doc.status,
+     submittedAtMs:doc.submittedAtMs,reviewedAtMs:doc.reviewedAtMs});
+   });
+   return emit(make('connected',safeOffers,safeDocs,
+    license.currentLicenseApproved));
+  }catch(error){
+   if(nonce!==epoch)return current;
+   const reason=error instanceof Error?error.message:'';
+   if(/session expired|role not authorized|authorization required/i.test(reason))
+    return reset('authorization-required');
+   return emit(make('offline'));
+  }
  }
  return Object.freeze({
   current:()=>current,
@@ -68,62 +124,13 @@ export function createDriverWorkspaceController({
   invalidate(){
    return reset();
   },
-  async refresh(){
-   if(!enabled)return reset('not-configured');
-   const nonce=++epoch;
-   emit(make('loading'));
-   let session;
-   try{
-    session=await authAdapter.getSession();
-    if(nonce!==epoch)return current;
-    if(session===null||session===undefined)return emit(make('signed-out'));
-    if(!cleanSession(session))return emit(make('authorization-required'));
-    // Keep token only in this async frame, never in controller persistent state.
-    const connection={apiOrigin,accessToken:session.accessToken,request,
-     approvedStagingHost,allowedByOwner};
-    const [offers,documents,license]=await Promise.all([
-     readInbox({...connection,now}),
-     readDocuments(connection),
-     readLicense(connection)
-    ]);
-    if(nonce!==epoch)return current;
-    if(!Array.isArray(offers)||offers.length>10||
-       !Array.isArray(documents)||documents.length>8||
-       !isObject(license)||typeof license.currentLicenseApproved!=='boolean'||
-       license.driverEligible!==false||license.liveEnabled!==false)
-     throw Error('Invalid private Driver state');
-    // Never trust unknown fields from injected adapters. Exact allowlist.
-    const safeOffers=offers.map(offer=>{
-     if(!isObject(offer)||!['AUTO_RIDE','DELIVERY'].includes(offer.kind)||
-       typeof offer.offerId!=='string'||!UUID.test(offer.offerId)||
-       typeof offer.serviceId!=='string'||!UUID.test(offer.serviceId)||
-       !Number.isSafeInteger(offer.expiresAtMs)||
-       offer.expiresAtMs<=now()+3000)
-      throw Error('Invalid offer in Driver workspace');
-     return Object.freeze({kind:offer.kind,offerId:offer.offerId,
-      serviceId:offer.serviceId,expiresAtMs:offer.expiresAtMs});
-    });
-    const safeDocs=documents.map(doc=>{
-     if(!isObject(doc)||typeof doc.kind!=='string'||
-       !['licencia','identidad_frente','identidad_dorso','cedula_verde',
-        'seguro','inspeccion','habilitacion','rostro_selfie'].includes(doc.kind)||
-       !['pending','approved','rejected'].includes(doc.status)||
-       !Number.isSafeInteger(doc.submittedAtMs)||
-       !(doc.reviewedAtMs===null||Number.isSafeInteger(doc.reviewedAtMs)))
-      throw Error('Invalid Driver document state');
-     return Object.freeze({kind:doc.kind,status:doc.status,
-      submittedAtMs:doc.submittedAtMs,reviewedAtMs:doc.reviewedAtMs});
-    });
-    return emit(make('connected',safeOffers,safeDocs,
-     license.currentLicenseApproved));
-   }catch(error){
-    if(nonce!==epoch)return current;
-    const reason=error instanceof Error?error.message:'';
-    if(/session expired|role not authorized|authorization required/i.test(reason)){
-     return reset('authorization-required');
-    }
-    return emit(make('offline'));
-   }
-  }
- });
+  refresh:()=>readVerified(false),
+  async poll(){
+   // No background discovery and no attempts without authenticated state.
+   // One in-flight quiet read only; manual refresh/invalidation supersedes it.
+   if(!enabled||current.phase!=='connected'||pollPending)return current;
+   pollPending=true;
+   try{return await readVerified(true);}
+   finally{pollPending=false;}
+  }, });
 }

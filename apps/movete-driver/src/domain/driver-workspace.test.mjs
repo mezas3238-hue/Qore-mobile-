@@ -168,3 +168,67 @@ test('G21 subscriber exception cannot prevent privacy reset and unsubscribe work
  assert.deepEqual(controller.current().offers,[]);
  assert.throws(()=>controller.subscribe(123),/subscriber/);
 });
+
+test('Driver STAGING poll receives new offers without a loading flash or POST',async()=>{
+ const nextOffer={kind:'AUTO_RIDE',
+  offerId:'55555555-5555-4555-8555-555555555555',
+  serviceId:'66666666-6666-4666-8666-666666666666',
+  expiresAtMs:TIME+27000};
+ let round=0;
+ const {controller,calls}=fixture({readInbox:async x=>{
+  calls.push(['inbox',x.accessToken]);return ++round===1?[]:[nextOffer];
+ }});
+ assert.equal((await controller.poll()).phase,'signed-out');
+ assert.equal(calls.length,0);
+ assert.equal((await controller.refresh()).offers.length,0);
+ const phases=[];
+ controller.subscribe(x=>phases.push(x.phase));
+ const state=await controller.poll();
+ assert.equal(state.phase,'connected');
+ assert.deepEqual(state.offers,[nextOffer]);
+ assert.deepEqual(phases,['connected']);
+ assert.deepEqual(calls.slice(-3),[
+  ['inbox',TOKEN_A],['documents',TOKEN_A],['license',TOKEN_A]
+ ]);
+});
+test('Foreground poll deduplicates simultaneous reads and drops failed authorization',async()=>{
+ let release;
+ const gate=new Promise(resolve=>{release=resolve;});
+ let polls=0,round=0;
+ const {controller}=fixture({
+  readInbox:async()=>{
+   polls++;round++;
+   if(round===1)return offers;
+   if(round===2){await gate;return offers;}
+   throw Error('Driver session expired');
+  }
+ });
+ assert.equal((await controller.refresh()).phase,'connected');
+ const first=controller.poll();
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ const second=await controller.poll();
+ assert.equal(second.phase,'connected');
+ assert.equal(polls,2);
+ release();
+ assert.equal((await first).phase,'connected');
+ assert.equal((await controller.poll()).phase,'authorization-required');
+ assert.deepEqual(controller.current().offers,[]);
+});
+test('Auth invalidation during poll does not resurrect private Driver data',async()=>{
+ let release;
+ const {controller}=fixture({
+  readInbox:async()=>{
+   if(!release)return offers;
+   return new Promise(resolve=>{const callback=release;release=()=>callback(resolve);});
+  }
+ });
+ await controller.refresh();
+ release=resolver=>resolver(offers);
+ const pending=controller.poll();
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ controller.invalidate();
+ assert.equal(controller.current().phase,'signed-out');
+ release();
+ await pending;
+ assert.deepEqual(controller.current().offers,[]);
+});

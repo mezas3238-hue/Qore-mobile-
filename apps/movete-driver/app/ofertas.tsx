@@ -1,10 +1,10 @@
-import React,{useEffect,useState} from 'react';
-import {ScrollView,Text,View} from 'react-native';
+import React,{useCallback,useState} from 'react';
+import {AppState,ScrollView,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
-import {router} from 'expo-router';
+import {router,useFocusEffect} from 'expo-router';
 
 /**
  * Read-only private STAGING inbox; never present a synthetic dispatch as LIVE.
@@ -12,15 +12,31 @@ import {router} from 'expo-router';
  * No "accept" control is enabled without an explicitly approved staging auth.
  */
 export default function DriverOffers(){
- const {state,refresh}=useDriverWorkspace();
+ const {state,refresh,poll}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
  const {state:actions,enabled,decide,reconcilePending}=useDriverOfferActions();
  const [clock,setClock]=useState(()=>Date.now());
- useEffect(()=>{
-  if(state.phase!=='connected')return;
-  const interval=setInterval(()=>setClock(Date.now()),1000);
-  return ()=>clearInterval(interval);
- },[state.phase]);
+ // The server suggests 5s polling for short-lived private offers. Refresh
+ // only while this screen is focused AND the device is in foreground.
+ // No accept/decline POST occurs here; each response is reauthenticated.
+ useFocusEffect(useCallback(()=>{
+  let focused=true;
+  const tick=()=>{if(focused&&AppState.currentState==='active')
+   setClock(Date.now());};
+  const sync=()=>{if(focused&&AppState.currentState==='active'){
+   tick();void poll();
+  }};
+  sync();
+  const clockTimer=setInterval(tick,1000);
+  const offerTimer=setInterval(sync,5000);
+  const foreground=AppState.addEventListener('change',status=>{
+   if(status==='active')sync();
+  });
+  return ()=>{
+   focused=false;clearInterval(clockTimer);clearInterval(offerTimer);
+   foreground.remove();
+  };
+ },[poll]));
  const available=state.phase==='connected'?
   state.offers.filter(item=>item.expiresAtMs>clock+3000):[];
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>

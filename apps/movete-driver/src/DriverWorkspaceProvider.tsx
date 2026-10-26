@@ -1,4 +1,4 @@
-import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
+import React,{createContext,useCallback,useContext,useEffect,useMemo,useState} from 'react';
 import {createDriverWorkspaceController} from './domain/driver-workspace.mjs';
 import type {
  DriverAuthSessionAdapter,DriverWorkspaceSnapshot,DriverWorkspaceController,
@@ -14,6 +14,7 @@ import type {
 type DriverWorkspaceContextValue={
  state:DriverWorkspaceSnapshot;
  refresh:()=>Promise<DriverWorkspaceSnapshot>;
+ poll:()=>Promise<DriverWorkspaceSnapshot>;
  clear:()=>void;
 };
 const Context=createContext<DriverWorkspaceContextValue|null>(null);
@@ -56,11 +57,12 @@ export function DriverWorkspaceProvider({
    controller.invalidate(); // invalidate pending asynchronous reads on unmount
   };
  },[controller,authAdapter]);
+ const refresh=useCallback(()=>controller.refresh(),[controller]);
+ const poll=useCallback(()=>controller.poll(),[controller]);
+ const clear=useCallback(()=>{controller.invalidate();},[controller]);
  const value=useMemo<DriverWorkspaceContextValue>(()=>({
-  state,
-  refresh:()=>controller.refresh(),
-  clear:()=>{controller.invalidate();}
- }),[controller,state]);
+  state,refresh,poll,clear
+ }),[state,refresh,poll,clear]);
  return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useDriverWorkspace(){
