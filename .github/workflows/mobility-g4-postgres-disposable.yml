@@ -581,3 +581,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G103_ONE_ACTIVE_PASSENGER_AUTO_MOTO_FENCE_POSTGRES_CI_ONLY.sql
       - name: G103 assert real G73/G100 service switches, canceled and repeated receipts, no privilege bypass
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G103_ONE_ACTIVE_PASSENGER_AUTO_MOTO_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G103 two real PostgreSQL sessions race AUTO versus MOTO and retry after winner cancellation
+        run: python3 apps/mobility-expo/server/g103-cross-service-two-postgres-sessions-ci.py
