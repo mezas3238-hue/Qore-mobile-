@@ -17,6 +17,10 @@ const owner='12400000-0000-4124-8124-000000000001';
 const operator='12400000-0000-4124-8124-000000000002';
 const passenger=['12400000-0000-4124-8124-000000000011',
  '12400000-0000-4124-8124-000000000012'];
+// G5 permits only one active sender delivery: second price version uses a
+// genuinely separate synthetic sender rather than bypassing the unique index.
+const freshPassenger=['12400000-0000-4124-8124-000000000013',
+ '12400000-0000-4124-8124-000000000014'];
 const keys=['12400000-0000-4124-8124-000000000021',
  '12400000-0000-4124-8124-000000000022'];
 const ownerToken='g124-owner-verified-private-aal2-qa-token';
@@ -99,7 +103,7 @@ async function main(){
  assert.equal(sql("SELECT (current_database()='qore_disposable_chain' AND "+
   "to_regclass('public.mobility_stage_g124_delivery_tariff_policy') IS NOT NULL)::text"),'true');
  sql("INSERT INTO auth.users(id) VALUES ('"+owner+"'),('"+operator+"'),('"+
-  passenger[0]+"'),('"+passenger[1]+"');"+
+  passenger[0]+"'),('"+passenger[1]+"'),('"+freshPassenger[0]+"'),('"+freshPassenger[1]+"');"+
   "DELETE FROM public.user_roles WHERE user_id IN ('"+owner+"','"+operator+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by)"+
   " VALUES('"+owner+"','owner','active','"+owner+"'),"+
@@ -192,13 +196,13 @@ async function main(){
    assert.equal(sql("SELECT public.mobility_stage_g123_delivery_priced_qa('"+
     delivery+"')::text"),'true',
     'G123 must preserve accepted original price until quote naturally expires');
-   const again=savedDelivery(sender,kind,
+   const again=savedDelivery(freshPassenger[i],kind,
     '12400000-0000-4124-8124-00000000008'+(i+1));
-   const q2=quote(sender,again,vehicleZone,
+   const q2=quote(freshPassenger[i],again,vehicleZone,
     '12400000-0000-4124-8124-00000000009'+(i+1));
    assert.equal(q2.ruleId,second.data.ruleId);
    assert.notEqual(q1.totalGs,q2.totalGs);
-   consent(sender,again,q2,'12400000-0000-4124-8124-00000000010'+(i+1));
+   consent(freshPassenger[i],again,q2,'12400000-0000-4124-8124-00000000010'+(i+1));
    assert.equal(sql("SELECT public.mobility_stage_g123_delivery_priced_qa('"+
     again+"')::text"),'true');
    const oldReceipt=await http(origin,path,ownerToken,
