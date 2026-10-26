@@ -44,11 +44,11 @@ const workerResult=(r,trip)=>{
 export const G111_COMMERCIAL_DISPATCH_ENABLED=false;
 export function createG111AfterBookingAutoDispatch({
  environment,qaOnly,liveEnabled,readPrivateDispatchStatus,
- runOneDueDispatch
+ runForBooking
 }={}){
  if(environment!=='isolated_staging'||qaOnly!==true||liveEnabled!==false||
  typeof readPrivateDispatchStatus!=='function'||
- typeof runOneDueDispatch!=='function')
+ typeof runForBooking!=='function')
   throw Error('G111 requires private G90 and G85 in isolated STAGING QA');
  return Object.freeze({
   async dispatchBookedAuto({passengerId,bookingKey,tripId}={}){
@@ -68,10 +68,10 @@ export function createG111AfterBookingAutoDispatch({
     return Object.freeze({ok:true,dispatchState:initial.dispatchState,
      attemptExecuted:false,qaOnly:true,productionEnabled:false});
    let attempted;
-   try{attempted=await runOneDueDispatch();}
+   try{attempted=await runForBooking({passengerId,bookingKey,tripId});}
    catch{return no('WORKER_UNCERTAIN_RECONCILE_G90');}
-   // G85 selects jobs itself under FOR UPDATE SKIP LOCKED. Reject any
-   // mis-scoped result; do NOT claim this Passenger's offer succeeded.
+   // G112 locks the exact verified G73 booking, not the oldest global job.
+   // Reject any mis-scoped result; never claim another Passenger's offer.
    if(!workerResult(attempted,tripId))
     return no('WORKER_DID_NOT_VERIFY_OWN_TRIP');
    let updated;

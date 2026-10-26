@@ -23,7 +23,8 @@ function build({statuses=[receipt(),receipt({state:'RETRY_PENDING',attempts:1})]
   liveEnabled:false,readPrivateDispatchStatus:async scope=>{
    assert.deepEqual(scope,{actorId:passenger,requestKey:bookingKey});
    return statuses[Math.min(reads++,statuses.length-1)];
-  },runOneDueDispatch:async()=>{workers++;
+  },runForBooking:async scope=>{
+   assert.deepEqual(scope,input);workers++;
    if(error)throw Error('SQL worker disconnected');
    return result;
   }});

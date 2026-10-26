@@ -8,6 +8,7 @@ on:
       - 'feature/mobility-monorepo-isolated-20261016'
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
@@ -17,6 +18,7 @@ on:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
@@ -558,6 +560,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G87_RECOVER_EXPIRED_PRIVATE_AUTO_OFFERS_POSTGRES_CI_ONLY.sql
       - name: G90 install private Passenger-only G85 dispatch status SQL
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G90_PASSENGER_DISPATCH_STATUS_POSTGRES_CI_ONLY.sql
+      - name: G112 install owner-scoped durable AUTO dispatch worker without cross-Passenger queue selection
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql
       - name: G81-G82-G85 verify booking, Driver inbox, legal denial and existing offer reconciliation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G81_F1_BOOKING_TO_PRIVATE_DRIVER_OFFER_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G85 verify persisted booking, unavailable Driver backoff, grants and rollback
