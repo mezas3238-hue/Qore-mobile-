@@ -10,12 +10,14 @@ export default function PassengerMoto(){
  const {client,view}=useClientView();
  // Remount on subject/JWT revision: never preserve a previous rider's route.
  return <PrivateMoto key={view.privateViewRevision} revision={view.privateViewRevision}
-  authenticated={view.authenticated} client={client} moto={view.motoPassenger}/>;
+  authenticated={view.authenticated} client={client} moto={view.motoPassenger}
+  rideStatus={view.motoRideStatus}/>;
 }
 type Client=ReturnType<typeof useClientView>['client'];
 type MotoView=ReturnType<typeof useClientView>['view']['motoPassenger'];
-function PrivateMoto({authenticated,client,moto,revision}:{
- authenticated:boolean;client:Client;moto:MotoView;revision:number;
+type MotoStatusView=ReturnType<typeof useClientView>['view']['motoRideStatus'];
+function PrivateMoto({authenticated,client,moto,rideStatus,revision}:{
+ authenticated:boolean;client:Client;moto:MotoView;rideStatus:MotoStatusView;revision:number;
 }){
  const rideIntent=usePassengerRideIntent();
  const [origin,setOrigin]=useState(()=>rideIntent.read(revision,'MOTO')?.origin??'');
@@ -58,6 +60,16 @@ function PrivateMoto({authenticated,client,moto,revision}:{
     'Respuesta de reserva incierta: solo se admite lectura privada, no otro POST.');
   }finally{setSending(false);}
  }
+ async function refreshMotoTracking(){
+  if(!authenticated||sending||!moto.bookingKey
+   ||!moto.tripId||!rideStatus.readReady)return;
+  setSending(true);
+  try{
+   const result=await client.refreshMotoRideStatus({bookingKey:moto.bookingKey});
+   setFeedback(result.ok?'Estado MOTO confirmado por PostgreSQL en QA.':
+    'Estado MOTO sin confirmar: no mostramos una asignación, GPS ni ETA.');
+  }finally{setSending(false);}
+ }
  async function cancelMoto(){
   if(!moto.contractReady||moto.phase!=='booked'||sending)return;
   setConfirmCancel(false);setSending(true);
@@ -86,7 +98,7 @@ function PrivateMoto({authenticated,client,moto,revision}:{
   keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>MOTO · Viaje de pasajeros</Text>
-   <Text style={styles.heroSub}>Transporte de personas en motocicleta, separado de MOTO ENVÍOS. Preparación privada; sin reserva ni búsqueda de motociclista todavía.</Text>
+   <Text style={styles.heroSub}>Transporte de personas en motocicleta, separado de MOTO ENVÍOS. Laboratorio privado con reserva persistida; ningún motociclista se asigna sin autorización legal.</Text>
   </View>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Origen y destino</Text>
@@ -127,7 +139,7 @@ function PrivateMoto({authenticated,client,moto,revision}:{
     <Text style={styles.text}>Tarifa original: {moto.quote.originalFareGs.toLocaleString('es-PY')} Gs.</Text>
     <Text style={styles.text}>Subsidio al cliente (10 %): {moto.quote.customerSubsidyGs.toLocaleString('es-PY')} Gs.</Text>
     <Text style={styles.text}>Total para el cliente: {moto.quote.customerPaysGs.toLocaleString('es-PY')} Gs.</Text>
-    <Text style={styles.small}>Comisión nominal 12 %, retención plataforma 2 %. Cifras recibidas y comprobadas contra el servidor en QA, no calculadas como cotización local.</Text>
+    <Text style={styles.small}>Comisión nominal {moto.quote.commissionBps/100} %; retención bruta {((moto.quote.commissionBps-1000)/100).toFixed(2)} %. Subsidio al pasajero fijo en 10 %. Tarifas provenientes del servidor QA.</Text>
     {moto.phase==='quoted'&&<Action label="Aceptar esta cotización MOTO" disabled={sending||quoteExpired}
      onPress={()=>{
       const result=client.acceptMotoQuote({quoteId:moto.quote!.quoteId,customerPaysGs:moto.quote!.customerPaysGs});
@@ -148,7 +160,21 @@ function PrivateMoto({authenticated,client,moto,revision}:{
     onPress={discardQuote}/>}
    {moto.phase!=='idle'&&<Text style={styles.small}>La ruta y la aceptación de seguridad permanecen bloqueadas mientras exista una cotización o reserva. Descartá la cotización sin reservar para volver a editarlas.</Text>}
    {moto.phase==='booked'&&<View>
-    <Text style={styles.text}>Reserva MOTO registrada en QA. Sin asignación de conductor ni ETA certificada.</Text>
+    <Text style={styles.text}>Reserva MOTO registrada en QA. La asignación y las transiciones dependen exclusivamente del servidor y sus permisos.</Text>
+    {rideStatus.readReady&&moto.bookingKey&&
+     <Action label={sending?'Consultando estado…':'Consultar estado MOTO en servidor'}
+      disabled={sending||rideStatus.busy} busy={sending}
+      onPress={()=>{void refreshMotoTracking();}}/>}
+    {rideStatus.tripId===moto.tripId&&rideStatus.state&&<View>
+     <Text style={styles.text}>Estado certificado en PostgreSQL QA: {({
+      searching:'Buscando motociclista autorizado',
+      accepted:'Solicitud aceptada',arriving:'Motociclista en camino',
+      in_progress:'En viaje',completed:'Viaje finalizado',
+      cancelled:'Viaje cancelado'
+     } as Record<string,string>)[rideStatus.state]??'Estado no reconocido'}</Text>
+     <Text style={styles.small}>Revisión {rideStatus.revision??'—'} · Sin GPS ni ETA certificados ·
+      No implica cobro ni liquidación real.</Text>
+    </View>}
     {!confirmCancel?<Action label="Solicitar cancelación MOTO" secondary
      onPress={()=>setConfirmCancel(true)}/>:<View>
      <Text style={styles.text}>¿Confirmás cancelar esta reserva de MOTO?</Text>
@@ -173,7 +199,7 @@ function PrivateMoto({authenticated,client,moto,revision}:{
      })();}}/>
    </View>}
    {feedback!==''&&<Text accessibilityRole="alert" style={styles.small}>{feedback}</Text>}
-   <Text style={styles.small}>MOTO no está disponible comercialmente. G100 solo tiene contratos SQL de laboratorio; sin API HTTPS ni mapas, asignación, ETA, KYC del motorista o pagos reales.</Text>
+   <Text style={styles.small}>MOTO no está disponible comercialmente. G118/G119 certifican estados y lectura privada en PostgreSQL/HTTP de laboratorio; no existe asignación legal real, mapas, GPS, ETA, pagos ni despliegue aprobado.</Text>
   </Panel>
  </ScrollView>;
 }

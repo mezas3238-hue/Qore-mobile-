@@ -27,7 +27,7 @@ export type ClientSnapshot={
   quote:{quoteId:string;originalFareGs:number;customerPaysGs:number;
    customerSubsidyGs:number;driverReceivesGs:number;platformRetainsGs:number;
    commissionBps:number;subsidyBps:1000;expiresAt:number}|null;
-  tripId:string|null;needsReadback:boolean;cancelled:boolean;
+  tripId:string|null;bookingKey:string|null;needsReadback:boolean;cancelled:boolean;
   error:string|null;qaOnly:true;productionEnabled:false};
  autoRouteQuote:{available:boolean;busy:boolean;productionEnabled:false};
  autoPrequote:{phase:string;quote:{quoteId:string;amountGs:number;currency:'PYG';fareVersion:string;expiresAt:number}|null;

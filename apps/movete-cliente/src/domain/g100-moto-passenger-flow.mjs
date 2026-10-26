@@ -121,6 +121,7 @@ export function createG100MotoPassengerFlow({
     driverReceivesGs:s.quote.driverReceivesGs,platformRetainsGs:s.quote.platformRetainsGs,
     commissionBps:s.quote.commissionBps,subsidyBps:1000,expiresAt:s.quote.expiresAt
    }):null,tripId:mine?s.tripId??null:null,
+   bookingKey:mine?s.bookingKey??null:null,
    needsReadback:mine&&['bookingUnknown','cancelUnknown','restoreUnknown'].includes(s.phase),
    cancelled:mine&&s.phase==='cancelled',
    error:mine?s.error??null:null,qaOnly:true,productionEnabled:false});
