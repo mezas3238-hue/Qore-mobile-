@@ -45,9 +45,9 @@ BEGIN
   AND c.confirmed_at<=pg_catalog.clock_timestamp()
   AND q.quoted_at<=c.confirmed_at
   AND q.expires_at>pg_catalog.clock_timestamp()
-  AND r.active IS TRUE
-  AND r.valid_from<=pg_catalog.clock_timestamp()
-  AND r.valid_until>pg_catalog.clock_timestamp()
+  -- Owner version changes never reprice an already accepted, unexpired quote.
+  AND r.valid_from<=q.quoted_at
+  AND r.valid_until>q.quoted_at
  FOR SHARE OF d,c,q,r,bound,sender;
  RETURN FOUND;
 END $f$;
