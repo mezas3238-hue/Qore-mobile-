@@ -226,14 +226,23 @@ async function main(){
   " VALUES('"+drv+"',true,-25.3,-57.57,clock_timestamp()-interval '5 seconds');"+
   "INSERT INTO public.mobility_location_consents(driver_id,opted_in_at)"+
   " VALUES('"+drv+"',clock_timestamp()-interval '1 day');");
- psql("SET ROLE service_role; WITH d AS (SELECT "+
-  "public.mobility_stage_register_driver_document('"+drv+"',"+
-  "'98980000-0000-4989-8989-000000000026','licencia',"+
-  "'"+drv+"/licencia-G104Qa1234567890.jpg',"+
-  "'image/jpeg',9200,repeat('e',64)) AS id)"+
-  " SELECT public.mobility_stage_review_driver_document(d.id,"+
-  "'00000000-0000-4000-8000-000000000101',true,'DOCUMENT_VALID',"+
-  "'98980000-0000-4989-8989-000000000027') FROM d;");
+ // CI fixture bootstrap as ephemeral DB owner, not an app-side KYC API.
+ // Later G47/G58 delegated permissions intentionally revoke the legacy
+ // document registration RPC; do not re-grant it or impersonate a Driver.
+ psql("WITH doc AS (INSERT INTO public.mobility_stage_driver_documents"+
+  "(request_key,driver_id,kind,object_key,mime_type,byte_size,sha256_hex,"+
+  "status,submitted_at,reviewed_at,reviewer_id)"+
+  " VALUES('98980000-0000-4989-8989-000000000026','"+drv+"','licencia',"+
+  "'"+drv+"/licencia-G104Qa1234567890.jpg','image/jpeg',9200,repeat('e',64),"+
+  "'approved',clock_timestamp()-interval '10 seconds',"+
+  "clock_timestamp()-interval '5 seconds',"+
+  "'00000000-0000-4000-8000-000000000101')"+
+  " RETURNING id,reviewed_at)"+
+  " INSERT INTO public.mobility_stage_driver_document_reviews"+
+  "(request_key,document_id,reviewer_id,status,reason_code,reviewed_at)"+
+  " SELECT '98980000-0000-4989-8989-000000000027',doc.id,"+
+  "'00000000-0000-4000-8000-000000000101','approved',"+
+  "'DOCUMENT_VALID',doc.reviewed_at FROM doc;");
  assert.equal(psql("SET ROLE service_role; SELECT public.mobility_vehicle_preflight("+
   "'"+drv+"','"+veh+"','economico')::text"),'true');
  const verifyDriver=async value=>{
