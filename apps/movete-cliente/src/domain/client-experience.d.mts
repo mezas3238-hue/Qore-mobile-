@@ -122,7 +122,8 @@ export type ClientExperience={
  readMotoBooking():Promise<ClientResult>;
  cancelMoto(args:{cancellationKey:string}):Promise<ClientResult>;
  readMotoCancellation():Promise<ClientResult>;
- resetMoto():void;
+ resetMoto():ClientResult;
+ discardMotoQuote():ClientResult;
  signOut():Promise<ClientResult>;
  clear():void;
  loadCommerceCatalog(branchId:string):Promise<ClientResult>;
