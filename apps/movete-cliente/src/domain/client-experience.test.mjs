@@ -41,7 +41,7 @@ test('sin Auth y sin gateway jamás prepara solicitudes ni muestra datos',async(
  assert.equal(api.acceptHistory(fakeHistory()),false);
  assert.equal(api.snapshot().authenticated,false);
 });
-test('viaje y reintento usan el mismo requestKey, sin crear IDs de servidor',async()=>{
+test('timeout de viaje conserva requestKey sin segundo POST',async()=>{
  let n=0;const sent=[];
  const {api}=fixture(fakeSession(),async(op,{body})=>{
   sent.push([op,body.requestKey]);n++;
@@ -50,8 +50,8 @@ test('viaje y reintento usan el mismo requestKey, sin crear IDs de servidor',asy
  assert.equal((await api.refreshSession()).ok,true);
  assert.equal(api.prepareRide(ride).ok,true);
  assert.equal((await api.submit()).code,'NETWORK_OR_TIMEOUT');
- assert.equal((await api.retry()).ok,true);
- assert.deepEqual(sent,[['rideRequest',key],['rideRequest',key]]);
+ assert.equal((await api.retry()).code,'NO_READY_REQUEST');
+ assert.deepEqual(sent,[['rideRequest',key]]);
  assert.equal(Object.hasOwn(api.snapshot().mutation,'tripId'),false);
 });
 test('proyecta cotización, tracking e historial propios sin guardarlos en disco',async()=>{
@@ -548,12 +548,12 @@ test('jamás descarta requestKey tras timeout: riesgo de doble despacho',async()
  assert.equal(api.snapshot().mutation.phase,'retryable');
  assert.equal(api.snapshot().mutation.requestKey,key);
 });
-test('solicitud reconocida no se puede borrar hasta reconciliar servidor',async()=>{
+test('HTTP 201 sin recibo certificado mantiene reserva en estado incierto',async()=>{
  const f=fixture(fakeSession(),async()=>({ok:true,status:201}));
  const api=f.api;await api.refreshSession();api.prepareRide(ride);
- assert.equal((await api.submit()).ok,true);
+ assert.equal((await api.submit()).code,'BOOKING_RECEIPT_NOT_CERTIFIED');
  assert.equal(api.discardPreparedMutation({operation:'rideRequest',requestKey:key}).code,'NOT_UNSENT_REQUEST');
- assert.equal(api.snapshot().mutation.phase,'acknowledged');
+ assert.equal(api.snapshot().mutation.phase,'failed');
 });
 
 test('cambio de JWT en la misma cuenta rota la revisión privada sin publicar token',async()=>{

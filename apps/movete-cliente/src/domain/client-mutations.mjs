@@ -104,9 +104,17 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   catch{reply=fail('NETWORK_OR_TIMEOUT');}
   if(started!==generation||state.subject!==session.subject)return fail('STALE_RESPONSE_IGNORED');
   if(reply&&reply.ok===true){
-   state.verifiedReceipt=verifiedBookingReceipt(reply,{
+   const certified=verifiedBookingReceipt(reply,{
     operation,requestKey:state.requestKey,subject:expectedSubject,status:201
    });
+   // A generic 201 can be sent after an unobserved commit. It is not
+   // authoritative proof of owner, requestKey, operation or service ID.
+   if(['rideRequest','deliveryRequest'].includes(operation)&&!certified){
+    state.verifiedReceipt=null;state.phase='failed';
+    state.error='BOOKING_RECEIPT_NOT_CERTIFIED';
+    return fail('BOOKING_RECEIPT_NOT_CERTIFIED');
+   }
+   state.verifiedReceipt=certified;
    state.phase='acknowledged';state.error=null;
    // No se guardan DTOs no certificados ni datos privados del servidor.
    return {ok:true,requestKey:state.requestKey,status:reply.status};
@@ -119,8 +127,7 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   // R57: a booking POST may have COMMITTED before timeout, 409 or a
   // malformed ACK. Never issue another POST, even with the same key,
   // until the independently certified READ reconciles its outcome.
-  state.phase=gateway?.bookingReconciliationRequired===true
-   &&['rideRequest','deliveryRequest'].includes(operation)
+  state.phase=['rideRequest','deliveryRequest'].includes(operation)
    ?'failed'
    :['NETWORK_OR_TIMEOUT','SERVICE_UNAVAILABLE','RATE_LIMITED'].includes(code)
     ?'retryable':'failed';
@@ -161,12 +168,15 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
   }
   if(reply?.ok===true&&reply.recoveredWithoutPost===true
    &&reply.qaOnly===true&&reply.bookingConfirmedForProduction===false){
-   state.verifiedReceipt=verifiedBookingReceipt(reply,{
+   const certified=verifiedBookingReceipt(reply,{
     operation,requestKey,subject:expectedSubject,status:200
    });
-   state.phase='acknowledged';state.error=null;
-   return Object.freeze({ok:true,requestKey,status:200,
-    qaOnly:true,productionEnabled:false});
+   if(certified){
+    state.verifiedReceipt=certified;
+    state.phase='acknowledged';state.error=null;
+    return Object.freeze({ok:true,requestKey,status:200,
+     qaOnly:true,productionEnabled:false});
+   }
   }
   state.phase='failed';
   state.error=safeCode(reply?.code,'BOOKING_RECONCILIATION_UNKNOWN');
@@ -180,6 +190,14 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    subject:state.subject,sessionRevision:state.sessionRevision,
    requestKey:state.requestKey});
  }
+ function verifiedDelivery(){
+  const receipt=state.verifiedReceipt;
+  if(state.phase!=='acknowledged'||state.operation!=='deliveryRequest'
+   ||receipt===null||receipt===undefined)return null;
+  return Object.freeze({deliveryId:receipt.serviceId,
+   serverRevision:receipt.revision,subject:state.subject,
+   sessionRevision:state.sessionRevision,requestKey:state.requestKey});
+ }
  return Object.freeze({prepare,submit:()=>run(false),retry:()=>run(true),
-  reconcileBooking,verifiedRide,clear,publicState});
+  reconcileBooking,verifiedRide,verifiedDelivery,clear,publicState});
 }

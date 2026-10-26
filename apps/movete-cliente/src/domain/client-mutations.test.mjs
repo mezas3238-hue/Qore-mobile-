@@ -5,6 +5,14 @@ const subject='123e4567-e89b-42d3-a456-426614174000';
 const key='123e4567-e89b-42d3-a456-426614174001';
 const ride={requestKey:key,originTag:'San Lorenzo centro',destinationTag:'Asunción centro',service:'economico'};
 const auth=()=>({subject,role:'passenger'});
+const verified=(op='rideRequest',id='123e4567-e89b-42d3-a456-426614174012')=>({
+ ok:true,status:201,qaOnly:true,commercialEnabled:false,
+ bookingConfirmedForProduction:false,data:{
+  mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+  ownerId:subject,requestKey:key,operation:op,serviceId:id,
+  revision:1,serverPersisted:true,status:'ACCEPTED_QA'
+ }
+});
 function fixture(send=async()=>({ok:true,status:201}),extras={}){
  return createClientMutationController({gateway:{send},getSession:auth,...extras});
 }
@@ -16,7 +24,7 @@ test('sin preparación o sin identidad no se solicita viaje',async()=>{
 });
 test('el requestKey preparado es el mismo enviado al backend',async()=>{
  const sent=[];
- const c=fixture(async(operation,data)=>{sent.push({operation,data});return {ok:true,status:201}});
+ const c=fixture(async(operation,data)=>{sent.push({operation,data});return verified();});
  assert.equal(c.prepare({operation:'rideRequest',body:ride,subject}).ok,true);
  assert.equal((await c.submit()).ok,true);
  assert.equal(sent.length,1);
@@ -35,8 +43,8 @@ test('doble toque mientras hay solicitud no crea segunda operación',async()=>{
  await Promise.resolve();await Promise.resolve();
  assert.equal((await c.submit()).code,'NO_READY_REQUEST');
  assert.equal(c.prepare({operation:'rideRequest',body:ride,subject}).code,'REQUEST_IN_FLIGHT');
- resolve({ok:true,status:201});
- await first;
+ resolve(verified());
+ assert.equal((await first).ok,true);
  assert.equal(n,1);
 });
 test('dos taps en el mismo tick no producen dos envíos',async()=>{
@@ -52,10 +60,10 @@ test('dos taps en el mismo tick no producen dos envíos',async()=>{
  assert.equal((await second).code,'NO_READY_REQUEST');
  await Promise.resolve();await Promise.resolve();
  assert.equal(calls,1);
- release({ok:true,status:201});
+ release(verified());
  assert.equal((await first).ok,true);
 });
-test('timeout conserva requestKey y solo reintenta explícitamente',async()=>{
+test('timeout de reserva preserva clave y bloquea segundo POST hasta GET autorizado',async()=>{
  const sent=[];
  let n=0;
  const c=fixture(async(_,payload)=>{
@@ -64,9 +72,9 @@ test('timeout conserva requestKey y solo reintenta explícitamente',async()=>{
  });
  c.prepare({operation:'rideRequest',body:ride,subject});
  assert.equal((await c.submit()).code,'NETWORK_OR_TIMEOUT');
- assert.equal((await c.submit()).code,'EXPLICIT_RETRY_REQUIRED');
- assert.equal((await c.retry()).ok,true);
- assert.deepEqual(sent,[key,key]);
+ assert.equal(c.publicState().phase,'failed');
+ assert.equal((await c.retry()).code,'NO_READY_REQUEST');
+ assert.deepEqual(sent,[key]);
 });
 test('requiere mismo titular; evita mezcla de cuentas',async()=>{
  const c=fixture(undefined,{getSession:()=>({subject:'123e4567-e89b-42d3-a456-426614174099',role:'passenger'})});
@@ -140,8 +148,8 @@ test('NUNCA reemplaza requestKey mientras el servidor pudo procesar un timeout',
  assert.equal(c.prepare({operation:'rideRequest',body:{...ride,
   requestKey:'123e4567-e89b-42d3-a456-426614174023'},subject}).code,'EXPLICIT_RETRY_REQUIRED');
  assert.equal(c.prepare({operation:'deliveryRequest',body:{...ride},subject}).code,'EXPLICIT_RETRY_REQUIRED');
- assert.equal((await c.retry()).ok,true);
- assert.deepEqual(requests,[key,key]);
+ assert.equal((await c.retry()).code,'NO_READY_REQUEST');
+ assert.deepEqual(requests,[key]);
 });
 test('rechazo ambiguo no habilita automáticamente un segundo despacho',async()=>{
  const c=fixture(async()=>({ok:false,code:'REQUEST_REJECTED',status:409}));
@@ -190,11 +198,12 @@ test('R59 unknown non-string error and objects are never stringified in UI',asyn
   assert.equal(JSON.stringify(c.publicState()).includes('PRIVATE'),false);
  }
 });
-test('R59 known protocol backpressure preserves explicit generic retry semantics',async()=>{
+test('R59 booking rate limit blocks duplicate POST',async()=>{
  const c=fixture(async()=>({ok:false,code:'RATE_LIMITED'}));
  c.prepare({operation:'rideRequest',body:ride,subject});
  assert.equal((await c.submit()).code,'RATE_LIMITED');
- assert.equal(c.publicState().phase,'retryable');
+ assert.equal(c.publicState().phase,'failed');
+ assert.equal((await c.retry()).code,'NO_READY_REQUEST');
 });
 test('R59 certified booking transport does not repeat POST after injected error',async()=>{
  let calls=0;
@@ -232,4 +241,69 @@ test('R59 known booking 201 ambiguity remains explicit but never public PII',asy
  assert.equal((await c.reconcileBooking()).code,'BOOKING_RECONCILIATION_UNKNOWN');
  assert.equal(c.publicState().phase,'failed');
  assert.equal(JSON.stringify(c.publicState()).includes('San Lorenzo'),false);
+});
+
+test('B16 AUTO/MOTO: 201 genérico nunca reconoce envío ni permite duplicar POST',async()=>{
+ for(const vehicle of ['AUTO','MOTO']){
+  let posts=0;
+  const c=fixture(async()=>{posts++;return {ok:true,status:201,data:{ok:true}};});
+  c.prepare({operation:'deliveryRequest',subject,body:{
+   requestKey:key,vehicleKind:vehicle,category:'PARCEL',
+   grams:1200,lengthCm:10,widthCm:12,heightCm:15,
+   pickupTag:'Villa Morra centro',deliveryTag:'San Lorenzo centro',
+   restrictedItemDeclared:false
+  }});
+  assert.equal((await c.submit()).code,'BOOKING_RECEIPT_NOT_CERTIFIED');
+  assert.equal((await c.retry()).code,'NO_READY_REQUEST');
+  assert.equal(c.verifiedDelivery(),null);
+  assert.equal(c.publicState().phase,'failed');
+  assert.equal(posts,1);
+ }
+});
+test('B16 AUTO/MOTO: recibo exacto 201 prueba el mismo ID del servidor, jamás pago/Driver',async()=>{
+ for(const vehicle of ['AUTO','MOTO']){
+  const serviceId=vehicle==='AUTO'
+   ?'123e4567-e89b-42d3-a456-426614174031'
+   :'123e4567-e89b-42d3-a456-426614174032';
+  let posts=0;
+  const c=fixture(async(op,data)=>{posts++;
+   assert.equal(op,'deliveryRequest');assert.equal(data.body.vehicleKind,vehicle);
+   return verified('deliveryRequest',serviceId);
+  });
+  c.prepare({operation:'deliveryRequest',subject,body:{
+   requestKey:key,vehicleKind:vehicle,category:'PARCEL',
+   grams:1200,lengthCm:10,widthCm:12,heightCm:15,
+   pickupTag:'Villa Morra centro',deliveryTag:'San Lorenzo centro',
+   restrictedItemDeclared:false
+  }});
+  assert.equal((await c.submit()).ok,true);
+  assert.equal(c.verifiedDelivery().deliveryId,serviceId);
+  assert.equal(c.verifiedDelivery().requestKey,key);
+  assert.equal(c.verifiedRide(),null);assert.equal(posts,1);
+  c.clear();assert.equal(c.verifiedDelivery(),null);
+ }
+});
+test('B16 conciliación 200 inconsistente no confirma envío ni libera nueva clave',async()=>{
+ let sends=0;
+ const deliveryBody={requestKey:key,vehicleKind:'MOTO',category:'PARCEL',
+  grams:1200,lengthCm:10,widthCm:12,heightCm:15,
+  pickupTag:'Villa Morra centro',deliveryTag:'San Lorenzo centro',
+  restrictedItemDeclared:false};
+ const c=createClientMutationController({
+  gateway:{bookingReconciliationRequired:true,
+   send:async()=>{sends++;return {ok:false,code:'NETWORK_OR_TIMEOUT'};},
+   reconcile:async()=>({ok:true,status:200,qaOnly:true,
+    bookingConfirmedForProduction:false,recoveredWithoutPost:true,
+    data:{...verified('deliveryRequest').data,ownerId:
+     '123e4567-e89b-42d3-a456-426614174077'}})},
+  getSession:async()=>({subject,role:'passenger',sessionRevision:6})
+ });
+ c.prepare({operation:'deliveryRequest',subject,sessionRevision:6,body:deliveryBody});
+ assert.equal((await c.submit()).code,'NETWORK_OR_TIMEOUT');
+ assert.equal((await c.reconcileBooking()).code,'BOOKING_RECONCILIATION_UNKNOWN');
+ assert.equal(c.publicState().phase,'failed');
+ assert.equal(c.verifiedDelivery(),null);
+ assert.equal(c.prepare({operation:'deliveryRequest',subject,sessionRevision:6,
+  body:deliveryBody}).code,'RECONCILE_BEFORE_NEW_REQUEST');
+ assert.equal(sends,1);
 });
