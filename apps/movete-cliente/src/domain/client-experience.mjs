@@ -29,6 +29,7 @@ import {createG51ChatInboxHttpGateway} from './g51-chat-inbox-http-gateway.mjs';
 import {createG52ChatHistoryHttpGateway} from './g52-chat-history-http-gateway.mjs';
 import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
 import {createG100MotoPassengerFlow} from './g100-moto-passenger-flow.mjs';
+import {createG101MotoPassengerHttpGateway} from './g101-moto-passenger-http-gateway.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -39,7 +40,7 @@ import {createG100MotoPassengerFlow} from './g100-moto-passenger-flow.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,motoPassengerOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -48,7 +49,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
- let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null,motoHttp=null;
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
@@ -78,6 +79,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
   if(motoFlow)motoFlow.clear(true);
+  if(motoHttp)motoHttp.cancelPending();
   if(mutations)mutations.clear();
   if(tracking)tracking.stop();
   if(cancellation)cancellation.clear();
@@ -105,10 +107,23 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
- // G100 is only PG SQL on A today. Default disabled; injected QA connector
- // must attest independent MOTO passenger permissions/route/legal/rules.
+ // G101 now has five separate Passenger HTTP contracts, but is only
+ // mounted over A's local disposable PG16 CI. External QA flags remain OFF.
+ // Never combine custom injected MOTO transport with production-style HTTP.
+ motoHttp=motoPassengerHttpOptions&&!motoPassengerOptions?
+  createG101MotoPassengerHttpGateway({
+   ...motoPassengerHttpOptions,now,
+   getSession:()=>{
+    const identity=actor(),token=session.getSessionForGateway();
+    return identity&&token?{...token,subject:identity.subject,
+     authRevision:session.revision(),
+     sessionRevision:session.privacyRevision()}:null;
+   },
+   onSessionInvalid:()=>{session.clear();notify();}
+  }):null;
  motoFlow=createG100MotoPassengerFlow({
-  ...(motoPassengerOptions??{}),getActor:actorSession,now,onChange:notify
+  ...(motoPassengerOptions??motoHttp?.flowOptions()??{}),
+  getActor:actorSession,now,onChange:notify
  });
  // F1 G73 canonical HTTP is OFF unless a *separately certified* HTTPS,
  // JWT, route provider, PostgreSQL and shared STAGING runtime is configured.

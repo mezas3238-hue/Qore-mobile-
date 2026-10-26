@@ -202,6 +202,14 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ motoPassengerHttpOptions?:{
+  enabled?:boolean;contractCertified?:boolean;externalRuntimeVerified?:boolean;
+  motoLegalVerified?:boolean;motoRouteVerified?:boolean;
+  passengerRlsVerified?:boolean;idempotencyVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,request:unknown)=>Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number
+ }|null;
  motoPassengerOptions?:{
   enabled?:boolean;contractCertified?:boolean;externalRuntimeVerified?:boolean;
   motoLegalVerified?:boolean;motoRouteVerified?:boolean;

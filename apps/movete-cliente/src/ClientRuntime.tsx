@@ -55,11 +55,29 @@ export function ClientRuntimeProvider({children,experience}:{
   statusContractVerified:process.env.EXPO_PUBLIC_F1_STATUS_CONTRACT_VERIFIED==='true',
   passengerRlsVerified:process.env.EXPO_PUBLIC_F1_PASSENGER_RLS_VERIFIED==='true'
  }),[]);
+ const motoG101=useMemo(()=>{
+  // Even G101 PostgreSQL loopback SUCCESS is NOT external HTTP+legal proof.
+  const approved=process.env.EXPO_PUBLIC_MOTO_OWNER_APPROVED==='true'
+   &&process.env.EXPO_PUBLIC_MOTO_G101_CONTRACT_VERIFIED==='true'
+   &&process.env.EXPO_PUBLIC_MOTO_EXTERNAL_RUNTIME_VERIFIED==='true'
+   &&process.env.EXPO_PUBLIC_MOTO_LEGAL_VERIFIED==='true'
+   &&process.env.EXPO_PUBLIC_MOTO_ROUTE_PROVIDER_VERIFIED==='true'
+   &&process.env.EXPO_PUBLIC_MOTO_PASSENGER_RLS_VERIFIED==='true'
+   &&process.env.EXPO_PUBLIC_MOTO_IDEMPOTENCY_VERIFIED==='true';
+  return approved?{
+   enabled:true,contractCertified:true,externalRuntimeVerified:true,
+   motoLegalVerified:true,motoRouteVerified:true,
+   passengerRlsVerified:true,idempotencyVerified:true,
+   origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+   pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
+  }:null;
+ },[]);
  const client=useMemo(()=>experience??createClientExperience({
   authProvider:nativeAuth,autoG73HttpOptions:qaHttp,g95RecoveryStore,
+  motoPassengerHttpOptions:motoG101,
   historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
   statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
- }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore]);
+ }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101]);
  useEffect(()=>{
   if(!nativeAuth)return;
   let active=true;
