@@ -25,6 +25,10 @@ import {createQoreRiderHistoryGateway}
  from './g26-rider-history-gateway.mjs';
 import {createQoreOwnHistoryRepository,HISTORY_PAGE_SIZE}
  from './g26-rider-history-repository.mjs';
+import {readPrivateDriverTripStatus,transitionPrivateDriverTrip}
+ from '../../movete-driver/src/domain/driver-trip-lifecycle-http.mjs';
+import {createDriverTripLifecycleController}
+ from '../../movete-driver/src/domain/driver-trip-lifecycle.mjs';
 
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fixture='10900000-0000-4109-8109-000000000023';
@@ -321,17 +325,53 @@ async function main(){
   assert.equal((await http(origin,transition,{
    method:'POST',auth:foreignToken,
    body:{event:'arrive',eventKey:keys[0]}})).status,403);
-  const events=['arrive','pickup','complete'];
-  for(let i=0;i<events.length;i++){
-   const body={event:events[i],eventKey:keys[i]};
-   const command=await http(origin,transition,{method:'POST',body});
-   assert.equal(command.status,200,JSON.stringify(command.data));
-   assert.equal(command.data.serverPersisted,true);
-   assert.equal(command.data.commercialRidesEnabled,false);
-   // Same key must return the same SQL event, never double increment.
+  // G111: execute the *real native Driver state machine* against A's
+  // Auth-scoped HTTP gateway + durable PG16. No fake Driver command adapter,
+  // production endpoint or post-G38 new acceptance is introduced.
+  let commandCount=0,readCount=0,keyCount=0;
+  assert.equal(new URL(origin).hostname,'127.0.0.1');
+  const nativeFetch=async(url,opts)=>{
+   const parsed=new URL(url);
+   assert.equal(parsed.origin,origin,'G111 disallows any remote host');
+   assert.equal(parsed.search,'');
+   assert.equal(parsed.hash,'');
+   if(opts.method==='POST')commandCount++;
+   if(opts.method==='GET')readCount++;
+   return fetch(url,opts);
+  };
+  const nativeDriver=createDriverTripLifecycleController({
+   liveEnabled:false,
+   readStatus:({accessToken,tripId:requested})=>
+    readPrivateDriverTripStatus({apiOrigin:origin,accessToken,
+     tripId:requested,request:nativeFetch}),
+   transition:({accessToken,tripId:requested,event,eventKey})=>
+    transitionPrivateDriverTrip({apiOrigin:origin,accessToken,
+     tripId:requested,event,eventKey,request:nativeFetch}),
+   makeRequestKey:()=>{
+    if(keyCount>=3)throw Error('G111 duplicate lifecycle key requested');
+    return keys[keyCount++];
+   }
+  });
+  nativeDriver.setSession({role:'driver',userId:driver,accessToken:driverToken});
+  assert.equal((await nativeDriver.open(tripId)).status,'accepted');
+  assert.equal(nativeDriver.current().revision,2);
+  assert.equal(nativeDriver.current().nextEvent,'arrive');
+  assert.equal(commandCount,0,'Opening native Driver is read-only');
+  for(const [i,event] of ['arrive','pickup','complete'].entries()){
+   assert.equal(nativeDriver.current().nextEvent,event);
+   const persisted=await nativeDriver.advance();
+   assert.equal(persisted.status,states[i+1][0],
+    'Native Driver must observe real persisted status after POST');
+   assert.equal(persisted.revision,states[i+1][2]);
+   assert.equal(persisted.phase,i===2?'terminal':'active');
+   assert.equal(persisted.uncertain,false);
+   // Only the CI caller replays the original key to validate the DB's
+   // idempotence. The native Driver never automatically replays a POST.
+   const body={event,eventKey:keys[i]};
    const replay=await http(origin,transition,{method:'POST',body});
    assert.equal(replay.status,200,JSON.stringify(replay.data));
-   assert.equal(replay.data.eventId,command.data.eventId);
+   const replayAgain=await http(origin,transition,{method:'POST',body});
+   assert.equal(replayAgain.data.eventId,replay.data.eventId);
    await verify(i+1);
    if(i===1){
     assert.equal((await http(origin,'/v1/staging/rider/trips/'+
@@ -340,6 +380,18 @@ async function main(){
      'Passenger cannot cancel an in-progress journey');
    }
   }
+  assert.equal(commandCount,3,'One native POST per authorized transition');
+  assert.equal(readCount,4,'Native GET before and after each command');
+  assert.equal(keyCount,3,'Three independent mutation keys');
+  assert.equal(nativeDriver.current().nextEvent,null);
+  await nativeDriver.advance();
+  await nativeDriver.poll();
+  assert.equal(commandCount,3,'Terminal trip must never reissue POST');
+  assert.equal(readCount,4,'Terminal trip must not keep polling');
+  assert(!JSON.stringify(nativeDriver.current()).includes(driverToken));
+  nativeDriver.clear();
+  assert.equal(nativeDriver.current().phase,'signed-out');
+  assert.equal(nativeDriver.current().tripId,null);
   assert.equal((await http(origin,transition,{
    method:'POST',body:{event:'arrive',eventKey:keys[3]}})).status,409);
   assert.equal((await http(origin,transition,{
@@ -352,6 +404,7 @@ async function main(){
   assert.equal(Number(terminal.events),4);
   assert.equal(Number(terminal.slot),0);
   console.log('G110 PASS: G26 original own-history SQL repository + authenticated HTTP GET reflect same AUTO trip at every revision, completed final state, foreign Passenger denied, no Driver PII');
+  console.log('G111 PASS: Native Driver G65 controller and native HTTP codecs -> original A PG16 accepted, arrive, pickup, complete; 3 unique POST, 4 server-confirmed GET, read-only terminal, Driver slot released, no LIVE');
   console.log('G109 PASS: real HTTP + PostgreSQL16 independently isolated pre-G38 QA acceptance -> arriving -> in_progress -> completed; Driver/Rider same persisted revision; G36 slot released; idempotent keys; no GPS, payments, new legal assignment or LIVE.');
  }finally{
   server.close();
