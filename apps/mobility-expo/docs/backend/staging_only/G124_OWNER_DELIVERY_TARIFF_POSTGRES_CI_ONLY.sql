@@ -40,7 +40,7 @@ REVOKE ALL ON public.mobility_stage_g124_delivery_tariff_audit FROM PUBLIC,anon,
 
 CREATE FUNCTION public.mobility_stage_g124_owner_rate_read_qa(
  _owner uuid,_vehicle text,_zone text
-) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $f$
+) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
 DECLARE policy public.mobility_stage_g124_delivery_tariff_policy%ROWTYPE;
  rule public.mobility_stage_fare_rules%ROWTYPE;
 BEGIN
