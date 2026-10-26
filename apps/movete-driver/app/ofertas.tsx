@@ -95,6 +95,11 @@ export default function DriverOffers(){
          <Action label={resuming?'Verificando viaje…':'Verificar y continuar mi viaje'}
           secondary disabled={resuming||actions.phase!=='ready'}
           onPress={()=>{void continueAcceptedAuto(decision);}}/>}
+        {decision?.phase==='confirmed'&&decision.action==='accept'&&
+         decision.kind==='DELIVERY'&&enabled&&<Action
+          label="Abrir custodia del envío aceptado"
+          secondary onPress={()=>router.push({pathname:'/entrega',
+           params:{deliveryId:decision.serviceId}})}/>}
         {decision?.phase==='uncertain'&&enabled&&
          state.phase==='connected'&&<Action
           label="Consultar comprobante del servidor"

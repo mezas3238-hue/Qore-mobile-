@@ -189,3 +189,48 @@ test('G66 live mode and missing callbacks are rejected',()=>{
   readStatus:async()=>{},transition:async()=>{},makeRequestKey:()=>key,...extra
  }));
 });
+
+test('C Driver delivery foreground GET observes server cancellation, prevents stale pickup',async()=>{
+ let phase='accepted',revision=2,posts=0,reads=0;
+ const ctl=createDriverCustodyController({
+  readStatus:async()=>{reads++;return {deliveryId:delivery,phase,revision,
+   nextEvent:steps[phase],proofVerified:false,qaOnly:true,productionEnabled:false};},
+  transition:async()=>{posts++;throw Error('No POST after cancellation');},
+  makeRequestKey:()=>key
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ assert.equal((await ctl.open(delivery)).status,'accepted');
+ phase='cancelled';revision=3;
+ const observed=await ctl.poll();
+ assert.equal(observed.phase,'terminal');
+ assert.equal(observed.status,'cancelled');
+ assert.equal(observed.nextEvent,null);
+ await ctl.advance();await ctl.poll();
+ assert.equal(posts,0);
+ assert.equal(reads,2);
+});
+test('C Driver delivery polling rejects regressed GET and never replays uncertain mutation',async()=>{
+ let revision=2,phase='accepted',reads=0,posts=0;
+ const ctl=createDriverCustodyController({
+  readStatus:async()=>{reads++;return {deliveryId:delivery,phase,revision,
+   nextEvent:steps[phase],proofVerified:false,qaOnly:true,productionEnabled:false};},
+  transition:async()=>{posts++;phase='picked_up';revision=3;
+   throw Error('Lost ACK after SQL COMMIT');},
+  makeRequestKey:()=>key
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ await ctl.open(delivery);
+ assert.equal((await ctl.poll()).phase,'active');
+ revision=1;
+ assert.equal((await ctl.poll()).phase,'unverified');
+ assert.equal(ctl.current().nextEvent,null);
+ revision=2;
+ assert.equal((await ctl.refresh()).phase,'active');
+ assert.equal((await ctl.advance()).phase,'uncertain');
+ const count=reads;
+ await ctl.poll();
+ assert.equal(reads,count);
+ assert.equal(posts,1);
+ assert.equal((await ctl.refresh()).status,'picked_up');
+ assert.equal(ctl.current().uncertain,false);
+});

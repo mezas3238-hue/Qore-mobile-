@@ -20,7 +20,7 @@ export function createDriverCustodyController({
   [readStatus,transition,makeRequestKey].some(f=>typeof f!=='function')||
   (obtainVerifiedProof!==null&&typeof obtainVerifiedProof!=='function'))
   throw Error('G66 trusted custody callbacks required');
- let actor=null,deliveryId=null,epoch=0,pending=null,state=empty();
+ let actor=null,deliveryId=null,epoch=0,pending=null,polling=false,state=empty();
  const listeners=new Set();
  const update=x=>{
   state=Object.freeze({...state,...x,qaOnly:true,productionEnabled:false});
@@ -28,15 +28,15 @@ export function createDriverCustodyController({
   return state;
  };
  function clear(){
-  epoch++;actor=null;deliveryId=null;pending=null;state=empty();
+  epoch++;actor=null;deliveryId=null;pending=null;polling=false;state=empty();
   for(const f of listeners)try{f(state)}catch{}
   return state;
  }
- async function refresh(){
+ async function refresh({quiet=false}={}){
   if(!actor||!deliveryId)return state;
   const version=++epoch,who=actor,id=deliveryId;
   const current=()=>version===epoch&&actor===who&&deliveryId===id;
-  if(!pending)update({phase:'loading'});
+  if(!pending&&!quiet)update({phase:'loading'});
   let row;
   try{row=await readStatus({accessToken:who.accessToken,deliveryId:id});}
   catch{
@@ -50,6 +50,10 @@ export function createDriverCustodyController({
    !Number.isSafeInteger(row.revision)||row.revision<2||
    typeof row.proofVerified!=='boolean'||row.qaOnly!==true||
    row.productionEnabled!==false)
+   return update({phase:pending?'uncertain':'unverified',
+    status:null,revision:null,nextEvent:null,uncertain:!!pending,proofVerified:false});
+  // A delayed/read-replica GET must never revive a previous courier action.
+  if(Number.isSafeInteger(state.revision)&&row.revision<state.revision)
    return update({phase:pending?'uncertain':'unverified',
     status:null,revision:null,nextEvent:null,uncertain:!!pending,proofVerified:false});
   if(pending){
@@ -96,6 +100,15 @@ export function createDriverCustodyController({
    return refresh();
   },
   refresh,
+  async poll(){
+   // Only while the delivery view is foregrounded; GET-only with no replay.
+   // Unknown COMMIT and terminal outcomes are never polled automatically.
+   if(!actor||!deliveryId||polling||pending||state.phase!=='active')
+    return state;
+   polling=true;
+   try{return await refresh({quiet:true});}
+   finally{polling=false;}
+  },
   async advance(){
    if(!actor||!deliveryId||pending||state.phase!=='active'||
     state.nextEvent!==NEXT[state.status]||!state.nextEvent)

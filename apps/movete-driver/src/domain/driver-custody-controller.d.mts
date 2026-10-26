@@ -26,6 +26,7 @@ export type DriverCustodyController=Readonly<{
  DriverCustodySnapshot;
  open:(deliveryId:string)=>Promise<DriverCustodySnapshot>;
  refresh:()=>Promise<DriverCustodySnapshot>;
+ poll:()=>Promise<DriverCustodySnapshot>;
  advance:()=>Promise<DriverCustodySnapshot>;
 }>;
 export declare function createDriverCustodyController(
