@@ -33,16 +33,19 @@ export function createG113AutoDispatchRetryWorker({
   !Number.isSafeInteger(maxJobs)||maxJobs<1||maxJobs>10)
   throw Error('G113 requires bounded STAGING-only server worker');
  let active=false,busy=false,timer=null,generation=0;
+ let successes=0,sqlFailures=0,lastOutcome='NOT_STARTED';
  async function tick(){
   if(!active)return Object.freeze({ok:false,reason:'NOT_RUNNING'});
   if(busy)return Object.freeze({ok:false,reason:'BUSY'});
   busy=true;const version=generation;
   try{
    const result=valid(await runDueBatch({limit:maxJobs}),maxJobs);
-   if(version!==generation||!active)
-    return Object.freeze({ok:false,reason:'STOPPED'});
+   if(version!==generation||!active){lastOutcome='STOPPED';
+    return Object.freeze({ok:false,reason:'STOPPED'});}
+   successes++;lastOutcome='OK';
    return Object.freeze({ok:true,result});
   }catch{
+   sqlFailures++;lastOutcome='SQL_UNAVAILABLE';
    return Object.freeze({ok:false,reason:'SQL_UNAVAILABLE'});
   }finally{busy=false;}
  }
@@ -69,7 +72,8 @@ export function createG113AutoDispatchRetryWorker({
  }
  return Object.freeze({start,stop,tick,
   snapshot:()=>Object.freeze({running:active,busy,qaOnly:true,
-   productionEnabled:false,maxJobs,intervalMs})});
+   productionEnabled:false,maxJobs,intervalMs,
+   successes,sqlFailures,lastOutcome})});
 }
 export function createG113AutoDispatchBatchRepository(client){
  if(!client||typeof client.rpc!=='function')

@@ -1,6 +1,7 @@
 -- G109 positive lifecycle fixture — disposable PostgreSQL 16 CI ONLY.
--- Deliberately accepted BEFORE G38 legal/geofence veto is installed, with
--- synthetic KYC, consent and vehicle. No real verified zone, permits or GPS.
+-- Creates an offered synthetic trip BEFORE G38: actual Native Driver G16/G4
+-- HTTP accepts it via G120, also BEFORE G38. Later G109 verifies completion
+-- with G38 fully active. No certified zone, permits or authentic GPS.
 -- NEVER deploy/execute on remote DB or treat this as commercial approval.
 -- This fixture makes completion test independent of all historical G20 rows.
 DO $guard$
@@ -70,7 +71,6 @@ DECLARE
  doc uuid;
  trip uuid;
  offer uuid;
- receipt uuid;
 BEGIN
  doc:=public.mobility_stage_register_driver_document(
   d,'10900000-0000-4109-8109-000000000025',
@@ -87,27 +87,25 @@ BEGIN
   'CENTRO_FIXTURE','AEROPUERTO','economico');
  offer:=public.mobility_stage_auto_demo_offer(
   trip,d,v,'10900000-0000-4109-8109-000000000027',30);
- receipt:=public.mobility_stage_auto_demo_accept_offer(
-  offer,d,'10900000-0000-4109-8109-000000000028');
- IF receipt IS NULL
+ IF offer IS NULL
  OR NOT EXISTS(SELECT 1 FROM public.mobility_stage_auto_demo_trips t
-  WHERE t.id=trip AND t.status='accepted' AND t.revision=2
-  AND t.driver_id=d AND t.passenger_id=p)
- THEN RAISE EXCEPTION 'G109 synthetic accepted QA trip not persisted'; END IF;
- RAISE NOTICE 'G109 fixture PASS: only disposable PRE-G38 synthetic accepted AUTO';
+  WHERE t.id=trip AND t.status='searching' AND t.revision=1
+  AND t.driver_id IS NULL AND t.passenger_id=p)
+ THEN RAISE EXCEPTION 'G109 pre-fence offered trip not persisted'; END IF;
+ RAISE NOTICE 'G109 fixture PASS: pre-G38 synthetic AUTO waiting for native Driver G120 acceptance';
 END $prepare$;
 RESET ROLE;
--- The G36 registry is intentionally invisible to service_role. Audit its
--- existence only as the disposable CI database owner, never by granting
--- access to the HTTP application or changing RLS.
+-- Positive acceptance is never inserted by this SQL fixture. Real native
+-- client HTTP must perform it in the very next isolated CI step; this table
+-- remains private from the service-role HTTP runtime.
 DO $audit$
 DECLARE t uuid;
 BEGIN
  SELECT id INTO t FROM public.mobility_stage_auto_demo_trips
  WHERE request_key='10900000-0000-4109-8109-000000000023';
- IF NOT EXISTS(SELECT 1 FROM public.mobility_stage_g36_driver_slots s
+ IF EXISTS(SELECT 1 FROM public.mobility_stage_g36_driver_slots s
   WHERE s.driver_id='10900000-0000-4109-8109-000000000022'
   AND s.assignment_kind='AUTO_RIDE' AND s.assignment_id=t)
- THEN RAISE EXCEPTION 'G109 QA accepted Driver slot was not persisted'; END IF;
+ THEN RAISE EXCEPTION 'G109 must not pre-create Driver acceptance'; END IF;
 END $audit$;
 COMMIT;

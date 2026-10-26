@@ -9,6 +9,9 @@ permissions:
   contents: read
 jobs:
   ownership:
+    # Only the independent B branch is subject to the B-exclusive file fence.
+    # A's scoped QA backend integration sub-PRs must not be mistaken for B.
+    if: github.event.pull_request.head.ref == 'feature/mobility-cliente-admin-parallel-20261022'
     name: Reject edits outside Client/Admin ownership
     runs-on: ubuntu-latest
     timeout-minutes: 5

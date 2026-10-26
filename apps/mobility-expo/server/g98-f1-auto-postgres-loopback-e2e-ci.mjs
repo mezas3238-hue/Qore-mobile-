@@ -15,9 +15,13 @@ import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
-import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
-import {createG112ScopedAutoDispatchRepository}
- from './g112-scoped-auto-dispatch-repository.mjs';
+import {createG115LocalQaAutoDispatchRuntime}
+ from './g115-local-qa-auto-dispatch-runtime.mjs';
+import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
+import {createDriverPrivateInboxRepository} from './g16-driver-private-inbox-repository.mjs';
+import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
+import {readDriverPrivateInbox} from '../../movete-driver/src/domain/driver-inbox.mjs';
+import {decidePrivateDriverOffer} from '../../movete-driver/src/domain/driver-offer-decision.mjs';
 
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -67,6 +71,7 @@ const methods={
  mobility_stage_g73_booking_receipt:['_passenger_id','_request_key'],
  mobility_stage_g90_passenger_dispatch_status_qa:['_passenger_id','_booking_key'],
  mobility_stage_g112_run_booked_auto_dispatch_qa:['_passenger_id','_booking_key','_trip_id'],
+ mobility_stage_g113_run_due_auto_batch_qa:['_limit'],
  mobility_stage_g93_preview_auto_qa:['_passenger_id','_quote_id'],
  mobility_stage_g94_auto_financial_state_qa:['_passenger_id','_booking_key'],
  mobility_stage_g95_cancel_booked_auto_qa:['_passenger_id','_booking_key','_cancellation_key'],
@@ -114,16 +119,20 @@ async function main(){
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+adminId+"','admin','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_g93_ride_campaigns(id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days) VALUES('"+campaign+"','AUTO_RIDE','G98_AUTO_60_QA','"+owner+"',true,pg_catalog.transaction_timestamp()-interval '1 hour',pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);");
  const db=createQoreG73AutoRepository({rpc});
- const targetedDispatch=createG112ScopedAutoDispatchRepository({rpc});
- let g111WorkerRuns=0,g111Receipt=null;
- const dispatcher=createG111AfterBookingAutoDispatch({
+ // The real B Client G73 HTTP booking now exercises the SAME G115
+ // runtime composition wired into the local server, not a parallel G111 mock.
+ let g111WorkerRuns=0,g111Receipt=null,triggerG115=null,stopG115=0;
+ const dispatcher=createG115LocalQaAutoDispatchRuntime({
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  maxJobs:1,intervalMs:30000,
+  schedule:(fire,ms)=>{assert.equal(ms,30000);triggerG115=fire;
+   return {unref(){}};},cancel:()=>{stopG115++;},
+  client:{rpc:async(name,args)=>{
+   if(name==='mobility_stage_g112_run_booked_auto_dispatch_qa')g111WorkerRuns++;
+   return rpc(name,args);
+  }},
   readPrivateDispatchStatus:({actorId,requestKey})=>
-   db.dispatchStatus({actorId,requestKey}),
-  runForBooking:async scope=>{
-   ++g111WorkerRuns;
-   return targetedDispatch.runForBooking(scope);
-  }
+   db.dispatchStatus({actorId,requestKey})
  });
  const gateway=createQoreG73AutoGateway({
   projectRef:'staging1234567890abcd',now:Date.now,
@@ -268,6 +277,53 @@ async function main(){
     "LIMIT 1),'null'::jsonb)::text;");
   }
  });
+ // G118: real Driver G16 private poll and G4 acceptance on the same
+ // PostgreSQL16 fixture as G73 Client and G113 booking retries.
+ const inboxRepository=createDriverPrivateInboxRepository({
+  rpc:async(name,args)=>{
+   const param=name==='mobility_stage_poll_driver_auto_offers'?'_driver_id':
+    name==='mobility_stage_poll_courier_delivery_offers'?'_courier_id':null;
+   if(param===null||Object.keys(args).length!==1||!uuid.test(args[param]??''))
+    throw Error('G118 untrusted private inbox SQL scope');
+   const raw=psql("SET ROLE service_role; SELECT COALESCE("+
+    "jsonb_agg(to_jsonb(v)),'[]'::jsonb)::text FROM public."+
+    name+"('"+args[param]+"') v");
+   return {data:JSON.parse(raw),error:null};
+  }
+ });
+ const driverInbox=createDriverPrivateInboxGateway({
+  projectRef:'staging1234567890abcd',
+  verifyAccessToken:driverIdentity,
+  authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
+  allowRequest:()=>true,
+  listForDriver:input=>inboxRepository.listForDriver(input)
+ });
+ const driverOffers=createQoreOfferGateway({
+  projectRef:'staging1234567890abcd',
+  verifyAccessToken:driverIdentity,
+  authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
+  allowRequest:()=>true,
+  loadOfferForDriver:async({offerId,driverId})=>{
+   if(!uuid.test(offerId)||!uuid.test(driverId))return null;
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT "+
+    "jsonb_build_object('offerId',o.id,'driverId',o.driver_id,"+
+    "'tripId',o.trip_id,'status',o.status,"+
+    "'expiresAtMs',(EXTRACT(EPOCH FROM o.expires_at)*1000)::bigint,"+
+    "'service',t.service,'originTag',t.origin_tag,"+
+    "'destinationTag',t.destination_tag) "+
+    "FROM public.mobility_stage_auto_demo_offers o "+
+    "JOIN public.mobility_stage_auto_demo_trips t ON t.id=o.trip_id "+
+    "WHERE o.id='"+offerId+"' AND o.driver_id='"+driverId+"' "+
+    "AND t.status='searching'),'null'::jsonb)::text");
+  },
+  acceptOffer:async p=>psql("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_auto_demo_accept_offer('"+p._offer_id+"','"+
+   p._driver_id+"','"+p._decision_key+"')::text"),
+  declineOffer:async p=>psql("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_auto_demo_decline_offer('"+p._offer_id+"','"+
+   p._driver_id+"','"+p._decision_key+"')::text")
+ });
+
  const tripCommands=createQoreTripCommandGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:driverIdentity,
@@ -287,7 +343,7 @@ async function main(){
  });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:rider,adminF1AuditHandler:adminGateway,
-  offerHandler:noop,tripCommandHandler:tripCommands,
+   offerHandler:driverOffers,driverInboxHandler:driverInbox,tripCommandHandler:tripCommands,
   driverTripStatusHandler:driverStatus,
   driverCurrentTripHandler:driverCurrent,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
@@ -359,6 +415,75 @@ async function main(){
    'G112 scoped dispatch cannot consume unrelated older due booking');
   assert(['RETRY_PENDING','OFFER_PENDING'].includes(
    g111Receipt.dispatchState),'G111 must not forge Driver assignment');
+  // G117: Continue THIS G73 booking through the actual G113 periodic retry,
+  // while preserving the older unrelated Passenger's due job for the
+  // independent G113 test below. All edits remain in disposable PostgreSQL16.
+  // G38/G71 remain enforced: no synthetic Driver or positive legal offer.
+  assert.equal(g111Receipt.dispatchState,'RETRY_PENDING');
+  psql("UPDATE public.mobility_stage_g85_auto_dispatch_jobs "+
+   "SET next_attempt_at=pg_catalog.clock_timestamp()+interval '2 hours' "+
+   "WHERE booking_key='"+olderKey+"' AND status='PENDING' AND attempts=0");
+  const settleG115=async()=>{
+   for(let i=0;i<20&&dispatcher.snapshot().busy;i++)
+    await new Promise(resolve=>setImmediate(resolve));
+   assert.equal(dispatcher.snapshot().busy,false,'G117 local worker busy');
+  };
+  assert.equal(dispatcher.start(),true);
+  await settleG115();
+  assert.equal(dispatcher.snapshot().successes,1);
+  assert.equal(dispatcher.snapshot().productionEnabled,false);
+  let sameJob=sqlJson("SELECT jsonb_build_object("+
+   "'tripId',trip_id,'status',status,'attempts',attempts,"+
+   "'offerId',offer_id)::text FROM "+
+   "public.mobility_stage_g85_auto_dispatch_jobs "+
+   "WHERE booking_key='"+bookingKey+"'");
+  assert.equal(sameJob.tripId,tripId);
+  assert.equal(sameJob.status,'WAITING');
+  assert.equal(sameJob.attempts,1,'G117 respects persisted 30s delay');
+  assert.equal(sameJob.offerId,null);
+  // Simulate due clock ONLY by changing the disposable CI due timestamp.
+  // The production worker never writes this field directly.
+  psql("UPDATE public.mobility_stage_g85_auto_dispatch_jobs "+
+   "SET next_attempt_at=pg_catalog.clock_timestamp()-interval '1 second' "+
+   "WHERE booking_key='"+bookingKey+"' AND status='WAITING' AND attempts=1");
+  assert.equal(typeof triggerG115,'function');
+  triggerG115();
+  await settleG115();
+  sameJob=sqlJson("SELECT jsonb_build_object("+
+   "'tripId',trip_id,'status',status,'attempts',attempts,"+
+   "'offerId',offer_id)::text FROM "+
+   "public.mobility_stage_g85_auto_dispatch_jobs "+
+   "WHERE booking_key='"+bookingKey+"'");
+  assert.equal(sameJob.tripId,tripId);
+  assert.equal(sameJob.status,'WAITING');
+  assert.equal(sameJob.attempts,2,'G117 retry must advance SAME trip');
+  assert.equal(sameJob.offerId,null,'No legal Driver evidence, no offer');
+  assert.equal(dispatcher.snapshot().successes,2);
+   // Actual native Driver G16 codec reads only verified offers from G16 SQL.
+   const realNativeInbox=await readDriverPrivateInbox({
+    apiOrigin:base,accessToken:driverToken,request:fetch,now:Date.now
+   });
+   assert.deepEqual(realNativeInbox,[]);
+   assert.equal((await http(base,'/v1/staging/driver/inbox',{auth:token})).status,401);
+   assert.equal((await http(base,'/v1/staging/driver/inbox',{auth:otherToken})).status,401);
+   const unknownOffer='11800000-0000-4118-8118-000000000001';
+   const forgedDecisionKey='11800000-0000-4118-8118-000000000002';
+   await assert.rejects(decidePrivateDriverOffer({
+    apiOrigin:base,accessToken:driverToken,kind:'AUTO_RIDE',
+    offerId:unknownOffer,requestKey:forgedDecisionKey,
+    action:'accept',request:fetch
+   }),/Offer expired, assigned or decision conflicted/);
+   const afterFakeOffer=sqlJson("SELECT jsonb_build_object("+
+    "'tripId',t.id,'revision',t.revision,'driverId',t.driver_id,"+
+    "'events',(SELECT count(*) FROM public.mobility_stage_auto_demo_events e "+
+    "WHERE e.trip_id=t.id))::text "+
+    "FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+tripId+"'");
+   assert.equal(afterFakeOffer.tripId,tripId);
+   assert.equal(afterFakeOffer.revision,1);
+   assert.equal(afterFakeOffer.driverId,null);
+   assert.equal(Number(afterFakeOffer.events),0);
+
+
   // G104: full Driver assignment is NOT an authorized QA outcome.
   // G71 requires an independently attested eight-document dossier and
   // G38 blocks zones without real legal evidence. Do not weaken either.
@@ -457,7 +582,7 @@ async function main(){
   assert.equal(before.data.tripId,tripId);
   assert.equal(before.data.tripState,'searching');
   assert.equal(before.data.dispatchState,g111Receipt.dispatchState);
-  assert.equal(before.data.attempts,1);
+  assert.equal(before.data.attempts,2,'G117 same G73 trip after due retry');
   assert.equal(before.data.offerPendingAcceptance,
    g111Receipt.dispatchState==='OFFER_PENDING');
   assert.equal((await http(base,f1+'/bookings/'+bookingKey+'/financial-status',
@@ -496,6 +621,33 @@ async function main(){
   assert.equal(closed.data.tripId,tripId);
   assert.equal(closed.data.dispatchState,'CLOSED');
   assert.equal(closed.data.offerPendingAcceptance,false);
+   // Canceling the real booking cannot leave a phantom offer in Driver.
+   assert.deepEqual(await readDriverPrivateInbox({
+    apiOrigin:base,accessToken:driverToken,request:fetch,now:Date.now
+   }),[]);
+  // Cancellation is terminal for the exact job the Client created.
+  const terminal=await dispatcher.tick();
+  assert.equal(terminal.ok,true);
+  const closedJob=sqlJson("SELECT jsonb_build_object("+
+   "'tripId',trip_id,'status',status,'attempts',attempts)::text "+
+   "FROM public.mobility_stage_g85_auto_dispatch_jobs "+
+   "WHERE booking_key='"+bookingKey+"'");
+  assert.equal(closedJob.tripId,tripId);
+  assert.equal(closedJob.status,'CLOSED');
+  assert.equal(closedJob.attempts,2);
+  dispatcher.stop();assert.equal(stopG115,1);
+  // Restore older unrelated fixture for original G113 isolated persistence
+  // test, proving our recurring worker never stole it in G117.
+  psql("UPDATE public.mobility_stage_g85_auto_dispatch_jobs "+
+   "SET next_attempt_at=pg_catalog.clock_timestamp()-interval '1 second' "+
+   "WHERE booking_key='"+olderKey+"' AND status='PENDING' AND attempts=0");
+  const otherJob=sqlJson("SELECT jsonb_build_object("+
+   "'status',status,'attempts',attempts,'due',"+
+   "(next_attempt_at<=pg_catalog.clock_timestamp()))::text "+
+   "FROM public.mobility_stage_g85_auto_dispatch_jobs "+
+   "WHERE booking_key='"+olderKey+"'");
+  assert.deepEqual(otherJob,{status:'PENDING',attempts:0,due:true});
+
   const riderAfter=await http(base,
    '/v1/staging/rider/trips/'+tripId+'/status');
   assert.equal(riderAfter.status,200,JSON.stringify(riderAfter.data));
@@ -653,11 +805,13 @@ async function main(){
   assert.equal(ledger.queueState,'CLOSED');
   assert.equal(Number(ledger.outstandingOffers),0);
   console.log('G112 PASS: G73 owner-scoped first dispatch bypasses unrelated older due booking, keeps its G85 job unchanged, and binds original Passenger, key and trip; no KYC/G38 bypass');
-  console.log('G111 PASS: real G73 HTTP booking invokes exactly one trusted G85 PostgreSQL worker, G90 state reflects private offer or legal backoff, replay adds zero attempts, G95 closes queue; no LIVE/PSP');
+  console.log('G118 DRIVER PASS: native Driver G16 inbox over actual private HTTP/PostgreSQL matches original G73 trip; no false offers, forged native G4 acceptance denied by SQL and G38/G71, cancellation clears inbox');
+  console.log('G117 SAME TRIP PASS: latest B Cliente G73 -> G115 G111/G112 immediate dispatch -> periodic G113 due retry 1->2 -> B G90 status and Admin G75 -> G95/G96 cancellation/ledger, all same tripId PostgreSQL16, no unauthorized Driver, no LIVE/PSP');
   console.log('G106 PASS: Driver current-trip recovery uses verified Auth and same real PostgreSQL; empty before/after cancellation, forbidden to Passenger');
   console.log('G105 PASS: Driver HTTP/Auth/real PostgreSQL denies forged advancement of the same G73 trip before and after G95 cancellation; zero assignment/forged events');
   console.log('G99 PASS: REAL local HTTP+PostgreSQL16 same G73 trip across Client+Admin before/after G95 cancellation; 4 G94 void entries, G96 dispatch CLOSED, Passenger privacy, Admin MFA/revocation QA, NO PSP / NO LIVE');
  }finally{
+  dispatcher.stop();
   if(server.listening)await new Promise((resolve,reject)=>
    server.close(err=>err?reject(err):resolve()));
  }
