@@ -42,6 +42,10 @@ export default function Account(){
     return;
    }
    const refreshed=await client.refreshSession();
+   // G95 is independent of the G101 MOTO bootstrapping. Resume any
+   // pending AUTO cancellation by its private GET after a late login.
+   // No duplicate cancel POST, no assumption of financial reversal.
+   if(refreshed.ok)await client.restoreG95Cancellation();
    setMessage(refreshed.ok
     ?'Sesión de pasajero verificada con el servidor. Los viajes todavía requieren el backend compartido habilitado.'
     :'La sesión no pudo certificarse; las solicitudes siguen bloqueadas.');

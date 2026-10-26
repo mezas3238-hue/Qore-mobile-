@@ -1162,12 +1162,6 @@ export function createClientExperience({authProvider=null,gateway=null,
     if(scope!==session.privacyRevision()||actor()?.subject!==owner){
      notify();return fail('STALE_SESSION_RESPONSE');
     }
-    if(canSaveG95&&autoG73Http?.isCancellationConfigured()===true
-      &&g95.phase==='idle')
-     await restoreG95Cancellation(); // read-only reconciliation, no POST.
-    if(scope!==session.privacyRevision()||actor()?.subject!==owner){
-     notify();return fail('STALE_SESSION_RESPONSE');
-    }
    }
    notify();return result;
   },

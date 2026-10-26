@@ -92,13 +92,15 @@ export function ClientRuntimeProvider({children,experience}:{
   if(!nativeAuth)return;
   let active=true;
   void (async()=>{
-   // A new Auth session performs G95/G101 secure GET recovery in
-   // ClientExperience.refreshSession, also after login or token rotation.
-   // Never perform a competing read here after the same refresh.
-   if(active)await client.refreshSession();
+   const auth=await client.refreshSession();
+   // Preserve the previously certified R75 manual G95 recovery contract.
+   // MOTO G101 is already bootstrapped by refreshSession; do not double-read.
+   if(active&&auth.ok===true&&g95RecoveryStore
+    &&qaHttp?.cancellationContractCertified===true)
+    await client.restoreG95Cancellation();
   })();
   return ()=>{active=false;};
- },[client,nativeAuth]);
+ },[client,nativeAuth,qaHttp,g95RecoveryStore]);
  // Solo RAM, nunca enlaces, AsyncStorage ni campos de URL con direcciones.
  const passengerRideIntent=useMemo(()=>createPassengerRideIntent(),[]);
  useEffect(()=>{
