@@ -278,10 +278,13 @@ async function main(){
    ]);
   const bOrigin='https://qore-g114-loopback-ci.invalid';
   let clientActor=rider;
+  // One immutable JWT expiry per issued QA session; do not recreate identity
+  // material while the B gateway checks pre/post-fetch session equality.
+  const bExpiresAt=Date.now()+600000;
   const bSession=async()=>({
    role:'passenger',subject:clientActor,
    token:clientActor===rider?riderToken:foreignToken,
-   authRevision:1,expiresAt:Date.now()+600000
+   authRevision:1,expiresAt:bExpiresAt
   });
   let bReads=0;
   const bFetch=(url,options)=>{
