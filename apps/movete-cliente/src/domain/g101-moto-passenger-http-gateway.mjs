@@ -13,7 +13,7 @@ const fail=(code,status=0)=>Object.freeze({ok:false,code,status});
 const PATH='/v1/staging/rider/moto';
 const safeText=x=>typeof x==='string'&&x.length>=3&&x.length<=120
  &&x.trim()===x&&!/[\u0000-\u001f\u007f]/.test(x);
-function pinnedOrigin(raw){
+function canonicalOrigin(raw){
  try{
   if(typeof raw!=='string'||raw.includes('\\'))return null;
   const u=new URL(raw);
@@ -52,7 +52,7 @@ export function createG101MotoPassengerHttpGateway({
  origin,pinnedOrigin,getSession,fetchImpl=fetch,onSessionInvalid=()=>{},
  now=Date.now,timeoutMs=8000,maxBytes=32768
 }={}){
- const host=pinnedOrigin(origin),pin=pinnedOrigin(pinnedOrigin);
+ const host=canonicalOrigin(origin),pin=canonicalOrigin(pinnedOrigin);
  const ready=enabled===true&&contractCertified===true
   &&externalRuntimeVerified===true&&motoLegalVerified===true
   &&motoRouteVerified===true&&passengerRlsVerified===true
