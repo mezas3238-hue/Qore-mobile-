@@ -607,7 +607,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: mezas3238-hue/Qore-mobile-
-          ref: 067fe837bcb8285721554cfde1710f9ba76476f2
+          ref: ad6569872d79c5c7fd948ae0a859706463678353
           path: ci-b-client
           persist-credentials: false
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation

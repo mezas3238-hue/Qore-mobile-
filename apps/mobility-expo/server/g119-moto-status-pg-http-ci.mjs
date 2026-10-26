@@ -7,6 +7,7 @@ import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 import {createG101MotoPassengerGateway,createG101MotoPassengerRepository}
  from './g101-moto-passenger-gateway.mjs';
+import {createG119MotoStatusGateway} from '../../../ci-b-client/apps/movete-cliente/src/domain/g119-moto-ride-status-gateway.mjs';
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'
  ||process.env.PGPORT!=='5432'||process.env.PGDATABASE!=='qore_disposable_chain'
  ||process.env.PGAPPNAME!=='qore_ci_disposable_chain')
@@ -74,6 +75,33 @@ async function main(){
  });
  try{
   const base=await listenQoreRadarLoopback(server);
+  const fixedNow=Date.now();
+  const bSource='https://g119-cross-branch-qa.invalid';
+  const bGateway=createG119MotoStatusGateway({
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:bSource,pinnedOrigin:bSource,now:()=>fixedNow,
+   getSession:async()=>({subject:passenger,role:'passenger',token,
+    expiresAt:fixedNow+600000}),
+   fetchImpl:async(url,init)=>{
+    const parsed=new URL(url);
+    assert.equal(parsed.origin,bSource);
+    assert.equal(parsed.search,'');
+    assert.equal(init.method,'GET');
+    assert.equal(init.credentials,'omit');
+    return fetch(base+parsed.pathname,{...init,redirect:'error'});
+   }
+  });
+  async function checkClient(version,status){
+   const view=await bGateway.read({bookingKey:booking,
+    expectedTripId:trip,minimumRevision:version});
+   assert.equal(view.ok,true,JSON.stringify(view));
+   assert.equal(view.data.tripState,status);
+   assert.equal(view.data.tripRevision,version);
+   assert.equal(view.data.subsidyBps,1000);
+   assert.equal(view.data.gpsVerified,false);
+   assert.equal(view.data.etaAvailable,false);
+  }
+
   const searching=await fetchStatus(base,booking);
   assert.equal(searching.status,200,JSON.stringify(searching.body));
   assert.equal(searching.body.tripId,trip);
@@ -81,6 +109,7 @@ async function main(){
   assert.equal(searching.body.tripRevision,1);
   assert.equal(searching.body.driverAssigned,false);
   assert.equal(searching.body.subsidyBps,1000);
+  await checkClient(1,'searching');
   assert.equal((await fetchStatus(base,booking,foreign)).status,404);
   assert.equal((await fetchStatus(base,booking,'invalid-token-aaa')).status,401);
   // G118 refuses a dispatch without certified MOTO territory even if a Driver
@@ -106,6 +135,7 @@ async function main(){
    assert.equal(read.body.gpsVerified,false);
    assert.equal(read.body.etaAvailable,false);
    assert.equal(read.body.pspCollected,false);
+   await checkClient(revision,state);
    if(command){
     const res=JSON.parse(sql('SET ROLE service_role; SELECT public.'+
       "mobility_stage_g118_moto_driver_step_qa('"+booking+"','"+driver+"',"+
@@ -129,6 +159,7 @@ async function main(){
   assert(!serialized.includes(driver));
   assert(!serialized.includes(vehicle));
   assert(!serialized.includes('latitude'));
+  console.log('G119 CROSS-BRANCH PASS: A PG16 MOTO trip statuses accepted by real B Client gateway, identity and finance pinned; no live');
   console.log('G119 PASS: one MOTO booking -> private HTTP searching, synthetic-only accepted, arriving, in_progress, completed via PG16; exact rider identity and fare, no GPS/ETA/PSP; unverified offers denied');
  }finally{await new Promise(resolve=>server.close(resolve));}
 }
