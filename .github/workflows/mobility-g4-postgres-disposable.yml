@@ -637,6 +637,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_POSTGRES_CI_ONLY.sql
       - name: G118 assert private booking, unmintable municipal gate and durable MOTO Driver state
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G119 authenticated Rider MOTO HTTP status across real PostgreSQL lifecycle
+        run: node apps/mobility-expo/server/g119-moto-status-pg-http-ci.mjs
       - name: G109 end-to-end Driver AUTO legacy QA lifecycle, Rider consistency and slot release
         run: node apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs
       - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
