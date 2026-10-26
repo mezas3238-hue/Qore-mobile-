@@ -195,6 +195,7 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
  */
 function OwnDeliveryActivityPanel({client,view}:{client:ClientExperience;view:ClientSnapshot}){
  const projection=projectOwnDeliveryActivity(view);
+ const selected=projection.selected;
  const [feedback,setFeedback]=useState('');
  const running=useRef(false);
  async function refreshHistory(){
@@ -214,7 +215,7 @@ function OwnDeliveryActivityPanel({client,view}:{client:ClientExperience;view:Cl
   const latest=client.snapshot(),owner=view.account?.subject;
   if(!latest.authenticated||latest.privateViewRevision!==view.privateViewRevision
    ||latest.account?.subject!==owner||latest.history?.ownerId!==owner
-   ||!latest.history.items.some(row=>row.kind==='DELIVERY'
+   ||!latest.history||!latest.history.items.some(row=>row.kind==='DELIVERY'
     &&row.serviceId===deliveryId&&row.revision===historyRevision))return;
   running.current=true;setFeedback('');
   try{
@@ -248,12 +249,12 @@ function OwnDeliveryActivityPanel({client,view}:{client:ClientExperience;view:Cl
     busy={view.senderCustody.loading}
     hint="El vehículo y la entrega se muestran solo cuando G68 los verifica con tu sesión."
     onPress={()=>{void verifyCustody(row.deliveryId,row.revision);}}/>
-   {projection.selected?.deliveryId===row.deliveryId&&<View>
+   {selected!==null&&selected.deliveryId===row.deliveryId&&<View>
     <Text accessibilityLiveRegion="polite" style={styles.text}>
-     {projection.selected.vehicleLabel} · {projection.selected.stateLabel} ·
-     revisión {projection.selected.revision}.
+     {selected.vehicleLabel} · {selected.stateLabel} ·
+     revisión {selected.revision}.
     </Text>
-    <Text style={styles.small}>{projection.selected.complete
+    <Text style={styles.small}>{selected.complete
      ?'Entrega con prueba de custodia verificada por el servidor de QA.'
      :'Entrega final todavía no confirmada con prueba independiente.'}
      {' '}Sin GPS ni ETA certificados; este estado no confirma cobro ni liquidación.
