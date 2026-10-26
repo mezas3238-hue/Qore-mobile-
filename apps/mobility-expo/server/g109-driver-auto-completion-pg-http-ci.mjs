@@ -315,6 +315,41 @@ async function main(){
    getSession:bSession
   });
   assert.equal(bPolling.begin(tripId,rider).ok,true);
+  // G115: real B ClientExperience auth, G26 history recovery, tracking
+  // and completion proof against the SAME A Driver-owned PG16 trip.
+  // The test-only trip was accepted before G38; it is not commercial GO.
+  const {createClientExperience}=await import(new URL('client-experience.mjs',bRoot));
+  const bComposer=createClientExperience({
+   authProvider:{
+    readSession:async()=>({
+     role:'passenger',subject:clientActor,
+     token:clientActor===rider?riderToken:foreignToken,
+     expiresAt:bExpiresAt
+    }),
+    signOut:async()=>{}
+   },
+   historyGatewayOptions:{
+    enabled:true,contractCertified:true,origin:bOrigin,
+    pinnedOrigin:bOrigin,fetchImpl:bFetch
+   },
+   statusGatewayOptions:{
+    enabled:true,contractCertified:true,origin:bOrigin,
+    pinnedOrigin:bOrigin,fetchImpl:bFetch
+   }
+  });
+  assert.equal((await bComposer.refreshSession()).ok,true);
+  assert.equal((await bComposer.loadHistoryPage({reset:true})).ok,true);
+  const initialHistory=bComposer.snapshot().history.items
+   .find(item=>item.serviceId===tripId);
+  assert.equal(initialHistory?.status,'assigned');
+  assert.equal(initialHistory.revision,2);
+  const resumed=await bComposer.resumeRideFromHistory({
+   tripId,expectedHistoryRevision:initialHistory.revision
+  });
+  assert.equal(resumed.ok,true,JSON.stringify(resumed));
+  assert.equal(bComposer.snapshot().tracking.tripId,tripId);
+  assert.equal(bComposer.snapshot().tracking.state,'assigned');
+  assert.equal(bComposer.snapshot().rideContinuation.canVerify,true);
   const states=[
    ['accepted','assigned',2,'arrive'],
    ['arriving','arriving',3,'pickup'],
@@ -357,6 +392,18 @@ async function main(){
    assert.equal(bItems.length,1);
    assert.equal(bItems[0].revision,revision);
    assert.equal(bItems[0].status,historyState);
+   // Complete B Passenger state machine independently verifies the live
+   // database revision without creating a trip, Driver or synthetic GPS.
+   const composed=await bComposer.syncTracking();
+   assert.equal(composed.ok,true,JSON.stringify(composed));
+   const fullClient=bComposer.snapshot();
+   assert.equal(fullClient.tracking.tripId,tripId);
+   assert.equal(fullClient.tracking.revision,revision);
+   assert.equal(fullClient.tracking.state,riderState);
+   assert.equal(fullClient.tracking.assignedDriver,null);
+   assert.equal(fullClient.tracking.position,null);
+   assert.equal(fullClient.tracking.etaMinutes,null);
+   assert.equal(fullClient.completedRideHistory.verified,false);
    assert(!JSON.stringify(h.data).includes(driver),
     'G26 must not expose Driver identity in Passenger history');
    assert.equal(d.data.tripId,tripId);
@@ -470,6 +517,17 @@ async function main(){
   assert.equal(terminal.revision,5);
   assert.equal(Number(terminal.events),4);
   assert.equal(Number(terminal.slot),0);
+  // Terminal state alone cannot confirm an own-history record.
+  // The actual B experience must independently re-read signed G26 history.
+  assert.equal(bComposer.snapshot().completedRideHistory.readReady,true);
+  const verifiedEnd=await bComposer.verifyCompletedRideHistory();
+  assert.equal(verifiedEnd.ok,true,JSON.stringify(verifiedEnd));
+  assert.equal(verifiedEnd.tripId,tripId);
+  const confirmedEnd=bComposer.snapshot();
+  assert.equal(confirmedEnd.completedRideHistory.verified,true);
+  assert.equal(confirmedEnd.history.items.find(item=>item.serviceId===tripId).revision,5);
+  assert(!JSON.stringify(confirmedEnd).includes(riderToken),
+   'Private Passenger JWT must not leak in Client snapshot');
   // Switching Passenger identity must clear B's existing subscription.
   const beforeSwitch=bReads;
   clientActor=outsider;
@@ -485,6 +543,14 @@ async function main(){
   const foreignOwnB=await bHistory.fetchPage(null);
   assert.equal(foreignOwnB.ok,true);
   assert(!foreignOwnB.data.items.some(x=>x.serviceId===tripId));
+  // Session switch must revoke B completion evidence and tracking.
+  assert.equal((await bComposer.refreshSession()).ok,true);
+  const afterSwitch=bComposer.snapshot();
+  assert.equal(afterSwitch.tracking.subscriptionActive,false);
+  assert.equal(afterSwitch.tracking.tripId,null);
+  assert.equal(afterSwitch.completedRideHistory.verified,false);
+  assert(!JSON.stringify(afterSwitch).includes(riderToken));
+  console.log('G115 CROSS-BRANCH PASS: real B ClientExperience recovers own G26 history, resumes same pre-G38 AUTO trip, follows A native Driver G65 revisions, then independently verifies completed PG16 revision 5; session switch revokes evidence; QA-only, no LIVE.');
   console.log('G114 CROSS-BRANCH PASS: real B Passenger status+polling+history and real A Driver G65 share four durable PG16 revisions of one pre-G38 synthetic AUTO trip; private session rotation, no fake GPS/ETA, no LIVE.');
   console.log('G110 PASS: G26 original own-history SQL repository + authenticated HTTP GET reflect same AUTO trip at every revision, completed final state, foreign Passenger denied, no Driver PII');
   console.log('G111 PASS: Native Driver G65 controller and native HTTP codecs -> original A PG16 accepted, arrive, pickup, complete; 3 unique POST, 4 server-confirmed GET, read-only terminal, Driver slot released, no LIVE');
