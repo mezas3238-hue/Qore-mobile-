@@ -83,3 +83,25 @@ test('snapshot authorizes by persisted participant and validates custody',async(
  await assert.rejects(repo.snapshot({...base(sender),deliveryId:delivery}),/custody/);
 });
 
+
+test('G121 repository never reads delivery without both owner and requestKey',async()=>{
+ const conditions={},calls=[];
+ const fake={
+  rpc(){throw Error('READ cannot call mutation RPC')},
+  from(table){
+   assert.equal(table,'mobility_stage_deliveries');
+   return {select(cols){assert.equal(cols,
+    'id,request_key,sender_id,requested_vehicle_kind,status,revision');return this;},
+    eq(k,v){conditions[k]=v;calls.push(k);return this;},
+    async maybeSingle(){return {error:null,data:conditions.sender_id===sender?
+     {id:delivery,sender_id:sender,request_key:key,
+      requested_vehicle_kind:'MOTO',status:'requested',revision:1}:null};}};
+  }
+ };
+ const repo=createSupabaseStagingDeliveryRepository(fake);
+ assert.deepEqual(await repo.reconcile({...base(sender),requestKey:key}),{
+  ok:true,liveEnabled:false,deliveryId:delivery,requestKey:key,
+  vehicleKind:'MOTO',status:'requested',revision:1});
+ assert.deepEqual(calls,['request_key','sender_id']);
+ assert.equal(await repo.reconcile({...base(outsider),requestKey:key}),null);
+});

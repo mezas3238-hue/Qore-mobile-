@@ -3,6 +3,7 @@ import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST='/v1/staging/sender/deliveries/request';
+const RECONCILE=/^\/v1\/staging\/sender\/deliveries\/requests\/([0-9a-f-]{36})$/i;
 const ACCEPT=/^\/v1\/staging\/courier\/deliveries\/([0-9a-f-]{36})\/accept$/i;
 const TRANSITION=/^\/v1\/staging\/deliveries\/([0-9a-f-]{36})\/transition$/i;
 const STATUS=/^\/v1\/staging\/deliveries\/([0-9a-f-]{36})\/status$/i;
@@ -44,6 +45,7 @@ const response=(status,body)=>({status,body});
 export function createQoreDeliveryCommandGateway({
  projectRef,verifyAccessToken,resolveRole,allowRequest,
  requestDelivery,acceptDelivery,transitionDelivery,loadDelivery,
+ reconcileDelivery=null,
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,resolveRole,allowRequest,requestDelivery,acceptDelivery,
@@ -51,10 +53,11 @@ export function createQoreDeliveryCommandGateway({
   throw Error('Authenticated delivery adapters required');
  return async({method,path,headers,body})=>{
   const create=method==='POST'&&path===REQUEST;
+  const recover=method==='GET'&&typeof path==='string'?RECONCILE.exec(path):null;
   const accept=method==='POST'&&typeof path==='string'?ACCEPT.exec(path):null;
   const transition=method==='POST'&&typeof path==='string'?TRANSITION.exec(path):null;
   const status=method==='GET'&&typeof path==='string'?STATUS.exec(path):null;
-  if(!create&&!accept&&!transition&&!status)return response(404,{error:'Not found'});
+  if(!create&&!accept&&!transition&&!status&&!recover)return response(404,{error:'Not found'});
   if(create&&!requestBody(body))return response(400,{error:'Invalid delivery request'});
   if(accept&&!acceptBody(body))return response(400,{error:'Invalid delivery acceptance'});
   if(transition&&!transitionBody(body))return response(400,{error:'Invalid delivery transition'});
@@ -71,12 +74,12 @@ export function createQoreDeliveryCommandGateway({
   }
   if(role!=='passenger'&&role!=='driver')
    return response(403,{error:'Single sender or courier role required'});
-  if(create&&role!=='passenger')return response(403,{error:'Sender role required'});
+  if((create||recover)&&role!=='passenger')return response(403,{error:'Sender role required'});
   if(accept&&role!=='driver')return response(403,{error:'Courier role required'});
   if(transition&&((SENDER_EVENTS.has(body.event)&&role!=='passenger')||
     (COURIER_EVENTS.has(body.event)&&role!=='driver')))
    return response(403,{error:'Role cannot perform delivery transition'});
-  const operation=create?'delivery_request':accept?'delivery_accept':
+  const operation=create?'delivery_request':recover?'delivery_reconcile':accept?'delivery_accept':
    transition?'delivery_'+body.event:'delivery_status';
   try{
    if(allowRequest({userId:user.id,operation})!==true)
@@ -84,6 +87,24 @@ export function createQoreDeliveryCommandGateway({
   }catch{return response(503,{error:'Request limiter unavailable'});}
   const deliveryId=create?null:(accept?.[1]??transition?.[1]??status?.[1]);
   try{
+   if(recover){
+    // Owner-scoped READ after an uncertain POST, never a second booking.
+    if(!UUID.test(recover[1]))return response(404,{error:'Not found'});
+    if(typeof reconcileDelivery!=='function')
+     return response(503,{error:'Delivery recovery unavailable'});
+    const proof=await reconcileDelivery({actorId:user.id,requestKey:recover[1]});
+    if(proof===null)return response(404,{error:'Delivery request unavailable'});
+    if(!plain(proof)||proof.ok!==true||proof.liveEnabled!==false||
+      !UUID.test(proof.deliveryId??'')||proof.requestKey!==recover[1]||
+      !VEHICLES.has(proof.vehicleKind)||!Number.isSafeInteger(proof.revision)||
+      proof.revision<1||
+      !['requested','accepted','picked_up','delivered','disputed','returned','cancelled']
+       .includes(proof.status))throw Error('Unverified delivery receipt');
+    return response(200,{mode:'STAGING_DEMO_ONLY',liveDeliveriesEnabled:false,
+     serverPersisted:true,ownerId:user.id,requestKey:proof.requestKey,
+     deliveryId:proof.deliveryId,vehicleKind:proof.vehicleKind,
+     status:proof.status,revision:proof.revision});
+   }
    if(create){
     const result=await requestDelivery({actorId:user.id,...body});
     if(!plain(result)||result.ok!==true||result.liveEnabled!==false||

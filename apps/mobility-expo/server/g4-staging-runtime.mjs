@@ -353,6 +353,9 @@ export async function prepareQoreG4StagingRuntime({
  const deliveries=createQoreDeliveryCommandGateway({
   projectRef:ref,verifyAccessToken:verified,
   resolveRole:id=>singleRole(admin,id),allowRequest,
+  reconcileDelivery:params=>deliveryPersistence.reconcile({
+   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+  }),
   requestDelivery:params=>deliveryPersistence.request({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),

@@ -81,6 +81,25 @@ export function createSupabaseStagingDeliveryRepository(client){
    return ok({deliveryId});
   },
 
+  async reconcile(params){
+   assertBase(params);
+   if(!validId(params.requestKey))throw Error('Invalid delivery key');
+   // BOTH sender_id and request_key are necessary; never unrestricted lookup.
+   const {data,error}=await client.from('mobility_stage_deliveries')
+    .select('id,request_key,sender_id,requested_vehicle_kind,status,revision')
+    .eq('request_key',params.requestKey).eq('sender_id',params.actorId)
+    .maybeSingle();
+   if(error)throw Error('Delivery recovery database unavailable');
+   if(data===null)return null;
+   if(!plain(data)||!validId(data.id)||data.request_key!==params.requestKey||
+    data.sender_id!==params.actorId||!VEHICLES.has(data.requested_vehicle_kind)||
+    !STATUSES.has(data.status)||!int(data.revision,1,Number.MAX_SAFE_INTEGER))
+    throw Error('Invalid delivery recovery receipt');
+   return ok({deliveryId:data.id,requestKey:data.request_key,
+    vehicleKind:data.requested_vehicle_kind,status:data.status,
+    revision:data.revision});
+  },
+
   async accept(params){
    assertBase(params);
    if(!validId(params.deliveryId)||!validId(params.vehicleId)||

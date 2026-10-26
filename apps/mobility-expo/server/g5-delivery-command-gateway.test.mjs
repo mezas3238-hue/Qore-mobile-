@@ -27,6 +27,9 @@ function fixture(){
   },
   resolveRole:async id=>id===sender?'passenger':id===courier?'driver':null,
   allowRequest:()=>true,
+  reconcileDelivery:async input=>{calls.push({operation:'reconcile',input});
+   return {ok:true,liveEnabled:false,deliveryId:delivery,
+    requestKey:input.requestKey,vehicleKind:'MOTO',status:'requested',revision:1};},
   requestDelivery:async input=>{calls.push({operation:'request',input});
    return {ok:true,liveEnabled:false,deliveryId:delivery};},
   acceptDelivery:async input=>{calls.push({operation:'accept',input});
@@ -95,4 +98,17 @@ test('limiter and persistence failures remain closed without live success',async
   requestDelivery:async()=>({ok:true,liveEnabled:true,deliveryId:delivery})});
  assert.equal((await broken({method:'POST',path:'/v1/staging/sender/deliveries/request',
   headers:headers(sender),body:request})).status,409);
+});
+
+test('G121 GET recovery strictly authenticates sender and never rebooks',async()=>{
+ const f=fixture(),path='/v1/staging/sender/deliveries/requests/'+key;
+ const x=await f.gateway({method:'GET',path,headers:headers(sender)});
+ assert.equal(x.status,200);
+ assert.deepEqual(x.body,{mode:'STAGING_DEMO_ONLY',liveDeliveriesEnabled:false,
+  serverPersisted:true,ownerId:sender,requestKey:key,deliveryId:delivery,
+  vehicleKind:'MOTO',status:'requested',revision:1});
+ assert.deepEqual(f.calls.map(x=>x.operation),['reconcile']);
+ assert.equal(f.calls[0].input.actorId,sender);
+ assert.equal((await f.gateway({method:'GET',path,headers:headers(courier)})).status,403);
+ assert.equal((await f.gateway({method:'GET',path,headers:{}})).status,401);
 });
