@@ -143,6 +143,81 @@ async function main(){
    "'auto',(SELECT count(*) FROM public.mobility_stage_auto_demo_trips WHERE passenger_id='"+p+"'),"+
    "'delivery',(SELECT count(*) FROM public.mobility_stage_deliveries WHERE sender_id='"+p+"'))::text"));
   assert.deepEqual(check,{motoTrips:1,reserve:4,reverse:4,auto:0,delivery:0});
+
+  // G108 joint A+B proof: B's genuine G101 HTTP transport + G100 MOTO
+  // Passenger state machine against A's authenticated disposable PG16.
+  // A fake pin satisfies CI parser shape; fetch redirects IN PROCESS to
+  // the localhost server. No actual Render host, maps, devices or money.
+  const bDir=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  const {createClientExperience}=await import(new URL('client-experience.mjs',bDir));
+  const fake='https://qore-ci-test.onrender.com';
+  let bPosts=0,bGets=0;
+  const bFetch=(url,opts)=>{
+   const parsed=new URL(url);
+   if(parsed.origin!==fake||parsed.search||parsed.hash||
+     !parsed.pathname.startsWith('/v1/staging/rider/moto/'))
+    throw Error('G108 disallows all outbound requests');
+   if(opts.method==='POST')bPosts++;
+   if(opts.method==='GET')bGets++;
+   return fetch(base+parsed.pathname,{...opts,redirect:'error'});
+  };
+  const b=createClientExperience({
+   authProvider:{readSession:async()=>({
+    subject:p,role:'passenger',token,expiresAt:Date.now()+600000
+   }),signOut:async()=>{}},
+   motoPassengerHttpOptions:{
+    enabled:true,contractCertified:true,externalRuntimeVerified:true,
+    motoLegalVerified:true,motoRouteVerified:true,
+    passengerRlsVerified:true,idempotencyVerified:true,
+    origin:fake,pinnedOrigin:fake,fetchImpl:bFetch,timeoutMs:15000
+   }
+  });
+  assert.equal((await b.refreshSession()).ok,true);
+  assert.equal(b.snapshot().motoPassenger.contractReady,true);
+  const motoQ=await b.requestMotoQuote({
+   origin:'Centro Asunción',destination:'Aeropuerto Asunción',
+   quoteRequestKey:'10200000-0000-4102-8102-000000000030',
+   safetyAcknowledged:true
+  });
+  assert.equal(motoQ.ok,true,JSON.stringify(motoQ));
+  const price=b.snapshot().motoPassenger.quote;
+  assert.equal(price.commissionBps,1200);
+  assert.equal(price.subsidyBps,1000);
+  assert.equal(price.originalFareGs,11000);
+  assert.equal(price.customerPaysGs,9900);
+  assert.equal(price.driverReceivesGs,9680);
+  assert.equal(price.platformRetainsGs,220);
+  assert.equal(b.acceptMotoQuote({
+   quoteId:price.quoteId,customerPaysGs:price.customerPaysGs
+  }).ok,true);
+  const bBooked=await b.bookMoto({
+   bookingKey:'10200000-0000-4102-8102-000000000031'
+  });
+  assert.equal(bBooked.ok,true,JSON.stringify(bBooked));
+  const current=b.snapshot().motoPassenger;
+  assert.equal(current.phase,'booked');
+  assert.ok(UUID.test(current.tripId)&&current.tripId!==booking.body.tripId);
+  assert.equal(bPosts,2,'Only one quote and one booked MOTO ride');
+  const readBack=await http(base,root+'/bookings/'+
+   '10200000-0000-4102-8102-000000000031');
+  assert.equal(readBack.status,200);
+  assert.equal(readBack.body.tripId,current.tripId);
+  assert.equal(readBack.body.customerPaysGs,9900);
+  const bCanceled=await b.cancelMoto({
+   cancellationKey:'10200000-0000-4102-8102-000000000032'
+  });
+  assert.equal(bCanceled.ok,true,JSON.stringify(bCanceled));
+  assert.equal(b.snapshot().motoPassenger.cancelled,true);
+  const actual=await http(base,root+'/bookings/'+
+   '10200000-0000-4102-8102-000000000031'+'/cancellation');
+  assert.equal(actual.status,200);
+  assert.equal(actual.body.tripId,current.tripId);
+  assert.equal(actual.body.financialState,'VOIDED_QA');
+  assert.equal(actual.body.reversalEntriesBalanced,true);
+  assert.equal(actual.body.pspRefunded,false);
+  assert.equal(bPosts,3);
+  assert.equal(bGets,0);
+  console.log('G108 CROSS-BRANCH PASS: B genuine G101/G100 MOTO Passenger -> A HTTP + PG16 quote/book/cancel, one trip, 12/10/2 amounts and balanced reversal, no PSP, real Driver, legal approval or LIVE');
   console.log('G102 PASS: real PG16 MOTO Passenger quoted -> booked -> cancellation and 4+4 money entries via localhost HTTP; same trip, 12/10/2 %, no AUTO/ENVÍOS crossover, no PSP, no Driver assignment');
  }finally{
   if(server.listening)await new Promise((resolve,reject)=>
