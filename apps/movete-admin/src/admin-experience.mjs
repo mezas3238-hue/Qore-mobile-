@@ -6,6 +6,7 @@ import {createIncidentQueueStore} from './incidents-overview.mjs';
 import {createAuditFeedStore} from './audit-feed.mjs';
 import {createAdminReadGateway} from './admin-read-gateway.mjs';
 import {createF1AutoRideAuditGateway} from './f1-auto-ride-audit-gateway.mjs';
+import {createServiceTraceGateway} from './service-trace-gateway.mjs';
 import {createF1AdminTripIntegrityFence} from './f1-admin-trip-integrity-fence.mjs';
 import {createPageNavigator,readContinuation} from './page-cursor.mjs';
 import {createIncidentTriageG41Gateway} from './incident-g41-gateway.mjs';
@@ -17,7 +18,7 @@ import {createGlobalTriageFlow} from './incident-g41-flow.mjs';
  * Las operaciones de escritura siguen bajo validación y autorización de A.
  */
 const fail=code=>({ok:false,code});
-export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,triageGatewayOptions=null,f1RideAuditOptions=null,now=()=>Date.now()}={}){
+export function createAdminExperience({authProvider=null,gateway=null,readGatewayOptions=null,triageGatewayOptions=null,f1RideAuditOptions=null,serviceTraceOptions=null,now=()=>Date.now()}={}){
  const queue=createKycQueueStore({now});
  const finance=createOwnerFinanceStore({now});
  const zones=createZoneOverviewStore({now});
@@ -26,6 +27,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const pages=createPageNavigator();
  const f1Integrity=createF1AdminTripIntegrityFence();
  let session,globalTriage,f1AuditGateway=null,f1Audit=null,f1AuditBusy=false,f1AuditGeneration=0,f1AuditError=null;
+ let traceGateway=null,trace=null,traceError=null,traceBusy=false,traceEpoch=0;
  // No second KYC decision after an unknown/accepted POST until an
  // authoritative NEWER server page has been read for the same Admin.
  let reviewInFlight=false,reviewNeedsReconciliation=false,reviewRevisionFloor=-1;
@@ -34,6 +36,8 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const clearPrivate=()=>{queue.clear();finance.clear();zones.clear();incidents.clear();audit.clear();pages.clear();globalTriage?.clear();
   f1AuditGeneration++;f1Audit=null;f1AuditBusy=false;f1AuditError=null;
   f1AuditGateway?.cancelPending();
+  traceEpoch++;trace=null;traceError=null;traceBusy=false;
+  traceGateway?.cancelPending();
   f1Integrity.clear();
   reviewInFlight=false;reviewNeedsReconciliation=false;reviewRevisionFloor=-1;};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
@@ -57,6 +61,47 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
+ traceGateway=serviceTraceOptions?createServiceTraceGateway({
+  ...serviceTraceOptions,now,
+  getSession:()=>{
+   const current=session.getSessionForGateway();
+   return current?{...current,authRevision:session.revision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
+ async function loadServiceTrace(kind,id){
+  const actor=session.publicSession();
+  if(!actor||actor.role!=='admin'||actor.mfaVerified!==true)
+   return fail('ADMIN_AUTH_REQUIRED');
+  if(!traceGateway?.isConfigured())return fail('TRACE_CONTRACT_PENDING');
+  if(traceBusy)return fail('TRACE_IN_FLIGHT');
+  const run=++traceEpoch,revision=session.revision();
+  trace=null;traceError=null;traceBusy=true;notify();
+  try{
+   const outcome=await traceGateway.read(kind,id);
+   const next=session.publicSession();
+   if(run!==traceEpoch||!next||next.subject!==actor.subject
+    ||next.role!==actor.role||session.revision()!==revision)
+    return fail('STALE_SESSION_RESPONSE');
+   if(!outcome.ok){
+    traceError=outcome.code??'TRACE_UNAVAILABLE';notify();
+    return fail(traceError);
+   }
+   trace=outcome.data;notify();
+   return {ok:true,qaOnly:true,productionEnabled:false};
+  }finally{if(run===traceEpoch){traceBusy=false;notify();}}
+ }
+ function clearServiceTrace(){
+  traceEpoch++;trace=null;traceError=null;traceBusy=false;
+  traceGateway?.cancelPending();notify();
+ }
+ function traceSnapshot(actor){
+  const authorized=actor?.role==='admin'&&actor?.mfaVerified===true;
+  if(trace&&trace.expiresAt<=now())trace=null;
+  return Object.freeze({contractReady:Boolean(authorized&&traceGateway?.isConfigured()),
+   loading:Boolean(authorized&&traceBusy),item:authorized?trace:null,
+   error:authorized?traceError:null,qaOnly:true,productionEnabled:false});
+ }
  async function loadF1RideAudit(tripId){
   const current=session.publicSession();
   if(!current||current.role!=='admin'||current.mfaVerified!==true)
@@ -134,7 +179,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const reading=new Set();
  function snapshot(){
   const current=session.publicSession();
-  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,f1RideAudit:f1AuditSnapshot(null),merchantCases:null,merchantCaseContractReady:false,
+  if(!current){clearPrivate();return Object.freeze({authenticated:false,account:null,kyc:null,finance:null,zones:null,incidents:null,audit:null,globalTriage:null,f1RideAudit:f1AuditSnapshot(null),serviceTrace:traceSnapshot(null),merchantCases:null,merchantCaseContractReady:false,
    pagination:Object.freeze({kyc:pages.get('kyc'),zones:pages.get('zones'),
     incidents:pages.get('incidents'),audit:pages.get('audit')}),
    actionsEnabled:false});}
@@ -148,6 +193,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    audit:current.role==='admin'?audit.current(current.role):null,
    globalTriage:current.role==='admin'?globalTriage.snapshot():null,
    f1RideAudit:f1AuditSnapshot(current),
+   serviceTrace:traceSnapshot(current),
    // R43 aislado: no convertir G41/seguridad genérica en casos comerciales.
    // El endpoint MerchantSupport A todavía no existe ni está certificado.
    merchantCases:null,merchantCaseContractReady:false,
@@ -291,6 +337,6 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   readKyc,readFinance,readZones,readIncidents,readAudit,
   isReadConfigured:operation=>Boolean(readGateway?.isConfigured(operation)),
   syncFromServer,reviewVehicle,loadGlobalIncidentTriage,
-  loadF1RideAudit,clearF1RideAudit,snapshot
+  loadF1RideAudit,clearF1RideAudit,loadServiceTrace,clearServiceTrace,snapshot
  });
 }

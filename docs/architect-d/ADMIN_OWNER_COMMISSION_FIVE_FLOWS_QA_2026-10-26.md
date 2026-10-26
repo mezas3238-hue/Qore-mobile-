@@ -33,3 +33,18 @@ Ninguna celda significa GO comercial. `PASS` E2E requiere mismo ID leído en Cli
 
 ## Habilitación futura — solo con certificación independiente
 Las cuatro variables de G116 constan en `apps/movete-admin/.env.example`, todas bloqueadas inicialmente. La presencia de banderas públicas jamás sustituye Auth/JWT de servidor. Configurar `VITE_G116_OWNER_COMMISSION_ENABLED` o `VITE_G116_OWNER_CONTRACT_VERIFIED` como verdaderas **solo después** de aprobar formalmente el entorno STAGING. El formulario no muestra tasas reales hasta que su propio GET autorizado obtenga un recibo válido.
+
+## D: consulta cinco modalidades por mismo serviceId (QA, sin GO)
+- Panel Admin posee búsqueda por `serviceId` y categoría, historial ordenado,
+  estado legal `G38/G71` y conciliación del mismo ID; no muestra PII.
+- Gateway de solo lectura, OFF hasta autorización Owner + HTTPS STAGING,
+  PG16 externo verificado, rol Admin JWT AAL2, revocación y contrato A.
+- **Contrato solicitado a A, todavía NO montado:**
+  `GET /v1/staging/admin/services/{serviceKind}/{serviceId}/trace`.
+  Debe consultar bajo snapshot consistente la misma reserva del Cliente,
+  oferta/estado Driver y ledger transaccional. Validar scope, RLS y revocación.
+- DTO exacto: `{mode:'STAGING_DEMO_ONLY',viewerId,serviceId,serviceKind,bookingRequestKey,quoteId,status,revision,observedAt,expiresAt,serverPersisted:true,productionEnabled:false,assignment:{state,legalGate},events:[{eventId,serviceId,sequence,status,at}],ledger:null|{serviceId,currency:'PYG',grossGs,platformCommissionGs,customerSubsidyGs,driverPayoutGs,reconciliationStatus}}`.
+- UI descarta UUID equivocado, historial/revisión inconsistente, ledger con ID ajeno,
+  supuesto conductor asignado con G38/G71 bloqueado, rol/identidad rotada,
+  respuesta vencida o HTTP desproporcionado. Las pruebas de gateway no
+  sustituyen navegación E2E, RLS ni PG externo.

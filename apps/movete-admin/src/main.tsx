@@ -480,6 +480,80 @@ function F1RideAuditPanel({client,state}:{client:AdminExperience;state:AdminSnap
  </Panel>;
 }
 
+function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSnapshot}){
+ const kinds=['AUTO_RIDE','MOTO_RIDE','MOTO_DELIVERY','AUTO_DELIVERY','COMMERCE'] as const;
+ const [kind,setKind]=useState<typeof kinds[number]>('AUTO_RIDE');
+ const [id,setId]=useState('');
+ const [message,setMessage]=useState('');
+ const current=state.serviceTrace;
+ const ready=Boolean(state.account?.role==='admin'&&current.contractReady);
+ const match=current.item?.serviceKind===kind&&current.item.serviceId===id
+  ?current.item:null;
+ const inspect=async()=>{
+  if(!ready||!F1_TRIP.test(id)||current.loading)return;
+  const output=await client.loadServiceTrace(kind,id);
+  setMessage(output.ok?'Consulta STAGING verificada por estructura; no implica autorización comercial.':
+   'No se pudo confirmar una reserva persistida para esta identidad.');
+ };
+ return <Panel className="detail">
+  <div className="section-head"><div>
+   <h2>Seguimiento por serviceId — cinco modalidades</h2>
+   <p>Reserva, eventos y conciliación por el mismo ID emitido a Cliente y Driver.
+    Sin direcciones, nombres, teléfono, GPS ni acceso a pagos.</p>
+  </div><span className="muted-tag">SOLO LECTURA · NO GO</span></div>
+  {!ready&&<p role="status">Backend A todavía no certificó este contrato,
+   PostgreSQL externo y autorización Admin AAL2. Búsqueda bloqueada.</p>}
+  <label htmlFor="d-trace-kind">Servicio</label>
+  <select id="d-trace-kind" value={kind} disabled={current.loading}
+   onChange={e=>{setKind(e.target.value as typeof kind);setMessage('');
+    client.clearServiceTrace();}}>
+   {kinds.map(k=><option key={k} value={k}>{k}</option>)}
+  </select>
+  <label htmlFor="d-trace-id">Identificador exacto (UUID servidor)</label>
+  <input id="d-trace-id" autoComplete="off" maxLength={36}
+   placeholder="serviceId registrado" value={id}
+   disabled={!ready||current.loading}
+   onChange={e=>{setId(e.target.value.trim());setMessage('');
+    client.clearServiceTrace();}}/>
+  <div className="refresh-actions">
+   <button type="button" disabled={!ready||current.loading||!F1_TRIP.test(id)}
+    onClick={()=>{void inspect();}}>
+    {current.loading?'Consultando…':'Buscar en servidor'}
+   </button>
+   <button type="button" disabled={!match||current.loading}
+    onClick={()=>{client.clearServiceTrace();setMessage('');}}>Limpiar</button>
+  </div>
+  {message&&<p role="status">{message}</p>}
+  {current.error&&<p role="alert">Consulta rechazada: {current.error}</p>}
+  {match&&<div className="zone-rows">
+   <div className="zone-row"><div>
+    <strong>{match.serviceKind} · {match.serviceId}</strong>
+    <small>Estado: {match.status} · revisión {match.revision}</small>
+    <small>Reserva {match.bookingRequestKey}</small>
+    <small>Cotización {match.quoteId}</small>
+    <small>Asignación: {match.assignment.state} — {match.assignment.legalGate}</small>
+    <small>PG persistido reportado por servidor, aún no cotejado independientemente</small>
+   </div><div className="zone-count">QA<small>NO LIVE</small></div></div>
+   <h3>Historial del mismo ID</h3>
+   {match.events.map(ev=><div className="zone-row" key={ev.eventId}><div>
+    <strong>{ev.sequence} · {ev.status}</strong>
+    <small>{new Date(ev.at).toLocaleString('es-PY')}</small>
+   </div></div>)}
+   <h3>Conciliación del mismo ID</h3>
+   {match.ledger?<div className="zone-row"><div>
+    <strong>{match.ledger.reconciliationStatus}</strong>
+    <small>Cobro: Gs. {match.ledger.grossGs.toLocaleString('es-PY')}</small>
+    <small>Comisión: Gs. {match.ledger.platformCommissionGs.toLocaleString('es-PY')}</small>
+    <small>Subsidio: Gs. {match.ledger.customerSubsidyGs.toLocaleString('es-PY')}</small>
+    <small>Conductor: Gs. {match.ledger.driverPayoutGs.toLocaleString('es-PY')}</small>
+   </div></div>:<p>Sin recibo financiero confirmado; no equivale a importe cero.</p>}
+  </div>}
+  <p className="training-disclaimer">Un GET válido de STAGING no prueba
+   conciliación bancaria ni habilita G38/G71. Los permisos y la persistencia
+   se verifican en el backend, nunca en el navegador.</p>
+ </Panel>;
+}
+
 function FiveFlowsReadOnly({state}:{state:AdminSnapshot}){
  const allowed=state.account?.role==='admin'&&state.account.mfaVerified===true;
  const zones=allowed&&state.zones&&state.zones.expiresAt>Date.now()
@@ -633,7 +707,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='servicios'?<FiveFlowsReadOnly state={adminState}/>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='servicios'?<><ServiceTracePanel client={client} state={adminState}/><FiveFlowsReadOnly state={adminState}/></>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}
