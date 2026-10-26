@@ -7,6 +7,8 @@ import {useClientView} from '../src/ClientRuntime';
 import {createSecureCancellationKey} from '../src/domain/secure-cancel-key.mjs';
 import {guardTrackingCancellationUiAction} from '../src/domain/tracking-cancellation-ui-guard.mjs';
 import {createF1FocusedTrackingSync} from '../src/domain/f1-focused-tracking-sync.mjs';
+import {claimCompletedHistoryAutoVerification}
+ from '../src/domain/completed-history-auto-verification.mjs';
 
 const LABEL:Record<string,string>={
  idle:'Sin viaje activo',searching:'Buscando automóvil',assigned:'Conductor asignado',
@@ -23,6 +25,7 @@ export default function ClientTracking(){
  const [historyMessage,setHistoryMessage]=useState('');
  const [historyBusy,setHistoryBusy]=useState(false);
  const historyLock=useRef(false);
+ const autoHistoryLastKey=useRef<string|null>(null);
  const locked=useRef(false);
  const confirmHeading=useRef<React.ElementRef<typeof Text>>(null);
  // F1: only the Passenger's verified QA booking may poll while this route is
@@ -153,6 +156,27 @@ export default function ClientTracking(){
     :'El historial del servidor todavía no confirma esta finalización. No mostramos recibos ni pagos sin verificación.');
   }finally{historyLock.current=false;setHistoryBusy(false);}
  }
+ // G110: a final, VERIFIED G4 status can trigger the independent G26 GET
+ // once while this screen is focused and foregrounded. No polling terminal
+ // records, automatic retry, writes, payment assumptions or old-session UI.
+ // The existing explicit button remains for network failure/manual retries.
+ useFocusEffect(useCallback(()=>{
+  const attempt=()=>{
+   if(AppState.currentState!=='active'||historyLock.current)return;
+   const decision=claimCompletedHistoryAutoVerification(
+    client.snapshot(),autoHistoryLastKey.current);
+   if(!decision.ok)return;
+   autoHistoryLastKey.current=decision.key;
+   void verifyOwnCompletedHistory();
+  };
+  attempt();
+  const appState=AppState.addEventListener('change',mode=>{
+   if(mode==='active')attempt();
+  });
+  return ()=>appState.remove();
+ },[client,view.privateViewRevision,view.account?.subject,state.tripId,
+  state.state,state.revision,view.completedRideHistory.readReady,
+  view.completedRideHistory.verified,view.completedRideHistory.verifying]));
  function validateCancelAction(action:'prepare'|'submit'|'retry'){
   const allowed=guardTrackingCancellationUiAction(view,client.snapshot(),{action});
   if(!allowed.ok){
@@ -250,7 +274,7 @@ export default function ClientTracking(){
      <Text style={styles.small}>El estado del viaje se consulta automáticamente cada 12 segundos mientras esta pantalla está abierta. Las ubicaciones y tiempos solo se muestran con datos vigentes del servidor.</Text>}
     {state.state==='completed'&&<View>
       <Text accessibilityRole="header" style={styles.heading}>Finalización e historial</Text>
-      <Text style={styles.small}>El estado finalizado del seguimiento no equivale a una entrada confirmada en el historial ni a un cobro realizado.</Text>
+      <Text style={styles.small}>Tras confirmar el estado final en el servidor, verificamos una sola vez y automáticamente su registro en el historial privado. Esto no equivale a un cobro ni a un comprobante de pago.</Text>
       {view.completedRideHistory.verified
        ?<Text accessibilityLiveRegion="polite" style={styles.text}>Finalización confirmada también por el historial privado del servidor.</Text>
        :view.completedRideHistory.readReady
