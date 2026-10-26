@@ -5,6 +5,8 @@ export type ClientSnapshot={
  account:{subject:string;role:'passenger'}|null;
  mutation:{phase:string;operation:string|null;requestKey:string|null;error:string|null};
  bookingRecovery:{readReady:boolean;productionEnabled:false};
+ deliveryRecovery:{storeReady:boolean;phase:string;unresolved:boolean;
+  blocked:boolean;requestKey:string|null;productionEnabled:false};
  deliveryRegistration:{readReady:boolean;busy:boolean;deliveryId:string|null;
   vehicleKind:'AUTO'|'MOTO'|null;revision:number|null;requestKey:string|null;
   registrationOnly:true;qaOnly:true;productionEnabled:false};
@@ -287,6 +289,11 @@ export declare function createClientExperience(options?:{
   quoteGateway?:(scope:unknown)=>Promise<unknown>|unknown;
   bookingGateway?:(scope:unknown)=>Promise<unknown>|unknown;
   reconciliationGateway?:(scope:unknown)=>Promise<unknown>|unknown;
+ }|null;
+ deliveryRecoveryStore?:{
+  read:(ownerId:string)=>Promise<unknown>;
+  write:(value:{version:number;ownerId:string;requestKey:string;createdAt:number})=>Promise<unknown>;
+  clear:(ownerId:string)=>Promise<unknown>;
  }|null;
  deliveryG122Options?:{
   enabled?:boolean;ownerApproved?:boolean;contractCertified?:boolean;

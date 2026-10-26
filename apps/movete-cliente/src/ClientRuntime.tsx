@@ -5,6 +5,7 @@ import type {ClientExperience,ClientSnapshot} from './domain/client-experience.m
 import {getNativePassengerAuth} from './NativePassengerAuth';
 import {getNativeG95RecoveryStore} from './NativeG95RecoveryStore';
 import {getNativeG101RecoveryStore} from './NativeG101RecoveryStore';
+import {getNativeDeliveryRecoveryStore} from './NativeDeliveryRecoveryStore';
 import type {NativePassengerAuth} from './domain/native-passenger-auth.mjs';
 import {createF1AuthorizedQaHttpOptions} from './domain/f1-authorized-qa-http-options.mjs';
 import {createF1AuthorizedHistoryRecoveryOptions} from './domain/f1-authorized-history-recovery-options.mjs';
@@ -41,6 +42,7 @@ export function ClientRuntimeProvider({children,experience}:{
  const nativeAuth=useMemo(()=>getNativePassengerAuth(),[]);
  const g95RecoveryStore=useMemo(()=>getNativeG95RecoveryStore(),[]);
  const motoRecoveryStore=useMemo(()=>getNativeG101RecoveryStore(),[]);
+ const deliveryRecoveryStore=useMemo(()=>getNativeDeliveryRecoveryStore(),[]);
  // Stage enrollment is a manual, independently reviewed decision. A simple
  // Render /liveness 200 cannot switch on pricing, booking or GPS.
  const qaHttp=useMemo(()=>createF1AuthorizedQaHttpOptions({
@@ -106,11 +108,11 @@ export function ClientRuntimeProvider({children,experience}:{
  const client=useMemo(()=>experience??createClientExperience({
   authProvider:nativeAuth,autoG73HttpOptions:qaHttp,g95RecoveryStore,
   deliveryRegistrationOptions:g121Options,
-  deliveryG122Options,
+  deliveryG122Options,deliveryRecoveryStore,
   motoPassengerHttpOptions:motoG101,motoRecoveryStore,
   historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
   statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
- }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options,deliveryG122Options]);
+ }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options,deliveryG122Options,deliveryRecoveryStore]);
  useEffect(()=>{
   if(!nativeAuth)return;
   let active=true;

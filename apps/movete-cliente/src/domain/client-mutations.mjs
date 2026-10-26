@@ -76,6 +76,21 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    sessionRevision,error:null,verifiedReceipt:null};
   return {ok:true,requestKey:state.requestKey};
  }
+ /**
+  * Restore ONLY an unresolved key after a new verified Passenger login.
+  * Null body makes any POST/retry impossible. G121 GET is the sole path.
+  */
+ function restoreUnconfirmedDelivery({requestKey,subject,sessionRevision}={}){
+  if(state.phase!=='idle')return fail('RECOVERY_CONFLICT');
+  if(!UUID.test(requestKey??'')||!UUID.test(subject??'')
+   ||!Number.isSafeInteger(sessionRevision)||sessionRevision<0)
+   return fail('INVALID_RECONCILIATION_SCOPE');
+  generation++;
+  state={phase:'failed',subject,operation:'deliveryRequest',body:null,
+   requestKey,sessionRevision,error:'BOOKING_RECONCILIATION_UNKNOWN',
+   verifiedReceipt:null};
+  return Object.freeze({ok:true,requestKey,recoveredWithoutPost:true});
+ }
  async function run(retry=false){
   if(!['ready','retryable'].includes(state.phase))return fail('NO_READY_REQUEST');
   if(retry!==true&&state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
@@ -198,6 +213,6 @@ export function createClientMutationController({gateway,getSession,clearSensitiv
    serverRevision:receipt.revision,subject:state.subject,
    sessionRevision:state.sessionRevision,requestKey:state.requestKey});
  }
- return Object.freeze({prepare,submit:()=>run(false),retry:()=>run(true),
+ return Object.freeze({prepare,restoreUnconfirmedDelivery,submit:()=>run(false),retry:()=>run(true),
   reconcileBooking,verifiedRide,verifiedDelivery,clear,publicState});
 }

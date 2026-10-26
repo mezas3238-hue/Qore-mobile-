@@ -2,6 +2,7 @@ import {createClientSessionController} from './client-session.mjs';
 import {createPassengerBookingStagingGateway} from './passenger-booking-staging-gateway.mjs';
 import {createG121DeliveryRegistrationGateway} from './g121-delivery-registration-gateway.mjs';
 import {createG122DeliveryPriceConsentFlow} from './g122-delivery-price-consent-flow.mjs';
+import {createG5DurableDeliveryRecovery} from './g5-durable-delivery-recovery.mjs';
 import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
@@ -43,11 +44,12 @@ import {createG119MotoStatusGateway} from './g119-moto-ride-status-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,deliveryRegistrationOptions=null,deliveryG122Options=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,deliveryRegistrationOptions=null,deliveryG122Options=null,deliveryRecoveryStore=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
  g53ChatSendHttpOptions=null,now=()=>Date.now()}={}){
+ const deliveryRecovery=createG5DurableDeliveryRecovery({store:deliveryRecoveryStore,now});
  const quote=createQuoteViewStore({now});
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
@@ -77,6 +79,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const observers=new Set();
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
+  deliveryRecovery.clearMemory();
   registrationEpoch++;registration={busy:false,receipt:null};
   g121Registration?.cancelPending();
   g122Consent?.clear();
@@ -1258,6 +1261,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
     deliveryRegistration:publicDeliveryRegistration(),
+    deliveryRecovery:deliveryRecovery.snapshot(null),
     deliveryPriceConsent:publicDeliveryPriceConsent(),
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
@@ -1283,6 +1287,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    bookingRecovery:Object.freeze({readReady:Boolean(bookingGateway?.reconciliationConfigured?.()),
     productionEnabled:false}),
    deliveryRegistration:publicDeliveryRegistration(),
+   deliveryRecovery:deliveryRecovery.snapshot(user.subject),
    deliveryPriceConsent:publicDeliveryPriceConsent(),
    rideContinuation:rideContinuation(),
    rideHistoryRecovery:rideHistoryRecovery(),
@@ -1329,6 +1334,16 @@ export function createClientExperience({authProvider=null,gateway=null,
     // Bootstrapping solely at app mount misses later Passenger sign-in and
     // JWT rotation. Read persisted opaque keys at this Auth boundary.
     const scope=session.privacyRevision(),owner=result.subject;
+    // Crash-safe unresolved G5 key restoration (no POST, address or JWT).
+    if(deliveryRecovery.isConfigured()&&mutations.publicState().phase==='idle'){
+     const restored=await deliveryRecovery.restore(owner);
+     if(restored.ok===true&&restored.restored===true){
+      const installed=mutations.restoreUnconfirmedDelivery({
+       requestKey:restored.requestKey,subject:owner,sessionRevision:scope
+      });
+      if(!installed.ok)return fail('G5_RECOVERY_CONFLICT');
+     }
+    }
     if(motoRecoveryStore!==null&&motoFlow.snapshot().phase==='idle')
      await motoFlow.restore(); // GET only; any failure blocks the next POST.
     if(scope!==session.privacyRevision()||actor()?.subject!==owner){
@@ -1473,7 +1488,12 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   prepareRide:body=>{const result=prepare('rideRequest',body);notify();return result;},
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
-  prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
+  prepareDelivery:body=>{
+   const user=actor();
+   if(deliveryRecovery.isConfigured()&&deliveryRecovery.snapshot(user?.subject).blocked)
+    return fail('G5_RECOVERY_READBACK_REQUIRED');
+   const result=prepare('deliveryRequest',body);notify();return result;
+  },
   readUnconfirmedDeliveryRegistration,
   quoteRecoveredDelivery,
   confirmRecoveredDeliveryQuote,
@@ -1482,7 +1502,27 @@ export function createClientExperience({authProvider=null,gateway=null,
   submitServerFare:async()=>{const result=await fareFlow.submit();notify();return result;},
   retryServerFare:async()=>{const result=await fareFlow.retry();notify();return result;},
   prepareSimulatedPayment:body=>{const result=prepare('paymentAuthorize',body);notify();return result;},
-  submit:async()=>{const result=await mutations.submit();notify();return result;},
+  submit:async()=>{
+   const requested=mutations.publicState(),user=actor();
+   if(requested.phase==='ready'&&requested.operation==='deliveryRequest'){
+    // Explicit QA HTTP gateway and durable key are both mandatory.
+    if(bookingGateway?.isConfigured()!==true
+     &&gateway?.isConfigured?.()!==true)
+     return fail('G5_NOT_CERTIFIED');
+    if(!deliveryRecovery.isConfigured())
+     return fail('G5_SECURE_STORE_REQUIRED');
+    if(!user||typeof requested.requestKey!=='string')
+     return fail('AUTH_REQUIRED');
+    const revision=session.privacyRevision(),subject=user.subject,key=requested.requestKey;
+    const saved=await deliveryRecovery.persist(subject,key);
+    if(!saved.ok){notify();return saved;}
+    const still=mutations.publicState(),after=actor();
+    if(!after||after.subject!==subject||session.privacyRevision()!==revision
+     ||still.phase!=='ready'||still.operation!=='deliveryRequest'
+     ||still.requestKey!==key)return fail('STALE_SESSION_RESPONSE');
+   }
+   const result=await mutations.submit();notify();return result;
+  },
   retry:async()=>{const result=await mutations.retry();notify();return result;},
   reconcileBooking:async()=>{
    const pending=mutations.reconcileBooking();notify();
