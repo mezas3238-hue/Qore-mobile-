@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {verifyAcceptedDriverAutoResume as verify} from './driver-accepted-ride-resume.mjs';
+import {verifyAcceptedDriverAutoResume as verify,
+ verifyResumableDriverAutoTrip as resume} from './driver-accepted-ride-resume.mjs';
 const id=n=>'10700000-0000-4107-8107-'+String(n).padStart(12,'0');
 const decision={offerId:id(1),serviceId:id(2),
  kind:'AUTO_RIDE',action:'accept',phase:'confirmed'};
@@ -54,4 +55,37 @@ test('G107 aborted authenticated read or provider revocation fails closed',async
  assert.deepEqual(fail,{ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
  assert.deepEqual(await verify({decision,recoverCurrent:null}),
  {ok:false,reason:'NOT_CONFIRMED'});
+});
+
+test('G121C a restarted Driver resumes ONLY same current SQL assignment',async()=>{
+ let reads=0;
+ const result=await resume({expectedTripId:id(2),minimumRevision:2,
+  recoverCurrent:async()=>{reads++;return valid;}});
+ assert.deepEqual(result,{ok:true,tripId:id(2)});
+ assert.equal(reads,1);
+});
+test('G121C no navigation when accepted trip changed, regressed or ended',async()=>{
+ for(const row of [
+  null,{...valid,tripId:id(3)},
+  {...valid,revision:1},{...valid,status:'completed'},
+  {...valid,status:'cancelled'},{...valid,status:'searching'}
+ ]){
+  const result=await resume({expectedTripId:id(2),minimumRevision:2,
+   recoverCurrent:async()=>row});
+  assert.deepEqual(result,{ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
+ }
+ assert.deepEqual(await resume({expectedTripId:id(2),minimumRevision:4,
+  recoverCurrent:async()=>valid}),
+  {ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
+});
+test('G121C invalid ID, missing reader and revoked session fail closed',async()=>{
+ let reads=0;
+ const reader=async()=>{reads++;return valid;};
+ for(const expectedTripId of ['forged',null,'']){
+  assert.equal((await resume({expectedTripId,recoverCurrent:reader})).ok,false);
+ }
+ assert.equal(reads,0);
+ assert.equal((await resume({expectedTripId:id(2),recoverCurrent:null})).ok,false);
+ assert.equal((await resume({expectedTripId:id(2),
+  recoverCurrent:async()=>{throw Error('revoked');}})).ok,false);
 });

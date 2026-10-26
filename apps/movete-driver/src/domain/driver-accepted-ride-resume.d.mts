@@ -6,3 +6,11 @@ export declare function verifyAcceptedDriverAutoResume(args:{
  recoverCurrent:()=>Promise<DriverCurrentTrip|null>;
 }):Promise<Readonly<{ok:true;tripId:string}|{
  ok:false;reason:'NOT_CONFIRMED'|'UNVERIFIED_ASSIGNMENT'}>>;
+
+/** Re-check the same Driver-owned AUTO assignment after restart or tap. */
+export declare function verifyResumableDriverAutoTrip(args:{
+ expectedTripId:string;
+ minimumRevision?:number;
+ recoverCurrent:()=>Promise<DriverCurrentTrip|null>;
+}):Promise<Readonly<{ok:true;tripId:string}|{
+ ok:false;reason:'UNVERIFIED_ASSIGNMENT'}>>;

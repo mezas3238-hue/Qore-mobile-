@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {ScrollView,Switch,Text,TextInput,View} from 'react-native';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
@@ -6,6 +6,7 @@ import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
+import {verifyResumableDriverAutoTrip} from '../src/domain/driver-accepted-ride-resume.mjs';
 export default function DriverHome(){
  const [demoAvailable,setDemoAvailable]=useState(false);
  const auth=useNativeDriverAuth();
@@ -14,6 +15,9 @@ export default function DriverHome(){
  const [authBusy,setAuthBusy]=useState(false);
  const [authenticated,setAuthenticated]=useState(false);
  const [authMessage,setAuthMessage]=useState('');
+ const [resuming,setResuming]=useState(false);
+ const [resumeNotice,setResumeNotice]=useState('');
+ const resumeLock=useRef(false);
  useEffect(()=>{
   let active=true;
   const verify=async()=>{
@@ -62,6 +66,22 @@ export default function DriverHome(){
   'offline':'Sin conexión confirmada — datos privados ocultos',
   'connected':'Sesión Driver de STAGING validada para consulta'
  };
+ async function continueVerifiedTrip(){
+  const old=currentTrip.state.trip;
+  if(resumeLock.current||!currentTrip.enabled||!old||
+   currentTrip.state.phase!=='active'||state.phase!=='connected'||
+   kyc.snapshot?.state!=='READY_QA')return;
+  resumeLock.current=true;setResuming(true);setResumeNotice('');
+  try{
+   const proof=await verifyResumableDriverAutoTrip({
+    expectedTripId:old.tripId,minimumRevision:old.revision,
+    recoverCurrent:currentTrip.refresh
+   });
+   if(proof.ok)router.push({pathname:'/viaje',
+    params:{tripId:proof.tripId}});
+   else setResumeNotice('La asignación cambió o no pudo volver a verificarse. No se abrirá un viaje sin autorización del servidor.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Movete Fácil Driver</Text>
@@ -117,9 +137,10 @@ export default function DriverHome(){
     currentTrip.state.phase==='active'&&currentTrip.state.trip?
      <>
       <Text style={styles.text}>Viaje asignado confirmado por servidor · etapa {currentTrip.state.trip.status} · revisión {currentTrip.state.trip.revision}</Text>
-      <Action label="Continuar mi viaje asignado" onPress={()=>router.push({
-       pathname:'/viaje',params:{tripId:currentTrip.state.trip!.tripId}
-      })}/>
+      <Action label={resuming?'Verificando asignación…':'Continuar mi viaje asignado'}
+       disabled={resuming||state.phase!=='connected'||
+        kyc.snapshot?.state!=='READY_QA'}
+       onPress={()=>{void continueVerifiedTrip();}}/>
      </>:
      <Text style={styles.text}>{
       currentTrip.state.phase==='none'?'El servidor no encontró un viaje AUTO activo para esta cuenta.':
@@ -127,6 +148,8 @@ export default function DriverHome(){
       currentTrip.state.phase==='offline'?'No se pudo verificar la asignación. No mostramos datos antiguos.':
       'Iniciá sesión Driver verificada para recuperar tu viaje.'
      }</Text>}
+   {resumeNotice!==''&&<Text accessibilityRole="alert"
+    style={styles.text}>{resumeNotice}</Text>}
    <Action label="Consultar mi asignación en el servidor" secondary
     disabled={!currentTrip.enabled||currentTrip.state.phase==='loading'}
     onPress={()=>{void currentTrip.refresh();}}/>
