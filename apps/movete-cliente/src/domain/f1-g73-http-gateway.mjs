@@ -32,7 +32,8 @@ function goodSubsidy(x,s,t){
   ||x.commercialEnabled!==false||x.ownerId!==s.ownerId
   ||x.quoteId!==s.quoteId||!id(x.campaignId)
   ||x.serviceKind!=='AUTO_RIDE'||x.currency!=='PYG'
-  ||x.commissionBps!==1500||x.subsidyBps!==1000
+  ||!Number.isSafeInteger(x.commissionBps)||x.commissionBps<1000||x.commissionBps>3000
+  ||x.subsidyBps!==1000
   ||!Number.isSafeInteger(x.originalFareGs)||x.originalFareGs!==s.originalAmountGs
   ||x.originalFareGs<1||x.originalFareGs>100000000
   ||x.fareVersion!==s.fareVersion||!version(x.fareVersion)
@@ -41,7 +42,7 @@ function goodSubsidy(x,s,t){
  for(const name of ['nominalCommissionGs','customerSubsidyGs','customerPaysGs',
   'driverReceivesGs','platformRetainsGs'])
   if(!Number.isSafeInteger(x[name])||x[name]<0||x[name]>100000000)return false;
- return x.nominalCommissionGs===g93Round(x.originalFareGs,1500)
+ return x.nominalCommissionGs===g93Round(x.originalFareGs,x.commissionBps)
   &&x.customerSubsidyGs===g93Round(x.originalFareGs,1000)
   &&x.customerPaysGs===x.originalFareGs-x.customerSubsidyGs
   &&x.driverReceivesGs===x.originalFareGs-x.nominalCommissionGs

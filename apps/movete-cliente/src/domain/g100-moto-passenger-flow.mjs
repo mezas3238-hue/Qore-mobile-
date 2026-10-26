@@ -22,13 +22,14 @@ const whole=x=>Number.isSafeInteger(x)&&x>=0&&x<=100000000;
 const money=x=>whole(x)&&x>0;
 const fieldsOK=x=>x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false
  &&x.serviceKind==='MOTO_RIDE'&&x.service==='moto_pasajero'
- &&x.currency==='PYG'&&x.commissionBps===1200&&x.subsidyBps===1000
+ &&x.currency==='PYG'&&Number.isSafeInteger(x.commissionBps)
+ &&x.commissionBps>=1000&&x.commissionBps<=3000&&x.subsidyBps===1000
  &&money(x.amountGs)&&whole(x.customerPaysGs)&&whole(x.customerSubsidyGs)
  &&whole(x.driverReceivesGs)&&whole(x.platformRetainsGs)
- &&x.driverReceivesGs+Math.floor((x.amountGs*1200+5000)/10000)===x.amountGs
+ &&x.driverReceivesGs+Math.floor((x.amountGs*x.commissionBps+5000)/10000)===x.amountGs
  &&x.customerSubsidyGs===Math.floor((x.amountGs*1000+5000)/10000)
  &&x.customerPaysGs+x.customerSubsidyGs===x.amountGs
- &&x.platformRetainsGs===Math.floor((x.amountGs*1200+5000)/10000)-x.customerSubsidyGs
+ &&x.platformRetainsGs===Math.floor((x.amountGs*x.commissionBps+5000)/10000)-x.customerSubsidyGs
  &&x.driverReceivesGs+x.platformRetainsGs===x.customerPaysGs
  &&x.driverAssigned===false&&x.pspCollected===false
  &&x.serverPersisted===true;
@@ -50,6 +51,7 @@ function bookingOK(x,scope,phase){
   &&x.customerSubsidyGs===scope.quote.customerSubsidyGs
   &&x.driverReceivesGs===scope.quote.driverReceivesGs
   &&x.platformRetainsGs===scope.quote.platformRetainsGs
+  &&x.commissionBps===scope.quote.commissionBps
   &&x.pspRefunded===false
   &&(phase==='book'?
    x.tripState==='searching'&&x.tripRevision===1
@@ -117,7 +119,7 @@ export function createG100MotoPassengerFlow({
     quoteId:s.quote.quoteId,originalFareGs:s.quote.amountGs,
     customerPaysGs:s.quote.customerPaysGs,customerSubsidyGs:s.quote.customerSubsidyGs,
     driverReceivesGs:s.quote.driverReceivesGs,platformRetainsGs:s.quote.platformRetainsGs,
-    commissionBps:1200,subsidyBps:1000,expiresAt:s.quote.expiresAt
+    commissionBps:s.quote.commissionBps,subsidyBps:1000,expiresAt:s.quote.expiresAt
    }):null,tripId:mine?s.tripId??null:null,
    needsReadback:mine&&['bookingUnknown','cancelUnknown','restoreUnknown'].includes(s.phase),
    cancelled:mine&&s.phase==='cancelled',
