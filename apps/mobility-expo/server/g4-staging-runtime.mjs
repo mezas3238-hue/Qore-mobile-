@@ -25,6 +25,7 @@ import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
 import {createG82PrivateAutoCandidateDispatch} from './g82-f1-auto-candidate-dispatch.mjs';
+import {createG115LocalQaAutoDispatchRuntime} from './g115-local-qa-auto-dispatch-runtime.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -160,10 +161,11 @@ export async function prepareQoreG4StagingRuntime({
  pricingContext=unavailablePricingContext,
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
- readDriverDecisionOwnerQa=null,now=Date.now,
+ readDriverDecisionOwnerQa=null,now=Date.now,qaAutoDispatchRetry=false,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
+ if(typeof qaAutoDispatchRetry!=='boolean')throw Error('G115 QA opt-in must be explicit boolean');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -238,6 +240,11 @@ export async function prepareQoreG4StagingRuntime({
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
  const f1MotoPersistence=createG101MotoPassengerRepository(admin);
  const candidateDispatch=createG82PrivateAutoCandidateDispatch(admin);
+ // G115 opt-in remains local, private and unstarted until verified server boot.
+ const qaDispatch=qaAutoDispatchRetry?createG115LocalQaAutoDispatchRuntime({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  client:admin,readPrivateDispatchStatus:x=>f1AutoPersistence.dispatchStatus(x)
+ }):null;
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
@@ -438,9 +445,11 @@ export async function prepareQoreG4StagingRuntime({
   readAutoFinancialState:params=>f1AutoPersistence.autoFinancialState(params),
   cancelBookedAuto:params=>f1AutoPersistence.cancelBookedAuto(params),
   readCancellation:params=>f1AutoPersistence.cancellationReceipt(params),
-  dispatchBookedAuto:async({passengerId,bookingKey})=>
-   candidateDispatch.offerFirstEligible({passengerId,bookingKey,
-    offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}),
+  dispatchBookedAuto:qaDispatch===null?
+   async({passengerId,bookingKey})=>candidateDispatch.offerFirstEligible({
+    passengerId,bookingKey,
+    offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}):
+   args=>qaDispatch.dispatchBookedAuto(args),
  });
  // G101: isolated and independent MOTO ride contract. An AUTO-only
  // route provider is never accepted as authorization for passenger MOTO.
@@ -633,6 +642,7 @@ export async function prepareQoreG4StagingRuntime({
  return {
   projectRef:ref,
   commercialRidesEnabled:false,
+  qaAutoDispatchRetryWorker:qaDispatch, // PRIVATE server object, never HTTP
   /** A server object, NOT a listener. Even this object cannot bind publicly. */
   server:createQoreRadarLoopbackTransport({
    riderHandler:guard(rider),riderHistoryHandler:guard(riderHistory),

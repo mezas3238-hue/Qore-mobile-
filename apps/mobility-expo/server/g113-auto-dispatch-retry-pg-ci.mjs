@@ -5,9 +5,8 @@
  */
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {createG113AutoDispatchRetryWorker,
- createG113AutoDispatchBatchRepository}
- from './g113-auto-dispatch-retry-worker.mjs';
+import {createG115LocalQaAutoDispatchRuntime}
+ from './g115-local-qa-auto-dispatch-runtime.mjs';
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
  process.env.PGAPPNAME!=='qore_ci_disposable_chain'||
@@ -47,26 +46,57 @@ assert.equal(before.tripState,'searching');
 assert.equal(before.passengerId,passenger);
 assert.equal(before.due,true);
 let rpcCalls=0;
-const repository=createG113AutoDispatchBatchRepository({
- rpc:async(name,params)=>{
-  assert.equal(name,'mobility_stage_g113_run_due_auto_batch_qa');
-  assert.deepEqual(params,{_limit:1});
+const pgClient={rpc:async(name,args)=>{
+ // This client is allowed ONLY on the already-proved disposable PG16.
+ // G90 is read privately; G112 can touch only the scoped original booking;
+ // G113 claims only due jobs, all with service_role SQL grants.
+ if(name==='mobility_stage_g113_run_due_auto_batch_qa'){
+  assert.deepEqual(args,{_limit:1});
   rpcCalls++;
   return {data:json("SET ROLE service_role; SELECT "+
-   "public.mobility_stage_g113_run_due_auto_batch_qa(1)::text"),
-   error:null};
+   "public.mobility_stage_g113_run_due_auto_batch_qa(1)::text"),error:null};
  }
-});
+ const parameters={
+  mobility_stage_g90_passenger_dispatch_status_qa:['_passenger_id','_booking_key'],
+  mobility_stage_g112_run_booked_auto_dispatch_qa:
+   ['_passenger_id','_booking_key','_trip_id']
+ }[name];
+ if(!parameters||Object.keys(args).length!==parameters.length||
+  !parameters.every(k=>Object.hasOwn(args,k)&&
+   /^[0-9a-f-]{36}$/i.test(args[k])))
+  throw Error('G115 attempted unapproved private SQL');
+ const result=json('SET ROLE service_role; SELECT public.'+name+'('+
+  parameters.map(k=>"'"+args[k]+"'").join(',')+')::text');
+ return {data:result,error:null};
+}};
 let scheduled=null,stopCount=0;
-const worker=createG113AutoDispatchRetryWorker({
+const worker=createG115LocalQaAutoDispatchRuntime({
  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
- runDueBatch:input=>repository.runDueBatch(input),
+ client:pgClient,
+ readPrivateDispatchStatus:async({actorId,requestKey})=>{
+  assert.equal(actorId,passenger);
+  assert.equal(requestKey,key);
+  const {data}=await pgClient.rpc('mobility_stage_g90_passenger_dispatch_status_qa',{
+   _passenger_id:actorId,_booking_key:requestKey
+  });
+  return data;
+ },
  maxJobs:1,intervalMs:30000,
  schedule:(cb,ms)=>{
   assert.equal(ms,30000);scheduled=cb;return {unref(){}};
  },
  cancel:()=>{stopCount++;}
 });
+// Real G73 booking in G98 receives exactly one G112 scoped initial dispatch;
+// G113 then only retries the SAME persisted trip when PostgreSQL says due.
+const dispatched=await worker.dispatchBookedAuto({
+ passengerId:passenger,bookingKey:key,tripId:before.tripId
+});
+assert.equal(dispatched.ok,true,JSON.stringify(dispatched));
+assert.equal(dispatched.attemptExecuted,true);
+assert.equal(dispatched.dispatchState,'RETRY_PENDING');
+assert.equal(current().attempts,1);
+assert.equal(current().tripId,before.tripId);
 const settle=async()=>{
  // The initial tick is asynchronous. Wait for completion, not merely the
  // first SQL side effect, before triggering another simulated cron interval.
@@ -119,4 +149,4 @@ worker.stop();assert.equal(stopCount,1);
 const reads=rpcCalls;scheduled();await settle();
 assert.equal(rpcCalls,reads,'Stopped worker has no further SQL side effects');
 assert.equal(worker.snapshot().running,false);
-console.log('G113 PASS: real PG16 automatic server startup + due tick -> WAITING 30-second backoff -> due retry attempts 1->2 -> G95/G96 canceled CLOSED; no extra worker, no offer/Driver/G38 bypass, no LIVE.');
+console.log('G115 POSTGRES PASS: original G73 persisted trip -> G111 G90 scoped status -> G112 initial SQL dispatch -> G113 periodic non-due and due retry -> G95/G96 terminal cancellation, same tripId and legal G38/G71 fences, no LIVE.');
