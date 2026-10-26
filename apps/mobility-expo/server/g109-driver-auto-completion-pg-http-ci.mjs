@@ -21,6 +21,10 @@ import {createG106PrivateDriverCurrentTripQa}
  from './g106-driver-current-trip-qa.mjs';
 import {createQoreTripCommandGateway}
  from './g4-trip-command-gateway.mjs';
+import {createQoreRiderHistoryGateway}
+ from './g26-rider-history-gateway.mjs';
+import {createQoreOwnHistoryRepository,HISTORY_PAGE_SIZE}
+ from './g26-rider-history-repository.mjs';
 
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fixture='10900000-0000-4109-8109-000000000023';
@@ -163,6 +167,66 @@ async function main(){
   resolveExclusiveRole:role,allowRequest:()=>true,
   loadCurrentAssignedTrip:getActive
  });
+
+ // G110: query the REAL G26 history repository, not a fake history response.
+ // A strictly allowlisted SQL adapter represents PostgREST in disposable CI.
+ // Each of the three sources is filtered by the same verified Passenger ID.
+ // HTTP never gets a SQL client or an unrestricted table name.
+ const historyTables=Object.freeze({
+  mobility_stage_auto_demo_trips:'passenger_id',
+  mobility_stage_deliveries:'sender_id',
+  mobility_stage_merchant_orders:'buyer_id'
+ });
+ const historyDb=Object.freeze({
+  from(table){
+   const actor=historyTables[table];
+   if(!actor)throw Error('G110 unexpected history table');
+   let owner=null,anchor=null,columns=null,ordered=[];
+   return {
+    select(value){
+     if(value!=='id,'+actor+',status,revision,created_at')
+      throw Error('G110 cannot widen private history projection');
+     columns=value;return this;
+    },
+    eq(column,value){
+     if(column!==actor||!UUID.test(value))
+      throw Error('G110 mandatory verified owner filter');
+     owner=value;return this;
+    },
+    lte(column,value){
+     if(column!=='created_at'||typeof value!=='string'||
+      !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value))
+      throw Error('G110 invalid own-history anchor');
+     anchor=value;return this;
+    },
+    or(){throw Error('G110 fixture expects one first-page history only');},
+    order(column,options){
+     if(!['created_at','id'].includes(column)||
+      options?.ascending!==false)throw Error('G110 non-keyset order');
+     ordered.push(column);return this;
+    },
+    async limit(value){
+     if(value!==HISTORY_PAGE_SIZE+1||owner===null||anchor===null||
+      !columns||ordered.join(',')!=='created_at,id')
+      throw Error('G110 incomplete verified history query');
+     const data=read("SELECT COALESCE(jsonb_agg(to_jsonb(h)),"+
+      "'[]'::jsonb)::text FROM (SELECT "+columns+
+      " FROM public."+table+" WHERE "+actor+"='"+owner+
+      "' AND created_at<='"+anchor+"'::timestamptz "+
+      "ORDER BY created_at DESC,id DESC LIMIT "+value+") h");
+     if(!Array.isArray(data))throw Error('G110 PostgreSQL history unavailable');
+     return {data,error:null};
+    }
+   };
+  }
+ });
+ const ownHistory=createQoreOwnHistoryRepository(historyDb);
+ const historyGateway=createQoreRiderHistoryGateway({
+  projectRef:'staging1234567890abcd',verifyAccessToken:verifiedRider,
+  authorizePassenger:async id=>await role(id)==='passenger',
+  allowRequest:()=>true,loadOwnHistory:ownHistory,
+  cursorSecrets:{current:'only-disposable-g110-private-history-hmac-not-for-release-001'}
+ });
  const commands=createQoreTripCommandGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:async token=>token===driverToken?
@@ -183,7 +247,8 @@ async function main(){
   }
  });
  const server=createQoreRadarLoopbackTransport({
-  riderHandler:riderStatus,tripCommandHandler:commands,
+  riderHandler:riderStatus,riderHistoryHandler:historyGateway,
+  tripCommandHandler:commands,
   driverTripStatusHandler:driverStatus,
   driverCurrentTripHandler:driverCurrent,offerHandler:NOOP,
   deliveryHandler:NOOP,merchantHandler:NOOP,financeHandler:NOOP,
@@ -196,6 +261,7 @@ async function main(){
   const cl='/v1/staging/rider/trips/'+tripId+'/status';
   const transition='/v1/staging/trips/'+tripId+'/transition';
   const current='/v1/staging/driver/trips/current';
+  const history='/v1/staging/rider/history';
   const states=[
    ['accepted','assigned',2,'arrive'],
    ['arriving','arriving',3,'pickup'],
@@ -204,11 +270,24 @@ async function main(){
   ];
   async function verify(stage){
    const [persisted,riderState,revision,event]=states[stage];
-   const [d,c,active]=await Promise.all([
-    http(origin,dr),http(origin,cl,{auth:riderToken}),http(origin,current)]);
+   const [d,c,active,h]=await Promise.all([
+    http(origin,dr),http(origin,cl,{auth:riderToken}),
+    http(origin,current),http(origin,history,{auth:riderToken})]);
    assert.equal(d.status,200,JSON.stringify(d.data));
    assert.equal(c.status,200,JSON.stringify(c.data));
    assert.equal(active.status,200,JSON.stringify(active.data));
+   assert.equal(h.status,200,JSON.stringify(h.data));
+   assert.equal(h.data.ownerId,rider);
+   assert.equal(h.data.nextCursor,null);
+   const completedHistory=h.data.items.filter(x=>x.serviceId===tripId);
+   assert.equal(completedHistory.length,1,
+    'Same durable AUTO trip must appear exactly once in own history');
+   const historyState=stage<2?'assigned':stage===2?'in_progress':'completed';
+   assert.equal(completedHistory[0].kind,'RIDE');
+   assert.equal(completedHistory[0].status,historyState);
+   assert.equal(completedHistory[0].revision,revision);
+   assert(!JSON.stringify(h.data).includes(driver),
+    'G26 must not expose Driver identity in Passenger history');
    assert.equal(d.data.tripId,tripId);
    assert.equal(d.data.state,persisted);
    assert.equal(d.data.revision,revision);
@@ -233,6 +312,12 @@ async function main(){
   await verify(0);
   assert.equal((await http(origin,cl,{auth:foreignToken})).status,404);
   assert.equal((await http(origin,dr,{auth:riderToken})).status,401);
+  const foreignHistory=await http(origin,history,{auth:foreignToken});
+  assert.equal(foreignHistory.status,200);
+  assert(!foreignHistory.data.items.some(x=>x.serviceId===tripId),
+   'Cross-Passenger history leak');
+  assert.equal((await http(origin,history)).status,401,
+   'Driver must not consume Passenger history');
   assert.equal((await http(origin,transition,{
    method:'POST',auth:foreignToken,
    body:{event:'arrive',eventKey:keys[0]}})).status,403);
@@ -266,6 +351,7 @@ async function main(){
   assert.equal(terminal.revision,5);
   assert.equal(Number(terminal.events),4);
   assert.equal(Number(terminal.slot),0);
+  console.log('G110 PASS: G26 original own-history SQL repository + authenticated HTTP GET reflect same AUTO trip at every revision, completed final state, foreign Passenger denied, no Driver PII');
   console.log('G109 PASS: real HTTP + PostgreSQL16 independently isolated pre-G38 QA acceptance -> arriving -> in_progress -> completed; Driver/Rider same persisted revision; G36 slot released; idempotent keys; no GPS, payments, new legal assignment or LIVE.');
  }finally{
   server.close();
