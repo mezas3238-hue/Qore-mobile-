@@ -1,0 +1,21 @@
+{
+  "cli": {
+    "appVersionSource": "local",
+    "requireCommit": true
+  },
+  "build": {
+    "store-candidate": {
+      "distribution": "store",
+      "developmentClient": false,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED": "false"
+      }
+    }
+  }
+}
