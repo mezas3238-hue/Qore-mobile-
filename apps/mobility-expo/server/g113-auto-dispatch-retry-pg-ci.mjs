@@ -67,7 +67,15 @@ const worker=createG113AutoDispatchRetryWorker({
  },
  cancel:()=>{stopCount++;}
 });
-const settle=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+const settle=async()=>{
+ // The initial tick is asynchronous. Wait for completion, not merely the
+ // first SQL side effect, before triggering another simulated cron interval.
+ for(let i=0;i<16;i++){
+  if(!worker.snapshot().busy)return;
+  await new Promise(resolve=>setImmediate(resolve));
+ }
+ assert.equal(worker.snapshot().busy,false,'G113 CI worker failed to settle');
+};
 assert.equal(worker.start(),true);
 await settle(); // first due batch is automatically invoked on server start
 assert.equal(rpcCalls,1);
