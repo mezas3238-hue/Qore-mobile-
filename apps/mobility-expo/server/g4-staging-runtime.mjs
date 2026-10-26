@@ -21,6 +21,7 @@ import {createSupabaseStagingMerchantRepository} from './g6-supabase-merchant-re
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
 import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repository.mjs';
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
+import {createG125CargoPricingContext} from './g125-cargo-pricing-context.mjs';
 import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
@@ -158,6 +159,7 @@ export async function prepareQoreG4StagingRuntime({
  projectRef,anonKey,serviceKey,historyCursorSecrets,
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
+ approvedCargoRoadResolver=null,cargoRoadRoutingApproved=false,
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
@@ -176,6 +178,10 @@ export async function prepareQoreG4StagingRuntime({
    typeof createClient!=='function'||
    typeof request!=='function'||typeof arrivalEvidence!=='function'||
    typeof pricingContext!=='function'||
+   !(approvedCargoRoadResolver===null||typeof approvedCargoRoadResolver==='function')||
+   !(cargoRoadRoutingApproved===false||cargoRoadRoutingApproved===true)||
+   (cargoRoadRoutingApproved!==true&&approvedCargoRoadResolver!==null)||
+   (cargoRoadRoutingApproved===true&&approvedCargoRoadResolver===null)||
    !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
    !(verifiedMotoRoute===null||typeof verifiedMotoRoute==='function')||
    !(privateEvidenceAdapters===null||
@@ -391,10 +397,36 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ // G125: Generic route/pricing adapters may NEVER mint cargo quotes.
+ // Explicit Owner approval and an independent evidence provider are required.
+ const cargoPricing=cargoRoadRoutingApproved===true?
+  createG125CargoPricingContext({
+   enabled:true,now,resolveVerifiedCargoRoute:approvedCargoRoadResolver,
+   loadSenderDelivery:async({actorId,deliveryId})=>{
+    const {data,error}=await admin.from('mobility_stage_deliveries')
+     .select('id,sender_id,requested_vehicle_kind,status,courier_id,pickup_tag,delivery_tag')
+     .eq('id',deliveryId).eq('sender_id',actorId).maybeSingle();
+    if(error)throw Error('G125 private cargo subject cannot be verified');
+    return data;
+   },
+   recordVerifiedRoute:async p=>{
+    const {data,error}=await admin.rpc('mobility_stage_g125_record_cargo_road_qa',{
+     _sender:p.actorId,_delivery:p.deliveryId,
+     _evidence:p.evidenceId,_vehicle:p.vehicleKind,_zone:p.zoneTag,
+     _pickup:p.pickupTag,_destination:p.deliveryTag,
+     _meters:p.distanceMeters,_seconds:p.durationSeconds,
+     _tolls:p.tollsPyg,_verified_at_ms:p.verifiedAtMs,
+     _expires_at_ms:p.expiresAtMs
+    });
+    if(error)throw Error('G125 PostgreSQL route proof registration denied');
+    return data;
+   }
+  }):unavailablePricingContext;
  const finance=createQoreFinanceGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
-  loadPricingContext:params=>pricingContext(params),
+  loadPricingContext:params=>params.fareMode==='DELIVERY'?
+   cargoPricing(params):pricingContext(params),
   quoteFare:params=>financePersistence.quote({
    modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),

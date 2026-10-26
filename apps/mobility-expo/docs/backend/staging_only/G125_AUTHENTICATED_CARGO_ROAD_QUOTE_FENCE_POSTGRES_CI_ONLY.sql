@@ -133,7 +133,7 @@ BEGIN
   OR _sender IS NULL OR _key IS NULL OR _delivery IS NULL
   THEN RAISE EXCEPTION 'G125 unsupported cargo quote scope'
    USING ERRCODE='P1251'; END IF;
-  SELECT * INTO attested
+  SELECT e.* INTO attested
   FROM public.mobility_stage_g125_cargo_road_attestations e
   JOIN public.mobility_stage_deliveries d ON d.id=e.delivery_id
    AND d.sender_id=e.sender_id

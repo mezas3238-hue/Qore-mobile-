@@ -641,6 +641,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G124_OWNER_DELIVERY_TARIFF_POSTGRES_CI_ONLY.sql
       - name: G124 real PostgreSQL Owner AAL2 HTTP and immutable cargo quote audit
         run: node apps/mobility-expo/server/g124-owner-cargo-rate-pg-http-ci.mjs
+      - name: G125 install verified cargo road evidence and SQL G7 quote fence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G125_AUTHENTICATED_CARGO_ROAD_QUOTE_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G125 quote only after independent AUTO/MOTO evidence and PG16 owner tariff
+        run: node apps/mobility-expo/server/g125-cargo-road-fare-pg-http-ci.mjs
       - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
         run: node apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs
 

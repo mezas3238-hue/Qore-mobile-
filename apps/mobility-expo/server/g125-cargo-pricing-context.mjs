@@ -1,7 +1,7 @@
 /** G125: only an independent certified server route can price a stored cargo delivery.
  * No provider is bundled/auto-enabled. A synthetic QA witness is never LIVE.
  */
-const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const TAG=/^[A-Z_]{3,60}$/;
 const ZONE=/^(AUTO|MOTO)_[A-Z_]{3,20}$/;
 const int=(x,min,max)=>Number.isSafeInteger(x)&&x>=min&&x<=max;
