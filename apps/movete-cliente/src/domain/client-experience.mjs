@@ -1,6 +1,7 @@
 import {createClientSessionController} from './client-session.mjs';
 import {createPassengerBookingStagingGateway} from './passenger-booking-staging-gateway.mjs';
 import {createG121DeliveryRegistrationGateway} from './g121-delivery-registration-gateway.mjs';
+import {createG122DeliveryPriceConsentFlow} from './g122-delivery-price-consent-flow.mjs';
 import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
@@ -42,7 +43,7 @@ import {createG119MotoStatusGateway} from './g119-moto-ride-status-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,deliveryRegistrationOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,deliveryRegistrationOptions=null,deliveryG122Options=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -55,7 +56,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let registrationEpoch=0,registration={busy:false,receipt:null};
- let g121Registration=null;
+ let g121Registration=null,g122Consent=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
@@ -78,6 +79,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const clearPrivate=()=>{
   registrationEpoch++;registration={busy:false,receipt:null};
   g121Registration?.cancelPending();
+  g122Consent?.clear();
   g95Restored=null;
   g95Epoch++;g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
   subsidyEpoch++;subsidyReceipt=null;subsidyBusy=false;
@@ -364,6 +366,16 @@ export function createClientExperience({authProvider=null,gateway=null,
  }:gateway;
  g121Registration=createG121DeliveryRegistrationGateway({
   ...(deliveryRegistrationOptions??{}),now,
+  getSession:()=>{
+   const privateSession=session.getSessionForGateway(),visible=actor();
+   return privateSession&&visible?{...privateSession,subject:visible.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  onSessionInvalid:()=>{session.clear();notify();}
+ });
+ // G122 is separate QA-only G7 quote and explicit price acceptance.
+ g122Consent=createG122DeliveryPriceConsentFlow({
+  ...(deliveryG122Options??{}),now,
   getSession:()=>{
    const privateSession=session.getSessionForGateway(),visible=actor();
    return privateSession&&visible?{...privateSession,subject:visible.subject,
@@ -1183,6 +1195,57 @@ export function createClientExperience({authProvider=null,gateway=null,
   }else registration={busy:false,receipt:null};
   notify();return result;
  }
+ function publicDeliveryPriceConsent(){
+  const verified=publicDeliveryRegistration(),current=g122Consent?.snapshot();
+  const anchored=Boolean(verified.deliveryId&&current?.deliveryId===verified.deliveryId
+   &&current.vehicleKind===verified.vehicleKind);
+  const ready=Boolean(verified.deliveryId&&g122Consent?.isConfigured());
+  if(!anchored)return Object.freeze({contractReady:ready,phase:'idle',
+   deliveryId:null,vehicleKind:null,quote:null,consentId:null,
+   canQuote:ready,canConfirm:false,unknown:false,qaOnly:true,
+   productionEnabled:false,paymentAuthorized:false,dispatchEnabled:false});
+  return Object.freeze({...current,contractReady:ready,
+   canQuote:Boolean(current.canQuote&&ready),
+   canConfirm:Boolean(current.canConfirm&&ready)});
+ }
+ async function quoteRecoveredDelivery(quoteRequestKey){
+  const user=actor(),verified=publicDeliveryRegistration();
+  const pending=mutations.publicState();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(!g122Consent?.isConfigured())return fail('G122_NOT_CERTIFIED');
+  if(!verified.deliveryId||!verified.vehicleKind||!verified.requestKey
+   ||pending.phase!=='failed'||pending.operation!=='deliveryRequest'
+   ||pending.requestKey!==verified.requestKey)
+   return fail('DELIVERY_REGISTRATION_NOT_VERIFIED');
+  const revision=session.privacyRevision(),owner=user.subject,key=verified.requestKey;
+  const promise=g122Consent.quote({ownerId:owner,requestKey:key,
+   deliveryId:verified.deliveryId,vehicleKind:verified.vehicleKind,
+   sessionRevision:revision},quoteRequestKey);
+  notify();const result=await promise;
+  const after=actor(),still=publicDeliveryRegistration();
+  if(!after||after.subject!==owner||session.privacyRevision()!==revision
+   ||still.requestKey!==key||still.deliveryId!==verified.deliveryId)
+   return fail('STALE_SESSION_RESPONSE');
+  notify();return result;
+ }
+ async function confirmRecoveredDeliveryQuote(args){
+  const user=actor(),verified=publicDeliveryRegistration();
+  const pending=mutations.publicState(),scope=g122Consent?.snapshot();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(!verified.deliveryId||!verified.vehicleKind
+   ||pending.operation!=='deliveryRequest'||pending.phase!=='failed'
+   ||pending.requestKey!==verified.requestKey
+   ||scope?.deliveryId!==verified.deliveryId
+   ||scope?.vehicleKind!==verified.vehicleKind)return fail('G122_SCOPE_CHANGED');
+  const revision=session.privacyRevision(),owner=user.subject,key=verified.requestKey;
+  const promise=g122Consent.confirm(args);
+  notify();const result=await promise;
+  const after=actor(),still=publicDeliveryRegistration();
+  if(!after||after.subject!==owner||session.privacyRevision()!==revision
+   ||still.requestKey!==key||still.deliveryId!==verified.deliveryId)
+   return fail('STALE_SESSION_RESPONSE');
+  notify();return result;
+ }
  function snapshot(){
   const user=actor();
   guardCustodyScope();
@@ -1195,6 +1258,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    return Object.freeze({authenticated:false,account:null,mutation:mutations.publicState(),
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
     deliveryRegistration:publicDeliveryRegistration(),
+    deliveryPriceConsent:publicDeliveryPriceConsent(),
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
     completedRideHistory:Object.freeze({readReady:false,verifying:false,verified:false,tripId:null,qaOnly:true,productionEnabled:false}),
@@ -1219,6 +1283,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    bookingRecovery:Object.freeze({readReady:Boolean(bookingGateway?.reconciliationConfigured?.()),
     productionEnabled:false}),
    deliveryRegistration:publicDeliveryRegistration(),
+   deliveryPriceConsent:publicDeliveryPriceConsent(),
    rideContinuation:rideContinuation(),
    rideHistoryRecovery:rideHistoryRecovery(),
    completedRideHistory:completedRideHistory(),
@@ -1410,6 +1475,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   discardPreparedMutation:args=>{const result=discardPreparedMutation(args);notify();return result;},
   prepareDelivery:body=>{const result=prepare('deliveryRequest',body);notify();return result;},
   readUnconfirmedDeliveryRegistration,
+  quoteRecoveredDelivery,
+  confirmRecoveredDeliveryQuote,
   prepareFare:body=>{const result=prepare('fareQuote',body);notify();return result;},
   prepareServerFare:args=>{const result=prepareServerFare(args);notify();return result;},
   submitServerFare:async()=>{const result=await fareFlow.submit();notify();return result;},

@@ -92,13 +92,25 @@ export function ClientRuntimeProvider({children,experience}:{
   origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
   pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
  }),[]);
+ const deliveryG122Options=useMemo(()=>({
+  enabled:process.env.EXPO_PUBLIC_G122_OWNER_APPROVED==='true',
+  ownerApproved:process.env.EXPO_PUBLIC_G122_OWNER_APPROVED==='true',
+  contractCertified:process.env.EXPO_PUBLIC_G122_CONTRACT_VERIFIED==='true',
+  externalRuntimeVerified:process.env.EXPO_PUBLIC_G122_EXTERNAL_RUNTIME_VERIFIED==='true',
+  ownerTariffVerified:process.env.EXPO_PUBLIC_G122_OWNER_TARIFF_VERIFIED==='true',
+  officialRoutingVerified:process.env.EXPO_PUBLIC_G122_OFFICIAL_ROUTING_VERIFIED==='true',
+  g123FenceVerified:process.env.EXPO_PUBLIC_G122_DISPATCH_FENCE_VERIFIED==='true',
+  sourceOrigin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+  pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
+ }),[]);
  const client=useMemo(()=>experience??createClientExperience({
   authProvider:nativeAuth,autoG73HttpOptions:qaHttp,g95RecoveryStore,
   deliveryRegistrationOptions:g121Options,
+  deliveryG122Options,
   motoPassengerHttpOptions:motoG101,motoRecoveryStore,
   historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
   statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
- }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options]);
+ }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options,deliveryG122Options]);
  useEffect(()=>{
   if(!nativeAuth)return;
   let active=true;

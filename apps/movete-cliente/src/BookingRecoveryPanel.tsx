@@ -1,4 +1,5 @@
 import React,{useRef,useState} from 'react';
+import * as Crypto from 'expo-crypto';
 import {Text} from 'react-native';
 import {Action,Panel,styles} from './ClientUI';
 import type {ClientExperience,ClientSnapshot} from './domain/client-experience.mjs';
@@ -65,6 +66,57 @@ export function BookingRecoveryPanel({client,view,operation}:{
   }catch{setMessage('No fue posible consultar el servidor. No se envió otra solicitud.');}
   finally{lock.current=false;setBusy(false);}
  }
+ async function quoteRegisteredDelivery(){
+  if(lock.current||operation!=='deliveryRequest')return;
+  const latest=client.snapshot(),reg=latest.deliveryRegistration;
+  if(!latest.authenticated||latest.account?.subject!==view.account?.subject
+   ||latest.privateViewRevision!==view.privateViewRevision
+   ||latest.mutation.phase!=='failed'
+   ||latest.mutation.operation!=='deliveryRequest'
+   ||latest.mutation.requestKey!==view.mutation.requestKey
+   ||reg.deliveryId!==view.deliveryRegistration.deliveryId
+   ||!latest.deliveryPriceConsent.canQuote)return;
+  lock.current=true;setBusy(true);setMessage('');
+  try{
+   const answer=await client.quoteRecoveredDelivery(Crypto.randomUUID());
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.account?.subject!==view.account?.subject
+    ||after.mutation.requestKey!==view.mutation.requestKey)return;
+   setMessage(answer.ok
+    ?'Tarifa de prueba consultada al servidor. Revisá el monto antes de confirmar.'
+    :'No se pudo certificar la tarifa. No solicites otra cotización automáticamente.');
+  }catch{setMessage('No fue posible confirmar la tarifa del servidor.');}
+  finally{lock.current=false;setBusy(false);}
+ }
+ async function acceptRegisteredDeliveryQuote(){
+  if(lock.current||operation!=='deliveryRequest')return;
+  const latest=client.snapshot(),price=latest.deliveryPriceConsent;
+  if(!latest.authenticated||latest.account?.subject!==view.account?.subject
+   ||latest.privateViewRevision!==view.privateViewRevision
+   ||latest.mutation.requestKey!==view.mutation.requestKey
+   ||latest.mutation.phase!=='failed'||!price.canConfirm||!price.quote
+   ||price.deliveryId!==view.deliveryRegistration.deliveryId
+   ||price.quote.quoteId!==view.deliveryPriceConsent.quote?.quoteId
+   ||price.quote.amountGs!==view.deliveryPriceConsent.quote.amountGs
+   ||price.quote.fareVersion!==view.deliveryPriceConsent.quote.fareVersion)return;
+  lock.current=true;setBusy(true);setMessage('');
+  try{
+   const answer=await client.confirmRecoveredDeliveryQuote({
+    confirmationKey:Crypto.randomUUID(),
+    acceptedTotalGs:price.quote.amountGs,
+    acceptedFareVersion:price.quote.fareVersion
+   });
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.account?.subject!==view.account?.subject
+    ||after.mutation.requestKey!==view.mutation.requestKey)return;
+   setMessage(answer.ok
+    ?'Se guardó tu aceptación de tarifa en QA. Sin cobro ni repartidor asignado.'
+    :'No se puede confirmar tu aceptación. No la reenviaremos automáticamente.');
+  }catch{setMessage('Aceptación de prueba incierta. No se enviará otra vez.');}
+  finally{lock.current=false;setBusy(false);}
+ }
  return <Panel>
   <Text accessibilityRole="header" style={styles.heading}>Estado de la solicitud anterior</Text>
   <Text accessibilityLiveRegion="polite" style={styles.text}>
@@ -81,6 +133,37 @@ export function BookingRecoveryPanel({client,view,operation}:{
     Registro verificado: {view.deliveryRegistration.vehicleKind==='MOTO'?'MOTO':'AUTO'}.
     Referencia {view.deliveryRegistration.deliveryId.slice(-8).toUpperCase()}.
     Precio y repartidor todavía no confirmados.
+   </Text>}
+  {operation==='deliveryRequest'
+   &&view.deliveryRegistration?.deliveryId
+   &&view.deliveryPriceConsent?.contractReady
+   &&view.deliveryPriceConsent?.canQuote
+   &&<Action label="Consultar tarifa certificada del envío (QA)"
+     hint="Envía una sola petición de tarifa G7, no contrata ni despacha."
+     busy={busy} disabled={busy} onPress={()=>{void quoteRegisteredDelivery();}}/>}
+  {operation==='deliveryRequest'&&view.deliveryPriceConsent?.quote
+   &&view.deliveryPriceConsent.deliveryId===view.deliveryRegistration?.deliveryId
+   &&<Text accessibilityLiveRegion="polite" style={styles.text}>
+     Cotización QA: {view.deliveryPriceConsent.quote.amountGs.toLocaleString('es-PY')} Gs.
+     Tarifa servidor versión {view.deliveryPriceConsent.quote.fareVersion}.
+     No hay cargo a tu cuenta.
+   </Text>}
+  {operation==='deliveryRequest'&&view.deliveryPriceConsent?.canConfirm
+   &&view.deliveryPriceConsent.quote
+   &&view.deliveryPriceConsent.deliveryId===view.deliveryRegistration?.deliveryId
+   &&<Action label="Acepto expresamente esta tarifa QA (sin pago)"
+     hint="Graba una sola confirmación G122. No despacha repartidor ni cobra."
+     busy={busy} disabled={busy}
+     onPress={()=>{void acceptRegisteredDeliveryQuote();}}/>}
+  {operation==='deliveryRequest'&&view.deliveryPriceConsent?.phase==='confirmed_qa'
+   &&<Text accessibilityLiveRegion="polite" style={styles.small}>
+     Aceptación de tarifa verificada en QA. No implica conductor asignado,
+     recogida, servicio comercial ni autorización de pago.
+   </Text>}
+  {operation==='deliveryRequest'&&view.deliveryPriceConsent?.unknown
+   &&<Text accessibilityRole="alert" style={styles.small}>
+     El resultado de tarifa o confirmación es incierto. No se volverá
+     a enviar la operación; se requiere conciliación certificada.
    </Text>}
   {presented.canRead&&presented.phase==='failed'&&
    <Action label={presented.actionLabel}
