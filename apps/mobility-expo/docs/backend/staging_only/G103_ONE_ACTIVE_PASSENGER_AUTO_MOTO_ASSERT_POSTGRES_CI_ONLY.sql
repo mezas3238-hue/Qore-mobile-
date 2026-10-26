@@ -13,11 +13,16 @@ INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_
 INSERT INTO public.mobility_stage_fare_rules(
  rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,minimum_pyg,
  commission_bps,valid_from,valid_until,active,approved_by,approved_at)
- VALUES('G103_MOTO_QA','MOTO','MOTO_TEST_ZONE',4000,1000,200,4000,1200,
+ VALUES('G103_MOTO_QA','MOTO','MOTO_GUARD_ZONE',4000,1000,200,4000,1200,
  clock_timestamp()-interval '1 hour',
  clock_timestamp()+interval '60 days',true,
  '10300000-0000-4103-8103-000000000002',
  clock_timestamp()-interval '2 hours');
+-- G102 leaves its own synthetic MOTO campaign active in this disposable
+-- chain. Temporarily retire that CI fixture while testing a separate Owner
+-- approval; ROLLBACK restores the earlier campaign after this assertion.
+UPDATE public.mobility_stage_g93_ride_campaigns SET active=false
+ WHERE service_kind='MOTO_RIDE' AND active;
 INSERT INTO public.mobility_stage_g93_ride_campaigns
  (id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days)
  VALUES('10300000-0000-4103-8103-000000000020','MOTO_RIDE',
@@ -39,7 +44,7 @@ BEGIN
   '10300000-0000-4103-8103-000000000012');
  moto_quote:=public.mobility_stage_g100_moto_quote_qa(passenger,
   '10300000-0000-4103-8103-000000000021',
-  'PANTEON','SHOPPING','MOTO_TEST_ZONE',5000,600);
+  'PANTEON','SHOPPING','MOTO_GUARD_ZONE',5000,600);
  IF moto_quote->>'serviceKind'<>'MOTO_RIDE'
  OR moto_quote->>'commissionBps'<>'1200'
  OR moto_quote->>'subsidyBps'<>'1000'
