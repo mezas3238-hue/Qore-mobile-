@@ -48,3 +48,12 @@ Las cuatro variables de G116 constan en `apps/movete-admin/.env.example`, todas 
   supuesto conductor asignado con G38/G71 bloqueado, rol/identidad rotada,
   respuesta vencida o HTTP desproporcionado. Las pruebas de gateway no
   sustituyen navegación E2E, RLS ni PG externo.
+
+## Protección adicional D — no retroceder reservas ni alterar ledger
+Se integra `service-trace-integrity-fence.mjs` dentro del AdminExperience,
+conservando por sesión Admin el último estado de cada serviceId. Previene
+retroceso de revisión, sustitución de bookingRequestKey/quoteId, historial
+reescrito/truncado, resurrección terminal y modificaciones de ledger
+conciliado. Sesión cambiada, cierre y revocación limpian la referencia.
+No sustituye pruebas PG16 ni autoriza mover fondos. Nuevos tests Node sobre
+transiciones positivas y casos adversariales (pendientes de CI D→B).

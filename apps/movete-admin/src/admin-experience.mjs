@@ -7,6 +7,7 @@ import {createAuditFeedStore} from './audit-feed.mjs';
 import {createAdminReadGateway} from './admin-read-gateway.mjs';
 import {createF1AutoRideAuditGateway} from './f1-auto-ride-audit-gateway.mjs';
 import {createServiceTraceGateway} from './service-trace-gateway.mjs';
+import {createServiceTraceIntegrityFence} from './service-trace-integrity-fence.mjs';
 import {createF1AdminTripIntegrityFence} from './f1-admin-trip-integrity-fence.mjs';
 import {createPageNavigator,readContinuation} from './page-cursor.mjs';
 import {createIncidentTriageG41Gateway} from './incident-g41-gateway.mjs';
@@ -26,6 +27,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
  const audit=createAuditFeedStore({now});
  const pages=createPageNavigator();
  const f1Integrity=createF1AdminTripIntegrityFence();
+ const traceIntegrity=createServiceTraceIntegrityFence();
  let session,globalTriage,f1AuditGateway=null,f1Audit=null,f1AuditBusy=false,f1AuditGeneration=0,f1AuditError=null;
  let traceGateway=null,trace=null,traceError=null,traceBusy=false,traceEpoch=0;
  // No second KYC decision after an unknown/accepted POST until an
@@ -38,6 +40,7 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
   f1AuditGateway?.cancelPending();
   traceEpoch++;trace=null;traceError=null;traceBusy=false;
   traceGateway?.cancelPending();
+  traceIntegrity.clear();
   f1Integrity.clear();
   reviewInFlight=false;reviewNeedsReconciliation=false;reviewRevisionFloor=-1;};
  session=createAdminSessionController({provider:authProvider,clearSensitive:clearPrivate,now});
@@ -86,6 +89,11 @@ export function createAdminExperience({authProvider=null,gateway=null,readGatewa
    if(!outcome.ok){
     traceError=outcome.code??'TRACE_UNAVAILABLE';notify();
     return fail(traceError);
+   }
+   const integrity=traceIntegrity.observe(outcome.data);
+   if(!integrity.ok){
+    trace=null;traceError=integrity.code;notify();
+    return fail(integrity.code);
    }
    trace=outcome.data;notify();
    return {ok:true,qaOnly:true,productionEnabled:false};
