@@ -15,7 +15,7 @@ import './styles.css';
 type Page='resumen'|'servicios'|'propietario'|'viajes'|'kyc'|'zonas'|'incidentes'|'auditoria';
 const sections:{id:Page;label:string;hint:string}[]=[
  {id:'resumen',label:'Resumen',hint:'Indicadores operativos'},
- {id:'servicios',label:'Cuatro servicios',hint:'Cobertura verificada y bloqueos por modalidad'},
+ {id:'servicios',label:'Cinco flujos',hint:'AUTO/MOTO, envíos AUTO/MOTO y comercios'},
  {id:'propietario',label:'Propietario',hint:'Ingresos, comisiones y control estratégico'},
  {id:'viajes',label:'Viajes AUTO',hint:'Verificación de un viaje F1 desde el servidor'},
  {id:'kyc',label:'Documentos y KYC',hint:'Revisión por responsable'},
@@ -125,7 +125,7 @@ function AuthorizedQueue({items}:{items:readonly AdminKycRecord[]}){
  </Panel>;
 }
 type OwnerFinance=NonNullable<AdminSnapshot['finance']>;
-function OwnerPanel({finance,authorized}:{finance:OwnerFinance|null;authorized:boolean}){
+function OwnerPanel({finance,authorized,ownerSubject}:{finance:OwnerFinance|null;authorized:boolean;ownerSubject:string|null}){
  const amount=(x:number)=>new Intl.NumberFormat('es-PY',{maximumFractionDigits:0}).format(x)+' Gs.';
  const metrics:{key:keyof OwnerFinance['totals'];name:string;hint:string}[]=[
   {key:'grossCollectedGs',name:'Cobros brutos',hint:'Importes registrados'},
@@ -153,7 +153,7 @@ function OwnerPanel({finance,authorized}:{finance:OwnerFinance|null;authorized:b
    </div>
    <p className="training-disclaimer">Un guion indica dato no verificado, no cero. No se accede a cuentas bancarias ni información personal de conductores.</p>
   </Panel>
-  <OwnerCommissionEditor authorized={authorized}/>
+  <OwnerCommissionEditor key={ownerSubject??'no-owner'} authorized={authorized}/>
   <Panel><h2>Control estratégico</h2>
    <p>Las tarifas, comisiones, zonas y liquidaciones necesitan autorización de servidor, revisión y bitácora. Esta interfaz no habilita modificaciones.</p>
    <div className="empty-chip">SOLO LECTURA · NO LIVE</div></Panel>
@@ -480,7 +480,7 @@ function F1RideAuditPanel({client,state}:{client:AdminExperience;state:AdminSnap
  </Panel>;
 }
 
-function FourServicesReadOnly({state}:{state:AdminSnapshot}){
+function FiveFlowsReadOnly({state}:{state:AdminSnapshot}){
  const allowed=state.account?.role==='admin'&&state.account.mfaVerified===true;
  const zones=allowed&&state.zones&&state.zones.expiresAt>Date.now()
   ?state.zones:null;
@@ -496,7 +496,7 @@ function FourServicesReadOnly({state}:{state:AdminSnapshot}){
   {id:'COMMERCE',label:'COMERCIOS · Pedidos',
    detail:'Supermercados, farmacias OTC, restaurantes y otros. Stock, pedido y entrega deben ser del backend.'}
  ] as const;
- return <div className="metric-grid" aria-label="Estado seguro de los cuatro servicios">
+ return <div className="metric-grid" aria-label="Estado seguro de los cinco flujos comerciales">
   {services.map(item=>{
    const observed=zones?.items.filter(z=>z.serviceKind===item.id)??[];
    return <Panel key={item.id} className="metric">
@@ -596,7 +596,7 @@ function App(){
    <div className="container">
     <div className="intro"><div><p className="overline">MOVETE FÁCIL · ADMINISTRACIÓN</p>
      <h1 ref={pageHeadingRef} tabIndex={-1}>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión de QA por proveedor (sin backend certificado)':'Sin autenticación administrativa activa'}</p></div>
-     <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
+     <div className="date">Versión de interfaz · 26 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
      <span><strong>Entorno de validación técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. Solo ingresar credenciales de cuentas STAGING autorizadas cuando el proyecto de identidad esté configurado.</span></div>
     <AdminAuthPanel/>
@@ -633,7 +633,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='servicios'?<FourServicesReadOnly state={adminState}/>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='servicios'?<FiveFlowsReadOnly state={adminState}/>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}
@@ -646,7 +646,7 @@ function App(){
        <div className="empty-chip">QA · SIN API</div>
      </Panel>}
 
-    <footer>Arquitecto B · PR #8 DRAFT · Sin despliegue, SQL remoto ni cobros</footer>
+    <footer>Arquitecto D · Issue #18 · Sin despliegue, SQL remoto ni cobros</footer>
    </div>
   </main>
  </div>;

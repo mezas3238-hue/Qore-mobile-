@@ -11,5 +11,5 @@ export declare function createOwnerCommissionGateway(args?:{
  enabled?:boolean;contractCertified?:boolean;origin?:string;
  pinnedOrigin?:string;getSession?:()=>unknown|Promise<unknown>;
  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
- now?:()=>number;
+ now?:()=>number;timeoutMs?:number;maxBytes?:number;
 }):OwnerCommissionGateway;
