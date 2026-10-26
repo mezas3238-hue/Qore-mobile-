@@ -4,7 +4,7 @@
  */
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
 const MATCH=/^\/v1\/staging\/owner\/delivery-rates\/(AUTO|MOTO)\/([A-Z_]{3,20})$/;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(x,keys)=>obj(x)&&Object.keys(x).length===keys.length&&
  keys.every(k=>Object.hasOwn(x,k));
