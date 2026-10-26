@@ -18,6 +18,11 @@ export type ClientSnapshot={
   locationObservedAt:number|null;subscriptionActive:boolean;syncing:boolean;
   lastFetchedAt:number|null;lastError:string|null;liveEnabled:false;
  };
+ motoRideStatus:{readReady:boolean;busy:boolean;tripId:string|null;
+  state:string|null;revision:number|null;financialState:string|null;
+  commissionBps:number|null;customerPaysGs:number|null;
+  driverIdentityExposed:false;gpsVerified:false;etaAvailable:false;
+  error:string|null;qaOnly:true;productionEnabled:false};
  motoPassenger:{contractReady:boolean;phase:string;busy:boolean;
   quote:{quoteId:string;originalFareGs:number;customerPaysGs:number;
    customerSubsidyGs:number;driverReceivesGs:number;platformRetainsGs:number;
@@ -122,6 +127,7 @@ export type ClientExperience={
  readMotoBooking():Promise<ClientResult>;
  cancelMoto(args:{cancellationKey:string}):Promise<ClientResult>;
  readMotoCancellation():Promise<ClientResult>;
+ refreshMotoRideStatus(args:{bookingKey:string}):Promise<ClientResult>;
  restoreMotoPassenger():Promise<ClientResult>;
  clearConfirmedMotoCancellation():Promise<ClientResult>;
  resetMoto():ClientResult;
@@ -205,6 +211,11 @@ export type ClientExperience={
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
+ motoRideStatusOptions?:{
+  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,options:unknown)=>unknown|Promise<unknown>;
+ }|null;
  motoPassengerHttpOptions?:{
   enabled?:boolean;contractCertified?:boolean;externalRuntimeVerified?:boolean;
   motoLegalVerified?:boolean;motoRouteVerified?:boolean;

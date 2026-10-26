@@ -30,6 +30,7 @@ import {createG52ChatHistoryHttpGateway} from './g52-chat-history-http-gateway.m
 import {createG53ChatSendHttpGateway} from './g53-chat-send-http-gateway.mjs';
 import {createG100MotoPassengerFlow} from './g100-moto-passenger-flow.mjs';
 import {createG101MotoPassengerHttpGateway} from './g101-moto-passenger-http-gateway.mjs';
+import {createG119MotoStatusGateway} from './g119-moto-ride-status-gateway.mjs';
 
 /**
  * Composición sin estado persistente de la app Cliente. Une los contratos
@@ -40,7 +41,7 @@ import {createG101MotoPassengerHttpGateway} from './g101-moto-passenger-http-gat
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -49,7 +50,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
- let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null,motoHttp=null;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null,motoHttp=null,motoRideGateway=null;
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
@@ -59,6 +60,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  let financialAnchor=null,financial={busy:false,data:null,error:null},financialEpoch=0;
  let g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
  let g95Epoch=0,g95Restored=null,restoringG95=false;
+ let motoRide={busy:false,data:null,error:null},motoRideEpoch=0;
  const G95_ID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
  const canSaveG95=Boolean(g95RecoveryStore&&['read','write','clear'].every(k=>typeof g95RecoveryStore[k]==='function'));
  const g93Required=autoG73HttpOptions?.subsidyContractCertified===true;
@@ -78,6 +80,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   dispatchEpoch++;dispatch={busy:false,data:null,error:null,scope:null};
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
+  motoRideEpoch++;motoRide={busy:false,data:null,error:null};
+  motoRideGateway?.cancelPending();
   if(motoFlow)motoFlow.clear(true);
   if(motoHttp)motoHttp.cancelPending();
   if(mutations)mutations.clear();
@@ -121,6 +125,14 @@ export function createClientExperience({authProvider=null,gateway=null,
    },
    onSessionInvalid:()=>{session.clear();notify();}
   }):null;
+ motoRideGateway=motoRideStatusOptions?createG119MotoStatusGateway({
+  ...motoRideStatusOptions,now,
+  getSession:()=>{
+   const u=actor(),t=session.getSessionForGateway();
+   return u&&t?{subject:u.subject,role:'passenger',
+    token:t.token,expiresAt:t.expiresAt}:null;
+  }
+ }):null;
  motoFlow=createG100MotoPassengerFlow({
   ...(motoPassengerOptions??motoHttp?.flowOptions()??{}),
   recoveryStore:motoRecoveryStore,getActor:actorSession,now,onChange:notify
@@ -1079,6 +1091,41 @@ export function createClientExperience({authProvider=null,gateway=null,
     fareVersion:proof.fareVersion,expiresAt:proof.expiresAt
    }):null});
  }
+
+ function publicMotoRideStatus(){return Object.freeze({
+  readReady:Boolean(motoRideGateway?.isConfigured()),busy:motoRide.busy,
+  tripId:motoRide.data?.tripId??null,
+  state:motoRide.data?.tripState??null,
+  revision:motoRide.data?.tripRevision??null,
+  financialState:motoRide.data?.financialState??null,
+  commissionBps:motoRide.data?.commissionBps??null,
+  customerPaysGs:motoRide.data?.customerPaysGs??null,
+  driverIdentityExposed:false,gpsVerified:false,etaAvailable:false,
+  error:motoRide.error,qaOnly:true,productionEnabled:false
+ });}
+ async function refreshMotoRideStatus({bookingKey}={}){
+  const a=actor(),state=motoFlow.snapshot();
+  if(!motoRideGateway?.isConfigured())return fail('G119_MOTO_STATUS_NOT_CERTIFIED');
+  if(!a||!['booked','cancelled'].includes(state.phase)
+   ||!G95_ID.test(bookingKey??'')||!G95_ID.test(state.tripId??''))
+   return fail('G119_MOTO_BOOKING_REQUIRED');
+  if(motoRide.busy)return fail('G119_MOTO_READ_IN_FLIGHT');
+  const seq=++motoRideEpoch,scope=session.privacyRevision();
+  const tripId=state.tripId,owner=a.subject;
+  const floor=motoRide.data?.tripId===tripId?motoRide.data.tripRevision:1;
+  motoRide={busy:true,data:null,error:null};notify();
+  let result;try{result=await motoRideGateway.read({
+   bookingKey,expectedTripId:tripId,minimumRevision:floor
+  });}catch{result=fail('G119_NETWORK_UNAVAILABLE');}
+  if(seq!==motoRideEpoch||session.privacyRevision()!==scope
+   ||actor()?.subject!==owner)return fail('STALE_SESSION_RESPONSE');
+  if(result?.ok!==true){
+   motoRide={busy:false,data:null,error:result?.code??'G119_STATUS_UNAVAILABLE'};
+   notify();return fail(motoRide.error);
+  }
+  motoRide={busy:false,data:result.data,error:null};notify();
+  return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
+ }
  function snapshot(){
   const user=actor();
   guardCustodyScope();
@@ -1096,7 +1143,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     privateViewRevision:session.privacyRevision(),tracking:tracking.snapshot(),quote:null,
     autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
     autoDispatch:emptyDispatch(),autoFinance:publicAutoFinance(),g95Cancellation:publicG95(),
-    motoPassenger:motoFlow.snapshot(),history:null,
+    motoPassenger:motoFlow.snapshot(),motoRideStatus:publicMotoRideStatus(),history:null,
     senderCustody:Object.freeze({...senderCustody.snapshot(),
      readReady:false,deliveryId:null,state:null,proofVerified:false}),
     historyLoading:false,historyLoadError:null,historyConfigured:Boolean(historyGateway?.isConfigured()),
@@ -1121,6 +1168,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    autoPrequote:publicAutoPrequote(),autoRouteQuote:autoRouteIntake.snapshot(),
    autoDispatch:autoDispatchSnapshot(),autoFinance:publicAutoFinance(),
    g95Cancellation:publicG95(),motoPassenger:motoFlow.snapshot(),
+   motoRideStatus:publicMotoRideStatus(),
    history:history.current(user.subject),
    senderCustody:senderCustody.snapshot(),
    historyLoading,historyLoadError,
@@ -1173,6 +1221,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   readMotoBooking:()=>motoFlow.readBooking(),
   cancelMoto:args=>motoFlow.cancel(args),
   readMotoCancellation:()=>motoFlow.readCancellation(),
+  refreshMotoRideStatus,
   restoreMotoPassenger:()=>motoFlow.restore(),
   clearConfirmedMotoCancellation:()=>motoFlow.clearConfirmedCancellation(),
   // Quote discard is permitted before POST only; preserve any booked/unknown trip.
