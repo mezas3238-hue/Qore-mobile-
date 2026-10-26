@@ -9,8 +9,9 @@ const KEYS=['mode','commercialEnabled','processed','waiting',
  'offered','closed','exhausted'];
 const integer=n=>Number.isSafeInteger(n)&&n>=0&&n<=10;
 const valid=(data,max)=>{
+ const enriched=data?.qaOnly===true&&data?.productionEnabled===false;
  if(!data||typeof data!=='object'||Array.isArray(data)||
-  Object.keys(data).length!==KEYS.length||
+  Object.keys(data).length!==KEYS.length+(enriched?2:0)||
   !KEYS.every(k=>Object.hasOwn(data,k))||
   data.mode!=='STAGING_DEMO_ONLY'||data.commercialEnabled!==false||
   !['processed','waiting','offered','closed','exhausted']

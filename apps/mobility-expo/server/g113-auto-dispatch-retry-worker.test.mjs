@@ -64,6 +64,21 @@ test('G113 rejects bad SQL receipt, excessive budget and unavailable worker',asy
  }
  assert.throws(()=>createG113AutoDispatchRetryWorker());
 });
+test('G113 actual repository and periodic worker use the same validated receipt',async()=>{
+ const repo=createG113AutoDispatchBatchRepository({
+  rpc:async()=>({data:batch,error:null})
+ });
+ const f=fixture({runDueBatch:arg=>repo.runDueBatch(arg)});
+ assert.equal(f.worker.start(),true);
+ await f.worker.tick(); // overlapping work is safely rejected or settled
+ for(let i=0;i<12;i++)await Promise.resolve();
+ const result=await f.worker.tick();
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.result.processed,1);
+ assert.equal(result.result.qaOnly,true);
+ f.worker.stop();
+});
+
 test('G113 server-only adapter invokes dedicated SQL with bounded typed limit',async()=>{
  let args;
  const repo=createG113AutoDispatchBatchRepository({rpc:async(name,input)=>{
