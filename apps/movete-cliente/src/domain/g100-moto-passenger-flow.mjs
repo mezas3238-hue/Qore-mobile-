@@ -271,7 +271,7 @@ export function createG100MotoPassengerFlow({
    quoteId:record.quoteId,amountGs:data.amountGs,
    customerPaysGs:data.customerPaysGs,customerSubsidyGs:data.customerSubsidyGs,
    driverReceivesGs:data.driverReceivesGs,platformRetainsGs:data.platformRetainsGs,
-   expiresAt:0
+   commissionBps:data.commissionBps,expiresAt:0
   }:null;
   const scope={...s,bookingKey:record.bookingKey,
    cancellationKey:record.cancellationKey,quote};
