@@ -1,4 +1,5 @@
 export declare const DRIVER_OFFER_ACTIONS_LIVE_ENABLED:false;
+import type {DriverPrivateDeliveryDetail} from './driver-private-delivery-detail.mjs';
 export type OfferKind='AUTO_RIDE'|'DELIVERY';
 export type OfferAction='accept'|'decline';
 export type OfferDecisionPhase='sending'|'confirmed'|'uncertain'|'blocked';
@@ -14,6 +15,8 @@ export type DriverOfferActionsSnapshot=Readonly<{
  busy:boolean;qaOnly:true;productionEnabled:false;
 }>;
 export type DriverOfferActionsAdapters=Readonly<{
+ readDeliveryDetail?:(x:{accessToken:string;offerId:string})=>
+  Promise<DriverPrivateDeliveryDetail>;
  decide:(params:{accessToken:string;kind:OfferKind;offerId:string;
   requestKey:string;action:OfferAction})=>Promise<{
    kind:OfferKind;action:OfferAction;outcome:'accepted'|'declined';

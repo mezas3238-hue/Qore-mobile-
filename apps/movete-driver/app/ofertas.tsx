@@ -18,7 +18,8 @@ import {router,useFocusEffect} from 'expo-router';
 export default function DriverOffers(){
  const {state,refresh,poll}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
- const {state:actions,enabled,decide,reconcilePending}=useDriverOfferActions();
+ const {state:actions,enabled,decide,reconcilePending,detail,inspectDelivery}
+  =useDriverOfferActions();
  const currentTrip=useDriverCurrentTrip();
  const resumeLock=useRef(false);
  const [resuming,setResuming]=useState(false);
@@ -100,11 +101,15 @@ export default function DriverOffers(){
       <Text style={styles.small}>La aceptación exige volver a validar documentación, vehículo, ubicación y disponibilidad en el servidor. Ninguna respuesta de prueba habilita viajes comerciales.</Text>
       {(()=>{
        const decision=actions.decisions.find(x=>x.offerId===offer.offerId);
+       const preview=offer.kind==='DELIVERY'&&detail.item?.offerId===offer.offerId
+        &&detail.item.deliveryId===offer.serviceId
+        &&detail.item.expiresAtMs>clock+3000?detail.item:null;
        const allowed=enabled&&actions.phase==='ready'&&
         state.currentLicenseApproved&&kyc.snapshot?.state==='READY_QA'&&
         kyc.snapshot?.accountBlocked===false&&actions.offers.some(x=>x.offerId===offer.offerId)&&
         !decision&&!actions.busy&&!resuming&&
         (offer.kind!=='AUTO_RIDE'||currentTrip.enabled)&&
+        (offer.kind!=='DELIVERY'||Boolean(preview))&&
         offer.expiresAtMs>clock+3000;
        return <>
         {decision&&<Text style={styles.text}>
@@ -128,6 +133,19 @@ export default function DriverOffers(){
           label="Consultar comprobante del servidor"
           secondary disabled={actions.busy}
           onPress={()=>{void reconcilePending(offer.offerId);}}/>}
+        {offer.kind==='DELIVERY'&&<Action
+         label={detail.phase==='loading'?'Consultando…':'Ver vehículo y paquete'}
+         secondary disabled={!enabled||detail.phase==='loading'
+          ||actions.busy||offer.expiresAtMs<=clock+3000}
+         onPress={()=>{void inspectDelivery(offer.offerId,offer.serviceId);}}/>}
+        {detail.phase==='unavailable'&&offer.kind==='DELIVERY'&&!preview&&
+         <Text style={styles.text}>No se pudo verificar el paquete privado.
+          Su aceptación permanece bloqueada.</Text>}
+        {preview&&<Text style={styles.text}>
+         Envío en {preview.vehicleKind} · {preview.category} · {preview.grams} g ·
+         {preview.dimensionsCm.length} × {preview.dimensionsCm.width} ×
+         {preview.dimensionsCm.height} cm. Solo QA; tarifa no confirmada en esta vista.
+        </Text>}
         {allowed&&<>
          <Action label="Aceptar oferta de prueba" onPress={()=>{
           if(offer.kind==='AUTO_RIDE')void acceptVerifiedAutoOffer(offer.offerId);
