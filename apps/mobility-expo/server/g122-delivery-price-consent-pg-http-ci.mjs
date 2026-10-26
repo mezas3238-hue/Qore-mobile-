@@ -86,7 +86,7 @@ async function main(){
   "INSERT INTO public.user_roles(user_id,role) VALUES('"+admin+"','admin')");
  assert.equal(await role(admin),'admin');
  const kinds=['MOTO','AUTO'];
- const zones=['G122_MOTO_QA','G122_AUTO_QA'];
+ const zones=['CARGA_MOTO_QA','CARGA_AUTO_QA'];
  const versions=['delivery-moto-synthetic-v1','delivery-auto-synthetic-v1'];
  for(let i=0;i<2;i++){
   // Numeric tariff parameters are made-up disposable test fixtures only.
