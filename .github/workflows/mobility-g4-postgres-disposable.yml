@@ -575,7 +575,7 @@ jobs:
       - name: G96 assert same G73 trip, one cancel/void, closed queue, withdrawn offer and late ACK denial
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_ASSERT_POSTGRES_CI_ONLY.sql
 
-      - name: G104 G98 PG16 AUTO Client booking Driver acceptance and completion Admin same-trip with G95 cancellation
+      - name: G104 G98 PG16 AUTO booked, unauthorized Driver offer rejected, Admin identity and cancellation ledger
         run: node apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
 
       - name: G100 install independently quoted MOTO passenger booking and subsidy ledger (disposable only)
