@@ -2,7 +2,7 @@ import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {createDriverOfferActionsController}
  from './domain/driver-offer-actions.mjs';
 import type {DriverOfferActionsController,DriverOfferActionsAdapters,
- DriverOfferActionsSnapshot,OfferAction}
+ DriverOfferActionsSnapshot,DriverOfferDecisionStatus,OfferAction}
  from './domain/driver-offer-actions.mjs';
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 import {useDriverWorkspace} from './DriverWorkspaceProvider';
