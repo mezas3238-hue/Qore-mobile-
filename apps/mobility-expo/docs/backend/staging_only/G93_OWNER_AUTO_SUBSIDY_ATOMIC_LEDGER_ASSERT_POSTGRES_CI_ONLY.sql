@@ -36,6 +36,8 @@ BEGIN
  receipt:=public.mobility_stage_g93_preview_auto_qa(p,qt);
  IF receipt->>'mode'<>'STAGING_DEMO_ONLY' OR receipt->>'ownerId'<>p::text
  OR receipt->>'serviceKind'<>'AUTO_RIDE' OR receipt->>'originalFareGs'<>'15200'
+ OR receipt->>'fareVersion' IS DISTINCT FROM
+    (public.mobility_stage_g73_quote_receipt(p,qt)->>'fareVersion')
  OR receipt->>'nominalCommissionGs'<>'2280'
  OR receipt->>'customerSubsidyGs'<>'1520'
  OR receipt->>'customerPaysGs'<>'13680'

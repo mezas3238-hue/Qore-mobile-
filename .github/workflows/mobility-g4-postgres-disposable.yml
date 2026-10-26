@@ -8,11 +8,13 @@ on:
       - 'feature/mobility-monorepo-isolated-20261016'
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
   pull_request:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G15_*'

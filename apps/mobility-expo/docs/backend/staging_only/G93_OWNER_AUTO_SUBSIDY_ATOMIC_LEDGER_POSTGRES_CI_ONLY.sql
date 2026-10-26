@@ -99,12 +99,13 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
   'customerPaysGs',t.customer_pays_gs,
   'driverReceivesGs',t.driver_receives_gs,
   'platformRetainsGs',t.platform_retains_gs,
-  'fareVersion',c.rule_version,
+  'fareVersion',f.rule_key,
   'expiresAt',floor(extract(epoch from LEAST(q.expires_at,c.ends_at))*1000)::bigint,
   'serverPersisted',true)
  FROM public.mobility_stage_g93_auto_quote_terms t
  JOIN public.mobility_stage_g93_ride_campaigns c ON c.id=t.campaign_id
  JOIN public.mobility_stage_g72_auto_prequotes q ON q.id=t.quote_id
+ JOIN public.mobility_stage_fare_rules f ON f.id=q.rule_id
  WHERE t.passenger_id=_passenger_id AND t.quote_id=_quote_id
    AND q.passenger_id=t.passenger_id AND q.trip_id IS NULL
    AND q.expires_at>pg_catalog.clock_timestamp()
