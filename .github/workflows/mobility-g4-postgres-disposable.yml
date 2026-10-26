@@ -17,6 +17,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G125_*'
+      - 'apps/mobility-expo/server/g125-*'
       - 'apps/mobility-expo/server/g124-*'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
   pull_request:
@@ -32,6 +34,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G125_*'
+      - 'apps/mobility-expo/server/g125-*'
       - 'apps/mobility-expo/server/g124-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G13_*'
