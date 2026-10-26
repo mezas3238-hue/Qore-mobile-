@@ -9,6 +9,9 @@ permissions:
   contents: read
 jobs:
   ownership:
+    # Only the named B branch is subject to the exclusive Client/Admin fence.
+    # Store/release integration PRs cannot impersonate B; B remains restricted.
+    if: github.event.pull_request.head.ref == 'feature/mobility-cliente-admin-parallel-20261022'
     name: Reject edits outside Client/Admin ownership
     runs-on: ubuntu-latest
     timeout-minutes: 5

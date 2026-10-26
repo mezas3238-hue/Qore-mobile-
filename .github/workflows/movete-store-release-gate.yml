@@ -1,0 +1,32 @@
+name: Movete store candidate profiles (no builds or submissions)
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-cliente/eas.json'
+      - 'apps/movete-driver/eas.json'
+      - 'scripts/check-store-release-profiles.mjs'
+      - '.github/workflows/movete-store-release-gate.yml'
+      - 'apps/movete-cliente/app.json'
+      - 'apps/movete-driver/app.json'
+  push:
+    branches:
+      - 'feature/mobility-store-aab-ipa-candidates-20261026'
+    paths:
+      - 'apps/movete-cliente/eas.json'
+      - 'apps/movete-driver/eas.json'
+      - 'scripts/check-store-release-profiles.mjs'
+      - '.github/workflows/movete-store-release-gate.yml'
+permissions:
+  contents: read
+jobs:
+  config-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enforce no APK, separate app identities, no payment or LIVE release
+        run: node scripts/check-store-release-profiles.mjs --self-test
+      - name: Recheck native Client/Driver binary isolation and no cross-imports
+        run: node scripts/check-mobile-boundaries.mjs

@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "appVersionSource": "local",
+    "requireCommit": true
+  },
+  "build": {
+    "store-candidate": {
+      "distribution": "store",
+      "developmentClient": false,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_F1_OWNER_APPROVED": "false",
+        "EXPO_PUBLIC_F1_G73_CONTRACT_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_PG_RUNTIME_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_ROUTE_PROVIDER_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_G93_SUBSIDY_CONTRACT_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_G94_FINANCIAL_STATUS_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_G95_CANCEL_CONTRACT_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_HISTORY_CONTRACT_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_STATUS_CONTRACT_VERIFIED": "false",
+        "EXPO_PUBLIC_F1_PASSENGER_RLS_VERIFIED": "false",
+        "EXPO_PUBLIC_MOTO_OWNER_APPROVED": "false",
+        "EXPO_PUBLIC_MOTO_LEGAL_VERIFIED": "false"
+      }
+    }
+  }
+}
