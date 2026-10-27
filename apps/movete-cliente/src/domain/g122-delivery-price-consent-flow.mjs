@@ -81,7 +81,8 @@ export function createG122DeliveryPriceConsentFlow({
  enabled=false,contractCertified=false,externalRuntimeVerified=false,
  ownerTariffVerified=false,officialRoutingVerified=false,
  g123FenceVerified=false,ownerApproved=false,
- g126OriginalKeyRecoveryVerified=false,sourceOrigin,pinnedOrigin,getSession,fetchImpl=fetch,
+ g126OriginalKeyRecoveryVerified=false,quoteKeyStore=null,
+ requireDurableQuoteKey=false,sourceOrigin,pinnedOrigin,getSession,fetchImpl=fetch,
  onSessionInvalid=()=>{},now=Date.now,timeoutMs=8000
 }={}){
  const host=origin(sourceOrigin);
@@ -90,10 +91,25 @@ export function createG122DeliveryPriceConsentFlow({
   &&officialRoutingVerified===true&&g123FenceVerified===true
   &&ownerApproved===true&&host!==null&&host===origin(pinnedOrigin)
   &&typeof getSession==='function'&&typeof fetchImpl==='function';
+ const hasStore=quoteKeyStore!==null&&['read','write','mark']
+  .every(k=>typeof quoteKeyStore[k]==='function');
+ const storeRequired=requireDurableQuoteKey===true;
  let epoch=0,active=null;
  let state={phase:'idle',scope:null,quote:null,confirmationKey:null,receipt:null,
   quoteRequestKey:null,quoteRecoveryAttempts:0};
  const readReady=()=>Boolean(ready);
+ const validSaved=(r,scope)=>exact(r,['version','ownerId','deliveryId',
+  'deliveryRequestKey','quoteRequestKey','vehicleKind','createdAt','stage'])
+  &&r.version===1&&uuid(r.ownerId)&&uuid(r.deliveryId)
+  &&uuid(r.deliveryRequestKey)&&uuid(r.quoteRequestKey)
+  &&['AUTO','MOTO'].includes(r.vehicleKind)
+  &&Number.isSafeInteger(r.createdAt)&&r.createdAt>0
+  &&r.createdAt<=now()+60000
+  &&['prepared','recovery_attempted','consent_attempted'].includes(r.stage)
+  &&r.ownerId===scope.ownerId&&r.deliveryId===scope.deliveryId
+  &&r.deliveryRequestKey===scope.requestKey
+  &&r.vehicleKind===scope.vehicleKind
+  &&r.quoteRequestKey!==scope.requestKey;
  const scopeValid=s=>obj(s)&&uuid(s.ownerId)&&uuid(s.deliveryId)
   &&uuid(s.requestKey)&&['AUTO','MOTO'].includes(s.vehicleKind)
   &&Number.isSafeInteger(s.sessionRevision)&&s.sessionRevision>=0;
@@ -107,10 +123,11 @@ export function createG122DeliveryPriceConsentFlow({
    quote:live&&['quoted','consenting','consent_unknown','confirmed_qa'].includes(state.phase)
     ?Object.freeze({...state.quote}):null,
    consentId:state.phase==='confirmed_qa'?state.receipt?.consentId??null:null,
-   canQuote:ready&&state.phase==='idle',
+   canQuote:ready&&(!storeRequired||hasStore)&&state.phase==='idle',
    // Explicit action ONLY. Exactly one follow-up G7 POST with the original
    // requestKey; G126 server-side must prove the original G125/G124 evidence.
-   canRecoverQuote:ready&&g126OriginalKeyRecoveryVerified===true
+   canRecoverQuote:ready&&(!storeRequired||hasStore)
+    &&g126OriginalKeyRecoveryVerified===true
     &&state.phase==='quote_unknown'&&state.quoteRecoveryAttempts===0
     &&uuid(state.quoteRequestKey),
    canConfirm:ready&&state.phase==='quoted'&&Boolean(live),
@@ -175,15 +192,77 @@ export function createG122DeliveryPriceConsentFlow({
   }catch{return fail('NETWORK_OR_TIMEOUT');}
   finally{clearTimeout(timer);if(active===ctl)active=null;}
  }
+ /**
+  * After G121 independent GET returns the persisted delivery, inspect only
+  * this owner's sealed key. Never POST during restore. A previous G7 POST may
+  * have committed; its original key is required for any later G126 attempt.
+  */
+ async function restoreOriginalQuote(scope){
+  if(!ready)return fail('G122_NOT_CERTIFIED');
+  if(!scopeValid(scope))return fail('INVALID_G122_SCOPE');
+  if(!hasStore)return storeRequired?fail('G126_SECURE_STORE_REQUIRED')
+   :Object.freeze({ok:true,restored:false});
+  if(state.phase!=='idle')return fail('G126_ALREADY_STARTED');
+  const version=++epoch;
+  state={phase:'restoring_quote',scope:Object.freeze({...scope}),
+   quote:null,confirmationKey:null,receipt:null,quoteRequestKey:null,
+   quoteRecoveryAttempts:0};
+  let saved;
+  try{saved=await quoteKeyStore.read(scope.ownerId);}catch{
+   if(version===epoch)state.phase='storage_blocked';
+   return fail('G126_SECURE_READ_FAILED');
+  }
+  if(version!==epoch)return fail('STALE_SESSION_RESPONSE');
+  if(saved===null){
+   state.phase='idle';
+   return Object.freeze({ok:true,restored:false});
+  }
+  if(!validSaved(saved,scope)){
+   state.phase='storage_blocked';
+   return fail('G126_ORIGINAL_SCOPE_MISMATCH');
+  }
+  state.quoteRequestKey=saved.quoteRequestKey;
+  state.quoteRecoveryAttempts=saved.stage==='prepared'?0:1;
+  state.phase=saved.stage==='consent_attempted'
+   ?'consent_unknown':'quote_unknown';
+  return Object.freeze({ok:true,restored:true,
+   canRecoverQuote:saved.stage==='prepared',
+   unresolved:true,quoteKey:saved.quoteRequestKey});
+ }
  async function quote(scope,quoteRequestKey){
   if(!ready)return fail('G122_NOT_CERTIFIED');
   if(!scopeValid(scope)||!uuid(quoteRequestKey)
    ||quoteRequestKey===scope.requestKey)return fail('INVALID_G122_SCOPE');
   if(state.phase!=='idle')return fail('G122_ALREADY_STARTED');
+  if(storeRequired&&!hasStore)return fail('G126_SECURE_STORE_REQUIRED');
   const version=++epoch;
-  state={phase:'quoting',scope:Object.freeze({...scope}),
+  state={phase:'preparing_quote',scope:Object.freeze({...scope}),
    quote:null,confirmationKey:null,receipt:null,
    quoteRequestKey,quoteRecoveryAttempts:0};
+  if(hasStore){
+   let saved;
+   try{saved=await quoteKeyStore.read(scope.ownerId);}catch{
+    if(version===epoch)state.phase='storage_blocked';
+    return fail('G126_SECURE_READ_FAILED');
+   }
+   if(version!==epoch)return fail('STALE_SESSION_RESPONSE');
+   if(saved!==null){
+    // A previously sent key may have committed. Never replace it,
+    // even if the new key or deliveryId is different.
+    state.phase='storage_blocked';
+    return fail('G126_EXISTING_QUOTE_KEY');
+   }
+   const record=Object.freeze({version:1,ownerId:scope.ownerId,
+    deliveryId:scope.deliveryId,deliveryRequestKey:scope.requestKey,
+    quoteRequestKey,vehicleKind:scope.vehicleKind,
+    createdAt:now(),stage:'prepared'});
+   try{await quoteKeyStore.write(record);}catch{
+    if(version===epoch)state.phase='storage_blocked';
+    return fail('G126_SECURE_SAVE_FAILED_NO_POST');
+   }
+   if(version!==epoch)return fail('STALE_SESSION_RESPONSE');
+  }
+  state.phase='quoting';
   const result=await http('/v1/staging/fares/quote',{
    requestKey:quoteRequestKey,fareMode:'DELIVERY',
    subjectKind:'DELIVERY',subjectId:scope.deliveryId
@@ -214,9 +293,19 @@ export function createG122DeliveryPriceConsentFlow({
   if(state.phase!=='quote_unknown'||!uuid(state.quoteRequestKey)
    ||state.quoteRecoveryAttempts!==0||!scopeValid(state.scope))
    return fail('G126_NO_RECOVERABLE_QUOTE');
+  if(storeRequired&&!hasStore)return fail('G126_SECURE_STORE_REQUIRED');
   const version=++epoch,scope=state.scope,key=state.quoteRequestKey;
-  state.phase='recovering_quote';
+  state.phase='preparing_recovery';
   state.quoteRecoveryAttempts=1;
+  if(hasStore){
+   try{await quoteKeyStore.mark(scope.ownerId,key,'recovery_attempted');}
+   catch{
+    if(version===epoch)state.phase='quote_unknown';
+    return fail('G126_RECOVERY_MARK_FAILED_NO_POST');
+   }
+   if(version!==epoch)return fail('STALE_SESSION_RESPONSE');
+  }
+  state.phase='recovering_quote';
   const result=await http('/v1/staging/fares/quote',{
    requestKey:key,fareMode:'DELIVERY',
    subjectKind:'DELIVERY',subjectId:scope.deliveryId
@@ -246,8 +335,20 @@ export function createG122DeliveryPriceConsentFlow({
   if(acceptedTotalGs!==state.quote.amountGs
    ||acceptedFareVersion!==state.quote.fareVersion)
    return fail('PRICE_TAMPERED');
+  if(storeRequired&&!hasStore)return fail('G126_SECURE_STORE_REQUIRED');
   const version=++epoch,scope=state.scope,quote=state.quote;
-  state.phase='consenting';state.confirmationKey=confirmationKey;
+  state.phase='preparing_consent';
+  state.confirmationKey=confirmationKey;
+  if(hasStore){
+   try{await quoteKeyStore.mark(scope.ownerId,state.quoteRequestKey,
+     'consent_attempted');}
+   catch{
+    if(version===epoch)state.phase='consent_unknown';
+    return fail('G126_CONSENT_MARK_FAILED_NO_POST');
+   }
+   if(version!==epoch)return fail('STALE_SESSION_RESPONSE');
+  }
+  state.phase='consenting';
   const result=await http('/v1/staging/sender/deliveries/quotes/confirm',{
    deliveryId:scope.deliveryId,quoteId:quote.quoteId,confirmationKey,
    acceptedTotalGs:quote.amountGs,acceptedFareVersion:quote.fareVersion
@@ -267,5 +368,5 @@ export function createG122DeliveryPriceConsentFlow({
   return fail(result.code??'G122_CONSENT_UNVERIFIED');
  }
  return Object.freeze({isConfigured:readReady,snapshot,quote,
-  recoverOriginalQuote,confirm,clear});
+  restoreOriginalQuote,recoverOriginalQuote,confirm,clear});
 }

@@ -291,6 +291,14 @@ export declare function createClientExperience(options?:{
   bookingGateway?:(scope:unknown)=>Promise<unknown>|unknown;
   reconciliationGateway?:(scope:unknown)=>Promise<unknown>|unknown;
  }|null;
+ deliveryQuoteKeyStore?:{
+  read:(ownerId:string)=>Promise<unknown>;
+  write:(row:{version:1;ownerId:string;deliveryId:string;
+   deliveryRequestKey:string;quoteRequestKey:string;vehicleKind:'AUTO'|'MOTO';
+   createdAt:number;stage:'prepared'})=>Promise<unknown>;
+  mark:(ownerId:string,quoteRequestKey:string,
+   stage:'recovery_attempted'|'consent_attempted')=>Promise<unknown>;
+ }|null;
  deliveryRecoveryStore?:{
   read:(ownerId:string)=>Promise<unknown>;
   write:(value:{version:number;ownerId:string;requestKey:string;createdAt:number})=>Promise<unknown>;
@@ -301,6 +309,7 @@ export declare function createClientExperience(options?:{
   externalRuntimeVerified?:boolean;ownerTariffVerified?:boolean;
   officialRoutingVerified?:boolean;g123FenceVerified?:boolean;
   g126OriginalKeyRecoveryVerified?:boolean;
+  requireDurableQuoteKey?:boolean;
   sourceOrigin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,req:unknown)=>Promise<unknown>;
  }|null;

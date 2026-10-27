@@ -44,7 +44,7 @@ import {createG119MotoStatusGateway} from './g119-moto-ride-status-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,deliveryRegistrationOptions=null,deliveryG122Options=null,deliveryRecoveryStore=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,deliveryRegistrationOptions=null,deliveryG122Options=null,deliveryRecoveryStore=null,deliveryQuoteKeyStore=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -378,7 +378,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  });
  // G122 is separate QA-only G7 quote and explicit price acceptance.
  g122Consent=createG122DeliveryPriceConsentFlow({
-  ...(deliveryG122Options??{}),now,
+  ...(deliveryG122Options??{}),quoteKeyStore:deliveryQuoteKeyStore,now,
   getSession:()=>{
    const privateSession=session.getSessionForGateway(),visible=actor();
    return privateSession&&visible?{...privateSession,subject:visible.subject,
@@ -1195,6 +1195,18 @@ export function createClientExperience({authProvider=null,gateway=null,
     requestKey,ownerId:owner,sessionRevision,
     deliveryId:result.deliveryId,vehicleKind:result.vehicleKind,revision:result.revision
    })};
+   // B23: after independent G121 ownership proof, restore only the
+   // sealed original G7 quote key. This operation MUST NEVER send HTTP.
+   if(g122Consent?.isConfigured()&&g122Consent.snapshot().phase==='idle'){
+    try{await g122Consent.restoreOriginalQuote({
+     ownerId:owner,requestKey,deliveryId:result.deliveryId,
+     vehicleKind:result.vehicleKind,sessionRevision
+    });}catch{}
+    const latest=actor(),pendingNow=mutations.publicState();
+    if(epoch!==registrationEpoch||!latest||latest.subject!==owner
+     ||session.privacyRevision()!==sessionRevision
+     ||pendingNow.requestKey!==requestKey)return fail('STALE_SESSION_RESPONSE');
+   }
   }else registration={busy:false,receipt:null};
   notify();return result;
  }
