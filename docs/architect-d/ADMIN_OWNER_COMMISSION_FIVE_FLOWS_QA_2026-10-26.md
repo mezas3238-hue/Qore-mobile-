@@ -70,3 +70,6 @@ transiciones positivas y casos adversariales (pendientes de CI D→B).
 - Editor D ahora diferencia 404 certificado (alta inicial permitida) de 401/403/409/503/timeout (bloqueo), con confirmación explícita de Owner respecto de vehículo y zona. No confundir 404 con permiso territorial.
 - Después de crear o actualizar, D exige un nuevo GET autorizado con mismo `ruleId` y `version` antes de declarar éxito; si el POST tiene ACK incierto se bloquea la segunda escritura, se consulta por GET. El backend sigue controlando Owner+AAL2/revocación/territorio.
 - G124 no define condiciones ni porcentajes de comercio. Subsidio pasajero = 10% separado. Ningún despliegue.
+
+### D Owner G124 — porcentaje legible y conversión exacta
+El campo de comisión se presenta al Owner en porcentaje (15 = 15 %, 12.50 = 12,50 %), con hasta dos decimales y rango 0-30 %, convertido sin aproximaciones a `commissionBps` antes de POST. Recibos 1300 bps se presentan como 13 %. El backend G124 sigue siendo la única autoridad para reglas y versión; no aplica el subsidio de pasajeros a envíos.

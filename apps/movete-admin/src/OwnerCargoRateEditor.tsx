@@ -2,6 +2,8 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {useWebAdminAuth} from './AdminRuntime';
 import {createOwnerCargoRateGateway} from './owner-cargo-rate-gateway.mjs';
 import {certifyOwnerCargoRateReadback} from './owner-cargo-rate-readback.mjs';
+import {parseOwnerCargoPercent,displayOwnerCargoPercent}
+ from './owner-cargo-percent.mjs';
 import type {CargoKind,CargoRate,CargoDraft} from './owner-cargo-rate-gateway.mjs';
 
 const fields=[
@@ -9,7 +11,7 @@ const fields=[
  ['perKmPyg','Por km (Gs.)',0,100000],
  ['perMinutePyg','Por minuto (Gs.)',0,20000],
  ['minimumPyg','Mínimo (Gs.)',1,1000000],
- ['commissionBps','Comisión (puntos base)',0,3000],
+ ['commissionBps','Comisión (%)',0,30],
  ['durationDays','Vigencia propuesta (días)',1,90]
 ] as const;
 type Key=typeof fields[number][0];
@@ -64,7 +66,7 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
    setRate(d);setUncertain(false);
    setData({basePyg:String(d.basePyg),perKmPyg:String(d.perKmPyg),
     perMinutePyg:String(d.perMinutePyg),minimumPyg:String(d.minimumPyg),
-    commissionBps:String(d.commissionBps),durationDays:'30'});
+    commissionBps:displayOwnerCargoPercent(d.commissionBps)??'',durationDays:'30'});
   }finally{setBusy(false);}
  }
  async function save(){
@@ -73,12 +75,23 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
    !(lookup==='present'&&rate||createNew&&initialConfirmed))return;
   const parsed={} as Record<Key,number>;
   for(const [field,,lo,hi] of fields){
+   if(field==='commissionBps'){
+    const bps=parseOwnerCargoPercent(data[field]);
+    if(bps===null){
+     setMessage('Comisión inválida: ingresá un porcentaje entre 0 % y 30 %, con hasta dos decimales.');
+     return;
+    }
+    parsed[field]=bps;
+    continue;
+   }
    if(!/^\d+$/.test(data[field])){
-    setMessage('Ingresá valores enteros válidos en todos los campos.');return;
+    setMessage('Ingresá valores enteros válidos en las tarifas y vigencia.');
+    return;
    }
    parsed[field]=Number(data[field]);
    if(!Number.isSafeInteger(parsed[field])||parsed[field]<lo||parsed[field]>hi){
-    setMessage('Hay un valor fuera del rango permitido por Backend A.');return;
+    setMessage('Hay un valor fuera del rango permitido por Backend A.');
+    return;
    }
   }
   const body:CargoDraft={...parsed,requestKey:crypto.randomUUID()};
@@ -109,7 +122,7 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
    setData({basePyg:String(verified.basePyg),perKmPyg:String(verified.perKmPyg),
     perMinutePyg:String(verified.perMinutePyg),
     minimumPyg:String(verified.minimumPyg),
-    commissionBps:String(verified.commissionBps),durationDays:'30'});
+    commissionBps:displayOwnerCargoPercent(verified.commissionBps)??'',durationDays:'30'});
    setMessage(createNew?'Primera tarifa G124 registrada y conciliada en STAGING.':
     'Tarifa G124 actualizada y conciliada en STAGING. Las cotizaciones anteriores permanecen inmutables.');
   }finally{setBusy(false);}
@@ -145,13 +158,16 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
   <form onSubmit={e=>{e.preventDefault();void save();}}>
    {fields.map(([name,label,min,max])=><div key={name}>
     <label htmlFor={'cargo-'+name}>{label}</label>
-    <input id={'cargo-'+name} type="number" min={min} max={max} step="1"
+    <input id={'cargo-'+name} type="number" min={min} max={max}
+     step={name==='commissionBps'?'0.01':'1'}
      value={data[name]} disabled={!ready||busy||uncertain||
       (lookup!=='present'&&lookup!=='missing')}
      onChange={e=>setData(prev=>({...prev,[name]:e.currentTarget.value}))}/>
    </div>)}
-   <p className="training-disclaimer">Comisión: 950 puntos base = 9,50 %.
-    La zona debe existir y estar aprobada por el backend.</p>
+   <p className="training-disclaimer">
+    Introducí la comisión directamente en porcentaje (por ejemplo 15 o 12.50).
+    El servidor recibe puntos base exactos; la zona debe estar autorizada por backend.
+   </p>
    <button type="submit" disabled={!ready||busy||uncertain||
     !(lookup==='present'&&rate||lookup==='missing'&&initialConfirmed)}>
     {lookup==='missing'?'Crear primera tarifa de envío':'Guardar nueva versión en servidor'}
