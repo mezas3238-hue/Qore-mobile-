@@ -23,6 +23,7 @@ import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repo
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 import {createG125CargoPricingContext} from './g125-cargo-pricing-context.mjs';
 import {createG127GoogleCargoRoadResolver} from './g127-google-cargo-road-resolver.mjs';
+import {createG128GeoapifyCargoRoadResolver} from './g128-geoapify-cargo-road-resolver.mjs';
 import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
@@ -162,6 +163,7 @@ export async function prepareQoreG4StagingRuntime({
  pricingContext=unavailablePricingContext,
  approvedCargoRoadResolver=null,cargoRoadRoutingApproved=false,
  g127CargoRouteOptions=null,
+ g128GeoapifyOptions=null,
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
@@ -182,10 +184,12 @@ export async function prepareQoreG4StagingRuntime({
    typeof pricingContext!=='function'||
    !(approvedCargoRoadResolver===null||typeof approvedCargoRoadResolver==='function')||
    !(cargoRoadRoutingApproved===false||cargoRoadRoutingApproved===true)||
-   (cargoRoadRoutingApproved!==true&&
-    (approvedCargoRoadResolver!==null||g127CargoRouteOptions!==null))||
-   (cargoRoadRoutingApproved===true&&
-    (approvedCargoRoadResolver===null)===(g127CargoRouteOptions===null))||
+   // Exactly one road authority; no Google fallback while Geoapify is chosen.
+   (cargoRoadRoutingApproved===true?
+    [approvedCargoRoadResolver,g127CargoRouteOptions,g128GeoapifyOptions]
+     .filter(v=>v!==null).length!==1:
+    [approvedCargoRoadResolver,g127CargoRouteOptions,g128GeoapifyOptions]
+     .some(v=>v!==null))||
    !(g127CargoRouteOptions===null||(
     Object.getPrototypeOf(g127CargoRouteOptions)===Object.prototype&&
     Object.keys(g127CargoRouteOptions).length===7&&
@@ -199,6 +203,21 @@ export async function prepareQoreG4StagingRuntime({
     !/\s/.test(g127CargoRouteOptions.apiKey)&&
     ['resolveCoveredCargoPlaces','verifyCargoTolls','reserveBillableBudget','request']
      .every(k=>typeof g127CargoRouteOptions[k]==='function')
+   ))||
+   !(g128GeoapifyOptions===null||(
+    Object.getPrototypeOf(g128GeoapifyOptions)===Object.prototype&&
+    Object.keys(g128GeoapifyOptions).length===7&&
+    ['enabled','freePlanApproved','apiKey','resolveCoveredCargoCoordinates',
+     'verifyCargoTolls','reserveFreeQuota','request']
+     .every(k=>Object.hasOwn(g128GeoapifyOptions,k))&&
+    g128GeoapifyOptions.enabled===true&&
+    g128GeoapifyOptions.freePlanApproved===true&&
+    typeof g128GeoapifyOptions.apiKey==='string'&&
+    g128GeoapifyOptions.apiKey.length>=20&&
+    g128GeoapifyOptions.apiKey.length<=300&&
+    !/\s/.test(g128GeoapifyOptions.apiKey)&&
+    ['resolveCoveredCargoCoordinates','verifyCargoTolls','reserveFreeQuota','request']
+      .every(k=>typeof g128GeoapifyOptions[k]==='function')
    ))||
    !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
    !(verifiedMotoRoute===null||typeof verifiedMotoRoute==='function')||
@@ -243,6 +262,9 @@ export async function prepareQoreG4StagingRuntime({
  // G127 opt-in and prevalidated BEFORE any Supabase Auth clients.
  const preparedG127CargoRoute=g127CargoRouteOptions===null?null:
   createG127GoogleCargoRoadResolver({...g127CargoRouteOptions,now});
+ // G128 free routing is an alternative, NOT a paid Google fallback.
+ const preparedG128CargoRoute=g128GeoapifyOptions===null?null:
+  createG128GeoapifyCargoRoadResolver({...g128GeoapifyOptions,now});
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
  // A bearer supplied by the user is verified over Supabase Auth, never
@@ -423,7 +445,7 @@ export async function prepareQoreG4StagingRuntime({
  const cargoPricing=cargoRoadRoutingApproved===true?
   createG125CargoPricingContext({
    enabled:true,now,
-   resolveVerifiedCargoRoute:preparedG127CargoRoute??approvedCargoRoadResolver,
+   resolveVerifiedCargoRoute:preparedG128CargoRoute??preparedG127CargoRoute??approvedCargoRoadResolver,
    loadSenderDelivery:async({actorId,deliveryId})=>{
     const {data,error}=await admin.from('mobility_stage_deliveries')
      .select('id,sender_id,requested_vehicle_kind,status,courier_id,pickup_tag,delivery_tag')
