@@ -47,10 +47,10 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Text accessibilityRole="header" style={styles.heading}>1 · Elegí tu vehículo</Text>
    <Action large label="AUTO · Viajar en automóvil" selected={vehicle==='AUTO'}
     secondary={vehicle!=='AUTO'} onPress={()=>setVehicle('AUTO')}/>
-   <Text style={styles.small}>Transporte de pasajeros en automóvil. Comisión nominal 15 %, subsidio al cliente 10 % y retención bruta de la plataforma 5 % de la tarifa original.</Text>
+   <Text style={styles.small}>Transporte de pasajeros en automóvil. La comisión de la plataforma se configura desde Admin Web por el propietario y se aplica en el servidor. El subsidio al pasajero es 10 % según la política vigente.</Text>
    <Action large label="MOTO · Viajar en motocicleta" selected={vehicle==='MOTO'}
     secondary={vehicle!=='MOTO'} onPress={()=>setVehicle('MOTO')}/>
-   <Text style={styles.small}>Transporte de pasajeros en motocicleta. Comisión nominal 12 %, subsidio al cliente 10 % y retención bruta de la plataforma 2 % de la tarifa original. Su habilitación requiere requisitos legales y de seguridad específicos.</Text>
+   <Text style={styles.small}>Transporte de pasajeros en motocicleta. La comisión de la plataforma se configura desde Admin Web por el propietario y se aplica en el servidor, sin copiar la del AUTO. El subsidio al pasajero es 10 %; además, la MOTO requiere requisitos legales y de seguridad específicos.</Text>
    <Text style={styles.small}>Elegir un vehículo no garantiza un conductor disponible, cobertura, precio ni reserva. La tarifa final en guaraníes debe venir del servidor autorizado.</Text>
   </Panel>
   <Panel>
