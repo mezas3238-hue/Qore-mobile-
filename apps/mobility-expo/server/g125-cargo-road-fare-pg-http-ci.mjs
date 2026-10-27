@@ -154,12 +154,16 @@ async function main(){
  const finance=createQoreFinanceGateway({
   projectRef:'staging1234567890abcd',verifyAccessToken:actor,
   authorizePassenger:async id=>senders.includes(id),allowRequest:()=>true,
-  loadPricingContext:input=>{
+  loadPricingContext:async input=>{
    const n=senders.indexOf(input.actorId);
    if(n===-1)throw Error('Sender not eligible');
-   return contexts[n](input);
+   try{return await contexts[n](input);}
+   catch(error){console.error('G125_QA_CONTEXT_FAILED: '+String(error).slice(0,1200));throw error;}
   },
-  quoteFare:async input=>quoteFare(input),
+  quoteFare:async input=>{
+   try{return quoteFare(input);}
+   catch(error){console.error('G125_QA_SQL_QUOTE_FAILED: '+String(error).slice(0,1200));throw error;}
+  },
   authorizePayment:async()=>{throw Error('NO PSP')},
   transitionPayment:async()=>{throw Error('NO PSP')},
   loadPayment:async()=>{throw Error('NO PSP')}
