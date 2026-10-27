@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {useWebAdminAuth} from './AdminRuntime';
 import {createOwnerCargoRateGateway} from './owner-cargo-rate-gateway.mjs';
+import {certifyOwnerCargoRateReadback} from './owner-cargo-rate-readback.mjs';
 import type {CargoKind,CargoRate,CargoDraft} from './owner-cargo-rate-gateway.mjs';
 
 const fields=[
@@ -95,8 +96,10 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
    // and after a versioned update; never treat only POST as committed UI state.
    const readBack=await gateway.read(kind,zone);
    if(!readBack.ok||!readBack.data||
-    readBack.data.ruleId!==answer.data.ruleId||
-    readBack.data.version!==answer.data.version){
+    !certifyOwnerCargoRateReadback({
+     written:answer.data,readback:readBack.data,
+     previousVersion,kind,zone
+    }).ok){
     setRate(null);
     setMessage('El POST no pudo conciliarse con GET. No repitas el guardado: consultá la tarifa actual.');
     return;
