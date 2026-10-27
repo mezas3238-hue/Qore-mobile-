@@ -96,6 +96,10 @@ function quoteFare({actorId,requestKey,fareMode,subjectKind,subjectId,
   "'DELIVERY'::public.mobility_stage_fare_mode,"+
   "'DELIVERY'::public.mobility_stage_fare_subject,"+safeUUID(subjectId)+
   ",'"+zoneTag+"',"+distanceMeters+","+durationSeconds+","+tollsPyg+")::text");
+ return loadQuoted(qid);
+}
+function loadQuoted(qid){
+ if(!UUID.test(qid??''))throw Error('G126 verified quote ID required');
  const row=json("SELECT jsonb_build_object('id',q.id,'mode',q.mode,"+
   "'subjectKind',q.subject_kind,'subjectId',q.subject_id,"+
   "'ruleVersion',r.rule_key,'subtotalPyg',q.subtotal_pyg,"+
@@ -106,6 +110,16 @@ function quoteFare({actorId,requestKey,fareMode,subjectKind,subjectId,
   "JOIN public.mobility_stage_fare_rules r ON r.id=q.rule_id "+
   "WHERE q.id="+safeUUID(qid));
  return {ok:true,liveEnabled:false,quote:row};
+}
+function recoverCargoQuote({actorId,subjectId,requestKey,fareMode,subjectKind}){
+ if(![actorId,subjectId,requestKey].every(x=>UUID.test(x))||
+  fareMode!=='DELIVERY'||subjectKind!=='DELIVERY')
+  throw Error('G126 cannot recover non-DELIVERY subject');
+ const id=sql("SET ROLE service_role; SELECT "+
+  "public.mobility_stage_g126_recover_cargo_quote_qa("+
+   safeUUID(actorId)+","+safeUUID(subjectId)+","+safeUUID(requestKey)+")::text");
+ if(!id)return null;
+ return loadQuoted(id);
 }
 async function main(){
  assert.equal(sql("SELECT (current_database()='qore_disposable_chain' AND "+
@@ -127,11 +141,13 @@ async function main(){
  // A provider must return the SAME immutable attestation on retries of this
  // original request. Changing verified_at for the same evidenceId is denied.
  const proofIssuedAt=[Date.now(),Date.now()];
+ const routeCalls=[0,0],sqlRecoveries=[0,0];
  const contexts=senders.map((sender,i)=>
   createG125CargoPricingContext({
    enabled:true,now:Date.now,
    loadSenderDelivery:async args=>loadDelivery(args),
    resolveVerifiedCargoRoute:async q=>{
+    routeCalls[i]++;
     assert.equal(q.actorId,sender);
     assert.equal(q.deliveryId,saved[i]);
     assert.equal(q.vehicleKind,kinds[i]);
@@ -157,6 +173,12 @@ async function main(){
  const finance=createQoreFinanceGateway({
   projectRef:'staging1234567890abcd',verifyAccessToken:actor,
   authorizePassenger:async id=>senders.includes(id),allowRequest:()=>true,
+  recoverCargoQuote:async input=>{
+   const n=senders.indexOf(input.actorId);
+   if(n<0)throw Error('G126 actor missing');
+   sqlRecoveries[n]++;
+   return recoverCargoQuote(input);
+  },
   loadPricingContext:async input=>{
    const n=senders.indexOf(input.actorId);
    if(n===-1)throw Error('Sender not eligible');
@@ -194,6 +216,21 @@ async function main(){
    // Read-after-lost-ack returns SAME quote and original immutable amount.
    const replay=await http(origin,tokens[i],body);
    assert.equal(replay.status,201);assert.equal(replay.data.quote.id,quoteId);
+   assert.equal(routeCalls[i],1,'G126 must NOT call road provider twice');
+   assert(sqlRecoveries[i]>=2,'database consulted before new map call and on replay');
+   // Older road evidence can expire WITHOUT expiring the already-issued G7
+   // quote; G126 rechecks quote TTL and original historical attestation.
+   sql("UPDATE public.mobility_stage_g125_cargo_road_attestations e SET "+
+    "expires_at=q.quoted_at+interval '0.001 seconds' "+
+    "FROM public.mobility_stage_fare_quotes q "+
+    "WHERE q.id="+safeUUID(quoteId)+" AND e.delivery_id=q.subject_id");
+   const afterRouteExpiry=await http(origin,tokens[i],body);
+   assert.equal(afterRouteExpiry.status,201);
+   assert.equal(afterRouteExpiry.data.quote.id,quoteId);
+   assert.equal(routeCalls[i],1,'expired road witness must not rebill');
+   assert.equal(sql("SELECT (expires_at<clock_timestamp())::text FROM "+
+    "public.mobility_stage_g125_cargo_road_attestations WHERE "+
+    "delivery_id="+safeUUID(saved[i])),'true');
    const stored=json("SELECT jsonb_build_object('count',count(*),"+
     "'source',min(provider_status)) FROM "+
     "public.mobility_stage_g125_cargo_road_attestations "+
