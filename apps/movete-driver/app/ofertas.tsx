@@ -5,6 +5,7 @@ import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
+import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {verifyAcceptedDriverAutoResume} from '../src/domain/driver-accepted-ride-resume.mjs';
 import {acceptAndRecoverDriverAuto} from '../src/domain/driver-auto-accept-flow.mjs';
 import type {DriverOfferDecisionStatus} from '../src/domain/driver-offer-actions.mjs';
@@ -21,6 +22,7 @@ export default function DriverOffers(){
  const {state:actions,enabled,decide,reconcilePending,detail,inspectDelivery}
   =useDriverOfferActions();
  const currentTrip=useDriverCurrentTrip();
+ const custody=useDriverCustody();
  const resumeLock=useRef(false);
  const [resuming,setResuming]=useState(false);
  const [resumeMessage,setResumeMessage]=useState('');
@@ -64,6 +66,18 @@ export default function DriverOffers(){
     setResumeMessage('La decisión puede estar confirmada, pero no se verificó la asignación actual en el servidor. Consultá tu viaje antes de continuar; no se repetirá la aceptación.');
    else if(result.reason==='NOT_CONFIRMED')
     setResumeMessage('No se confirmó la aceptación. Consultá el comprobante de la oferta; no se enviará otra aceptación automáticamente.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
+ async function continueAcceptedDelivery(decision:DriverOfferDecisionStatus){
+  if(resumeLock.current||!enabled||!custody.enabled||
+   decision.kind!=='DELIVERY'||decision.phase!=='confirmed'||
+   decision.action!=='accept'||state.phase!=='connected')return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const verified=await custody.openVerified(decision.serviceId);
+   if(verified)router.push({pathname:'/entrega',
+    params:{deliveryId:decision.serviceId}});
+   else setResumeMessage('El servidor no confirmó esta entrega asignada a tu sesión Driver. No se realizarán acciones de custodia hasta verificar el mismo envío.');
   }finally{resumeLock.current=false;setResuming(false);}
  }
  async function continueAcceptedAuto(decision:DriverOfferDecisionStatus){
@@ -124,10 +138,10 @@ export default function DriverOffers(){
           secondary disabled={resuming||actions.phase!=='ready'}
           onPress={()=>{void continueAcceptedAuto(decision);}}/>}
         {decision?.phase==='confirmed'&&decision.action==='accept'&&
-         decision.kind==='DELIVERY'&&enabled&&<Action
-          label="Abrir custodia del envío aceptado"
-          secondary onPress={()=>router.push({pathname:'/entrega',
-           params:{deliveryId:decision.serviceId}})}/>}
+         decision.kind==='DELIVERY'&&enabled&&custody.enabled&&<Action
+          label={resuming?'Verificando entrega…':'Verificar asignación y abrir custodia'}
+          secondary disabled={resuming||actions.phase!=='ready'}
+          onPress={()=>{void continueAcceptedDelivery(decision);}}/>}
         {decision?.phase==='uncertain'&&enabled&&
          state.phase==='connected'&&<Action
           label="Consultar comprobante del servidor"
@@ -190,10 +204,10 @@ export default function DriverOffers(){
        secondary disabled={resuming||actions.phase!=='ready'}
        onPress={()=>{void continueAcceptedAuto(d);}}/>}
      {d.phase==='confirmed'&&d.action==='accept'&&
-      d.kind==='DELIVERY'&&enabled&&<Action
-       label="Abrir custodia de envío"
-       secondary onPress={()=>router.push({pathname:'/entrega',
-        params:{deliveryId:d.serviceId}})}/>}
+      d.kind==='DELIVERY'&&enabled&&custody.enabled&&<Action
+       label={resuming?'Verificando entrega…':'Verificar asignación y abrir custodia'}
+       secondary disabled={resuming||actions.phase!=='ready'}
+       onPress={()=>{void continueAcceptedDelivery(d);}}/>}
      {d.phase==='uncertain'&&enabled&&<Action
       label="Consultar decisión original" secondary
       disabled={actions.busy}

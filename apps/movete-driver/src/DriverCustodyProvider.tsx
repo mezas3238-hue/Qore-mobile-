@@ -1,11 +1,14 @@
 import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {createDriverCustodyController} from './domain/driver-custody-controller.mjs';
+import {verifyAcceptedPrivateDeliveryCustody}
+ from './domain/driver-delivery-navigation.mjs';
 import type {DriverCustodyController,DriverCustodyAdapters,
  DriverCustodySnapshot} from './domain/driver-custody-controller.mjs';
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 type ContextValue={
  state:DriverCustodySnapshot;enabled:boolean;hasProofSource:boolean;
- open:(id:string)=>Promise<void>;refresh:()=>Promise<void>;
+ open:(id:string)=>Promise<void>;
+ openVerified:(id:string)=>Promise<boolean>;refresh:()=>Promise<void>;
  poll:()=>Promise<void>;advance:()=>Promise<void>;
 };
 const EMPTY:DriverCustodySnapshot=Object.freeze({
@@ -43,6 +46,9 @@ export function DriverCustodyProvider({
   state,enabled:!!ctl&&!!authAdapter,
   hasProofSource:typeof qaAdapters?.obtainVerifiedProof==='function',
   open:async id=>{await ctl?.open(id);},
+  openVerified:async id=>Boolean((await verifyAcceptedPrivateDeliveryCustody({
+   deliveryId:id,readCustody:()=>ctl?.open(id)
+  })).ok),
   refresh:async()=>{await ctl?.refresh();},
   poll:async()=>{await ctl?.poll();},
   advance:async()=>{await ctl?.advance();}
