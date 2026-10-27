@@ -13,7 +13,7 @@ export type ClientSnapshot={
  deliveryPriceConsent:{contractReady:boolean;phase:string;deliveryId:string|null;
   vehicleKind:'AUTO'|'MOTO'|null;
   quote:{quoteId:string;amountGs:number;fareVersion:string;expiresAt:number;currency:'PYG'}|null;
-  consentId:string|null;canQuote:boolean;canConfirm:boolean;unknown:boolean;
+  consentId:string|null;canQuote:boolean;canRecoverQuote:boolean;canConfirm:boolean;unknown:boolean;
   qaOnly:true;productionEnabled:false;paymentAuthorized:false;dispatchEnabled:false};
  rideContinuation:{canVerify:boolean;tripId:string|null;qaOnly:true;productionEnabled:false};
  rideHistoryRecovery:{readReady:boolean;busy:boolean;qaOnly:true;productionEnabled:false};
@@ -191,6 +191,7 @@ export type ClientExperience={
  prepareDelivery(body:unknown):ClientResult;
  readUnconfirmedDeliveryRegistration():Promise<ClientResult>;
  quoteRecoveredDelivery(quoteRequestKey:string):Promise<ClientResult>;
+ recoverOriginalDeliveryQuote():Promise<ClientResult>;
  confirmRecoveredDeliveryQuote(args:{confirmationKey:string;
   acceptedTotalGs:number;acceptedFareVersion:string}):Promise<ClientResult>;
  prepareFare(body:unknown):ClientResult;
@@ -299,6 +300,7 @@ export declare function createClientExperience(options?:{
   enabled?:boolean;ownerApproved?:boolean;contractCertified?:boolean;
   externalRuntimeVerified?:boolean;ownerTariffVerified?:boolean;
   officialRoutingVerified?:boolean;g123FenceVerified?:boolean;
+  g126OriginalKeyRecoveryVerified?:boolean;
   sourceOrigin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,req:unknown)=>Promise<unknown>;
  }|null;

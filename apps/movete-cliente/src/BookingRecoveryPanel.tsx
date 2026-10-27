@@ -89,6 +89,31 @@ export function BookingRecoveryPanel({client,view,operation}:{
   }catch{setMessage('No fue posible confirmar la tarifa del servidor.');}
   finally{lock.current=false;setBusy(false);}
  }
+ async function recoverG126OriginalDeliveryQuote(){
+  if(lock.current||operation!=='deliveryRequest')return;
+  const current=client.snapshot(),reg=current.deliveryRegistration,
+   price=current.deliveryPriceConsent;
+  if(!current.authenticated||current.account?.subject!==view.account?.subject
+   ||current.privateViewRevision!==view.privateViewRevision
+   ||current.mutation.phase!=='failed'
+   ||current.mutation.operation!=='deliveryRequest'
+   ||current.mutation.requestKey!==view.mutation.requestKey
+   ||reg.deliveryId!==view.deliveryRegistration.deliveryId
+   ||price.deliveryId!==reg.deliveryId
+   ||price.vehicleKind!==reg.vehicleKind||!price.canRecoverQuote)return;
+  lock.current=true;setBusy(true);setMessage('');
+  try{
+   const answer=await client.recoverOriginalDeliveryQuote();
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.account?.subject!==view.account?.subject
+    ||after.mutation.requestKey!==view.mutation.requestKey)return;
+   setMessage(answer.ok
+    ?'El servidor verificó la cotización original usando la misma clave. Revisá el precio antes de aceptar.'
+    :'La cotización original sigue sin confirmarse. No se intentará crear otra tarifa.');
+  }catch{setMessage('No se pudo recuperar la cotización original; se mantiene bloqueada.');}
+  finally{lock.current=false;setBusy(false);}
+ }
  async function acceptRegisteredDeliveryQuote(){
   if(lock.current||operation!=='deliveryRequest')return;
   const latest=client.snapshot(),price=latest.deliveryPriceConsent;
@@ -141,6 +166,13 @@ export function BookingRecoveryPanel({client,view,operation}:{
    &&<Action label="Consultar tarifa certificada del envío (QA)"
      hint="Envía una sola petición de tarifa G7, no contrata ni despacha."
      busy={busy} disabled={busy} onPress={()=>{void quoteRegisteredDelivery();}}/>}
+  {operation==='deliveryRequest'
+   &&view.deliveryPriceConsent?.canRecoverQuote
+   &&view.deliveryPriceConsent.deliveryId===view.deliveryRegistration?.deliveryId
+   &&<Action label="Recuperar cotización original sin otra tarifa (QA)"
+    hint="Una única consulta G126 usando la misma clave de G7, sin despacho ni cobro."
+    disabled={busy} busy={busy}
+    onPress={()=>{void recoverG126OriginalDeliveryQuote();}}/>}
   {operation==='deliveryRequest'&&view.deliveryPriceConsent?.quote
    &&view.deliveryPriceConsent.deliveryId===view.deliveryRegistration?.deliveryId
    &&<Text accessibilityLiveRegion="polite" style={styles.text}>

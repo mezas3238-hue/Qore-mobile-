@@ -1205,10 +1205,11 @@ export function createClientExperience({authProvider=null,gateway=null,
   const ready=Boolean(verified.deliveryId&&g122Consent?.isConfigured());
   if(!anchored)return Object.freeze({contractReady:ready,phase:'idle',
    deliveryId:null,vehicleKind:null,quote:null,consentId:null,
-   canQuote:ready,canConfirm:false,unknown:false,qaOnly:true,
+   canQuote:ready,canRecoverQuote:false,canConfirm:false,unknown:false,qaOnly:true,
    productionEnabled:false,paymentAuthorized:false,dispatchEnabled:false});
   return Object.freeze({...current,contractReady:ready,
    canQuote:Boolean(current.canQuote&&ready),
+   canRecoverQuote:Boolean(current.canRecoverQuote&&ready),
    canConfirm:Boolean(current.canConfirm&&ready)});
  }
  async function quoteRecoveredDelivery(quoteRequestKey){
@@ -1224,6 +1225,26 @@ export function createClientExperience({authProvider=null,gateway=null,
   const promise=g122Consent.quote({ownerId:owner,requestKey:key,
    deliveryId:verified.deliveryId,vehicleKind:verified.vehicleKind,
    sessionRevision:revision},quoteRequestKey);
+  notify();const result=await promise;
+  const after=actor(),still=publicDeliveryRegistration();
+  if(!after||after.subject!==owner||session.privacyRevision()!==revision
+   ||still.requestKey!==key||still.deliveryId!==verified.deliveryId)
+   return fail('STALE_SESSION_RESPONSE');
+  notify();return result;
+ }
+ async function recoverOriginalDeliveryQuote(){
+  const user=actor(),verified=publicDeliveryRegistration();
+  const pending=mutations.publicState(),scope=g122Consent?.snapshot();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(!verified.deliveryId||!verified.vehicleKind||!verified.requestKey
+   ||pending.operation!=='deliveryRequest'||pending.phase!=='failed'
+   ||pending.requestKey!==verified.requestKey
+   ||scope?.deliveryId!==verified.deliveryId
+   ||scope?.vehicleKind!==verified.vehicleKind
+   ||scope?.canRecoverQuote!==true)
+   return fail('G126_RECOVERY_SCOPE_UNVERIFIED');
+  const revision=session.privacyRevision(),owner=user.subject,key=verified.requestKey;
+  const promise=g122Consent.recoverOriginalQuote();
   notify();const result=await promise;
   const after=actor(),still=publicDeliveryRegistration();
   if(!after||after.subject!==owner||session.privacyRevision()!==revision
@@ -1496,6 +1517,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   readUnconfirmedDeliveryRegistration,
   quoteRecoveredDelivery,
+  recoverOriginalDeliveryQuote,
   confirmRecoveredDeliveryQuote,
   prepareFare:body=>{const result=prepare('fareQuote',body);notify();return result;},
   prepareServerFare:args=>{const result=prepareServerFare(args);notify();return result;},

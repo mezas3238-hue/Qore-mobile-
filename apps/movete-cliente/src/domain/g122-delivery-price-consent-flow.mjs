@@ -81,7 +81,7 @@ export function createG122DeliveryPriceConsentFlow({
  enabled=false,contractCertified=false,externalRuntimeVerified=false,
  ownerTariffVerified=false,officialRoutingVerified=false,
  g123FenceVerified=false,ownerApproved=false,
- sourceOrigin,pinnedOrigin,getSession,fetchImpl=fetch,
+ g126OriginalKeyRecoveryVerified=false,sourceOrigin,pinnedOrigin,getSession,fetchImpl=fetch,
  onSessionInvalid=()=>{},now=Date.now,timeoutMs=8000
 }={}){
  const host=origin(sourceOrigin);
@@ -91,7 +91,8 @@ export function createG122DeliveryPriceConsentFlow({
   &&ownerApproved===true&&host!==null&&host===origin(pinnedOrigin)
   &&typeof getSession==='function'&&typeof fetchImpl==='function';
  let epoch=0,active=null;
- let state={phase:'idle',scope:null,quote:null,confirmationKey:null,receipt:null};
+ let state={phase:'idle',scope:null,quote:null,confirmationKey:null,receipt:null,
+  quoteRequestKey:null,quoteRecoveryAttempts:0};
  const readReady=()=>Boolean(ready);
  const scopeValid=s=>obj(s)&&uuid(s.ownerId)&&uuid(s.deliveryId)
   &&uuid(s.requestKey)&&['AUTO','MOTO'].includes(s.vehicleKind)
@@ -107,6 +108,11 @@ export function createG122DeliveryPriceConsentFlow({
     ?Object.freeze({...state.quote}):null,
    consentId:state.phase==='confirmed_qa'?state.receipt?.consentId??null:null,
    canQuote:ready&&state.phase==='idle',
+   // Explicit action ONLY. Exactly one follow-up G7 POST with the original
+   // requestKey; G126 server-side must prove the original G125/G124 evidence.
+   canRecoverQuote:ready&&g126OriginalKeyRecoveryVerified===true
+    &&state.phase==='quote_unknown'&&state.quoteRecoveryAttempts===0
+    &&uuid(state.quoteRequestKey),
    canConfirm:ready&&state.phase==='quoted'&&Boolean(live),
    unknown:state.phase==='quote_unknown'||state.phase==='consent_unknown',
    qaOnly:true,productionEnabled:false,paymentAuthorized:false,dispatchEnabled:false
@@ -114,7 +120,8 @@ export function createG122DeliveryPriceConsentFlow({
  }
  function clear(){
   epoch++;active?.abort();active=null;
-  state={phase:'idle',scope:null,quote:null,confirmationKey:null,receipt:null};
+  state={phase:'idle',scope:null,quote:null,confirmationKey:null,receipt:null,
+   quoteRequestKey:null,quoteRecoveryAttempts:0};
  }
  async function http(path,body,scope,version){
   let before,after;
@@ -170,11 +177,13 @@ export function createG122DeliveryPriceConsentFlow({
  }
  async function quote(scope,quoteRequestKey){
   if(!ready)return fail('G122_NOT_CERTIFIED');
-  if(!scopeValid(scope)||!uuid(quoteRequestKey))return fail('INVALID_G122_SCOPE');
+  if(!scopeValid(scope)||!uuid(quoteRequestKey)
+   ||quoteRequestKey===scope.requestKey)return fail('INVALID_G122_SCOPE');
   if(state.phase!=='idle')return fail('G122_ALREADY_STARTED');
   const version=++epoch;
   state={phase:'quoting',scope:Object.freeze({...scope}),
-   quote:null,confirmationKey:null,receipt:null};
+   quote:null,confirmationKey:null,receipt:null,
+   quoteRequestKey,quoteRecoveryAttempts:0};
   const result=await http('/v1/staging/fares/quote',{
    requestKey:quoteRequestKey,fareMode:'DELIVERY',
    subjectKind:'DELIVERY',subjectId:scope.deliveryId
@@ -192,6 +201,40 @@ export function createG122DeliveryPriceConsentFlow({
   // No automatic second quote POST with a new key.
   state.phase='quote_unknown';
   return fail(result.code??'G122_QUOTE_UNVERIFIED');
+ }
+ /**
+  * A G126 postcondition: the SAME authenticated quote request key is checked
+  * against the original persisted G7 quote, cargo, G125 road and G124 tariff.
+  * Do NOT call without independently certified G126 runtime. One explicit
+  * human action, one POST maximum after the initial ambiguous receipt.
+  */
+ async function recoverOriginalQuote(){
+  if(!ready||g126OriginalKeyRecoveryVerified!==true)
+   return fail('G126_RECOVERY_NOT_CERTIFIED');
+  if(state.phase!=='quote_unknown'||!uuid(state.quoteRequestKey)
+   ||state.quoteRecoveryAttempts!==0||!scopeValid(state.scope))
+   return fail('G126_NO_RECOVERABLE_QUOTE');
+  const version=++epoch,scope=state.scope,key=state.quoteRequestKey;
+  state.phase='recovering_quote';
+  state.quoteRecoveryAttempts=1;
+  const result=await http('/v1/staging/fares/quote',{
+   requestKey:key,fareMode:'DELIVERY',
+   subjectKind:'DELIVERY',subjectId:scope.deliveryId
+  },scope,version);
+  if(version!==epoch)return fail('STALE_SESSION_RESPONSE');
+  if(result.ok&&result.status===201
+   &&validQuote(result.data,scope.ownerId,scope.deliveryId,now())){
+   const d=result.data;
+   state.phase='quoted';
+   state.quote=Object.freeze({quoteId:d.quoteId,amountGs:d.amountGs,
+    fareVersion:d.fareVersion,expiresAt:d.expiresAt,currency:'PYG'});
+   return Object.freeze({ok:true,qaOnly:true,recoveredWithOriginalKey:true,
+    quote:state.quote,productionEnabled:false});
+  }
+  // G126 could not verify original receipt; fail closed permanently until
+  // certified independent readback, never generate a new quoteRequestKey.
+  state.phase='quote_unknown';
+  return fail(result.code??'G126_QUOTE_UNVERIFIED');
  }
  async function confirm({confirmationKey,acceptedTotalGs,acceptedFareVersion}={}){
   if(!ready)return fail('G122_NOT_CERTIFIED');
@@ -223,5 +266,6 @@ export function createG122DeliveryPriceConsentFlow({
   state.phase='consent_unknown';
   return fail(result.code??'G122_CONSENT_UNVERIFIED');
  }
- return Object.freeze({isConfigured:readReady,snapshot,quote,confirm,clear});
+ return Object.freeze({isConfigured:readReady,snapshot,quote,
+  recoverOriginalQuote,confirm,clear});
 }

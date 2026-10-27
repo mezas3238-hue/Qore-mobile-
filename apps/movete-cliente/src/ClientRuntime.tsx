@@ -102,6 +102,7 @@ export function ClientRuntimeProvider({children,experience}:{
   ownerTariffVerified:process.env.EXPO_PUBLIC_G122_OWNER_TARIFF_VERIFIED==='true',
   officialRoutingVerified:process.env.EXPO_PUBLIC_G122_OFFICIAL_ROUTING_VERIFIED==='true',
   g123FenceVerified:process.env.EXPO_PUBLIC_G122_DISPATCH_FENCE_VERIFIED==='true',
+  g126OriginalKeyRecoveryVerified:process.env.EXPO_PUBLIC_G126_ORIGINAL_KEY_RECOVERY_VERIFIED==='true',
   sourceOrigin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
   pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
  }),[]);
