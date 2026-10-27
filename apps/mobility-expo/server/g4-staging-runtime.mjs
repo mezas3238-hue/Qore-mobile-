@@ -22,6 +22,7 @@ import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
 import {createSupabaseStagingFinanceRepository} from './g7-supabase-finance-repository.mjs';
 import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 import {createG125CargoPricingContext} from './g125-cargo-pricing-context.mjs';
+import {createG127GoogleCargoRoadResolver} from './g127-google-cargo-road-resolver.mjs';
 import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
@@ -160,6 +161,7 @@ export async function prepareQoreG4StagingRuntime({
  createClient,request=fetch,arrivalEvidence=unavailableArrivalEvidence,
  pricingContext=unavailablePricingContext,
  approvedCargoRoadResolver=null,cargoRoadRoutingApproved=false,
+ g127CargoRouteOptions=null,
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
@@ -180,8 +182,24 @@ export async function prepareQoreG4StagingRuntime({
    typeof pricingContext!=='function'||
    !(approvedCargoRoadResolver===null||typeof approvedCargoRoadResolver==='function')||
    !(cargoRoadRoutingApproved===false||cargoRoadRoutingApproved===true)||
-   (cargoRoadRoutingApproved!==true&&approvedCargoRoadResolver!==null)||
-   (cargoRoadRoutingApproved===true&&approvedCargoRoadResolver===null)||
+   (cargoRoadRoutingApproved!==true&&
+    (approvedCargoRoadResolver!==null||g127CargoRouteOptions!==null))||
+   (cargoRoadRoutingApproved===true&&
+    (approvedCargoRoadResolver===null)===(g127CargoRouteOptions===null))||
+   !(g127CargoRouteOptions===null||(
+    Object.getPrototypeOf(g127CargoRouteOptions)===Object.prototype&&
+    Object.keys(g127CargoRouteOptions).length===7&&
+    ['enabled','billableProviderApproved','apiKey','resolveCoveredCargoPlaces',
+     'verifyCargoTolls','reserveBillableBudget','request']
+     .every(k=>Object.hasOwn(g127CargoRouteOptions,k))&&
+    g127CargoRouteOptions.enabled===true&&
+    g127CargoRouteOptions.billableProviderApproved===true&&
+    typeof g127CargoRouteOptions.apiKey==='string'&&
+    g127CargoRouteOptions.apiKey.length>=20&&g127CargoRouteOptions.apiKey.length<=300&&
+    !/\s/.test(g127CargoRouteOptions.apiKey)&&
+    ['resolveCoveredCargoPlaces','verifyCargoTolls','reserveBillableBudget','request']
+     .every(k=>typeof g127CargoRouteOptions[k]==='function')
+   ))||
    !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
    !(verifiedMotoRoute===null||typeof verifiedMotoRoute==='function')||
    !(privateEvidenceAdapters===null||
@@ -222,6 +240,9 @@ export async function prepareQoreG4StagingRuntime({
  // even constructing Supabase Auth/SQL clients, never after side effects.
  const preparedG77Route=g77RouteOptions===null?null:
   createG77VerifiedAutoRouteResolver({...g77RouteOptions,now});
+ // G127 opt-in and prevalidated BEFORE any Supabase Auth clients.
+ const preparedG127CargoRoute=g127CargoRouteOptions===null?null:
+  createG127GoogleCargoRoadResolver({...g127CargoRouteOptions,now});
  const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
  const url='https://'+ref+'.supabase.co';
  // A bearer supplied by the user is verified over Supabase Auth, never
@@ -401,7 +422,8 @@ export async function prepareQoreG4StagingRuntime({
  // Explicit Owner approval and an independent evidence provider are required.
  const cargoPricing=cargoRoadRoutingApproved===true?
   createG125CargoPricingContext({
-   enabled:true,now,resolveVerifiedCargoRoute:approvedCargoRoadResolver,
+   enabled:true,now,
+   resolveVerifiedCargoRoute:preparedG127CargoRoute??approvedCargoRoadResolver,
    loadSenderDelivery:async({actorId,deliveryId})=>{
     const {data,error}=await admin.from('mobility_stage_deliveries')
      .select('id,sender_id,requested_vehicle_kind,status,courier_id,pickup_tag,delivery_tag')

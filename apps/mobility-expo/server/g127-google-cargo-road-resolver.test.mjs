@@ -109,10 +109,8 @@ test('G127 rejects invalid coverage BEFORE billing or Google calls',async()=>{
  }
 });
 test('G127 never calls Google when durable cost reservation is refused',async()=>{
- for(const budget of [{approved:false},{durable:false},{reservationId:sender},
-  {vehicleKind:'AUTO'}]){
+ for(const budget of [{approved:false},{durable:false},{vehicleKind:'AUTO'}]){
   const x=make('MOTO',{budget});
-  if(budget.reservationId===sender)continue; // valid UUID differs but no mismatch check on reservation id.
   await assert.rejects(x.resolver(x.ctx),/budget/);
   assert.equal(x.paid(),0);assert.equal(x.tolls(),0);
  }
