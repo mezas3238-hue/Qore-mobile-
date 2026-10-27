@@ -64,3 +64,9 @@ transiciones positivas y casos adversariales (pendientes de CI D→B).
 - DTO POST exacto `{requestKey,basePyg,perKmPyg,perMinutePyg,minimumPyg,commissionBps,durationDays}`. No acepta `subsidyBps` ni asume que el 10% de pasajeros aplica a carga.
 - Cliente comprueba rol Owner AAL2 antes y después del HTTP, coincidencia del vehículo+zona, versión, vencimiento, recibo G124, respuesta acotada y timeout. Resultado incierto bloquea nuevo POST hasta un GET fresco. Pasado no se recalcula.
 - OFF por defecto en `.env.example`. No se activó STAGING externo ni LIVE. Exigir certificación end-to-end y ejecución Admin CI antes de usarlo con tarifas vigentes.
+
+### G124 — alta inicial REAL del contrato A y readback idempotente
+- A confirma en su prueba PostgreSQL16 de G124 que GET devuelve 404 sin tarifa y POST crea **versión 1** para MOTO/AUTO; POST de versión siguiente preserva cotizaciones previas.
+- Editor D ahora diferencia 404 certificado (alta inicial permitida) de 401/403/409/503/timeout (bloqueo), con confirmación explícita de Owner respecto de vehículo y zona. No confundir 404 con permiso territorial.
+- Después de crear o actualizar, D exige un nuevo GET autorizado con mismo `ruleId` y `version` antes de declarar éxito; si el POST tiene ACK incierto se bloquea la segunda escritura, se consulta por GET. El backend sigue controlando Owner+AAL2/revocación/territorio.
+- G124 no define condiciones ni porcentajes de comercio. Subsidio pasajero = 10% separado. Ningún despliegue.
