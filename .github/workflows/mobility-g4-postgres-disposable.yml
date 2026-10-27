@@ -18,6 +18,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G125_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G126_*'
       - 'apps/mobility-expo/server/g125-*'
       - 'apps/mobility-expo/server/g124-*'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
@@ -35,6 +36,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G125_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G126_*'
       - 'apps/mobility-expo/server/g125-*'
       - 'apps/mobility-expo/server/g124-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G12_*'
@@ -647,7 +649,9 @@ jobs:
         run: node apps/mobility-expo/server/g124-owner-cargo-rate-pg-http-ci.mjs
       - name: G125 install verified cargo road evidence and SQL G7 quote fence
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G125_AUTHENTICATED_CARGO_ROAD_QUOTE_FENCE_POSTGRES_CI_ONLY.sql
-      - name: G125 quote only after independent AUTO/MOTO evidence and PG16 owner tariff
+      - name: G126 install SQL original cargo quote lost-ACK recovery
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G126_RECOVER_ORIGINAL_CARGO_QUOTE_POSTGRES_CI_ONLY.sql
+      - name: G125/G126 cargo HTTP quote, immutable replay and no second road request
         run: node apps/mobility-expo/server/g125-cargo-road-fare-pg-http-ci.mjs
       - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
         run: node apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs

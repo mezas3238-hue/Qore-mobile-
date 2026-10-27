@@ -424,6 +424,11 @@ export async function prepareQoreG4StagingRuntime({
   }):unavailablePricingContext;
  const finance=createQoreFinanceGateway({
   projectRef:ref,verifyAccessToken:verified,now,
+  ...(cargoRoadRoutingApproved===true?{
+   recoverCargoQuote:params=>financePersistence.recoverCargoQuote({
+    modeGuard:'SYNTHETIC_STAGING',liveEnabled:false,...params,
+   })
+  }:{}),
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   loadPricingContext:params=>params.fareMode==='DELIVERY'?
    cargoPricing(params):pricingContext(params),

@@ -37,9 +37,12 @@ const response=(status,body)=>({status,body});
 
 export function createQoreFinanceGateway({
  projectRef,verifyAccessToken,authorizePassenger,allowRequest,loadPricingContext,
- quoteFare,authorizePayment,transitionPayment,loadPayment,now=Date.now,
+ quoteFare,authorizePayment,transitionPayment,loadPayment,
+ recoverCargoQuote=null,now=Date.now,
 }){
  assertStagingRef(projectRef);
+ if(!(recoverCargoQuote===null||typeof recoverCargoQuote==='function'))
+  throw Error('G126 cargo quote recovery adapter invalid');
  if(![verifyAccessToken,authorizePassenger,allowRequest,loadPricingContext,
   quoteFare,authorizePayment,transitionPayment,loadPayment,now]
   .every(value=>typeof value==='function'))throw Error('Finance adapters required');
@@ -71,19 +74,25 @@ export function createQoreFinanceGateway({
   }catch{return response(503,{error:'Request limiter unavailable'});}
   try{
    if(quote){
-    // Distance, duration, zone and tolls come only from a trusted route adapter.
-    const pricing=await loadPricingContext({actorId:user.id,fareMode:body.fareMode,
-     subjectKind:body.subjectKind,subjectId:body.subjectId});
-    if(!plain(pricing)||pricing.trafficAware!==true||pricing.fallbackUsed!==false||
-      typeof pricing.zoneTag!=='string'||!/^[A-Z_]{3,40}$/.test(pricing.zoneTag)||
-      !Number.isSafeInteger(pricing.distanceMeters)||pricing.distanceMeters<0||
-      pricing.distanceMeters>500000||!Number.isSafeInteger(pricing.durationSeconds)||
-      pricing.durationSeconds<0||pricing.durationSeconds>86400||
-      !Number.isSafeInteger(pricing.tollsPyg)||pricing.tollsPyg<0||pricing.tollsPyg>1000000)
-     throw Error('Unverified pricing context');
-    const result=await quoteFare({actorId:user.id,...body,zoneTag:pricing.zoneTag,
-     distanceMeters:pricing.distanceMeters,durationSeconds:pricing.durationSeconds,
-     tollsPyg:pricing.tollsPyg});
+    // G126: Recover the original DELIVERY quote before making a second
+    // billable road request. SQL proves sender, key, cargo and G125 attestation.
+    let result=body.fareMode==='DELIVERY'&&recoverCargoQuote!==null?
+     await recoverCargoQuote({actorId:user.id,...body}):null;
+    if(result===null){
+     // New quotes still require independent server-owned road/toll evidence.
+     const pricing=await loadPricingContext({actorId:user.id,fareMode:body.fareMode,
+      subjectKind:body.subjectKind,subjectId:body.subjectId});
+     if(!plain(pricing)||pricing.trafficAware!==true||pricing.fallbackUsed!==false||
+       typeof pricing.zoneTag!=='string'||!/^[A-Z_]{3,40}$/.test(pricing.zoneTag)||
+       !Number.isSafeInteger(pricing.distanceMeters)||pricing.distanceMeters<0||
+       pricing.distanceMeters>500000||!Number.isSafeInteger(pricing.durationSeconds)||
+       pricing.durationSeconds<0||pricing.durationSeconds>86400||
+       !Number.isSafeInteger(pricing.tollsPyg)||pricing.tollsPyg<0||
+       pricing.tollsPyg>1000000)throw Error('Unverified pricing context');
+     result=await quoteFare({actorId:user.id,...body,zoneTag:pricing.zoneTag,
+      distanceMeters:pricing.distanceMeters,durationSeconds:pricing.durationSeconds,
+      tollsPyg:pricing.tollsPyg});
+    }
     const receipt=result?.quote;
     const at=now();
     const deadline=Date.parse(receipt?.expiresAt);

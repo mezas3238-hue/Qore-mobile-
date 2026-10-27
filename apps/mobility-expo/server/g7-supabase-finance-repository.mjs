@@ -65,6 +65,22 @@ export function createSupabaseStagingFinanceRepository(client){
   return safeQuote({...data,rule_key:rule?.rule_key},quoteId,actorId);
  };
  return Object.freeze({
+  async recoverCargoQuote(params){
+   assertBase(params);
+   if(params.fareMode!=='DELIVERY'||params.subjectKind!=='DELIVERY'||
+     !validId(params.subjectId)||!validId(params.requestKey))
+    throw Error('Invalid cargo quote recovery');
+   const {data,error}=await client.rpc('mobility_stage_g126_recover_cargo_quote_qa',{
+    _sender:params.actorId,_delivery:params.subjectId,_key:params.requestKey,
+   });
+   if(error)throw Error('Cargo quote recovery rejected');
+   if(data===null)return null;
+   if(!validId(data))throw Error('Malformed cargo quote recovery');
+   const quote=await loadQuote(params.actorId,data);
+   if(quote.mode!=='DELIVERY'||quote.subjectKind!=='DELIVERY'||
+      quote.subjectId!==params.subjectId)throw Error('Recovered cargo quote mismatched');
+   return ok({quote});
+  },
   async quote(params){
    assertBase(params);
    if(!validId(params.requestKey)||!MODES.has(params.fareMode)||

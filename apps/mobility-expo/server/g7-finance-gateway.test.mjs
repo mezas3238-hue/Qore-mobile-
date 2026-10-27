@@ -153,3 +153,38 @@ test('G24 rejects quote receipts without provable server amount, version, owners
   assert.doesNotMatch(JSON.stringify(result),/PY_ASU_V1|15000/);
  }
 });
+
+test('G126 returns original cargo quote without another paid route call',async()=>{
+ let maps=0,recovered=0,writes=0;
+ const cargo={requestKey,fareMode:'DELIVERY',subjectKind:'DELIVERY',subjectId:subject};
+ const existing={id:quoteId,mode:'DELIVERY',subjectKind:'DELIVERY',
+  subjectId:subject,totalPyg:14500,ruleVersion:'cargo_moto_asuncion_v1',
+  expiresAt:'2026-10-23T03:20:00Z'};
+ const base={
+  projectRef:ref,now:()=>Date.parse('2026-10-23T03:15:00Z'),
+  verifyAccessToken:async()=>({id:passenger,is_anonymous:false,
+   email_confirmed_at:'2026-10-22T12:00:00Z'}),
+  authorizePassenger:async()=>true,allowRequest:()=>true,
+  recoverCargoQuote:async params=>{recovered++;
+   assert.equal(params.requestKey,requestKey);assert.equal(params.actorId,passenger);
+   return {ok:true,liveEnabled:false,quote:existing};
+  },
+  loadPricingContext:async()=>{maps++;throw Error('No paid route on G126 replay');},
+  quoteFare:async()=>{writes++;throw Error('No new quote on G126 replay');},
+  authorizePayment:async()=>{},transitionPayment:async()=>{},loadPayment:async()=>{}
+ };
+ const api=createQoreFinanceGateway(base);
+ const a=await api({method:'POST',path:'/v1/staging/fares/quote',
+  headers:headers(passenger),body:cargo});
+ assert.equal(a.status,201);assert.equal(a.body.quoteId,quoteId);
+ assert.equal(a.body.amountGs,14500);
+ assert.equal(maps,0);assert.equal(writes,0);assert.equal(recovered,1);
+ const expired=createQoreFinanceGateway({...base,now:()=>
+  Date.parse('2026-10-23T03:21:00Z')});
+ assert.equal((await expired({method:'POST',path:'/v1/staging/fares/quote',
+  headers:headers(passenger),body:cargo})).status,409);
+ const fresh=createQoreFinanceGateway({...base,recoverCargoQuote:async()=>null});
+ assert.equal((await fresh({method:'POST',path:'/v1/staging/fares/quote',
+  headers:headers(passenger),body:cargo})).status,409);
+ assert.equal(maps,1);
+});
