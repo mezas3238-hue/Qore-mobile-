@@ -111,7 +111,7 @@ async function main(){
  assert.equal(sql("SELECT (current_database()='qore_disposable_chain' AND "+
   "to_regclass('public.mobility_stage_g125_cargo_road_attestations') "+
   "IS NOT NULL)::text"),'true');
- sql("INSERT INTO auth.users(id) VALUES("+senders.map(x=>'('+safeUUID(x)+')').join(',')+")");
+ sql("INSERT INTO auth.users(id) VALUES "+senders.map(x=>'('+safeUUID(x)+')').join(','));
  const kinds=['MOTO','AUTO'],saved=[];
  for(let i=0;i<2;i++){
   const d=requestDelivery(senders[i],kinds[i],bookingKeys[i]);
