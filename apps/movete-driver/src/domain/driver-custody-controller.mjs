@@ -9,6 +9,17 @@ const TOKEN=/^[A-Za-z0-9._~-]{20,7900}$/;
 const NEXT=Object.freeze({accepted:'pickup',picked_up:'deliver',
  delivered:null,disputed:'return',returned:null,cancelled:null});
 const AFTER=Object.freeze({pickup:'picked_up',deliver:'delivered',return:'returned'});
+// A different phase on the same SQL revision is a conflicting replica.
+// Some later external safety decisions may advance a delivery to disputed
+// or returned, but a closed custody can never restart as accepted/picked_up.
+const FORWARD=Object.freeze({
+ accepted:new Set(['accepted','picked_up','delivered','disputed','returned','cancelled']),
+ picked_up:new Set(['picked_up','delivered','disputed','returned','cancelled']),
+ delivered:new Set(['delivered','disputed','returned']),
+ disputed:new Set(['disputed','returned']),
+ returned:new Set(['returned']),
+ cancelled:new Set(['cancelled'])
+});
 const empty=()=>Object.freeze({phase:'signed-out',deliveryId:null,status:null,
  revision:null,nextEvent:null,uncertain:false,proofVerified:false,
  qaOnly:true,productionEnabled:false});
@@ -20,7 +31,8 @@ export function createDriverCustodyController({
   [readStatus,transition,makeRequestKey].some(f=>typeof f!=='function')||
   (obtainVerifiedProof!==null&&typeof obtainVerifiedProof!=='function'))
   throw Error('G66 trusted custody callbacks required');
- let actor=null,deliveryId=null,epoch=0,pending=null,polling=false,state=empty();
+ let actor=null,deliveryId=null,epoch=0,pending=null,polling=false,state=empty(),
+  highWater=null;
  const listeners=new Set();
  const update=x=>{
   state=Object.freeze({...state,...x,qaOnly:true,productionEnabled:false});
@@ -28,7 +40,8 @@ export function createDriverCustodyController({
   return state;
  };
  function clear(){
-  epoch++;actor=null;deliveryId=null;pending=null;polling=false;state=empty();
+  epoch++;actor=null;deliveryId=null;pending=null;polling=false;
+  highWater=null;state=empty();
   for(const f of listeners)try{f(state)}catch{}
   return state;
  }
@@ -52,10 +65,16 @@ export function createDriverCustodyController({
    row.productionEnabled!==false)
    return update({phase:pending?'uncertain':'unverified',
     status:null,revision:null,nextEvent:null,uncertain:!!pending,proofVerified:false});
-  // A delayed/read-replica GET must never revive a previous courier action.
-  if(Number.isSafeInteger(state.revision)&&row.revision<state.revision)
+  // High-water mark survives invalid/offline GETs and UI revision clearing.
+  // Otherwise, a second stale read could silently revive pickup/delivery.
+  if(highWater&&(row.revision<highWater.revision
+    ||(row.revision===highWater.revision&&
+      (row.phase!==highWater.phase||row.proofVerified!==highWater.proofVerified))
+    ||(row.revision>highWater.revision&&
+      !FORWARD[highWater.phase].has(row.phase))))
    return update({phase:pending?'uncertain':'unverified',
     status:null,revision:null,nextEvent:null,uncertain:!!pending,proofVerified:false});
+  highWater={revision:row.revision,phase:row.phase,proofVerified:row.proofVerified};
   if(pending){
    // A later verified SQL state demonstrates progress, not the HTTP
    // response's receipt ID. Missing progress does not prove rollback.
@@ -93,7 +112,7 @@ export function createDriverCustodyController({
     return update({phase:'unverified',nextEvent:null});
    if(pending&&deliveryId!==id)return update({phase:'uncertain',nextEvent:null});
    if(deliveryId!==id){
-    epoch++;deliveryId=id;
+    epoch++;deliveryId=id;highWater=null;
     update({phase:'ready',deliveryId:id,status:null,revision:null,
      uncertain:false,nextEvent:null,proofVerified:false});
    }

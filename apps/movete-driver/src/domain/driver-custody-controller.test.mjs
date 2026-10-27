@@ -234,3 +234,62 @@ test('C Driver delivery polling rejects regressed GET and never replays uncertai
  assert.equal((await ctl.refresh()).status,'picked_up');
  assert.equal(ctl.current().uncertain,false);
 });
+
+test('C G66 high-water revision survives multiple stale GETs and prevents courier replay',async()=>{
+ let row={phase:'accepted',revision:2,proofVerified:false};
+ let posts=0;
+ const ctl=createDriverCustodyController({
+  readStatus:async()=>({deliveryId:delivery,...row,
+   nextEvent:steps[row.phase],qaOnly:true,productionEnabled:false}),
+  transition:async()=>{posts++;throw Error('Must not send stale pickup')},
+  makeRequestKey:()=>key
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ assert.equal((await ctl.open(delivery)).revision,2);
+ row={phase:'picked_up',revision:5,proofVerified:false};
+ assert.equal((await ctl.poll()).revision,5);
+ row={phase:'accepted',revision:4,proofVerified:false};
+ assert.equal((await ctl.refresh()).phase,'unverified');
+ assert.equal(ctl.current().nextEvent,null);
+ row={phase:'accepted',revision:3,proofVerified:false};
+ assert.equal((await ctl.refresh()).phase,'unverified');
+ await ctl.advance();assert.equal(posts,0);
+ row={phase:'picked_up',revision:5,proofVerified:false};
+ assert.equal((await ctl.refresh()).phase,'active');
+ assert.equal(ctl.current().nextEvent,'deliver');
+});
+test('C G66 refuses conflicting same revision and terminal resurrection',async()=>{
+ let row={phase:'picked_up',revision:5,proofVerified:false};
+ const ctl=createDriverCustodyController({
+  readStatus:async()=>({deliveryId:delivery,...row,
+   nextEvent:steps[row.phase],qaOnly:true,productionEnabled:false}),
+  transition:async()=>{throw Error('unexpected POST')},makeRequestKey:()=>key
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ await ctl.open(delivery);
+ row={phase:'accepted',revision:5,proofVerified:false};
+ assert.equal((await ctl.refresh()).phase,'unverified');
+ row={phase:'returned',revision:6,proofVerified:true};
+ assert.equal((await ctl.refresh()).phase,'terminal');
+ row={phase:'accepted',revision:7,proofVerified:false};
+ assert.equal((await ctl.refresh()).phase,'unverified');
+ row={phase:'returned',revision:6,proofVerified:true};
+ assert.equal((await ctl.refresh()).phase,'terminal');
+});
+test('C G66 high-water is scoped to the currently opened delivery and driver',async()=>{
+ const id2=id(64);
+ let phase='returned',revision=9;
+ const ctl=createDriverCustodyController({
+  readStatus:async({deliveryId})=>({deliveryId,phase,revision,
+   nextEvent:steps[phase],proofVerified:phase==='returned',
+   qaOnly:true,productionEnabled:false}),
+  transition:async()=>{},makeRequestKey:()=>key
+ });
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ assert.equal((await ctl.open(delivery)).phase,'terminal');
+ phase='accepted';revision=2;
+ assert.equal((await ctl.open(id2)).phase,'active');
+ ctl.clear();
+ ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
+ assert.equal((await ctl.open(delivery)).phase,'active');
+});
