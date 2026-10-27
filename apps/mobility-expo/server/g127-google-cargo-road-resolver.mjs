@@ -1,9 +1,10 @@
 /**
- * G127 — Google Routes v2 for cargo delivery AUTO (DRIVE) or MOTO (TWO_WHEELER).
+ * G127 — Google Routes v2 shared DRIVE geometry for cargo AUTO and MOTO.
  * PRIVATE, opt-in STAGING adapter. No embedded credentials, no new paid
  * requests without independently verified geofence + atomic budget approval.
  * Neither Maps nor this resolver grants geographic or Driver legal permission.
- * TWO_WHEELER routes are beta and require a warning in Driver/Cliente UX.
+ * Shared DRIVE is a pricing road-reference, not motorcycle legal navigation.
+ * Check motorcycle road restrictions separately before guiding a Driver.
  */
 const URL='https://routes.googleapis.com/directions/v2:computeRoutes';
 const MASK='routes.distanceMeters,routes.duration,fallbackInfo';
@@ -82,8 +83,7 @@ export function createG127GoogleCargoRoadResolver({
   // The injected durable quota is shared across replicas and survives restart.
   const grant=await reserveBillableBudget(Object.freeze({
    actorId,deliveryId,vehicleKind,coverageEvidenceId:coverage.evidenceId,
-   billingProduct:vehicleKind==='MOTO'?'ROUTES_TWO_WHEELER_TRAFFIC_AWARE':
-    'ROUTES_DRIVE_TRAFFIC_AWARE',
+   billingProduct:'ROUTES_DRIVE_TRAFFIC_AWARE',
    billableUnits:1
   }));
   if(!object(grant)||grant.approved!==true||grant.durable!==true||
@@ -96,7 +96,7 @@ export function createG127GoogleCargoRoadResolver({
   const body={
    origin:{placeId:coverage.originPlaceId},
    destination:{placeId:coverage.destinationPlaceId},
-   travelMode:vehicleKind==='MOTO'?'TWO_WHEELER':'DRIVE',
+   travelMode:'DRIVE',
    routingPreference:'TRAFFIC_AWARE',
    computeAlternativeRoutes:false,
    regionCode:'py',units:'METRIC',

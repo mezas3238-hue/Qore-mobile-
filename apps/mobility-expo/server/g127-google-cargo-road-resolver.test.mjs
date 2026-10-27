@@ -54,7 +54,7 @@ test('G127 does not permit billable route without separate approval and budgets'
   resolveCoveredCargoPlaces:async()=>{},verifyCargoTolls:async()=>{}
  }),/durable billing/);
 });
-test('G127 AUTO uses DRIVE; MOTO uses TWO_WHEELER with same G125 receipts',async()=>{
+test('G127 AUTO/MOTO share DRIVE road profile with distinct vehicle records',async()=>{
  for(const kind of ['AUTO','MOTO']){
   const x=make(kind);
   const proof=await x.resolver(x.ctx);
@@ -70,7 +70,7 @@ test('G127 AUTO uses DRIVE; MOTO uses TWO_WHEELER with same G125 receipts',async
   assert.equal(api.opts.headers['X-Goog-FieldMask'],
    'routes.distanceMeters,routes.duration,fallbackInfo');
   const sent=JSON.parse(api.opts.body);
-  assert.equal(sent.travelMode,kind==='MOTO'?'TWO_WHEELER':'DRIVE');
+  assert.equal(sent.travelMode,'DRIVE');
   assert.equal(sent.routingPreference,'TRAFFIC_AWARE');
   assert.deepEqual(sent.origin,{placeId:place1});
   assert.deepEqual(sent.destination,{placeId:place2});
