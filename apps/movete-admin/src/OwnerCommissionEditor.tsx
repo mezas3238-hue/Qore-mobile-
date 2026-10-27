@@ -1,5 +1,6 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {useWebAdminAuth} from './AdminRuntime';
+import {createOwnerPolicyScopeFence} from './owner-policy-scope-fence.mjs';
 import {createOwnerCommissionGateway} from './owner-commission-gateway.mjs';
 import type {CommissionKind,CommissionReceipt} from './owner-commission-gateway.mjs';
 
@@ -23,14 +24,18 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
  const [error,setError]=useState('');
  const [uncertain,setUncertain]=useState(false);
  const ready=authorized&&gateway.isConfigured();
+ const scopeFence=useRef(createOwnerPolicyScopeFence());
+ scopeFence.current.select(service,authorized,gateway);
  useEffect(()=>{
   setRate(null);setPercent('');setError('');setUncertain(false);
  },[authorized,service]);
  async function refresh(){
   if(!ready||busy)return;
+  const ticket=scopeFence.current.select(service,authorized,gateway);
   setBusy(true);setError('');
   try{
    const result=await gateway.read(service);
+   if(!scopeFence.current.current(ticket))return;
    if(result.ok&&result.data){
     setRate(result.data);setPercent(String(result.data.commissionBps/100));
     setUncertain(false);
@@ -49,11 +54,13 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
    return;
   }
   if(bps===rate.commissionBps)return;
+  const ticket=scopeFence.current.select(service,authorized,gateway);
   setBusy(true);setError('');
   try{
    const result=await gateway.change(service,{
     requestKey:crypto.randomUUID(),commissionBps:bps
    });
+   if(!scopeFence.current.current(ticket))return;
    if(result.ok&&result.data&&result.data.version>rate.version){
     setRate(result.data);setPercent(String(result.data.commissionBps/100));
    }else{
@@ -72,7 +79,8 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
   </p>}
   <label htmlFor="commission-service">Servicio</label>
   <select id="commission-service" value={service} disabled={!ready||busy}
-   onChange={e=>setService(e.currentTarget.value as CommissionKind)}>
+   onChange={e=>{scopeFence.current.invalidate();
+    setService(e.currentTarget.value as CommissionKind);}}>
    <option value="AUTO_RIDE">AUTO · pasajeros</option>
    <option value="MOTO_RIDE">MOTO · pasajeros</option>
   </select>

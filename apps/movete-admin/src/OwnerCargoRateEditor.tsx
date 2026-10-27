@@ -1,5 +1,6 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {useWebAdminAuth} from './AdminRuntime';
+import {createOwnerPolicyScopeFence} from './owner-policy-scope-fence.mjs';
 import {createOwnerCargoRateGateway} from './owner-cargo-rate-gateway.mjs';
 import {certifyOwnerCargoRateReadback} from './owner-cargo-rate-readback.mjs';
 import {parseOwnerCargoPercent,displayOwnerCargoPercent}
@@ -38,15 +39,21 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
  const [uncertain,setUncertain]=useState(true);
  const [message,setMessage]=useState('');
  const ready=authorized&&gateway.isConfigured();
+ const scopeFence=useRef(createOwnerPolicyScopeFence());
+ // Invalidate any old HTTP result before it can overwrite another vehicle,
+ // territory, role or authentication adapter's selected policy.
+ scopeFence.current.select(kind,zone,authorized,gateway);
  useEffect(()=>{setRate(null);setLookup('unknown');
   setInitialConfirmed(false);setUncertain(true);
   setData(blank());setMessage('');},[kind,zone,authorized]);
  const validZone=/^[A-Z_]{3,20}$/.test(zone);
  async function read(){
   if(!ready||!validZone||busy)return;
+  const ticket=scopeFence.current.select(kind,zone,authorized,gateway);
   setBusy(true);setMessage('');
   try{
    const answer=await gateway.read(kind,zone);
+   if(!scopeFence.current.current(ticket))return;
    if(!answer.ok||!answer.data){
     setRate(null);
     if(answer.code==='CARGO_RATE_NOT_CONFIGURED'){
@@ -94,12 +101,14 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
     return;
    }
   }
+  const ticket=scopeFence.current.select(kind,zone,authorized,gateway);
   const body:CargoDraft={...parsed,requestKey:crypto.randomUUID()};
   const previousVersion=rate?.version??0;
   setBusy(true);setUncertain(true);setLookup('unknown');
   setInitialConfirmed(false);setMessage('');
   try{
    const answer=await gateway.change(kind,zone,body);
+   if(!scopeFence.current.current(ticket))return;
    if(!answer.ok||!answer.data||answer.data.version<=previousVersion){
     setRate(null);
     setMessage('Resultado no confirmado. NO repitas el POST: consultá nuevamente por GET antes de actuar.');
@@ -108,6 +117,7 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
    // One authoritative GET read-back is mandatory after initial creation
    // and after a versioned update; never treat only POST as committed UI state.
    const readBack=await gateway.read(kind,zone);
+   if(!scopeFence.current.current(ticket))return;
    if(!readBack.ok||!readBack.data||
     !certifyOwnerCargoRateReadback({
      written:answer.data,readback:readBack.data,
@@ -135,14 +145,16 @@ export function OwnerCargoRateEditor({authorized}:{authorized:boolean}){
    Bloqueado: falta autorización G124 HTTPS / Owner AAL2 / PostgreSQL externo.</p>}
   <label htmlFor="cargo-kind">Vehículo de envío</label>
   <select id="cargo-kind" value={kind} disabled={busy||!ready}
-   onChange={e=>setKind(e.currentTarget.value as CargoKind)}>
+   onChange={e=>{scopeFence.current.invalidate();
+    setKind(e.currentTarget.value as CargoKind);}}>
    <option value="AUTO">AUTO (paquetes)</option>
    <option value="MOTO">MOTO (paquetes)</option>
   </select>
   <label htmlFor="cargo-zone">Código de zona autorizado por backend</label>
   <input id="cargo-zone" value={zone} maxLength={20} autoComplete="off"
    placeholder="Ej. ASUNCION; validar contra servidor"
-   disabled={busy||!ready} onChange={e=>setZone(e.currentTarget.value.toUpperCase())}/>
+   disabled={busy||!ready} onChange={e=>{scopeFence.current.invalidate();
+    setZone(e.currentTarget.value.toUpperCase());}}/>
   <button type="button" disabled={!ready||busy||!validZone}
    onClick={()=>void read()}>{busy?'Verificando…':'Consultar tarifa vigente'}</button>
   <p>Tarifa verificada: <strong>{rate?
