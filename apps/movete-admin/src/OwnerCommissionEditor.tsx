@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {useWebAdminAuth} from './AdminRuntime';
 import {createOwnerPolicyScopeFence} from './owner-policy-scope-fence.mjs';
 import {createOwnerCommissionGateway} from './owner-commission-gateway.mjs';
+import {certifyOwnerCommissionReadback} from './owner-commission-readback.mjs';
 import type {CommissionKind,CommissionReceipt} from './owner-commission-gateway.mjs';
 
 /** Owner-only commission editor. Never calculates or saves tariffs locally.
@@ -61,12 +62,28 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
     requestKey:crypto.randomUUID(),commissionBps:bps
    });
    if(!scopeFence.current.current(ticket))return;
-   if(result.ok&&result.data&&result.data.version>rate.version){
-    setRate(result.data);setPercent(String(result.data.commissionBps/100));
-   }else{
+   if(!scopeFence.current.current(ticket))return;
+   if(!result.ok||!result.data||result.data.version<=rate.version){
     setUncertain(true);setRate(null);
-    setError('Resultado no confirmado. Volvé a consultar antes de guardar.');
+    setError('Resultado del POST no confirmado. No lo repitas: consultá primero el servidor.');
+    return;
    }
+   // HTTP 200 from POST is insufficient: require an independent GET,
+   // identical version, stored commission and fixed passenger subsidy.
+   // No repeat POST on uncertain COMMIT or stale Owner session.
+   const readback=await gateway.read(service);
+   if(!scopeFence.current.current(ticket))return;
+   if(!readback.ok||!readback.data||!certifyOwnerCommissionReadback({
+    written:result.data,readback:readback.data,
+    previousVersion:rate.version,service
+   }).ok){
+    setUncertain(true);setRate(null);
+    setError('El POST no coincide con la comisión persistida. No repitas el guardado: consultá nuevamente.');
+    return;
+   }
+   setRate(readback.data);
+   setPercent(String(readback.data.commissionBps/100));
+   setUncertain(false);
   }finally{setBusy(false);}
  }
  return <section className="panel">
