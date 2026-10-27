@@ -93,7 +93,7 @@ test('G128 wrong coverage and foreign subject rejected before free-credit reserv
   {verifiedAtMs:at-61000},{zoneTag:'AUTO_ASUNCION'},
   {coverageVerified:false}]){
   const f=make('MOTO',{coverage:bad});
-  await assert.rejects(f.api(f.ctx),/coverage/);
+  await assert.rejects(f.api(f.ctx),/verified Paraguayan|coverage/);
   assert.equal(f.count.route,0);assert.equal(f.count.quota,0);
  }
 });
