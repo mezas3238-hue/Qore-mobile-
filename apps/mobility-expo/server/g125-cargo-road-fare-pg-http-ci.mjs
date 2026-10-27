@@ -124,6 +124,9 @@ async function main(){
    "'DELIVERY'::public.mobility_stage_fare_subject,"+safeUUID(d)+
    ",'"+kinds[i]+"_ASUNCION',5000,700,0)::text"),/Command failed/);
  }
+ // A provider must return the SAME immutable attestation on retries of this
+ // original request. Changing verified_at for the same evidenceId is denied.
+ const proofIssuedAt=[Date.now(),Date.now()];
  const contexts=senders.map((sender,i)=>
   createG125CargoPricingContext({
    enabled:true,now:Date.now,
@@ -132,7 +135,7 @@ async function main(){
     assert.equal(q.actorId,sender);
     assert.equal(q.deliveryId,saved[i]);
     assert.equal(q.vehicleKind,kinds[i]);
-    const now=Date.now();
+    const now=proofIssuedAt[i];
     // CI fixture simulates independent certified router. No real provider.
     return {source:'INDEPENDENT_ROAD_ROUTING_AUTHORITY',
      coverageVerified:true,routingVerified:true,tollsVerified:true,
