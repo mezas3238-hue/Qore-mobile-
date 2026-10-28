@@ -677,6 +677,26 @@ async function main(){
   assert.equal(dAfter?.quoteId,q.data.quoteId);
   assert.equal(dAfter?.bookingRequestKey,bookingKey);
   assert.equal(dAfter?.assignmentPersisted,false);
+  // G135: Owner changes the nominal commission via the real protected
+  // G116 SQL RPC. Previously booked/quoted terms must remain frozen,
+  // while the SAME B HTTP -> A PostgreSQL -> D Admin path uses the new rate.
+  const originalTerms=sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'bps',commission_bps,'version',commission_version,'subsidy',subsidy_gs)::text "+
+   "FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id='"+
+   q.data.quoteId+"'");
+  assert.equal(originalTerms.bps,1500);
+  assert.equal(originalTerms.version,1);
+  const changedRate=sqlJson("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_g116_set_commission_qa('"+owner+
+   "','AUTO_RIDE',1800,'98980000-0000-4989-8989-000000000034')::text");
+  assert.equal(changedRate.commissionBps,1800);
+  assert.equal(changedRate.subsidyBps,1000);
+  assert.equal(changedRate.version,2);
+  assert.deepEqual(sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'bps',commission_bps,'version',commission_version,'subsidy',subsidy_gs)::text "+
+   "FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id='"+
+   q.data.quoteId+"'"),originalTerms,
+   'Owner changes must not rewrite an accepted historical quote');
   // G107 uses the actual Architect B Passenger state machine and strict
   // parsers, not copies, against A's HTTP loopback and disposable PG16.
   // B Client code MUST come from this same integrated Git tree, not stale checkout.
@@ -722,7 +742,7 @@ async function main(){
   const subsidyCheck=await bridge.loadAutoSubsidy();
   assert.equal(subsidyCheck.ok,true,JSON.stringify(subsidyCheck));
   const discount=bridge.snapshot().autoPrequote.subsidy;
-  assert.equal(discount.commissionBps,1500);
+  assert.equal(discount.commissionBps,1800);
   assert.equal(discount.subsidyBps,1000);
   assert.equal(discount.customerPaysGs,
    discount.originalFareGs-discount.customerSubsidyGs);
@@ -737,6 +757,19 @@ async function main(){
   assert.equal(receipt.ok,true,JSON.stringify(receipt));
   const secondTrip=receipt.tripId;
   assert.ok(uuid.test(secondTrip)&&secondTrip!==tripId);
+  const updatedTerms=sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'bps',commission_bps,'version',commission_version,'subsidy',subsidy_gs)::text "+
+   "FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id='"+
+   quote.quoteId+"'");
+  assert.equal(updatedTerms.bps,1800);
+  assert.equal(updatedTerms.version,2);
+  assert.equal(updatedTerms.subsidy,
+   Math.floor((quote.amountGs*1000+5000)/10000));
+  assert.deepEqual(sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'bps',commission_bps,'version',commission_version,'subsidy',subsidy_gs)::text "+
+   "FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id='"+
+   q.data.quoteId+"'"),originalTerms);
+
   let opened=null;
   const continuation=createF1AutoRideContinuation({
    readSnapshot:()=>bridge.snapshot(),
@@ -804,6 +837,7 @@ async function main(){
    body:{offerId:deniedOfferKey,
     requestKey:'98980000-0000-4989-8989-000000000029'}})).status,401);
   console.log('G134 SESSION FENCE PASS: revoked Driver cannot poll G16 or accept G4 offers for the same G73 trip, with G38/G71 unchanged; CI-only.');
+  console.log('G135 OWNER COMMISSION INTEGRATED PASS: original AUTO quote stays 1500bps, new B/A/D same-trip quote uses Owner 1800bps and passenger subsidy remains 1000bps; no PSP or LIVE.');
   console.log('G133 DRIVER DECISION PARTIAL: native C accept attempts use real authenticated G4 HTTP -> PG16 and fail closed with G38/G71 intact; no false assignment/settlement.');
   console.log('G132 UNIFIED B+A+C+D PARTIAL: native Driver C polls G16 authenticated real PG16 inbox for B new G73 ride; zero offers when G71/G38 legal evidence is absent; Admin D sees same trip. EXTERNAL_LEGAL_EVIDENCE_BLOCKED, not an accepted trip.');
   console.log('G131 UNIFIED A+B+D PASS: real Client B booking and subsidy -> A HTTP/PostgreSQL persisted trip -> Admin Web D state -> B cancel -> D same ID/revision/fare and IdP revocation; Driver legal G38/G71 remains blocked, NO LIVE');
