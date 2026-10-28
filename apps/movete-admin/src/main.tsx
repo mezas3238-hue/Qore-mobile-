@@ -178,9 +178,16 @@ function ZoneReadOnly({zones,allowed}:{
     <div className="zone-row" key={item.zoneId+":"+item.serviceKind}>
      <div><strong>{item.municipality}</strong>
       <small>{item.serviceKind.replaceAll('_',' ')} · Cobertura: {item.coverageStatus}</small>
-      <small>Permiso operativo: {item.eligibleByPolicy?'Reportado habilitado':'No habilitado'}</small></div>
-     <div className="zone-count">{item.availabilityFresh?String(item.onDutyVehicles):'—'}
-      <small>Vehículos en línea reportados</small></div>
+      <small>Permiso operativo: {item.eligibleByPolicy?'Reportado habilitado':'No habilitado'}</small>
+      {item.serviceKind==='MOTO_RIDE'&&
+       <small>Habilitación legal pasajeros MOTO: {item.legalGate??'NO VERIFICADA'}</small>}
+      {item.serviceKind==='COMMERCE'&&
+       <small>Habilitación comercial: {item.merchantEligibilityVerified?'Reportada verificada':'NO VERIFICADA'}</small>}
+     </div>
+     <div className="zone-count">
+      {item.serviceKind==='COMMERCE'?'—':item.availabilityFresh?String(item.onDutyVehicles):'—'}
+      <small>{item.serviceKind==='COMMERCE'?'Inventario de comercios no confirmado':
+       'Vehículos en línea reportados'}</small></div>
     </div>)}</div>}
   <p className="training-disclaimer">Estos datos son solo una vista del servidor. No estiman aceptación, tiempos de espera ni capacidad de despacho; no habilitan rutas, motos de pasajeros ni zonas nuevas.</p>
  </Panel>;
@@ -578,8 +585,8 @@ function FiveFlowsReadOnly({state}:{state:AdminSnapshot}){
    return <Panel key={item.id} className="metric">
     <small>{item.id}</small><strong>{item.label}</strong>
     <p>{item.detail}</p>
-    {allowed&&zones&&item.id!=='MOTO_RIDE'&&item.id!=='COMMERCE'
-     ?<span>{observed.length} zonas reportadas en esta página de servidor; cobertura no significa disponibilidad ni aprobación comercial.</span>
+    {allowed&&zones
+     ?<span>{observed.length} zonas de {item.id} reportadas en esta página del servidor. No implica vehículo, comercio o permiso operativo disponible.</span>
      :<span>Sin lectura certificada de cobertura específica de este servicio.</span>}
     <div className="empty-chip">NO LIVE · Sin controles de activación</div>
    </Panel>;
@@ -587,7 +594,7 @@ function FiveFlowsReadOnly({state}:{state:AdminSnapshot}){
   <Panel className="metric">
    <small>Seguridad del panel</small><strong>Activación bloqueada</strong>
    <p>No se muestran usuarios, disponibilidad, tarifas ni ventas inventadas.
-    MOTO_RIDE no aparece todavía en el DTO de zonas de Admin.</p>
+    MOTO_RIDE exige prueba legal independiente y COMMERCE prueba de elegibilidad comercial. La cantidad de vehículos no sustituye ninguna de estas pruebas.</p>
    <span>{allowed?'Admin con MFA; operaciones sujetas a permisos específicos.':
     'Acceso restringido: se necesita rol Admin y MFA.'}</span>
   </Panel>

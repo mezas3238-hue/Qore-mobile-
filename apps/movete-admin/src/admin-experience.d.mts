@@ -22,7 +22,9 @@ export type AdminSnapshot={
    grossCollectedGs:number;driverPayoutGs:number;platformCommissionGs:number;refundsGs:number;
    processingFeesGs:number;netPlatformGs:number}}|null;
  zones:{revision:number;expiresAt:number;items:readonly {
-   zoneId:string;municipality:string;serviceKind:'AUTO_RIDE'|'AUTO_DELIVERY'|'MOTO_DELIVERY';
+   zoneId:string;municipality:string;serviceKind:'AUTO_RIDE'|'MOTO_RIDE'|'AUTO_DELIVERY'|'MOTO_DELIVERY'|'COMMERCE';
+   legalGate?:'CLEARED'|'G38_BLOCKED'|'G71_BLOCKED'|'UNVERIFIED';
+   merchantEligibilityVerified?:boolean;
    coverageStatus:string;eligibleByPolicy:boolean;onDutyVehicles:number|null;
    availabilityFresh:boolean;availabilityConfirmed:false;
  }[]}|null;

@@ -32,7 +32,7 @@ test('se rechazan datos privados y operaciones LIVE en DTO',()=>{
   assert.equal(result,null,field);
  }
 });
-test('moto pasajeros y revision duplicada no pasan',()=>{
+test('MOTO_RIDE sin prueba legal y revisiones duplicadas no pasan',()=>{
  assert.equal(projectZoneOverview({...data,items:[{...row,serviceKind:'MOTO_RIDE'}]},{role:'admin',now}),null);
  assert.equal(projectZoneOverview({...data,items:[row,row]},{role:'admin',now}),null);
 });
@@ -85,4 +85,66 @@ test('A05 limita a 50 la página, no a 50 el total de la plataforma',()=>{
  assert.equal(projected.nextCursor,'S'.repeat(44));
  assert.equal(projectZoneOverview({...page,items:[...rows,createRecord(51)]},
   {role:'admin',now}),null);
+});
+
+
+test('D acepta cinco servicios separados en la misma zona sin mezclar pasajeros y entregas',()=>{
+ const rows=[
+  {...row,serviceKind:'AUTO_RIDE'},
+  {...row,serviceKind:'MOTO_RIDE',legalGate:'CLEARED'},
+  {...row,serviceKind:'AUTO_DELIVERY'},
+  {...row,serviceKind:'MOTO_DELIVERY'},
+  {...row,serviceKind:'COMMERCE',merchantEligibilityVerified:true}
+ ];
+ const result=projectZoneOverview({...data,items:rows},{role:'admin',now});
+ assert(result);
+ assert.deepEqual(result.items.map(i=>i.serviceKind),[
+  'AUTO_RIDE','MOTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY','COMMERCE'
+ ]);
+ assert.equal(result.items[1].legalGate,'CLEARED');
+ assert.equal(result.items[4].merchantEligibilityVerified,true);
+ assert.equal(result.items[4].onDutyVehicles,null);
+ assert.equal(result.items[4].availabilityConfirmed,false);
+});
+test('D bloquea MOTO_RIDE sin autorización legal propia de pasajeros',()=>{
+ for(const state of [undefined,'G38_BLOCKED','G71_BLOCKED','UNVERIFIED',
+  'DELIVERY_CLEARED']){
+  const item={...row,serviceKind:'MOTO_RIDE',legalGate:state};
+  assert.equal(projectZoneOverview({...data,items:[item]},{role:'admin',now}),null);
+ }
+ const blocked={...row,serviceKind:'MOTO_RIDE',legalGate:'G71_BLOCKED',
+  eligibleByPolicy:false};
+ const view=projectZoneOverview({...data,items:[blocked]},{role:'admin',now});
+ assert.equal(view.items[0].legalGate,'G71_BLOCKED');
+ assert.equal(view.items[0].onDutyVehicles,null);
+ assert.equal(view.items[0].availabilityConfirmed,false);
+ assert.equal(projectZoneOverview({...data,items:[{
+  ...row,serviceKind:'MOTO_RIDE',legalGate:'CLEARED',coverageStatus:'PAUSED'
+ }]},{role:'admin',now}),null);
+});
+test('D no infiere comercio por el número de repartidores en línea',()=>{
+ for(const entry of [
+  {...row,serviceKind:'COMMERCE'},
+  {...row,serviceKind:'COMMERCE',merchantEligibilityVerified:false},
+  {...row,serviceKind:'COMMERCE',merchantEligibilityVerified:true,
+   coverageStatus:'PAUSED'}
+ ]){
+  assert.equal(projectZoneOverview({...data,items:[entry]},{role:'admin',now}),null);
+ }
+ const blocked={...row,serviceKind:'COMMERCE',merchantEligibilityVerified:false,
+  eligibleByPolicy:false};
+ const view=projectZoneOverview({...data,items:[blocked]},{role:'admin',now});
+ assert.equal(view.items[0].onDutyVehicles,null);
+ assert.equal(view.items[0].availabilityFresh,false);
+ assert.equal(view.items[0].eligibleByPolicy,false);
+});
+test('D mantiene prueba de elegibilidad exclusiva por modalidad',()=>{
+ for(const serviceKind of ['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY']){
+  assert.equal(projectZoneOverview({...data,items:[{
+   ...row,serviceKind,legalGate:'CLEARED'
+  }]},{role:'admin',now}),null);
+  assert.equal(projectZoneOverview({...data,items:[{
+   ...row,serviceKind,merchantEligibilityVerified:true
+  }]},{role:'admin',now}),null);
+ }
 });
