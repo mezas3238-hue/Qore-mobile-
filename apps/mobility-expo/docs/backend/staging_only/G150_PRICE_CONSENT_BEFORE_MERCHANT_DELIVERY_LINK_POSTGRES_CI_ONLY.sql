@@ -50,6 +50,17 @@ BEGIN
   OR d.pickup_tag<>expected_pickup OR d.category<>expected_category
   OR d.status<>'requested' OR d.courier_id IS NOT NULL
   OR d.vehicle_id IS NOT NULL OR d.proof_ref IS NOT NULL
+  -- Bind physical cargo mass to immutable catalog-line weight. The
+  -- Buyer can include packaging weight, but never underdeclare products.
+  OR NOT EXISTS (
+   SELECT 1 FROM public.mobility_stage_merchant_order_lines l
+   WHERE l.order_id=o.id
+  )
+  OR d.grams < COALESCE((
+   SELECT pg_catalog.sum(l.quantity::bigint*l.unit_grams::bigint)
+   FROM public.mobility_stage_merchant_order_lines l
+   WHERE l.order_id=o.id
+  ),0)
   OR NOT EXISTS (
    SELECT 1
    FROM public.mobility_stage_g122_delivery_price_consents c

@@ -239,6 +239,17 @@ try{
  assert.equal(consent.status,200,JSON.stringify(consent.body));
  assert.equal(consent.body.paymentAuthorized,false);
  assert.equal(consent.body.dispatchEnabled,false);
+ // G153: accepted price does not override underdeclared original stock mass.
+ // This direct SQL mutation is a disposable negative test fixture only.
+ assert(original.grams>1);
+ sql("UPDATE public.mobility_stage_deliveries SET grams="+
+  (original.grams-1)+" WHERE id="+qs(deliveryId));
+ const underdeclared=await post(path,sellerToken,{deliveryId,requestKey:linkKey});
+ assert.equal(underdeclared.status,409,'Cannot underdeclare original reserved stock mass');
+ assert.equal(sql("SELECT count(*) FROM public.mobility_stage_merchant_order_events WHERE order_id="+qs(original.id)),'3');
+ assert.equal(sql("SELECT delivery_id IS NULL FROM public.mobility_stage_merchant_orders WHERE id="+qs(original.id)),'t');
+ sql("UPDATE public.mobility_stage_deliveries SET grams="+
+  original.grams+" WHERE id="+qs(deliveryId));
  const attached=await post(path,sellerToken,{deliveryId,requestKey:linkKey});
  assert.equal(attached.status,200,JSON.stringify(attached.body));
  assert.equal(attached.body.orderId,original.id);
@@ -330,6 +341,7 @@ try{
  assert.equal(adminResult.data.ledger,null);
  assert.equal(sql("SELECT status FROM public.mobility_stage_deliveries WHERE id="+qs(deliveryId)),'requested');
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_delivery_events WHERE delivery_id="+qs(deliveryId)),'0');
+ console.log('G153 PASS: original reserved merchandise mass cannot exceed declared G5 cargo grams, even with G122 quote consent');
  console.log('G150 PASS: ORIGINAL G139 Buyer order -> G148 Merchant ready -> Buyer G5 delivery -> G7 server MOTO quote -> G122 immutable price consent -> G6 Merchant HTTP attach same orderId/deliveryId -> Buyer B original authenticated HTTP/G144 recovery AND Admin D AAL2 same link; no driver, PSP, LIVE or fake delivery.');
 } finally {
  await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
