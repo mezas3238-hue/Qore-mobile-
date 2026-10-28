@@ -15,8 +15,11 @@ import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
 import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
+import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
 import {createDriverPrivateInboxRepository} from './g16-driver-private-inbox-repository.mjs';
 import {readDriverPrivateInbox} from '../../movete-driver/src/domain/driver-inbox.mjs';
+import {decidePrivateDriverOffer}
+ from '../../movete-driver/src/domain/driver-offer-decision.mjs';
 import {createDriverInboxSessionController}
  from '../../movete-driver/src/domain/driver-inbox-session.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
@@ -298,6 +301,44 @@ async function main(){
   authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
   allowRequest:()=>true,listForDriver:x=>driverInboxSql.listForDriver(x)
  });
+ // G133: offer read / accept / decline use the original G4 SQL and Auth.
+ // Accept still passes every G71 and G38 trigger; an absent proof is a 409.
+ const driverOffer=createQoreOfferGateway({
+  projectRef:'staging1234567890abcd',
+  verifyAccessToken:driverIdentity,
+  authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
+  allowRequest:()=>true,
+  loadOfferForDriver:async({offerId,driverId:actor})=>{
+   if(!uuid.test(offerId)||!uuid.test(actor))throw Error('G133 scope');
+   return sqlJson("SET ROLE service_role; SELECT COALESCE((SELECT "+
+    "pg_catalog.jsonb_build_object('offerId',o.id,'driverId',o.driver_id,"+
+    "'tripId',o.trip_id,'status',o.status,'expiresAtMs',"+
+    "(EXTRACT(EPOCH FROM o.expires_at)*1000)::bigint,"+
+    "'service',t.service,'originTag',t.origin_tag,"+
+    "'destinationTag',t.destination_tag) FROM "+
+    "public.mobility_stage_auto_demo_offers o JOIN "+
+    "public.mobility_stage_auto_demo_trips t ON t.id=o.trip_id "+
+    "WHERE o.id='"+offerId+"' AND o.driver_id='"+actor+
+    "'),'null'::jsonb)::text");
+  },
+  acceptOffer:async params=>{
+   if(!Object.values(params).every(x=>uuid.test(x)))
+    throw Error('G133 unverified acceptance');
+   const result=psql("SET ROLE service_role; SELECT "+
+    "public.mobility_stage_auto_demo_accept_offer('"+
+    params._offer_id+"','"+params._driver_id+"','"+
+    params._decision_key+"')::text");
+   return result;
+  },
+  declineOffer:async params=>{
+   if(!Object.values(params).every(x=>uuid.test(x)))
+    throw Error('G133 unverified decline');
+   return psql("SET ROLE service_role; SELECT "+
+    "public.mobility_stage_auto_demo_decline_offer('"+
+    params._offer_id+"','"+params._driver_id+"','"+
+    params._decision_key+"')::text");
+  }
+ });
  const tripCommands=createQoreTripCommandGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:driverIdentity,
@@ -317,7 +358,7 @@ async function main(){
  });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:rider,adminF1AuditHandler:adminGateway,
-  offerHandler:noop,tripCommandHandler:tripCommands,
+  offerHandler:driverOffer,tripCommandHandler:tripCommands,
   driverTripStatusHandler:driverStatus,
   driverCurrentTripHandler:driverCurrent,driverInboxHandler:driverInbox,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
@@ -465,6 +506,18 @@ async function main(){
   assert.equal((await http(base,'/v1/staging/driver/inbox',{auth:otherToken})).status,401);
   assert.equal((await http(base,'/v1/staging/driver/inbox?driverId='+driverId,
    {auth:driverToken})).status,404);
+  // C's genuine native HTTP decision adapter reaches the real G4/PG16
+  // contract. G71/G38 prevent a new acceptance without certified evidence.
+  await assert.rejects(decidePrivateDriverOffer({
+   apiOrigin:base,accessToken:driverToken,kind:'AUTO_RIDE',
+   offerId:deniedOfferKey,
+   requestKey:'98980000-0000-4989-8989-000000000027',
+   action:'accept',request:fetch
+  }),/Offer expired, assigned or decision conflicted/);
+  assert.equal((await http(base,'/v1/staging/driver/offers/accept',{
+   auth:token,method:'POST',
+   body:{offerId:deniedOfferKey,
+    requestKey:'98980000-0000-4989-8989-000000000028'}})).status,401);
   // Two distinct HTTP clients read exactly the same G73 -> G3 trip.
   const riderBefore=await http(base,
    '/v1/staging/rider/trips/'+tripId+'/status');
@@ -736,6 +789,7 @@ async function main(){
   assert.equal(posts,5,'One route, quote, subsidy, booking and cancel');
   assert.equal(gets,4,'One status, financial, canceled status, voided financial');
   continuation.close();
+  console.log('G133 DRIVER DECISION PARTIAL: native C accept attempts use real authenticated G4 HTTP -> PG16 and fail closed with G38/G71 intact; no false assignment/settlement.');
   console.log('G132 UNIFIED B+A+C+D PARTIAL: native Driver C polls G16 authenticated real PG16 inbox for B new G73 ride; zero offers when G71/G38 legal evidence is absent; Admin D sees same trip. EXTERNAL_LEGAL_EVIDENCE_BLOCKED, not an accepted trip.');
   console.log('G131 UNIFIED A+B+D PASS: real Client B booking and subsidy -> A HTTP/PostgreSQL persisted trip -> Admin Web D state -> B cancel -> D same ID/revision/fare and IdP revocation; Driver legal G38/G71 remains blocked, NO LIVE');
   // Provider revocation and stored backoffice suspension must both deny reads.
