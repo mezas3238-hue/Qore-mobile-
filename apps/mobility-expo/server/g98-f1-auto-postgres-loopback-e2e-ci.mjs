@@ -789,11 +789,14 @@ async function main(){
   assert.equal(originalTerms.version,1);
   const ownerWebOrigin='https://qore-g135-owner-admin-ci.invalid';
   let ownerWebWrites=0;
+  // A single issued QA Owner session must keep one immutable expiry across
+  // pre/post reads; renewing expiresAt on every GET is not token rotation.
+  const ownerWebExpiry=Date.now()+600000;
   const ownerWeb=createOwnerCommissionGateway({
    enabled:true,contractCertified:true,
    origin:ownerWebOrigin,pinnedOrigin:ownerWebOrigin,
    getSession:async()=>({role:'owner',mfaVerified:true,
-    subject:owner,token:ownerToken,expiresAt:Date.now()+600000}),
+    subject:owner,token:ownerToken,expiresAt:ownerWebExpiry}),
    fetchImpl:(url,opts)=>{
     const destination=new URL(url);
     assert.equal(destination.origin,ownerWebOrigin);
