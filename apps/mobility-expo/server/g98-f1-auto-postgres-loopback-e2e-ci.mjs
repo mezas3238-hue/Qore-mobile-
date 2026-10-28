@@ -13,6 +13,7 @@ import {createG134GeoapifyAutoRouteResolver}
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
+import {createG138AdminAutoTraceGateway} from './g138-admin-auto-trace-gateway.mjs';
 import {createG116OwnerCommissionGateway} from './g116-owner-commission-gateway.mjs';
 import {createOwnerCommissionGateway} from '../../movete-admin/src/owner-commission-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
@@ -308,6 +309,18 @@ async function main(){
   loadAdminRideReceipt:x=>adminSql.read(x)
  });
 
+ // G138: original G73 trip -> G3 append-only events -> G93 ledger.
+ // Never create a parallel trip or certify an unverified Driver.
+ const autoTrace=createG138AdminAutoTraceGateway({
+  adminF1AuditGateway:adminGateway,
+  loadAutoTraceReceipt:async({actorId,tripId})=>{
+   if(!uuid.test(actorId)||!uuid.test(tripId))
+    throw Error('Untrusted G138 SQL scope');
+   return sqlJson("SET ROLE service_role; SELECT COALESCE(public."+
+    "mobility_stage_g138_auto_trace_qa('"+actorId+"','"+tripId+
+    "'),'null'::jsonb)::text;");
+  }
+ });
  // G135: the real D Admin Owner browser codec must change the SAME
  // PostgreSQL commission policy that F1 Cliente B uses after the update.
  // A verifies Owner authority, independent AAL2 and session revocation.
@@ -496,6 +509,7 @@ async function main(){
  });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:rider,adminF1AuditHandler:adminGateway,
+  adminServiceTraceHandler:autoTrace,
   ownerCommissionHandler:ownerRates,
   offerHandler:driverOffer,tripCommandHandler:tripCommands,
   driverTripStatusHandler:driverStatus,
@@ -678,6 +692,42 @@ async function main(){
   assert.equal(adminBefore.data.driverId,null);
   assert.equal(adminBefore.data.assignmentPersisted,false);
   assert.equal(adminBefore.data.amountGs,q.data.amountGs);
+  // G138: actual D Admin browser codec reads SQL from the ORIGINAL G73
+  // serviceId through G75's role/AAL2/revocation fence.
+  const {createServiceTraceGateway}=await import(
+   '../../movete-admin/src/service-trace-gateway.mjs');
+  const traceUrl='https://qore-g138-admin-trace-qa.invalid';
+  const adminTraceExpiry=Date.now()+600000;
+  const traceClient=createServiceTraceGateway({
+   enabled:true,contractCertified:true,
+   origin:traceUrl,pinnedOrigin:traceUrl,
+   getSession:async()=>({role:'admin',subject:adminId,
+    mfaVerified:true,authRevision:1,
+    token:adminToken,expiresAt:adminTraceExpiry}),
+   fetchImpl:(url,opts)=>{
+    const u=new URL(url);
+    assert.equal(u.origin,traceUrl);
+    assert.equal(u.search,'');assert.equal(u.hash,'');
+    assert.equal(opts.method,'GET');
+    return fetch(base+u.pathname,{...opts,redirect:'error'});
+   }
+  });
+  const tBefore=await traceClient.read('AUTO_RIDE',tripId);
+  assert.equal(tBefore.ok,true,JSON.stringify(tBefore));
+  assert.equal(tBefore.data.serviceId,tripId);
+  assert.equal(tBefore.data.quoteId,q.data.quoteId);
+  assert.equal(tBefore.data.bookingRequestKey,bookingKey);
+  assert.equal(tBefore.data.status,'searching');
+  assert.equal(tBefore.data.revision,1);
+  assert.equal(tBefore.data.assignment.legalGate,'G38_BLOCKED');
+  assert.equal(tBefore.data.ledger.serviceId,tripId);
+  assert.equal(tBefore.data.ledger.grossGs,q.data.amountGs);
+  assert.equal(tBefore.data.events.length,1);
+  assert.equal(tBefore.data.events[0].serviceId,tripId);
+  assert.equal((await traceClient.read('MOTO_RIDE',tripId)).ok,false);
+  assert.equal((await http(base,
+   '/v1/staging/admin/services/AUTO_RIDE/'+tripId+'/trace',
+   {auth:token})).status,401);
   // G131: the ACTUAL D Admin Web state machine (same integrated commit)
   // consumes the exact G75 response read from the real PostgreSQL trip.
   // No duplicated fixture, synthetic Admin DTO or bypass of AAL2/RBAC.
@@ -780,6 +830,14 @@ async function main(){
   assert.equal(riderAfter.data.state,'cancelled');
   assert.equal(riderAfter.data.revision,2);
   assert.equal(riderAfter.data.driver,null);
+  const tAfter=await traceClient.read('AUTO_RIDE',tripId);
+  assert.equal(tAfter.ok,true,JSON.stringify(tAfter));
+  assert.equal(tAfter.data.status,'cancelled');
+  assert.equal(tAfter.data.revision,2);
+  assert.equal(tAfter.data.events.length,2);
+  assert.equal(tAfter.data.events[1].status,'cancelled');
+  assert.equal(tAfter.data.events[1].serviceId,tripId);
+  assert.equal(tAfter.data.ledger.reconciliationStatus,'PENDING');
   // An app restart cannot rediscover a canceled trip as active.
   const cAfter=await cInbox.refresh();
   assert.equal(cAfter.phase,'connected');
