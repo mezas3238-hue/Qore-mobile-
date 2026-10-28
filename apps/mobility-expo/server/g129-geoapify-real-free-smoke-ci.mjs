@@ -28,7 +28,7 @@ if(response.status!==200||!response.ok||response.redirected===true)
 if(!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type')??''))
  throw Error('G129_RESPONSE_NOT_JSON');
 const advertised=response.headers.get('content-length');
-if(advertised!==null&&(!/^\d+$/.test(advertised)||Number(advertised)>524288))
+if(advertised!==null&&(!/^\d+$/.test(advertised)||Number(advertised)>4194304))
  throw Error('G129_OVERSIZED_PROVIDER_RESPONSE');
 let raw;
 try{
@@ -37,13 +37,16 @@ try{
  const rd=response.body.getReader();
  try{
   for(;;){const {done,value}=await rd.read();if(done)break;
-   if(!(value instanceof Uint8Array)||(bytes+=value.byteLength)>524288)
+   if(!(value instanceof Uint8Array)||(bytes+=value.byteLength)>4194304)
     throw Error('oversize');
    chunks.push(value);
   }
  }finally{rd.releaseLock();}
  raw=Buffer.concat(chunks).toString('utf8');
-}catch{throw Error('G129_UNREADABLE_OR_LARGE_RESPONSE');}
+}catch(error){
+ if(error?.message==='oversize')throw Error('G129_PROVIDER_RESPONSE_OVER_4MIB');
+ throw Error('G129_RESPONSE_STREAM_UNREADABLE');
+}
 let payload;try{payload=JSON.parse(raw);}catch{throw Error('G129_INVALID_JSON');}
 if(!Array.isArray(payload?.results)||payload.results.length!==1)
  throw Error('G129_WRONG_ROUTE_RESULT_COUNT');
