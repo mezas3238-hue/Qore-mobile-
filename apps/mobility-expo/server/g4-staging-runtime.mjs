@@ -24,6 +24,7 @@ import {createQoreFinanceGateway} from './g7-finance-gateway.mjs';
 import {createG125CargoPricingContext} from './g125-cargo-pricing-context.mjs';
 import {createG127GoogleCargoRoadResolver} from './g127-google-cargo-road-resolver.mjs';
 import {createG128GeoapifyCargoRoadResolver} from './g128-geoapify-cargo-road-resolver.mjs';
+import {createG134GeoapifyAutoRouteResolver} from './g134-geoapify-auto-route-resolver.mjs';
 import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
@@ -165,6 +166,7 @@ export async function prepareQoreG4StagingRuntime({
  g127CargoRouteOptions=null,
  g128GeoapifyOptions=null,
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
+ g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
 }){
@@ -219,6 +221,25 @@ export async function prepareQoreG4StagingRuntime({
     ['resolveCoveredCargoCoordinates','verifyCargoTolls','reserveFreeQuota','request']
       .every(k=>typeof g128GeoapifyOptions[k]==='function')
    ))||
+   !(g134GeoapifyAutoOptions===null||(
+     Object.getPrototypeOf(g134GeoapifyAutoOptions)===Object.prototype
+     &&Object.keys(g134GeoapifyAutoOptions).length===8
+     &&['enabled','freePlanApproved','apiKey','tagSecret',
+       'resolveCoveredAutoCoordinates','verifyAutoTolls',
+       'reserveFreeQuota','request']
+      .every(k=>Object.hasOwn(g134GeoapifyAutoOptions,k))
+     &&g134GeoapifyAutoOptions.enabled===true
+     &&g134GeoapifyAutoOptions.freePlanApproved===true
+     &&typeof g134GeoapifyAutoOptions.apiKey==='string'
+     &&g134GeoapifyAutoOptions.apiKey.length>=20
+     &&g134GeoapifyAutoOptions.apiKey.length<=300
+     &&!/\s/.test(g134GeoapifyAutoOptions.apiKey)
+     &&typeof g134GeoapifyAutoOptions.tagSecret==='string'
+     &&g134GeoapifyAutoOptions.tagSecret.length>=32
+     &&['resolveCoveredAutoCoordinates','verifyAutoTolls',
+       'reserveFreeQuota','request']
+      .every(k=>typeof g134GeoapifyAutoOptions[k]==='function')
+     &&verifiedAutoRoute===null&&g77RouteOptions===null))||
    !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
    !(verifiedMotoRoute===null||typeof verifiedMotoRoute==='function')||
    !(privateEvidenceAdapters===null||
@@ -259,6 +280,11 @@ export async function prepareQoreG4StagingRuntime({
  // even constructing Supabase Auth/SQL clients, never after side effects.
  const preparedG77Route=g77RouteOptions===null?null:
   createG77VerifiedAutoRouteResolver({...g77RouteOptions,now});
+ // G141: Geoapify Free is a mutually exclusive AUTO provider, not
+ // an implicit Google fallback. Separate coverage, tolls and durable
+ // quota must all be verified before any road request.
+ const preparedG134AutoRoute=g134GeoapifyAutoOptions===null?null:
+  createG134GeoapifyAutoRouteResolver({...g134GeoapifyAutoOptions,now});
  // G127 opt-in and prevalidated BEFORE any Supabase Auth clients.
  const preparedG127CargoRoute=g127CargoRouteOptions===null?null:
   createG127GoogleCargoRoadResolver({...g127CargoRouteOptions,now});
@@ -511,7 +537,7 @@ export async function prepareQoreG4StagingRuntime({
  });
  // G79: choose one route provider. No geocode-first alternative is mounted.
  // All billable routing is OFF unless explicitly approved by Owner.
- const resolvedAutoRoute=preparedG77Route??
+ const resolvedAutoRoute=preparedG134AutoRoute??preparedG77Route??
   verifiedAutoRoute??unavailablePricingContext;
 
  // Stable server-derived G82 idempotency UUID. Never supplied by a handset:
