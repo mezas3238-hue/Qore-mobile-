@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {verifyDriverKycForOffer} from './driver-kyc-expiry.mjs';
 import {readDriverKycExpiry,driverKycScreenNotice,assertDriverKycExpirySnapshot}
  from './driver-kyc-expiry.mjs';
 const now=Date.parse('2026-10-24T18:00:00Z'),token='driver-verified-token-000000000000000';
@@ -67,4 +68,41 @@ test('Offline and unauthorized routes never invent successful reactivation',asyn
    approvedStagingHost:'staging.movetefacil.example',allowedByOwner:true,
    accessToken:token,request,now:()=>now}));
  }
+});
+
+test('C acceptance preflight requires fresh READY_QA on the same driver account',async()=>{
+ const actor={role:'driver',userId:'123e4567-e89b-42d3-a456-426614174000',
+  accessToken:'driver-verified-staging-token-abcdefgh'};
+ const base={mode:'STAGING_DEMO_ONLY',state:'READY_QA',expiredKinds:[],
+  renewalRequiredKinds:[],expiringSoonKinds:[],nearestExpiryAtMs:null,
+  accountBlocked:false,qaOnboardingActive:true,
+  commercialDispatchAuthorized:false,qaOnly:true,productionEnabled:false};
+ let session=actor,calls=0;
+ const check=overrides=>verifyDriverKycForOffer({
+  getSession:async()=>session,
+  readStatus:async({accessToken})=>{calls++;
+   assert.equal(accessToken,actor.accessToken);
+   return base;},...overrides
+ });
+ const success=await check();
+ assert.equal(success.ok,true);assert.equal(calls,1);
+ assert(!JSON.stringify(success).includes(actor.accessToken));
+ const expired={...base,state:'BLOCKED_EXPIRED',expiredKinds:['licencia'],
+  renewalRequiredKinds:['licencia'],accountBlocked:true,qaOnboardingActive:false};
+ assert.equal((await check({readStatus:async()=>expired})).ok,false);
+ assert.equal((await check({readStatus:async()=>({...base,
+  commercialDispatchAuthorized:true})})).ok,false);
+ assert.equal((await check({readStatus:async()=>{
+  session={...actor,accessToken:actor.accessToken+'changed'};return base;
+ }})).code,'STALE_DRIVER_SESSION');
+ session=null;
+ assert.equal((await check()).ok,false);
+});
+test('C preflight rejects revoked epoch or offline server without sending any decision',async()=>{
+ const actor={role:'driver',userId:'123e4567-e89b-42d3-a456-426614174000',
+ accessToken:'driver-verified-staging-token-abcdefgh'};
+ assert.equal((await verifyDriverKycForOffer({getSession:async()=>actor,
+  readStatus:async()=>{throw Error('offline');}})).ok,false);
+ assert.equal((await verifyDriverKycForOffer({getSession:async()=>actor,
+  readStatus:async()=>null,isCurrent:()=>false})).ok,false);
 });

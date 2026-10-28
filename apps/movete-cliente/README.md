@@ -1,7 +1,9 @@
-# Movete Fácil Cliente
+# Movete Fácil Cliente — app nativa separada
 
-Esta es la **aplicación independiente de pasajeros y usuarios de envíos**. Sus pantallas y validadores no comparten estados ni rutas con Driver.
+Instalación local Android/iOS con Expo SDK 57: `npm install`, `npm run check`, `npm run android` / `npm run ios`. La compilación nativa firmada requiere credenciales Expo/EAS y, para iOS físico, el entorno de firma autorizado. El proyecto NO está desplegado en tiendas.
 
-Instalación local: `npm install`; pruebas `npm run check`; vista Expo `npm start`. Paquete Android/iOS: `com.movetefacil.cliente`.
+**Ingreso de pasajeros:** el formulario Cuenta ahora utiliza `@supabase/supabase-js` en el dispositivo, con almacenamiento de sesión en Keystore/Keychain mediante `expo-secure-store` (sin respaldo en texto plano). La clave es pública y solo se admite el host HTTPS `<referencia>.supabase.co`. Se verifica identidad con `auth.getUser` y **exactamente un rol passenger** consultado mediante RLS de `user_roles`; una cuenta Driver/Admin/Owner o doble rol no entra como pasajero. Logout limpia el estado privado inmediatamente. En web este adaptador permanece apagado. Para configurarlo, rellenar `.env.local` desde `.env.example` con proyecto STAGING autorizado: nunca agregar valores reales a Git.
 
-**No incluye** registro del conductor, licencias, aprobación de vehículos, despacho hacia otros conductores ni saldos del Driver. No habilita solicitudes ni cobros reales.
+**No equivale a un viaje operativo.** Las pantallas y contratos G73/G74, envíos, chat y comercios permanecen fail-closed: la aplicación aún no cuenta con backend común HTTPS persistente, cobertura/peajes certificados ni conexión funcional con un Driver independiente. No activar flags de viaje por pruebas sintéticas. Credenciales de servicio y pagos no se integran en el móvil.
+
+**Prueba de aceptación real pendiente:** instalar Cliente y Driver por separado en Android e iOS, autenticar pasajeros y conductor diferentes, cotizar ruta paraguaya verificada en Gs, reservar con una sola requestKey, asignar Driver válido, transmitir GPS con consentimiento, mensajes bidireccionales, iniciar/finalizar, conciliación de importe/comisión y confirmar el mismo tripId en Admin Web. Guardar evidencia de 17 requisitos de lanzamiento y 20 recorridos comerciales antes de GO.

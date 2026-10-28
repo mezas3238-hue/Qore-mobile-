@@ -522,8 +522,8 @@ async function main(){
   assert.equal(adminAfter.data.assignmentPersisted,false);
   // G107 uses the actual Architect B Passenger state machine and strict
   // parsers, not copies, against A's HTTP loopback and disposable PG16.
-  // CI explicitly checks out pinned B commit to ci-b-client below.
-  const root=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  // B Client code MUST come from this same integrated Git tree, not stale checkout.
+  const root=new URL('../../movete-cliente/src/domain/',import.meta.url);
   const {createClientExperience}=await import(new URL('client-experience.mjs',root));
   const {createF1AutoRideContinuation}=await import(new URL('f1-auto-ride-continuation.mjs',root));
   const fakeOrigin='https://qore-cross-branch-ci.invalid';

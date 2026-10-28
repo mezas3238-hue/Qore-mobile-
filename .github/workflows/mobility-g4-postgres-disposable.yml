@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - 'feature/mobility-monorepo-isolated-20261016'
+      - 'integration/qore-mobile-e2e-four-apps-20261027'
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs'
@@ -613,13 +614,10 @@ jobs:
       - name: G96 assert same G73 trip, one cancel/void, closed queue, withdrawn offer and late ACK denial
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G96_CANCEL_PRIVATE_DRIVER_DISPATCH_ASSERT_POSTGRES_CI_ONLY.sql
 
-      - name: G107 checkout pinned B Cliente into disposable GitHub worker
-        uses: actions/checkout@v4
-        with:
-          repository: mezas3238-hue/Qore-mobile-
-          ref: ad6569872d79c5c7fd948ae0a859706463678353
-          path: ci-b-client
-          persist-credentials: false
+      - name: G107 verify current integrated Cliente B files (no pinned stale checkout)
+        run: |
+          test -f apps/movete-cliente/src/domain/client-experience.mjs
+          test -f apps/movete-cliente/src/domain/f1-auto-ride-continuation.mjs
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation
         run: node apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
       - name: G113 real PostgreSQL automatic retry, backoff, idempotent cancellation and worker shutdown

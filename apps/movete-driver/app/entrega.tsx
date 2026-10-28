@@ -1,6 +1,6 @@
-import React,{useEffect} from 'react';
-import {ScrollView,Text,View} from 'react-native';
-import {useLocalSearchParams,router} from 'expo-router';
+import React,{useCallback,useEffect} from 'react';
+import {AppState,ScrollView,Text,View} from 'react-native';
+import {useFocusEffect,useLocalSearchParams,router} from 'expo-router';
 import {Action,Panel,styles} from '../src/DriverUI';
 import {useDriverCustody} from '../src/DriverCustodyProvider';
 const labels:Record<string,string>={
@@ -19,10 +19,23 @@ const actions:Record<string,string>={
 export default function DriverDelivery(){
  const {deliveryId:raw}=useLocalSearchParams<{deliveryId?:string}>();
  const deliveryId=typeof raw==='string'?raw:null;
- const {state,enabled,hasProofSource,open,refresh,advance}=useDriverCustody();
+ const {state,enabled,hasProofSource,open,refresh,poll,advance}=useDriverCustody();
  useEffect(()=>{
   if(enabled&&deliveryId&&state.phase==='ready')void open(deliveryId);
  },[enabled,deliveryId,state.phase,open]);
+ // G122C: observe external cancellation/dispute on the same persisted
+ // delivery. Never auto-POST; stop polling when unfocused or backgrounded.
+ useFocusEffect(useCallback(()=>{
+  let focused=true;
+  const sync=()=>{if(focused&&AppState.currentState==='active')
+   void poll();};
+  sync();
+  const interval=setInterval(sync,5000);
+  const foreground=AppState.addEventListener('change',status=>{
+   if(status==='active')sync();
+  });
+  return ()=>{focused=false;clearInterval(interval);foreground.remove();};
+ },[poll]));
  const same=state.deliveryId===deliveryId;
  const active=enabled&&same&&state.phase==='active'&&
   state.nextEvent!==null&&!state.uncertain;

@@ -1,7 +1,7 @@
 import React,{createContext,useContext,useEffect,useMemo,useRef,useState}
  from 'react';
 import {AppState} from 'react-native';
-import {driverKycScreenNotice}
+import {driverKycScreenNotice,verifyDriverKycForOffer}
  from './domain/driver-kyc-expiry.mjs';
 import type {DriverKycExpirySnapshot}
  from './domain/driver-kyc-expiry.mjs';
@@ -15,6 +15,7 @@ type Value=Readonly<{
  snapshot:DriverKycExpirySnapshot|null;
  notice:Readonly<{severity:'warning'|'info';text:string}>;
  refresh:()=>Promise<void>;
+ verifyForOffer:()=>Promise<boolean>;
 }>;
 const Ctx=createContext<Value|null>(null);
 export function DriverKycExpiryProvider({children,authAdapter=null,adapter=null}:{
@@ -58,10 +59,23 @@ export function DriverKycExpiryProvider({children,authAdapter=null,adapter=null}
    clearInterval(everyMinute);
   };
  },[authAdapter,adapter]);
+ // Verify fresh documents with identity recheck immediately before accept.
+ const verifyForOffer=async():Promise<boolean>=>{
+  if(!adapter||!authAdapter)return false;
+  const seq=epoch.current;
+  const proof=await verifyDriverKycForOffer({
+   getSession:()=>authAdapter.getSession(),
+   readStatus:params=>adapter.readStatus(params),
+   isCurrent:()=>epoch.current===seq
+  });
+  if(epoch.current!==seq)return false;
+  if(!proof.ok){setSnapshot(null);setPhase('offline');}
+  return proof.ok;
+ };
  const notice=useMemo(()=>driverKycScreenNotice(
   phase==='connected'?snapshot:null
  ),[phase,snapshot]);
- return <Ctx.Provider value={{phase,snapshot,notice,refresh}}>
+ return <Ctx.Provider value={{phase,snapshot,notice,refresh,verifyForOffer}}>
   {children}
  </Ctx.Provider>;
 }

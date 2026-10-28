@@ -1,6 +1,7 @@
 import React,{createContext,useCallback,useContext,useEffect,useRef,useState} from 'react';
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 import type {DriverCurrentTrip} from './domain/driver-current-trip-http.mjs';
+import {verifyPrivateDriverCurrentTrip} from './domain/driver-current-trip-session.mjs';
 
 export type DriverCurrentTripReader=Readonly<{
  readCurrent:(input:{accessToken:string})=>Promise<DriverCurrentTrip|null>;
@@ -40,7 +41,9 @@ export function DriverCurrentTripProvider({
    if(session.role!=='driver'){
     setState({phase:'authorization-required',trip:null});return null;
    }
-   const trip=await reader.readCurrent({accessToken:session.accessToken});
+   const trip=await verifyPrivateDriverCurrentTrip({
+    session,readCurrent:reader.readCurrent,getSession:()=>authAdapter.getSession()
+   });
    if(generation.current!==sequence)return null;
    setState({phase:trip?'active':'none',trip});
    return trip;

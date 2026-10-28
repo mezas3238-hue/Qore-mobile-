@@ -1,0 +1,218 @@
+import {validateClientOperation} from './client-gateway.mjs';
+
+/**
+ * Cliente: orquestación efímera para solicitudes idempotentes. Un solo requestKey
+ * por intento de usuario, incluso con timeout. Ningún ID ni token se persiste.
+ * El backend es quien decide autorización, duplicados, tarifa y asignación.
+ */
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MUTATIONS=new Set(['rideRequest','deliveryRequest','fareQuote','paymentAuthorize']);
+/**
+ * R59 — never publish an arbitrary transport/server error in ClientSnapshot.
+ * Codes are stable protocol identifiers, never human text or free-form details.
+ * Keep unknown failures terminal for ordinary operations and unconfirmed for
+ * bookings. Do not echo URLs, JWTs, request bodies or phone numbers.
+ */
+const SAFE_CODES=new Set([
+ 'AUTH_REQUIRED','AUTH_UNAVAILABLE','FORBIDDEN','SESSION_CHANGED',
+ 'STALE_SESSION_RESPONSE','REQUEST_REJECTED','BAD_REQUEST',
+ 'CONFLICT_RECONCILE','DEDICATED_GATEWAY_REQUIRED','NOT_CONFIGURED',
+ 'OPERATION_DENIED','REQUEST_IN_FLIGHT','NETWORK_OR_TIMEOUT',
+ 'RATE_LIMITED','SERVICE_UNAVAILABLE','BOOKING_STAGING_NOT_CERTIFIED',
+ 'BOOKING_RECEIPT_NOT_CERTIFIED','BOOKING_IN_FLIGHT',
+ 'BOOKING_RECONCILIATION_NOT_CERTIFIED','BOOKING_RECONCILIATION_UNKNOWN',
+ 'INVALID_BOOKING_REQUEST','INVALID_RECONCILIATION_SCOPE',
+ 'STALE_RESPONSE_IGNORED'
+]);
+const safeCode=(candidate,fallback)=>
+ typeof candidate==='string'&&SAFE_CODES.has(candidate)?candidate:fallback;
+const fail=(code)=>({ok:false,code});
+const UUID_RIDE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** F1: only a strict R56 QA receipt may identify a persisted ride.
+ * Generic HTTP 201, Driver push, or user-entered tripId are NOT evidence. */
+function verifiedBookingReceipt(reply,{operation,requestKey,subject,status}){
+ const d=reply?.data;
+ const fields=['mode','commercialEnabled','ownerId','requestKey','operation',
+  'serviceId','revision','serverPersisted','status'];
+ if(reply?.ok!==true||reply.status!==status
+  ||reply.qaOnly!==true||reply.commercialEnabled!==false
+  ||reply.bookingConfirmedForProduction!==false
+  ||!d||typeof d!=='object'||Array.isArray(d)
+  ||Object.keys(d).length!==fields.length||!fields.every(k=>Object.hasOwn(d,k))
+  ||d.mode!=='STAGING_DEMO_ONLY'||d.commercialEnabled!==false
+  ||d.ownerId!==subject||d.requestKey!==requestKey||d.operation!==operation
+  ||!UUID_RIDE.test(d.serviceId)||!Number.isSafeInteger(d.revision)
+  ||d.revision<1||d.serverPersisted!==true||d.status!=='ACCEPTED_QA')
+  return null;
+ return Object.freeze({serviceId:d.serviceId,revision:d.revision});
+}
+function copy(value){return JSON.parse(JSON.stringify(value));}
+export function createClientMutationController({gateway,getSession,clearSensitive=()=>{}}={}){
+ let state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,
+  sessionRevision:null,error:null,verifiedReceipt:null};
+ let generation=0;
+ const publicState=()=>Object.freeze({
+  phase:state.phase,operation:state.operation,requestKey:state.requestKey,error:state.error
+ });
+ function clear(){
+  generation++;
+  state={phase:'idle',subject:null,operation:null,body:null,requestKey:null,
+   sessionRevision:null,error:null,verifiedReceipt:null};
+  clearSensitive();
+ }
+ function prepare({operation,body,subject,sessionRevision=null}={}){
+  if(state.phase==='in_flight')return fail('REQUEST_IN_FLIGHT');
+  if(state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
+  if(state.phase==='acknowledged')return fail('ALREADY_ACKNOWLEDGED');
+  // No crear un segundo requestKey tras una respuesta no concluyente (p.ej. 409).
+  if(state.phase==='failed')return fail('RECONCILE_BEFORE_NEW_REQUEST');
+  if(!MUTATIONS.has(operation)||!validateClientOperation(operation,body)
+    ||typeof subject!=='string'||!UUID.test(subject)
+    ||(sessionRevision!==null&&(!Number.isSafeInteger(sessionRevision)||sessionRevision<0)))
+   return fail('INVALID_INPUT');
+  if(state.subject&&state.subject!==subject)clear();
+  generation++;
+  state={phase:'ready',subject,operation,body:copy(body),requestKey:body.requestKey,
+   sessionRevision,error:null,verifiedReceipt:null};
+  return {ok:true,requestKey:state.requestKey};
+ }
+ /**
+  * Restore ONLY an unresolved key after a new verified Passenger login.
+  * Null body makes any POST/retry impossible. G121 GET is the sole path.
+  */
+ function restoreUnconfirmedDelivery({requestKey,subject,sessionRevision}={}){
+  if(state.phase!=='idle')return fail('RECOVERY_CONFLICT');
+  if(!UUID.test(requestKey??'')||!UUID.test(subject??'')
+   ||!Number.isSafeInteger(sessionRevision)||sessionRevision<0)
+   return fail('INVALID_RECONCILIATION_SCOPE');
+  generation++;
+  state={phase:'failed',subject,operation:'deliveryRequest',body:null,
+   requestKey,sessionRevision,error:'BOOKING_RECONCILIATION_UNKNOWN',
+   verifiedReceipt:null};
+  return Object.freeze({ok:true,requestKey,recoveredWithoutPost:true});
+ }
+ async function run(retry=false){
+  if(!['ready','retryable'].includes(state.phase))return fail('NO_READY_REQUEST');
+  if(retry!==true&&state.phase==='retryable')return fail('EXPLICIT_RETRY_REQUIRED');
+  if(!gateway||typeof gateway.send!=='function'||!getSession)return fail('GATEWAY_UNAVAILABLE');
+  // La exclusión de doble envío debe suceder ANTES del primer await.
+  // Dos taps síncronos no pueden pasar ambos la comprobación de phase.
+  const started=++generation;
+  const expectedSubject=state.subject;
+  const expectedSessionRevision=state.sessionRevision;
+  const operation=state.operation;
+  const body=copy(state.body);
+  state.phase='in_flight';state.error=null;
+  let session;
+  try{session=await getSession();}
+  catch{
+   if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+   clear();return fail('AUTH_UNAVAILABLE');
+  }
+  if(started!==generation||state.subject!==expectedSubject)return fail('STALE_RESPONSE_IGNORED');
+  if(!session||session.role!=='passenger'||session.subject!==expectedSubject
+   ||(expectedSessionRevision!==null&&session.sessionRevision!==expectedSessionRevision)){
+   clear();return fail('SESSION_CHANGED');
+  }
+  let reply;
+  try{reply=await gateway.send(operation,{body,expectedSessionRevision,expectedSubject});}
+  catch{reply=fail('NETWORK_OR_TIMEOUT');}
+  if(started!==generation||state.subject!==session.subject)return fail('STALE_RESPONSE_IGNORED');
+  if(reply&&reply.ok===true){
+   const certified=verifiedBookingReceipt(reply,{
+    operation,requestKey:state.requestKey,subject:expectedSubject,status:201
+   });
+   // A generic 201 can be sent after an unobserved commit. It is not
+   // authoritative proof of owner, requestKey, operation or service ID.
+   if(['rideRequest','deliveryRequest'].includes(operation)&&!certified){
+    state.verifiedReceipt=null;state.phase='failed';
+    state.error='BOOKING_RECEIPT_NOT_CERTIFIED';
+    return fail('BOOKING_RECEIPT_NOT_CERTIFIED');
+   }
+   state.verifiedReceipt=certified;
+   state.phase='acknowledged';state.error=null;
+   // No se guardan DTOs no certificados ni datos privados del servidor.
+   return {ok:true,requestKey:state.requestKey,status:reply.status};
+  }
+  const code=safeCode(reply?.code,'REQUEST_REJECTED');
+  if(['AUTH_REQUIRED','FORBIDDEN','SESSION_CHANGED'].includes(code)){
+   clear();return fail(code);
+  }
+  state.error=code;
+  // R57: a booking POST may have COMMITTED before timeout, 409 or a
+  // malformed ACK. Never issue another POST, even with the same key,
+  // until the independently certified READ reconciles its outcome.
+  state.phase=['rideRequest','deliveryRequest'].includes(operation)
+   ?'failed'
+   :['NETWORK_OR_TIMEOUT','SERVICE_UNAVAILABLE','RATE_LIMITED'].includes(code)
+    ?'retryable':'failed';
+  return fail(code);
+ }
+ async function reconcileBooking(){
+  if(gateway?.bookingReconciliationRequired!==true
+   ||typeof gateway.reconcile!=='function')
+   return fail('BOOKING_RECONCILIATION_NOT_CERTIFIED');
+  if(state.phase!=='failed'
+   ||!['rideRequest','deliveryRequest'].includes(state.operation))
+   return fail('NO_BOOKING_TO_RECONCILE');
+  if(!getSession)return fail('AUTH_UNAVAILABLE');
+  const started=++generation;
+  const expectedSubject=state.subject;
+  const expectedSessionRevision=state.sessionRevision;
+  const operation=state.operation,requestKey=state.requestKey;
+  state.phase='in_flight';
+  let actor;
+  try{actor=await getSession();}catch{actor=null;}
+  if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+  if(!actor||actor.role!=='passenger'||actor.subject!==expectedSubject
+   ||actor.sessionRevision!==expectedSessionRevision){
+   clear();return fail('SESSION_CHANGED');
+  }
+  let reply;
+  try{reply=await gateway.reconcile(operation,{
+   requestKey,expectedSubject,expectedSessionRevision
+  });}catch{reply=fail('BOOKING_RECONCILIATION_UNKNOWN');}
+  if(started!==generation||state.subject!==expectedSubject)
+   return fail('STALE_RESPONSE_IGNORED');
+  let after;
+  try{after=await getSession();}catch{after=null;}
+  if(started!==generation)return fail('STALE_RESPONSE_IGNORED');
+  if(!after||after.role!=='passenger'||after.subject!==expectedSubject
+   ||after.sessionRevision!==expectedSessionRevision){
+   clear();return fail('SESSION_CHANGED');
+  }
+  if(reply?.ok===true&&reply.recoveredWithoutPost===true
+   &&reply.qaOnly===true&&reply.bookingConfirmedForProduction===false){
+   const certified=verifiedBookingReceipt(reply,{
+    operation,requestKey,subject:expectedSubject,status:200
+   });
+   if(certified){
+    state.verifiedReceipt=certified;
+    state.phase='acknowledged';state.error=null;
+    return Object.freeze({ok:true,requestKey,status:200,
+     qaOnly:true,productionEnabled:false});
+   }
+  }
+  state.phase='failed';
+  state.error=safeCode(reply?.code,'BOOKING_RECONCILIATION_UNKNOWN');
+  return fail(state.error);
+ }
+ function verifiedRide(){
+  const receipt=state.verifiedReceipt;
+  if(state.phase!=='acknowledged'||state.operation!=='rideRequest'
+   ||receipt===null||receipt===undefined)return null;
+  return Object.freeze({tripId:receipt.serviceId,serverRevision:receipt.revision,
+   subject:state.subject,sessionRevision:state.sessionRevision,
+   requestKey:state.requestKey});
+ }
+ function verifiedDelivery(){
+  const receipt=state.verifiedReceipt;
+  if(state.phase!=='acknowledged'||state.operation!=='deliveryRequest'
+   ||receipt===null||receipt===undefined)return null;
+  return Object.freeze({deliveryId:receipt.serviceId,
+   serverRevision:receipt.revision,subject:state.subject,
+   sessionRevision:state.sessionRevision,requestKey:state.requestKey});
+ }
+ return Object.freeze({prepare,restoreUnconfirmedDelivery,submit:()=>run(false),retry:()=>run(true),
+  reconcileBooking,verifiedRide,verifiedDelivery,clear,publicState});
+}

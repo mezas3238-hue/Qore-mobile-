@@ -71,3 +71,36 @@ test('Driver reports unauthorized, offline and malformed responses without retai
  await assert.rejects(()=>run({request:mock({}).request}),/invalid response/);
  assert.deepEqual(await run({request:mock({...snapshot,offers:[]}).request}),[]);
 });
+
+test('Driver private inbox times out hung transport and aborts without an automatic write',async()=>{
+ let signal=null;
+ const request=async(url,init)=>{signal=init.signal;return new Promise(()=>{});};
+ await assert.rejects(()=>run({request,timeoutMs:120}),/unavailable/);
+ assert.equal(signal?.aborted,true);
+});
+test('Driver private inbox does not accept a late or hanging JSON body',async()=>{
+ const request=async()=>({status:200,json:()=>new Promise(()=>{})});
+ await assert.rejects(()=>run({request,timeoutMs:120}),/invalid response/);
+});
+test('Driver private inbox refuses oversize receipts and motorcycle passengers without contract',async()=>{
+ let jsonCalled=false;
+ const large=async()=>({status:200,
+  headers:{get:k=>k==='content-length'?'9000':null},
+  json:async()=>{jsonCalled=true;return snapshot;}});
+ await assert.rejects(()=>run({request:large}),/invalid response/);
+ assert.equal(jsonCalled,false);
+ await assert.rejects(()=>run({request:mock({
+  ...snapshot,offers:[{...snapshot.offers[0],kind:'MOTO_RIDE'}]
+ }).request}),/invalid offer/);
+});
+
+test('Driver validates ordinary numeric content-length without rejecting a valid receipt',async()=>{
+ const plain=JSON.stringify(snapshot);
+ const request=async()=>({status:200,headers:{get:k=>
+  k==='content-length'?String(Buffer.byteLength(plain,'utf8')):null},
+  json:async()=>snapshot});
+ assert.deepEqual(await run({request}),snapshot.offers);
+ const invalid=async()=>({status:200,headers:{get:k=>
+  k==='content-length'?'5xyz':null},json:async()=>snapshot});
+ await assert.rejects(()=>run({request:invalid}),/invalid response/);
+});

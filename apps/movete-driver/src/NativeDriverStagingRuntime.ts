@@ -43,6 +43,8 @@ export function getApprovedNativeDriverStagingRuntime():DriverStagingRuntime|nul
   verifyStopped:async()=>({
    vehicleStopped:false,source:'unverified',observedAtMs:Date.now()
   }),
-  enableKycExpiryStatus:false
+  // KYC is queried read-only from the pinned, Driver-scoped STAGING backend.
+  // Without this adapter offer acceptance stays permanently disabled.
+  enableKycExpiryStatus:true
  });
 }

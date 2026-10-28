@@ -1,0 +1,62 @@
+# One integration candidate: A backend + B client + C driver + D admin.
+# This checks ONE tree, not independently pinned or separately mocked branches.
+# Full real HTTP + PG16 E2E runs in mobility-g4-postgres-disposable.yml.
+name: QORE Mobile A+B+C+D single-tree integration
+on:
+  push:
+    branches:
+      - integration/qore-mobile-e2e-four-apps-20261027
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  four-app-source:
+    name: A+B+C+D same revision, builds and native typechecks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert one integrated source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs \
+            apps/movete-cliente/src/ClientRuntime.tsx \
+            apps/movete-driver/package.json \
+            apps/movete-admin/src/AdminRuntime.tsx; do
+            test -s "$f"
+          done
+          ! grep -q 'ci-b-client/apps/movete-cliente' apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
+          echo "All four components are in the same commit: ${GITHUB_SHA}"
+      - name: Verify Client application can typecheck in unified tree
+        working-directory: apps/movete-cliente
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run typecheck
+      - name: Verify Driver application can typecheck in unified tree
+        working-directory: apps/movete-driver
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run typecheck
+      - name: Verify Owner Admin web bundles from the same code revision
+        working-directory: apps/movete-admin
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run check
+          npm run build
+          test -f dist/index.html
+      - name: Backend HTTP/SQL modules checked without external secrets
+        run: |
+          node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
+          node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
+          echo "The G4 PostgreSQL workflow validates real same-tree HTTP + PG persistence."
+      - name: Do not misrepresent compilation as production GO
+        run: |
+          echo "NO external Auth/AAL2, Driver G38/G71, PSP or production runtime certified."
+          echo "No Render/Supabase deployment and no app store release performed."

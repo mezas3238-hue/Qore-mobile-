@@ -22,6 +22,7 @@ import {readDriverKycExpiry} from './driver-kyc-expiry.mjs';
 import {submitPrivateDriverEvidence}
  from './driver-document-upload.mjs';
 import {readDriverCurrentTrip} from './driver-current-trip-http.mjs';
+import {readDriverPrivateDeliveryDetail} from './driver-private-delivery-detail.mjs';
 import {resolveDriverStatusOrigin}
  from './driver-status-origin.mjs';
 
@@ -86,6 +87,10 @@ export function createDriverStagingRuntime({
   })
  });
  const offerActions=Object.freeze({
+  readDeliveryDetail:({accessToken,offerId})=>readDriverPrivateDeliveryDetail({
+   apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+   accessToken,offerId,request,now
+  }),
   makeRequestKey:chatAdapters.makeRequestKey,
   now,
   liveEnabled:false,
