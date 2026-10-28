@@ -9,7 +9,7 @@ import type {G148Result} from './domain/g148-commerce-durable-order.mjs';
 import {createG148CommerceDurableOrder}
  from './domain/g148-commerce-durable-order.mjs';
 type Controller=ReturnType<typeof createG148CommerceDurableOrder>;
-const positive=x=>typeof x==='string'&&/^[1-9][0-9]{0,14}$/.test(x)
+const positive=(x:unknown)=>typeof x==='string'&&/^[1-9][0-9]{0,14}$/.test(x)
  &&Number.isSafeInteger(Number(x));
 const resultMessage=(r:G148Result)=>{
  if(r.ok)return r.receipt?.orderId?
