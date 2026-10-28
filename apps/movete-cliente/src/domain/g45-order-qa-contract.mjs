@@ -19,7 +19,7 @@ const CANCEL_ACK=['orderId','receiptId','eventId','receiptStatus','refundStatus'
 const fail=code=>Object.freeze({ok:false,code});
 export function validateG45ReserveRequest(body){
  if(!exact(body,BODY)||!uuid(body.requestKey)||!uuid(body.branchId)
-  ||!natural(body.catalogVersion)||body.vehicleKind!=='AUTO'
+  ||!natural(body.catalogVersion)||!['AUTO','MOTO'].includes(body.vehicleKind)
   ||!Array.isArray(body.items)||body.items.length<1||body.items.length>50)
   return false;
  const seen=new Set();
