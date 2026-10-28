@@ -127,6 +127,19 @@ async function main(){
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+owner+"','owner','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) VALUES('"+adminId+"','admin','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_g93_ride_campaigns(id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days) VALUES('"+campaign+"','AUTO_RIDE','G98_AUTO_60_QA','"+owner+"',true,pg_catalog.transaction_timestamp()-interval '1 hour',pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);");
+ // G134 maps to its verified AUTO coverage zone. Reuse only the
+ // already Owner-approved QA rule, with an explicit immutable new rule key;
+ // never let the map provider choose prices or alter prior fare versions.
+ psql("SET ROLE service_role; INSERT INTO public.mobility_stage_fare_rules "+
+  "(rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,"+
+  "minimum_pyg,commission_bps,valid_from,valid_until,active,"+
+  "approved_by,approved_at) SELECT 'g134-geoapify-free-auto-qa',"+
+  "mode,'AUTO_ASUNCION',base_pyg,per_km_pyg,per_minute_pyg,"+
+  "minimum_pyg,commission_bps,valid_from,valid_until,true,"+
+  "approved_by,approved_at FROM public.mobility_stage_fare_rules "+
+  "WHERE mode='AUTO' AND zone_tag='ASUNCION_FIXTURE' AND active=true");
+ assert.equal(psql("SELECT count(*) FROM public.mobility_stage_fare_rules "+
+  "WHERE rule_key='g134-geoapify-free-auto-qa' AND active=true"),'1');
  const db=createQoreG73AutoRepository({rpc});
  const targetedDispatch=createG112ScopedAutoDispatchRepository({rpc});
  let g111WorkerRuns=0,g111Receipt=null;
