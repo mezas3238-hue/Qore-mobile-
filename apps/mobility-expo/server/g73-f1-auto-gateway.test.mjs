@@ -161,3 +161,37 @@ test('G90 rejects untrusted or contradictory SQL receipt and never leaks identit
  assert.equal((await fixture().app(request(path,null,'GET'))).status,503);
  assert.throws(()=>fixture({readDispatchStatus:'forged'}));
 });
+
+test('G135 editable Owner rate survives G73 API while passenger subsidy stays fixed at 10%',async()=>{
+ const amount=quote.amountGs;
+ const build=(bps,patch={})=>{
+  const commission=Math.floor((amount*bps+5000)/10000);
+  const subsidy=Math.floor((amount*1000+5000)/10000);
+  return {mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+   ownerId:actor,quoteId,campaignId:'73730000-0000-4737-8737-000000000017',
+   serviceKind:'AUTO_RIDE',currency:'PYG',originalFareGs:amount,
+   commissionBps:bps,subsidyBps:1000,nominalCommissionGs:commission,
+   customerSubsidyGs:subsidy,customerPaysGs:amount-subsidy,
+   driverReceivesGs:amount-commission,platformRetainsGs:commission-subsidy,
+   fareVersion:quote.fareVersion,expiresAt:time+60000,serverPersisted:true,
+   ...patch};
+ };
+ const uri='/v1/staging/rider/auto/prequotes/'+quoteId+'/subsidy';
+ for(const bps of [1000,1500,1800,3000]){
+  const dto=build(bps);
+  const f=fixture({readSubsidyPreview:async()=>dto});
+  const result=await f.app(request(uri,null));
+  assert.equal(result.status,200,JSON.stringify(result.body));
+  assert.equal(result.body.commissionBps,bps);
+  assert.equal(result.body.subsidyBps,1000);
+  assert.equal(result.body.customerPaysGs,amount-1520);
+ }
+ for(const bad of [
+  build(999),build(3001),build(1800,{subsidyBps:800}),
+  build(1800,{nominalCommissionGs:1}),
+  build(1800,{ownerId:stranger}),build(1800,{platformRetainsGs:0})
+ ]){
+  const f=fixture({readSubsidyPreview:async()=>bad});
+  assert.equal((await f.app(request(uri,null))).status,409);
+ }
+});
