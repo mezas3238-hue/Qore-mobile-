@@ -15,7 +15,8 @@ const policy=(kind,bps=0,version=1)=>({
 test('G136 Admin Owner reads five services and independently verifies changed cargo/commerce',async()=>{
  const issued={role:'owner',mfaVerified:true,subject:owner,
   token:'g136-owner-provider-token-123456789',expiresAt:2000000600000};
- const stored=new Map(source.map(k=>[k,policy(k)]));
+ const stored=new Map(source.map(k=>[k,policy(k,
+  k==='AUTO_RIDE'?1500:k==='MOTO_RIDE'?1200:0)]));
  const called=[];
  const gateway=createOwnerCommissionGateway({
   enabled:true,contractCertified:true,origin:host,pinnedOrigin:host,
