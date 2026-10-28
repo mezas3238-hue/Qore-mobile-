@@ -4,6 +4,7 @@ import type {AdminExperience,AdminSnapshot} from './admin-experience.mjs';
 import {getWebAdminAuth} from './WebAdminClient';
 import {createF1AdminAuthorizedQaOptions} from './f1-admin-authorized-qa-options.mjs';
 import {createServiceTraceQaOptions} from './service-trace-gateway.mjs';
+import {createAdminReadQaOptions} from './admin-read-qa-options.mjs';
 import type {WebAdminAuth} from './web-admin-auth.mjs';
 const Context=createContext<AdminExperience|null>(null);
 const AuthContext=createContext<WebAdminAuth|null>(null);
@@ -41,9 +42,26 @@ export function AdminRuntimeProvider({children,experience}:{
   serverRevocationVerified:import.meta.env.VITE_D_TRACE_REVOCATION_VERIFIED==='true',
   fetchImpl:fetch
  }):null,[auth]);
+ // D: the existing G27 Admin HTTP gateway was never attached at runtime.
+ // Permit only explicitly certified HTTPS endpoints; server still enforces JWT,
+ // MFA AAL2, RBAC, RLS and revocation. All env flags default to OFF.
+ const reads=useMemo(()=>auth?createAdminReadQaOptions({
+  origin:import.meta.env.VITE_D_READ_STAGING_ORIGIN,
+  pinnedOrigin:import.meta.env.VITE_D_READ_PINNED_ORIGIN,
+  ownerApproved:import.meta.env.VITE_D_READ_OWNER_APPROVED==='true',
+  externalHttpsVerified:import.meta.env.VITE_D_READ_EXTERNAL_HTTPS_VERIFIED==='true',
+  contractVerified:import.meta.env.VITE_D_READ_CONTRACT_VERIFIED==='true',
+  postgresVerified:import.meta.env.VITE_D_READ_PG_VERIFIED==='true',
+  serverMfaVerified:import.meta.env.VITE_D_READ_SERVER_MFA_VERIFIED==='true',
+  serverRbacVerified:import.meta.env.VITE_D_READ_SERVER_RBAC_VERIFIED==='true',
+  serverRevocationVerified:import.meta.env.VITE_D_READ_REVOCATION_VERIFIED==='true',
+  verifiedOperations:import.meta.env.VITE_D_READ_VERIFIED_OPERATIONS,
+  fetchImpl:fetch
+ }):null,[auth]);
  const value=useMemo(()=>experience??createAdminExperience({
-  authProvider:auth,f1RideAuditOptions:f1Qa,serviceTraceOptions:traceQa
- }),[experience,auth,f1Qa,traceQa]);
+  authProvider:auth,readGatewayOptions:reads,
+  f1RideAuditOptions:f1Qa,serviceTraceOptions:traceQa
+ }),[experience,auth,reads,f1Qa,traceQa]);
  useEffect(()=>{if(auth)void value.refreshSession();},[auth,value]);
  return <Context.Provider value={value}>
   <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
