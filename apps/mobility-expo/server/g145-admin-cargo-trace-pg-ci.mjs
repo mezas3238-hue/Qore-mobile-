@@ -56,7 +56,9 @@ assert.deepEqual([...found].sort(),['AUTO','MOTO']);
 for(const r of rows)assert([r.id,r.key,r.quoteId].every(x=>UUID.test(x)));
 const gateway=createG145AdminCargoTraceGateway({
  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
- now:()=>now,
+ // Compare SQL observedAt against a FRESH server clock, not the time
+ // the CI file was first evaluated before its PostgreSQL round trips.
+ now:()=>Date.now(),
  verifyAccessToken:async bearer=>{
   if(bearer!==token)throw Error('IdP rejected');
   return {id:admin,sessionId:session,expiresAtMs:now+60000,
