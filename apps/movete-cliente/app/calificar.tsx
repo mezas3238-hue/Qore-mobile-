@@ -10,7 +10,7 @@ import {createG155VerifiedRatingClient}
 import type {G155RatingKind,G155TargetKind,G155IncidentCode}
  from '../src/domain/g155-verified-rating-client.mjs';
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const kinds:readonly G155RatingKind[]=['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE'];
 const labels:Record<G155RatingKind,string>={
  AUTO_RIDE:'Viaje en auto',MOTO_RIDE:'Viaje en moto',

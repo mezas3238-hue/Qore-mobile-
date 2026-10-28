@@ -2,7 +2,7 @@ import {readBoundedResponseText} from './bounded-http-response.mjs';
 /** Passenger ratings require an authorized STAGING server with independently
  * verified original service status; frontend never decides who can be rated.
  */
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const KINDS=new Set(['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE']);
 const TARGETS=new Set(['DRIVER','COURIER','MERCHANT']);
 const INCIDENTS=new Set(['SUSPECTED_FRAUD','SAFETY','NO_SHOW','INCORRECT_ITEM','OTHER']);
