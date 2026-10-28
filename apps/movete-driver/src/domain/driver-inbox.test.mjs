@@ -93,3 +93,14 @@ test('Driver private inbox refuses oversize receipts and motorcycle passengers w
   ...snapshot,offers:[{...snapshot.offers[0],kind:'MOTO_RIDE'}]
  }).request}),/invalid offer/);
 });
+
+test('Driver validates ordinary numeric content-length without rejecting a valid receipt',async()=>{
+ const plain=JSON.stringify(snapshot);
+ const request=async()=>({status:200,headers:{get:k=>
+  k==='content-length'?String(Buffer.byteLength(plain,'utf8')):null},
+  json:async()=>snapshot});
+ assert.deepEqual(await run({request}),snapshot.offers);
+ const invalid=async()=>({status:200,headers:{get:k=>
+  k==='content-length'?'5xyz':null},json:async()=>snapshot});
+ await assert.rejects(()=>run({request:invalid}),/invalid response/);
+});

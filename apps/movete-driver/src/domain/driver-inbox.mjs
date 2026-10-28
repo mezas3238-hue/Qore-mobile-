@@ -45,7 +45,7 @@ export async function readDriverPrivateInbox({
   if(response?.status!==200||response?.redirected===true)
    throw Error('Driver inbox unavailable');
   const length=response.headers?.get?.('content-length');
-  if(length!=null&&(!/^\\d+$/.test(length)||Number(length)>limit))
+  if(length!=null&&(!/^[0-9]+$/.test(length)||Number(length)>limit))
    throw Error('Driver inbox invalid response');
   try{
    data=await within(response.json());
