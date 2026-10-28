@@ -6,9 +6,9 @@
  */
 import assert from 'node:assert/strict';
 if(process.env.CI!=='true'||process.env.GITHUB_REPOSITORY!=='mezas3238-hue/Qore-mobile-'||
- process.env.GITHUB_REF!=='refs/heads/feature/mobility-monorepo-isolated-20261016'||
+ ![ 'refs/heads/feature/mobility-monorepo-isolated-20261016', 'refs/heads/integration/qore-mobile-e2e-four-apps-20261027' ].includes(process.env.GITHUB_REF)||
  process.env.GITHUB_EVENT_NAME!=='push')
- throw Error('G129 live smoke restricted to original trusted CI branch push');
+ throw Error('G129 live smoke restricted to trusted owner CI branch push');
 const secret=process.env.GEOAPIFY_API_KEY;
 if(typeof secret!=='string'||secret.length<20||secret.length>300||
  /\s/.test(secret))throw Error('G129_SECRET_UNAVAILABLE_OR_INVALID');
