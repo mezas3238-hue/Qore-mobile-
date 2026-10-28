@@ -160,7 +160,7 @@ const qaBuyer=createG45BuyerOrderReservationQa({
    args._buyer!==buyer||args._session!==buyerSession||
    args._iat_ms!==issued||args._request_key!==key)
    throw Error('G152 original Buyer private recovery only');
-  return {data:read("SET ROLE service_role; SELECT COALESCE("+
+  return {data:read("SELECT COALESCE("+
    "public.mobility_stage_g144_recover_order_qa("+
    qs(buyer)+","+qs(buyerSession)+","+issued+","+qs(key)+
    "),'null'::jsonb)::text")};
