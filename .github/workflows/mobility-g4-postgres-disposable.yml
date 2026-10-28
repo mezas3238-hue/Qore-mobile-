@@ -14,6 +14,10 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
+      - 'apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs'
+      - 'apps/movete-cliente/src/domain/g5-g121-verified-delivery-booking-gateway.mjs'
+      - 'apps/movete-cliente/src/domain/g121-delivery-registration-gateway.mjs'
+      - 'apps/movete-driver/src/domain/driver-custody-http.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
@@ -32,6 +36,10 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
+      - 'apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs'
+      - 'apps/movete-cliente/src/domain/g5-g121-verified-delivery-booking-gateway.mjs'
+      - 'apps/movete-cliente/src/domain/g121-delivery-registration-gateway.mjs'
+      - 'apps/movete-driver/src/domain/driver-custody-http.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
@@ -215,6 +223,7 @@ jobs:
           node --check apps/mobility-expo/server/g106-driver-current-trip-qa.mjs
           node --check apps/mobility-expo/server/g106-driver-current-trip-repository.mjs
           node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
+          node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: Guard isolated local chain database
         run: |
           test "$PGHOST" = "localhost"
@@ -635,7 +644,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G122_DELIVERY_VEHICLE_FARE_CONSENT_POSTGRES_CI_ONLY.sql
       - name: G122 HTTP original AUTO and MOTO delivery + G7 quote + exact price consent PostgreSQL
         run: node apps/mobility-expo/server/g122-delivery-price-consent-pg-http-ci.mjs
-      - name: G121 private AUTO/MOTO package lost-ACK booking recovery in disposable PG16
+      - name: G132 original B Client G5/G121 and C Driver G66 over A PostgreSQL16 (same SHA)
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G123 install SQL private delivery offer/accept price fence AFTER G121/G122 receipts
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G123_DELIVERY_PRICE_BEFORE_PRIVATE_OFFER_FENCE_POSTGRES_CI_ONLY.sql
