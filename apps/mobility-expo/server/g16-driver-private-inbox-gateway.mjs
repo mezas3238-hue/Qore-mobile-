@@ -16,12 +16,15 @@ const bearer=headers=>{
 const confirmed=user=>object(user)&&validId(user.id)&&user.is_anonymous!==true&&
  (typeof user.email_confirmed_at==='string'||typeof user.phone_confirmed_at==='string');
 export function createDriverPrivateInboxGateway({
- projectRef,verifyAccessToken,authorizeDriver,allowRequest,listForDriver,now=Date.now
+ projectRef,verifyAccessToken,authorizeDriver,allowRequest,listForDriver,now=Date.now,
+ requireFreshSession=false,verifySessionNotRevoked
 }={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizeDriver,allowRequest,listForDriver,now]
   .every(fn=>typeof fn==='function'))
   throw Error('Trusted G16 Driver gateway dependencies required');
+ if(requireFreshSession===true&&typeof verifySessionNotRevoked!=='function')
+  throw Error('G16 requires revocation authority for guarded Driver sessions');
  return async({method,path,headers,body}={})=>{
   if(method!=='GET'||path!==PATH)return answer(404,{error:'Not found'});
   if(body!==undefined&&body!==null)return answer(400,{error:'GET body unsupported'});
@@ -32,6 +35,16 @@ export function createDriverPrivateInboxGateway({
    return answer(401,{error:'Driver session not confirmed'});
   }
   if(!confirmed(user))return answer(401,{error:'Confirmed driver identity required'});
+  if(requireFreshSession===true){
+   const at=now();
+   if(!validId(user.sessionId)||!Number.isSafeInteger(user.expiresAtMs)||
+    !Number.isSafeInteger(at)||user.expiresAtMs<=at)
+    return answer(401,{error:'Driver session expired or incomplete'});
+   try{
+    if(await verifySessionNotRevoked({userId:user.id,sessionId:user.sessionId,at})!==true)
+     return answer(401,{error:'Driver session revoked'});
+   }catch{return answer(503,{error:'Driver session authority unavailable'});}
+  }
   try{
    if(await authorizeDriver(user.id)!==true)
     return answer(403,{error:'Driver role required'});
