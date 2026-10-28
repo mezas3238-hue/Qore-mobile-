@@ -271,6 +271,7 @@ jobs:
           node --test apps/mobility-expo/server/g101-moto-passenger-gateway.test.mjs
           node --check apps/mobility-expo/server/g4-staging-runtime.mjs
           node --test apps/mobility-expo/server/g4-staging-runtime.test.mjs
+          node --test apps/mobility-expo/server/g143-courier-custody-http-routing.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: Guard isolated local chain database
         run: |
