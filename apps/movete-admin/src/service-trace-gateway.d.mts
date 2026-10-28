@@ -1,6 +1,6 @@
 export type TraceServiceKind='AUTO_RIDE'|'MOTO_RIDE'|'DELIVERY_AUTO'|'DELIVERY_MOTO'|'COMMERCE';
 export type ServiceTrace=Readonly<{
- serviceKind:TraceServiceKind;serviceId:string;quoteId:string;
+ serviceKind:TraceServiceKind;serviceId:string;quoteId:string|null;
  bookingRequestKey:string;status:string;revision:number;
  observedAt:number;expiresAt:number;serverPersistedReported:true;
  qaOnly:true;productionEnabled:false;

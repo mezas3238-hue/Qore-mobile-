@@ -45,7 +45,8 @@ const same=(a,b)=>a.subject===b.subject&&a.role===b.role
 function validated(d,kind,id,subject,t){
  if(!exact(d,ROOT)||d.mode!=='STAGING_DEMO_ONLY'
   ||d.productionEnabled!==false||d.viewerId!==subject
-  ||d.serviceKind!==kind||d.serviceId!==id||!uuid(d.quoteId)
+  ||d.serviceKind!==kind||d.serviceId!==id
+  ||(kind==='COMMERCE'?d.quoteId!==null:!uuid(d.quoteId))
   ||!uuid(d.bookingRequestKey)||!STATES[kind].includes(d.status)
   ||!safeInt(d.revision)||d.revision<1
   ||!safeInt(d.observedAt)||d.observedAt>t||t-d.observedAt>30000
@@ -55,7 +56,13 @@ function validated(d,kind,id,subject,t){
   ||!['G38_BLOCKED','G71_BLOCKED','UNVERIFIED','CLEARED'].includes(d.assignment.legalGate)
   ||(d.assignment.legalGate!=='CLEARED'&&d.assignment.state!=='NOT_ASSIGNABLE')
   ||(d.assignment.state==='ASSIGNED'&&d.assignment.legalGate!=='CLEARED')
-  ||!Array.isArray(d.events)||d.events.length<1||d.events.length>40)return false;
+  ||!Array.isArray(d.events)||d.events.length<1||d.events.length>40
+  ||(kind==='COMMERCE'&&(
+    !['requested','cancelled'].includes(d.status)
+    ||d.revision!==(d.status==='cancelled'?2:1)
+    ||d.events.length!==d.revision||d.ledger!==null
+    ||d.assignment.state!=='NOT_ASSIGNABLE'
+    ||d.assignment.legalGate!=='G38_BLOCKED')))return false;
  let last=0,at=0;const ids=new Set();
  for(const event of d.events){
   if(!exact(event,EVENT)||!uuid(event.eventId)||ids.has(event.eventId)

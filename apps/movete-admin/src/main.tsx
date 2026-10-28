@@ -568,7 +568,7 @@ function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSna
     <strong>{match.serviceKind} · {match.serviceId}</strong>
     <small>Estado: {match.status} · revisión {match.revision}</small>
     <small>Reserva {match.bookingRequestKey}</small>
-    <small>Cotización {match.quoteId}</small>
+    <small>{match.quoteId?'Cotización '+match.quoteId:'Sin cotización G7 emitida'}</small>
     <small>Asignación: {match.assignment.state} — {match.assignment.legalGate}</small>
     <small>PG persistido reportado por servidor, aún no cotejado independientemente</small>
    </div><div className="zone-count">QA<small>NO LIVE</small></div></div>

@@ -36,6 +36,7 @@ import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG138AdminAutoTraceGateway} from './g138-admin-auto-trace-gateway.mjs';
 import {createG142AdminMotoTraceGateway} from './g142-admin-moto-trace-gateway.mjs';
 import {createG145AdminCargoTraceGateway} from './g145-admin-cargo-trace-gateway.mjs';
+import {createG146AdminCommerceTraceGateway} from './g146-admin-commerce-trace-gateway.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-merchant-management-repository.mjs';
@@ -675,6 +676,21 @@ export async function prepareQoreG4StagingRuntime({
    return data;
   }
  });
+ // G146: original G45 Buyer stock/order, read-only Admin provenance.
+ // G45 is NOT a quote and no ledger/payment may be inferred from its receipt.
+ const adminCommerceTrace=verifiedAdminTrust===null?null:createG146AdminCommerceTraceGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  ...verifiedAdminTrust,
+  loadCommerceTraceReceipt:async({actorId,orderId})=>{
+   if(!UUID.test(actorId)||!UUID.test(orderId))
+    throw Error('Invalid G146 original commerce SQL scope');
+   const {data,error}=await admin.rpc('mobility_stage_g146_commerce_trace_qa',{
+    _admin:actorId,_order:orderId
+   });
+   if(error)throw Error('G146 original SQL commerce trace unavailable');
+   return data;
+  }
+ });
  const safety=createQoreSafetyGateway({
   projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
   allowRequest,
@@ -869,6 +885,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminAutoTrace===null?{}:{adminServiceTraceHandler:guard(adminAutoTrace)}),
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
+   ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
    financeHandler:guard(finance),

@@ -8,12 +8,12 @@ const session={role:'admin',subject:admin,mfaVerified:true,authRevision:4,
  token:'admin-aal2-verified-qa-session-012345',expiresAt:at+300000};
 const row=kind=>({
  mode:'STAGING_DEMO_ONLY',viewerId:admin,serviceId:id,
- serviceKind:kind,bookingRequestKey:uuid(3),quoteId:uuid(4),
+ serviceKind:kind,bookingRequestKey:uuid(3),quoteId:kind==='COMMERCE'?null:uuid(4),
  status:'requested',revision:1,observedAt:at,expiresAt:at+30000,
  serverPersisted:true,productionEnabled:false,
  assignment:{state:'NOT_ASSIGNABLE',legalGate:'G71_BLOCKED'},
  events:[{eventId:uuid(5),serviceId:id,sequence:1,status:'requested',at:at-1000}],
- ledger:{serviceId:id,currency:'PYG',grossGs:20000,
+ ledger:kind==='COMMERCE'?null:{serviceId:id,currency:'PYG',grossGs:20000,
   platformCommissionGs:3000,customerSubsidyGs:2000,
   driverPayoutGs:17000,reconciliationStatus:'PENDING'}
 });
@@ -43,7 +43,7 @@ test('D five flows use precisely one server serviceId across events and ledger',
   assert.equal(out.ok,true,kind);
   assert.equal(out.data.serviceId,id);
   assert.equal(out.data.events[0].serviceId,id);
-  assert.equal(out.data.ledger.serviceId,id);
+  assert.equal(out.data.ledger?.serviceId??null,kind==='COMMERCE'?null:id);
   assert.equal(out.data.assignment.state,'NOT_ASSIGNABLE');
   assert.equal(out.data.viewerId,undefined);
   assert.equal(out.data.productionEnabled,false);
@@ -64,7 +64,9 @@ test('D mismatched reservation/history/ledger/viewer never displays as E2E',asyn
 test('D G38/G71 blocks any assigned driver and rejects fraudulent paid ledger',async()=>{
  const d=row('MOTO_RIDE');d.assignment.state='ASSIGNED';
  assert.equal((await configured(async()=>response(d)).read('MOTO_RIDE',id)).ok,false);
- const e=row('COMMERCE');e.ledger.reconciliationStatus='RECONCILED';
+ const e=row('COMMERCE');e.ledger={serviceId:id,currency:'PYG',
+  grossGs:20000,platformCommissionGs:3000,customerSubsidyGs:0,
+  driverPayoutGs:17000,reconciliationStatus:'RECONCILED'};
  assert.equal((await configured(async()=>response(e)).read('COMMERCE',id)).ok,false);
 });
 test('D rejects role downgrade during HTTP, does not leak private session',async()=>{
@@ -104,4 +106,21 @@ test('D rejects legacy delivery service aliases at the HTTP contract boundary',a
  assert.deepEqual(TRACE_SERVICE_KINDS,[
   'AUTO_RIDE','MOTO_RIDE','DELIVERY_MOTO','DELIVERY_AUTO','COMMERCE'
  ]);
+});
+
+test('G146 Commerce requires explicit missing G7 quote and never renders a fabricated paid ledger',async()=>{
+ const good=row('COMMERCE');
+ assert.equal((await configured(async()=>response(good)).read('COMMERCE',id)).ok,true);
+ for(const change of [
+  x=>x.quoteId=uuid(66),
+  x=>x.status='delivered',
+  x=>x.revision=2,
+  x=>x.ledger={serviceId:id,currency:'PYG',grossGs:25000,
+   platformCommissionGs:1000,customerSubsidyGs:0,driverPayoutGs:24000,
+   reconciliationStatus:'PENDING'}
+ ]){
+  const dto=row('COMMERCE');change(dto);
+  const got=await configured(async()=>response(dto)).read('COMMERCE',id);
+  assert.equal(got.code,'INVALID_TRACE_RECEIPT');
+ }
 });
