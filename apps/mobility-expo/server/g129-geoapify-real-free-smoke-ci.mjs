@@ -18,35 +18,55 @@ url.searchParams.set('mode','drive');
 url.searchParams.set('traffic','approximated');
 url.searchParams.set('format','json');
 url.searchParams.set('apiKey',secret);
-let response;
-try{
- response=await fetch(url,{method:'GET',redirect:'error',
-  signal:AbortSignal.timeout(10000),headers:{accept:'application/json'}});
-}catch{throw Error('G129_ROUTING_NETWORK_UNAVAILABLE');}
-if(response.status!==200||!response.ok||response.redirected===true)
- throw Error('G129_GEOAPIFY_HTTP_'+String(response.status).replace(/\D/g,''));
-if(!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type')??''))
- throw Error('G129_RESPONSE_NOT_JSON');
-const advertised=response.headers.get('content-length');
-if(advertised!==null&&(!/^\d+$/.test(advertised)||Number(advertised)>4194304))
- throw Error('G129_OVERSIZED_PROVIDER_RESPONSE');
-let raw;
-try{
- const chunks=[];let bytes=0;
- if(!response.body?.getReader())throw Error('missing reader');
- const rd=response.body.getReader();
+// Native TLS stream avoids the Node fetch decompression/body-reader failure
+// observed on the GitHub runner. Exactly ONE network call; no retry or redirect.
+const {get}=await import('node:https');
+const maxBytes=4194304;
+const raw=await new Promise((resolve,reject)=>{
+ let complete=false,bytes=0,chunks=[];
+ let req;
+ const fail=reason=>{
+  if(complete)return;
+  complete=true;
+  reject(Error(reason));
+  req?.destroy();
+ };
  try{
-  for(;;){const {done,value}=await rd.read();if(done)break;
-   if(!(value instanceof Uint8Array)||(bytes+=value.byteLength)>4194304)
-    throw Error('oversize');
-   chunks.push(value);
-  }
- }finally{rd.releaseLock();}
- raw=Buffer.concat(chunks).toString('utf8');
-}catch(error){
- if(error?.message==='oversize')throw Error('G129_PROVIDER_RESPONSE_OVER_4MIB');
- throw Error('G129_RESPONSE_STREAM_UNREADABLE');
-}
+  req=get(url,{
+   timeout:10000,
+   headers:{accept:'application/json','accept-encoding':'identity'}
+  },res=>{
+   if(res.statusCode!==200){
+    fail('G129_GEOAPIFY_HTTP_'+String(res.statusCode??0).replace(/\\D/g,''));
+    return;
+   }
+   if(!/^application\\/json(?:\\s*;|$)/i.test(res.headers['content-type']??'')){
+    fail('G129_RESPONSE_NOT_JSON');return;
+   }
+   const advertised=res.headers['content-length'];
+   if(advertised!==undefined&&(!/^\\d+$/.test(advertised)||
+    Number(advertised)>maxBytes)){
+    fail('G129_OVERSIZED_PROVIDER_RESPONSE');return;
+   }
+   res.on('data',chunk=>{
+    if(complete)return;
+    if(!Buffer.isBuffer(chunk)){fail('G129_BAD_STREAM_CHUNK');return;}
+    bytes+=chunk.length;
+    if(bytes>maxBytes){fail('G129_PROVIDER_RESPONSE_OVER_4MIB');return;}
+    chunks.push(chunk);
+   });
+   res.on('aborted',()=>fail('G129_RESPONSE_ABORTED'));
+   res.on('error',()=>fail('G129_RESPONSE_STREAM_UNREADABLE'));
+   res.on('end',()=>{
+    if(complete)return;
+    complete=true;
+    resolve(Buffer.concat(chunks).toString('utf8'));
+   });
+  });
+  req.on('timeout',()=>fail('G129_ROUTING_TIMEOUT'));
+  req.on('error',()=>fail('G129_ROUTING_NETWORK_UNAVAILABLE'));
+ }catch{fail('G129_ROUTING_NETWORK_UNAVAILABLE');}
+});
 let payload;try{payload=JSON.parse(raw);}catch{throw Error('G129_INVALID_JSON');}
 if(!Array.isArray(payload?.results)||payload.results.length!==1)
  throw Error('G129_WRONG_ROUTE_RESULT_COUNT');
