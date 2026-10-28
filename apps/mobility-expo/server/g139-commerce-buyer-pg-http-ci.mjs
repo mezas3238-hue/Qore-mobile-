@@ -32,7 +32,7 @@ function sql(statement){
 const read=s=>JSON.parse(sql(s));
 assert.equal(sql("SELECT (current_database()='qore_disposable_chain'"+
  " AND current_setting('application_name')='qore_ci_disposable_chain')"),'t');
-sql("INSERT INTO auth.users(id) VALUES("+[buyer,owner,reviewer].map(id=>'('+quote(id)+')').join(',')+");"+
+sql("INSERT INTO auth.users(id) VALUES "+[buyer,owner,reviewer].map(id=>'('+quote(id)+')').join(',')+";"+
  "INSERT INTO public.user_roles(user_id,role) VALUES("+quote(buyer)+",'passenger');"+
  "INSERT INTO public.mobility_stage_g42_provider_session_grants("+
  "user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind)"+
