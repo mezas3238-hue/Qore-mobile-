@@ -66,13 +66,13 @@ test('conductores en línea dejan de mostrarse después de 60 segundos sin nueva
 });
 
 test('una misma zona admite automóvil, autoenvío y motoenvío sin colisión de registros',()=>{
- const rows=['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY'].map(serviceKind=>({
+ const rows=['AUTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO'].map(serviceKind=>({
   ...row,serviceKind
  }));
  const result=projectZoneOverview({...data,items:rows},{role:'admin',now});
  assert.equal(result.items.length,3);
  assert.deepEqual(result.items.map(x=>x.serviceKind),
-  ['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY']);
+  ['AUTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO']);
  assert.equal(result.items.every(x=>x.availabilityConfirmed===false),true);
 });
 
@@ -92,14 +92,14 @@ test('D acepta cinco servicios separados en la misma zona sin mezclar pasajeros 
  const rows=[
   {...row,serviceKind:'AUTO_RIDE'},
   {...row,serviceKind:'MOTO_RIDE',legalGate:'CLEARED'},
-  {...row,serviceKind:'AUTO_DELIVERY'},
-  {...row,serviceKind:'MOTO_DELIVERY'},
+  {...row,serviceKind:'DELIVERY_AUTO'},
+  {...row,serviceKind:'DELIVERY_MOTO'},
   {...row,serviceKind:'COMMERCE',merchantEligibilityVerified:true}
  ];
  const result=projectZoneOverview({...data,items:rows},{role:'admin',now});
  assert(result);
  assert.deepEqual(result.items.map(i=>i.serviceKind),[
-  'AUTO_RIDE','MOTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY','COMMERCE'
+  'AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE'
  ]);
  assert.equal(result.items[1].legalGate,'CLEARED');
  assert.equal(result.items[4].merchantEligibilityVerified,true);
@@ -139,12 +139,24 @@ test('D no infiere comercio por el número de repartidores en línea',()=>{
  assert.equal(view.items[0].eligibleByPolicy,false);
 });
 test('D mantiene prueba de elegibilidad exclusiva por modalidad',()=>{
- for(const serviceKind of ['AUTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY']){
+ for(const serviceKind of ['AUTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO']){
   assert.equal(projectZoneOverview({...data,items:[{
    ...row,serviceKind,legalGate:'CLEARED'
   }]},{role:'admin',now}),null);
   assert.equal(projectZoneOverview({...data,items:[{
    ...row,serviceKind,merchantEligibilityVerified:true
   }]},{role:'admin',now}),null);
+ }
+});
+
+test('D coverage consumes the exact canonical five-service IDs used by Owner commissions',()=>{
+ const rows=['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE'].map(kind=>({
+  ...row,serviceKind:kind,...(kind==='MOTO_RIDE'?{legalGate:'CLEARED'}:{}),
+  ...(kind==='COMMERCE'?{merchantEligibilityVerified:true}:{})
+ }));
+ const projected=projectZoneOverview({...data,items:rows},{role:'admin',now});
+ assert.deepEqual(projected.items.map(i=>i.serviceKind),rows.map(i=>i.serviceKind));
+ for(const legacy of ['AUTO_DELIVERY','MOTO_DELIVERY']){
+  assert.equal(projectZoneOverview({...data,items:[{...row,serviceKind:legacy}]},{role:'admin',now}),null);
  }
 });

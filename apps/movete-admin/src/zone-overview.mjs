@@ -9,7 +9,7 @@ const validId=x=>typeof x==='string'&&UUID.test(x);
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(value,keys)=>obj(value)&&Object.keys(value).every(k=>keys.includes(k))
  &&keys.every(k=>k==='nextCursor'||Object.hasOwn(value,k));
-const kinds=new Set(['AUTO_RIDE','MOTO_RIDE','AUTO_DELIVERY','MOTO_DELIVERY','COMMERCE']);
+const kinds=new Set(['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE']);
 const motoLegalGates=new Set(['CLEARED','G38_BLOCKED','G71_BLOCKED','UNVERIFIED']);
 const coverage=new Set(['ACTIVE','PLANNED','PAUSED','CLOSED']);
 const top=['scope','revision','generatedAt','expiresAt','items','nextCursor'];
