@@ -33,6 +33,10 @@ const buyerSession='15000000-0000-4150-8150-000000000002';
 const sellerToken='g150-merchant-provider-session-token-0000000000001';
 const buyerToken='g150-buyer-provider-session-token-0000000000000002';
 const deliveryKey='15000000-0000-4150-8150-000000000011';
+const underDeliveryKey='15000000-0000-4150-8150-000000000016';
+const underQuoteKey='15000000-0000-4150-8150-000000000017';
+const underConsentKey='15000000-0000-4150-8150-000000000018';
+const underCancelKey='15000000-0000-4150-8150-000000000019';
 const quoteKey='15000000-0000-4150-8150-000000000012';
 const consentKey='15000000-0000-4150-8150-000000000013';
 const linkKey='15000000-0000-4150-8150-000000000014';
@@ -92,7 +96,7 @@ const deliveries=createQoreDeliveryCommandGateway({
  resolveRole:role,allowRequest:()=>true,
  requestDelivery:async d=>{
   assert.equal(d.actorId,buyer);
-  assert.equal(d.requestKey,deliveryKey);
+  assert([deliveryKey,underDeliveryKey].includes(d.requestKey));
   assert.equal(d.pickupTag,original.pickup);
   assert.equal(d.category,category);
   return {ok:true,liveEnabled:false,deliveryId:sql("SET ROLE service_role; SELECT "+
@@ -206,6 +210,44 @@ async function post(path,token,body){
  return {status:res.status,body:await res.json()};
 }
 try{
+ // G153: create an immutable UNDERWEIGHT G5 cargo request through original
+ // authenticated B->A HTTP, accept its genuine G122 fare, then deny link.
+ assert(original.grams>1);
+ const underRequest=await post('/v1/staging/sender/deliveries/request',buyerToken,{
+  requestKey:underDeliveryKey,vehicleKind:'MOTO',category,grams:original.grams-1,
+  lengthCm:30,widthCm:20,heightCm:10,pickupTag:original.pickup,
+  deliveryTag:'BUYER_DESTINATION_QA',restrictedItemDeclared:false});
+ assert.equal(underRequest.status,201,JSON.stringify(underRequest.body));
+ const undersizedId=underRequest.body.deliveryId;
+ assert(UUID.test(undersizedId));
+ const underQuoteId=sql("SET ROLE service_role; SELECT "+
+  "public.mobility_stage_fare_quote("+qs(buyer)+","+qs(underQuoteKey)+","+
+  "'DELIVERY'::public.mobility_stage_fare_mode,"+
+  "'DELIVERY'::public.mobility_stage_fare_subject,"+qs(undersizedId)+
+  ",'CARGA_MOTO_QA',4800,750,0)::text");
+ assert(UUID.test(underQuoteId));
+ const underPrice=read("SELECT jsonb_build_object('amount',q.total_pyg,'fare',r.rule_key) "+
+  "FROM public.mobility_stage_fare_quotes q JOIN public.mobility_stage_fare_rules r "+
+  "ON r.id=q.rule_id WHERE q.id="+qs(underQuoteId));
+ const underConsent=await post('/v1/staging/sender/deliveries/quotes/confirm',buyerToken,{
+  deliveryId:undersizedId,quoteId:underQuoteId,confirmationKey:underConsentKey,
+  acceptedTotalGs:underPrice.amount,acceptedFareVersion:underPrice.fare});
+ assert.equal(underConsent.status,200,JSON.stringify(underConsent.body));
+ assert.equal(underConsent.body.dispatchEnabled,false);
+ const undersizedLink=await post(
+  '/v1/staging/merchant/orders/'+original.id+'/attach-delivery',sellerToken,
+  {deliveryId:undersizedId,requestKey:linkKey});
+ assert.equal(undersizedLink.status,409,
+  'Price-consented G5 parcel below original G45 merchandise mass must not link');
+ assert.equal(sql("SELECT count(*) FROM public.mobility_stage_merchant_order_events WHERE order_id="+qs(original.id)),'3');
+ assert.equal(sql("SELECT delivery_id IS NULL FROM public.mobility_stage_merchant_orders WHERE id="+qs(original.id)),'t');
+ // Legitimate sender cancellation, not tampering with G37 immutable grams.
+ const cancellation=sql("SET ROLE service_role; SELECT "+
+  "public.mobility_stage_delivery_transition("+qs(undersizedId)+","+
+  qs(buyer)+",'cancel',"+qs(underCancelKey)+",NULL)::text");
+ assert(UUID.test(cancellation));
+ assert.equal(sql("SELECT status FROM public.mobility_stage_deliveries WHERE id="+qs(undersizedId)),'cancelled');
+ // Fresh original delivery after the canceled underweight request.
  const request=await post('/v1/staging/sender/deliveries/request',buyerToken,{
   requestKey:deliveryKey,vehicleKind:'MOTO',category,grams:original.grams,
   lengthCm:30,widthCm:20,heightCm:10,pickupTag:original.pickup,
@@ -239,17 +281,6 @@ try{
  assert.equal(consent.status,200,JSON.stringify(consent.body));
  assert.equal(consent.body.paymentAuthorized,false);
  assert.equal(consent.body.dispatchEnabled,false);
- // G153: accepted price does not override underdeclared original stock mass.
- // This direct SQL mutation is a disposable negative test fixture only.
- assert(original.grams>1);
- sql("UPDATE public.mobility_stage_deliveries SET grams="+
-  (original.grams-1)+" WHERE id="+qs(deliveryId));
- const underdeclared=await post(path,sellerToken,{deliveryId,requestKey:linkKey});
- assert.equal(underdeclared.status,409,'Cannot underdeclare original reserved stock mass');
- assert.equal(sql("SELECT count(*) FROM public.mobility_stage_merchant_order_events WHERE order_id="+qs(original.id)),'3');
- assert.equal(sql("SELECT delivery_id IS NULL FROM public.mobility_stage_merchant_orders WHERE id="+qs(original.id)),'t');
- sql("UPDATE public.mobility_stage_deliveries SET grams="+
-  original.grams+" WHERE id="+qs(deliveryId));
  const attached=await post(path,sellerToken,{deliveryId,requestKey:linkKey});
  assert.equal(attached.status,200,JSON.stringify(attached.body));
  assert.equal(attached.body.orderId,original.id);
