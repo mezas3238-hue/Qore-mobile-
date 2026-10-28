@@ -48,6 +48,14 @@ test('G45 server-priced receipt sealed; client never supplies subtotal or permis
    _vehicle_kind:'AUTO',_items:request.items}
  });
 });
+test('G140 MOTO passes independently verified vehicle kind into G45 PostgreSQL',async()=>{
+ const f=fixture(),moto={...request,vehicleKind:'MOTO'};
+ const out=await f.api.reserve({bearer,body:moto});
+ assert.equal(out.status,201);
+ assert.equal(f.calls.length,1);
+ assert.equal(f.calls[0].args._vehicle_kind,'MOTO');
+ assert.equal(f.calls[0].args._buyer,buyer);
+});
 test('G45 exact signed actor session is required for cancellation; refund remains simulated',async()=>{
  const f=fixture();
  const result=await f.api.cancel({bearer,body:{orderId,cancelKey}});
@@ -57,12 +65,12 @@ test('G45 exact signed actor session is required for cancellation; refund remain
   args:{_buyer:buyer,_session:sessionId,_iat_ms:at-20000,
    _order_id:orderId,_cancel_key:cancelKey}});
 });
-test('G45 blocks client prices, payment, prescription, MOTO, duplicates, non-integer quantities',async()=>{
+test('G45 blocks client prices, payment, invalid vehicle and duplicate quantities',async()=>{
  const bad=[
   {...request,subtotalPyg:1},{...request,unitPricePyg:1},
   {...request,paymentMethod:'CREDIT_CARD'},{...request,buyerId:buyer},
   {...request,catalogVersion:0},{...request,catalogVersion:1.25},
-  {...request,vehicleKind:'MOTO'},
+  {...request,vehicleKind:'BICYCLE'},
   {...request,items:[]},
   {...request,items:[{itemId,quantity:1,unitPricePyg:1}]},
   {...request,items:[{itemId,quantity:1},{itemId,quantity:1}]},
