@@ -90,9 +90,10 @@ BEGIN
    WHERE id=_service_id FOR UPDATE;
   IF FOUND AND d.status='delivered' AND d.proof_ref IS NOT NULL
    AND d.courier_id IS NOT NULL
-   AND d.requested_vehicle_kind=CASE _service_kind
-     WHEN 'DELIVERY_AUTO' THEN 'AUTO'::public.mobility_vehicle_kind
-     ELSE 'MOTO'::public.mobility_vehicle_kind END
+   AND ((_service_kind='DELIVERY_AUTO'
+      AND d.requested_vehicle_kind='AUTO'::public.mobility_vehicle_kind)
+     OR (_service_kind='DELIVERY_MOTO'
+      AND d.requested_vehicle_kind='MOTO'::public.mobility_vehicle_kind))
    AND NOT EXISTS(SELECT 1 FROM public.mobility_stage_merchant_orders m
     WHERE m.delivery_id=d.id)
   THEN
