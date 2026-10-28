@@ -462,8 +462,10 @@ async function main(){
   assert.equal(await cFreshRead(),null,
    'C Driver must see no assigned trip when G38/G71 denied assignment');
   const dFakeOrigin='https://qore-g131-admin-loopback.invalid';
+  // D F1 requires unchanged Auth revision and expiry across the double-read.
+  const dExpiresAt=Date.now()+600000;
   const dSession=async()=>({role:'admin',subject:adminId,token:adminToken,
-   authRevision:1,mfaVerified:true,expiresAt:Date.now()+600000});
+   authRevision:1,mfaVerified:true,expiresAt:dExpiresAt});
   const dFetch=(url,opts)=>{
    const u=new URL(url);
    assert.equal(u.origin,dFakeOrigin);
