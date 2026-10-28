@@ -40,8 +40,8 @@ BEGIN
   IF public.mobility_stage_g116_read_commission_qa(k)<>changed
   THEN RAISE EXCEPTION 'G136 read-after-write drift %',k; END IF;
  END LOOP;
- IF (SELECT count(*) FROM public.mobility_stage_g116_commission_audit
-     WHERE owner_id='13600000-0000-4136-8136-000000000001'::uuid)<>3
+ IF (SELECT count(*) FROM public.mobility_stage_g116_commission_audit audit
+     WHERE audit.owner_id='13600000-0000-4136-8136-000000000001'::uuid)<>3
  THEN RAISE EXCEPTION 'G136 audit missing'; END IF;
  got:=public.mobility_stage_g116_read_commission_qa('AUTO_RIDE');
  IF got->>'commissionBps'<>'1500' OR got->>'subsidyBps'<>'1000'
