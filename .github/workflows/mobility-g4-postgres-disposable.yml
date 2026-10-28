@@ -9,6 +9,7 @@ on:
       - 'integration/qore-mobile-e2e-four-apps-20261027'
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.mjs'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs'
       - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
@@ -40,6 +41,7 @@ on:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.mjs'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs'
       - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
