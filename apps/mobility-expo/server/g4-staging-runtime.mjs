@@ -313,6 +313,25 @@ export async function prepareQoreG4StagingRuntime({
   if(error||!data?.user)throw Error('Supabase session not confirmed');
   return data.user;
  };
+ // G134: when a separately attested KYC/session authority is configured,
+ // private offers use it exactly like G65; getUser alone is insufficient.
+ const verifiedDriverOfferSession=async token=>{
+  if(driverKycTrust===null)throw Error('Driver revocation authority unavailable');
+  const provider=await verified(token);
+  const attested=await driverKycTrust.verifyDriverSession(token);
+  if(provider?.id!==attested?.id||provider?.is_anonymous===true||
+     !(typeof provider?.email_confirmed_at==='string'||
+       typeof provider?.phone_confirmed_at==='string'))
+   throw Error('G134 Driver identity source mismatch');
+  return {...attested,is_anonymous:false,
+   ...(typeof provider.email_confirmed_at==='string'?
+    {email_confirmed_at:provider.email_confirmed_at}:
+    {phone_confirmed_at:provider.phone_confirmed_at})};
+ };
+ const guardedDriverAuth=driverKycTrust===null?{}:{
+  verifyAccessToken:verifiedDriverOfferSession,requireFreshSession:true,
+  verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p)
+ };
  const limit=createStagingRateLimiter({
   now,windowMs:60_000,maxEntries:1024,draftLimit:30,adminLimit:30
  });
@@ -350,7 +369,7 @@ export async function prepareQoreG4StagingRuntime({
   now
  });
  const driver=createQoreOfferGateway({
-  projectRef:ref,verifyAccessToken:verified,
+  projectRef:ref,verifyAccessToken:verified,...guardedDriverAuth,
   authorizeDriver:id=>roleHas(admin,id,'driver'),
   allowRequest,
   loadOfferForDriver:async({offerId,driverId})=>{
@@ -699,7 +718,7 @@ export async function prepareQoreG4StagingRuntime({
   observePrivateObject
  });
  const driverInbox=createDriverPrivateInboxGateway({
-  projectRef:ref,verifyAccessToken:verified,
+  projectRef:ref,verifyAccessToken:verified,...guardedDriverAuth,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,now,
   listForDriver:params=>driverInboxPersistence.listForDriver(params),
  });
