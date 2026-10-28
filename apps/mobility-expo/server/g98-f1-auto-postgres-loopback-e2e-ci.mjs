@@ -180,8 +180,18 @@ async function main(){
   apiKey:'G98_QA_NOT_A_REAL_GEOAPIFY_KEY_123456789',
   tagSecret:'G98_PRIVATE_QA_SERVER_TAG_SECRET_123456789',
   resolveCoveredAutoCoordinates:async scope=>{
-   if(scope.actorId!==p||scope.quoteRequestKey!==routeKey||
-    scope.origin!=='Centro, Asunción'||scope.destination!=='Aeropuerto, Asunción'||
+   // Two separate new G73 route intents exercised by the same integrated
+   // Passenger: the first direct HTTP booking, then B's original app POST.
+   // No arbitrary text/identity is promoted to trusted coverage.
+   const accepted=new Map([
+    [routeKey,['Centro, Asunción','Aeropuerto, Asunción']],
+    ['98980000-0000-4989-8989-000000000030',
+     ['Centro de Asunción','Aeropuerto Internacional']]
+   ]);
+   const exactAddresses=accepted.get(scope.quoteRequestKey);
+   if(scope.actorId!==p||!exactAddresses||
+    scope.origin!==exactAddresses[0]||
+    scope.destination!==exactAddresses[1]||
     scope.service!=='economico')
     throw Error('G134 QA independently covered route unavailable');
    return {source:'INDEPENDENT_COVERAGE_AUTHORITY',coverageVerified:true,
