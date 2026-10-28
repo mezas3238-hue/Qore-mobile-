@@ -37,6 +37,7 @@ on:
       - 'apps/mobility-expo/server/g148-merchant-fulfillment-pg-ci.mjs'
       - 'apps/mobility-expo/server/g150-merchant-priced-delivery-link-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G150_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G154_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G151_*'
       - 'apps/movete-cliente/src/domain/g148-commerce-durable-order.*'
       - 'apps/movete-cliente/src/G148CommerceQaPanel.tsx'
@@ -100,6 +101,7 @@ on:
       - 'apps/mobility-expo/server/g148-merchant-fulfillment-pg-ci.mjs'
       - 'apps/mobility-expo/server/g150-merchant-priced-delivery-link-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G150_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G154_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G151_*'
       - 'apps/movete-cliente/src/domain/g148-commerce-durable-order.*'
       - 'apps/movete-cliente/src/G148CommerceQaPanel.tsx'
@@ -770,6 +772,11 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G123_DELIVERY_PRICE_BEFORE_PRIVATE_OFFER_FENCE_POSTGRES_CI_ONLY.sql
       - name: G123 prove accepted MOTO/AUTO quotes, deny unpriced/expires/unauthorized offers and SQL privilege bypass
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G123_DELIVERY_PRICE_BEFORE_PRIVATE_OFFER_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G154 install original COMMERCE ready & G150 link fence on G10 offers and acceptance
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G154_COMMERCE_PRIVATE_DISPATCH_READINESS_FENCE_POSTGRES_CI_ONLY.sql
+      - name: G154 prove real G139/G148/G150 same-order source and reject priced but unlinked merchant delivery
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G154_COMMERCE_PRIVATE_DISPATCH_READINESS_ASSERT_POSTGRES_CI_ONLY.sql
+
       - name: G124 install Owner-only independent AUTO/MOTO cargo tariffs
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G124_OWNER_DELIVERY_TARIFF_POSTGRES_CI_ONLY.sql
       - name: G124 real PostgreSQL Owner AAL2 HTTP and immutable cargo quote audit
