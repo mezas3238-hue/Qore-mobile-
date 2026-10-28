@@ -28,6 +28,7 @@ function sql(statement){
 const decode=statement=>JSON.parse(sql(statement));
 assert.equal(sql("SELECT (to_regprocedure('public.mobility_stage_g146_commerce_trace_qa(uuid,uuid)') IS NOT NULL)::text"),'true');
 assert.equal(sql("SELECT (has_function_privilege('authenticated','public.mobility_stage_g146_commerce_trace_qa(uuid,uuid)','EXECUTE') OR has_function_privilege('anon','public.mobility_stage_g146_commerce_trace_qa(uuid,uuid)','EXECUTE'))::text"),'false');
+const stockBeforeAdminRead=sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id='13800000-0000-4138-8138-000000000040'");
 const existing=decode("SELECT jsonb_build_object('id',o.id,'key',r.request_key,'status',o.status,'revision',o.revision,'subtotal',o.subtotal_pyg,'branchId',o.branch_id,'vehicleKind',o.requested_vehicle_kind) "+
  "FROM public.mobility_stage_merchant_orders o "+
  "JOIN public.mobility_stage_g45_order_receipts r ON r.order_id=o.id "+
@@ -133,7 +134,7 @@ try{
  assert.equal(reads,before,'denied identities cannot query PG');
  assert.equal((await http(path.replace('COMMERCE','AUTO_RIDE'))).status,503);
  assert.equal((await http(path.replace(existing.id,'ffffffff-ffff-4fff-8fff-ffffffffffff'))).status,404);
- assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id='13800000-0000-4138-8138-000000000040'"),'2',
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id='13800000-0000-4138-8138-000000000040'"),stockBeforeAdminRead,
   'Admin GET must never reserve stock or alter the G139 cancellation');
  console.log('G146 PASS: ORIGINAL G139 Buyer order / G45 PostgreSQL requestKey and orderId -> A HTTP -> D Admin, no fake quote/ledger, AAL2/revocation/foreign blocked');
 }finally{
