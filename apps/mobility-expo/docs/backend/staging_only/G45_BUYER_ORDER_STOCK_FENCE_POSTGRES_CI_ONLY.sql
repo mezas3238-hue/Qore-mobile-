@@ -21,7 +21,7 @@ CREATE TABLE public.mobility_stage_g45_order_receipts (
  canonical_items jsonb NOT NULL CHECK(pg_catalog.jsonb_typeof(canonical_items)='array'),
  subtotal_pyg integer NOT NULL CHECK(subtotal_pyg BETWEEN 100 AND 50000000),
  issued_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
- CHECK(requested_vehicle_kind='AUTO')
+ CHECK(requested_vehicle_kind IN ('AUTO','MOTO'))
 );
 CREATE TABLE public.mobility_stage_g45_cancel_receipts (
  request_key uuid PRIMARY KEY,
@@ -51,7 +51,8 @@ BEGIN
  IF _buyer IS NULL OR _session IS NULL OR _iat_ms IS NULL
  OR _request_key IS NULL OR _branch IS NULL
  OR _catalog_version IS NULL OR _catalog_version<1
- OR _vehicle_kind IS DISTINCT FROM 'AUTO'::public.mobility_vehicle_kind
+ OR _vehicle_kind IS NULL OR _vehicle_kind NOT IN
+ ('AUTO'::public.mobility_vehicle_kind,'MOTO'::public.mobility_vehicle_kind)
  OR _items IS NULL OR pg_catalog.jsonb_typeof(_items)<>'array'
  OR pg_catalog.jsonb_array_length(_items) NOT BETWEEN 1 AND 50
  THEN RAISE EXCEPTION 'G45 invalid buyer reservation'
@@ -96,6 +97,8 @@ BEGIN
  JOIN public.mobility_stage_merchant_branches b ON b.id=v.branch_id
  JOIN public.mobility_stage_merchants m ON m.id=b.merchant_id
  WHERE v.branch_id=_branch AND b.active AND b.accepting_orders
+  AND g.service_kind=CASE WHEN _vehicle_kind='AUTO'::public.mobility_vehicle_kind
+    THEN 'AUTO_DELIVERY' ELSE 'MOTO_DELIVERY' END
   AND m.status='approved' AND m.owner_id<>_buyer
   AND z.coverage_status='ACTIVE' AND z.eligible_by_policy=false
  FOR UPDATE OF v;
