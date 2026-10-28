@@ -99,3 +99,39 @@ test('resultado neto puede ser negativo si el ledger concilia pérdidas',()=>{
  assert.equal(projectOwnerFinance({...data,totals:{...totals,platformCommissionGs:-1}},
   {role:'owner',subject:owner,now}),null);
 });
+
+test('D Owner finance rejects contradictory reconciled PYG at unchanged ledger revision',()=>{
+ const store=createOwnerFinanceStore({now:()=>now});
+ assert.equal(store.replace(data,session),true);
+ const contradictory={...data,revision:data.revision+1,generatedAt:now-1000,
+  totals:{...totals,netPlatformGs:totals.netPlatformGs+5000}};
+ assert.equal(store.replace(contradictory,session),false);
+ assert.equal(store.current(session),null);
+});
+test('D Owner finance rejects changed trip counts without a new ledger revision',()=>{
+ const store=createOwnerFinanceStore({now:()=>now});
+ assert.equal(store.replace(data,session),true);
+ const altered={...data,totals:{...totals,completedRides:totals.completedRides+1}};
+ assert.equal(store.replace(altered,session),false);
+ assert.equal(store.current(session),null);
+});
+test('D Owner finance accepts an independently versioned financial reconciliation',()=>{
+ const store=createOwnerFinanceStore({now:()=>now});
+ assert.equal(store.replace(data,session),true);
+ const updated={...data,ledgerRevision:data.ledgerRevision+1,
+  revision:data.revision+1,generatedAt:now-1000,
+  totals:{...totals,netPlatformGs:totals.netPlatformGs+5000}};
+ assert.equal(store.replace(updated,session),true);
+ assert.equal(store.current(session).totals.netPlatformGs,22000);
+});
+test('D Owner finance permits identical ledger polling but never an older financial projection',()=>{
+ const store=createOwnerFinanceStore({now:()=>now});
+ assert.equal(store.replace(data,session),true);
+ assert.equal(store.replace({...data,generatedAt:now-1000},session),true);
+ assert.equal(store.replace({...data,generatedAt:now-6000},session),false);
+ assert.equal(store.current(session),null);
+ const other=createOwnerFinanceStore({now:()=>now});
+ other.replace(data,session);
+ assert.equal(other.replace({...data,revision:data.revision-1},session),false);
+ assert.equal(other.current(session),null);
+});
