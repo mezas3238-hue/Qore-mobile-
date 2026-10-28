@@ -25,7 +25,7 @@ BEGIN
   got:=public.mobility_stage_g116_read_commission_qa(k);
   IF got IS NULL OR got->>'serviceKind'<>k OR (got->>'version')::integer<>1
   OR (got->>'subsidyBps')::integer <>
-     CASE WHEN k IN ('AUTO_RIDE','MOTO_RIDE') THEN 1000 ELSE 0 END
+     (CASE WHEN k IN ('AUTO_RIDE','MOTO_RIDE') THEN 1000 ELSE 0 END)
   THEN RAISE EXCEPTION 'G136 initial five-policy read failed for %',k; END IF;
  END LOOP;
  FOREACH k IN ARRAY ARRAY['DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE'] LOOP

@@ -33,6 +33,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G136_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G125_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G126_*'
@@ -67,6 +68,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G136_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G124_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G125_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G126_*'
@@ -625,7 +627,7 @@ jobs:
       - name: G86 two independent PostgreSQL workers SKIP LOCKED plus canceled trip and privilege denial
         run: python3 apps/mobility-expo/server/g86-durable-dispatch-two-session-ci.py
 
-      - name: G116 install Owner-configurable AUTO/MOTO commission (CI only)
+      - name: G136 install Owner commissions for five independent services (CI only)
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G116_OWNER_CONFIGURABLE_COMMISSION_POSTGRES_CI_ONLY.sql
       - name: G93 install QA-only Owner AUTO discount and atomic booking ledger
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G93_OWNER_AUTO_SUBSIDY_ATOMIC_LEDGER_POSTGRES_CI_ONLY.sql
