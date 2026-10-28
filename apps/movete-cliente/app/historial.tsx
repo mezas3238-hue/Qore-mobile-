@@ -1,11 +1,181 @@
-import React from 'react';
-import {ScrollView,Text,View} from 'react-native';
-import {Panel,styles} from '../src/ClientUI';
+import React,{useEffect,useRef,useState} from 'react';
+import {router} from 'expo-router';
+import {FlatList,Text,View} from 'react-native';
+import {Action,Panel,styles} from '../src/ClientUI';
+import {useClientView} from '../src/ClientRuntime';
+import {canAutoLoadHistory} from '../src/domain/history-auto-page.mjs';
+import {canShowPassengerServiceChat} from '../src/domain/passenger-chat-navigation.mjs';
+const kind:Record<string,string>={RIDE:'Automóvil',DELIVERY:'Envío',MERCHANT_ORDER:'Pedido comercial'};
+const safeMessage:Record<string,string>={
+ INVALID_OR_EXPIRED_CURSOR:'La consulta venció. Reiniciá desde la primera página.',
+ AUTH_REQUIRED:'La sesión caducó. Volvé a iniciar sesión.',
+ FORBIDDEN:'La cuenta no tiene acceso a este historial.',
+ INVALID_HISTORY_DTO:'El servidor no devolvió datos válidos para esta cuenta.',
+ CURSOR_REPEATED:'Se detectó un cursor repetido. Reiniciá la consulta.',
+ NETWORK_OR_TIMEOUT:'Sin conexión segura. Podés intentar de nuevo.',
+ RATE_LIMITED:'Hay demasiadas consultas. Intentá más tarde.',
+ SERVICE_UNAVAILABLE:'El servicio de historial no está disponible.',
+ HISTORY_READ_IN_FLIGHT:'Ya se está consultando el historial.'
+};
 export default function ClientHistory(){
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-  <View style={styles.hero}><Text style={styles.heroText}>Mi historial</Text>
-   <Text style={styles.heroSub}>Viajes y entregas de mi identidad verificada, sin datos de otras cuentas.</Text></View>
-  <Panel><Text style={styles.heading}>Todavía no hay servicios</Text>
-   <Text style={styles.text}>No hay viajes ni envíos reales conectados en esta compilación. Cuando se habilite STAGING, el servidor filtrará registros por tu sesión.</Text></Panel>
- </ScrollView>;
+ const {client,view}=useClientView();
+ const lastCursor=useRef<string|null>(null);
+ const [resumeMessage,setResumeMessage]=useState('');
+ useEffect(()=>{lastCursor.current=null;setResumeMessage('');},[view.account?.subject]);
+ const list=view.authenticated?view.history?.items??[]:[];
+ function atListEnd(){
+  const cursor=view.history?.nextCursor??null;
+  if(!canAutoLoadHistory({authenticated:view.authenticated,configured:view.historyConfigured,
+   loading:view.historyLoading,error:view.historyLoadError,nextCursor:cursor,
+   lastRequested:lastCursor.current}))return;
+  lastCursor.current=cursor;
+  void client.loadHistoryPage();
+ }
+ function resetHistory(){
+  lastCursor.current=null;
+  void client.loadHistoryPage({reset:true});
+ }
+ function nextManual(){
+  lastCursor.current=view.history?.nextCursor??null;
+  void client.loadHistoryPage();
+ }
+ async function resumeOwnRide(tripId:string,revision:number){
+  const latest=client.snapshot();
+  const row=latest.history?.items.find(x=>x.kind==='RIDE'&&x.serviceId===tripId);
+  if(!view.authenticated||!latest.authenticated||!latest.rideHistoryRecovery.readReady
+   ||latest.rideHistoryRecovery.busy||latest.tracking.subscriptionActive
+   ||latest.account?.subject!==view.account?.subject
+   ||latest.privateViewRevision!==view.privateViewRevision
+   ||latest.history?.ownerId!==view.history?.ownerId
+   ||!row||row.revision!==revision
+   ||!['searching','assigned','in_progress'].includes(row.status))return;
+  setResumeMessage('');
+  const result=await client.resumeRideFromHistory({tripId,expectedHistoryRevision:revision});
+  const after=client.snapshot();
+  if(after.privateViewRevision!==view.privateViewRevision
+   ||after.account?.subject!==view.account?.subject)return;
+  if(result.ok&&after.tracking.subscriptionActive
+   &&after.tracking.tripId===tripId&&after.rideContinuation.canVerify
+   &&after.rideContinuation.tripId===tripId){
+   router.push('/seguimiento');
+  }else{
+   setResumeMessage('No se pudo recuperar el viaje desde el servidor. Consultá el historial actualizado; no se abrió seguimiento.');
+  }
+ }
+ return <FlatList
+  contentInsetAdjustmentBehavior="automatic"
+  accessibilityLabel="Historial de servicios propios"
+  style={styles.page}
+  contentContainerStyle={styles.content}
+  data={list}
+  keyExtractor={item=>item.kind+':'+item.serviceId}
+  onEndReachedThreshold={0.35}
+  onEndReached={atListEnd}
+  initialNumToRender={12}
+  maxToRenderPerBatch={18}
+  windowSize={7}
+  ListHeaderComponent={<>
+   <View style={styles.hero}>
+    <Text accessibilityRole="header" style={styles.heroText}>Mi historial</Text>
+    <Text style={styles.heroSub}>Servicios propios, sin límite global de registros. La lista se muestra en partes para cuidar la memoria.</Text>
+   </View>
+   <Panel>
+    <Text accessibilityRole="header" style={styles.heading}>¿Reiniciaste la app durante un viaje?</Text>
+    <Text style={styles.text}>Primero consultá tus viajes en el servidor. Si aparece uno activo, verificaremos su estado mediante otra lectura antes de abrir el seguimiento. No se vuelve a reservar ni se genera un cobro.</Text>
+    <Action label={view.historyLoading?'Consultando viajes propios…':'Buscar mis viajes en el servidor'}
+     busy={view.historyLoading}
+     disabled={!view.authenticated||!view.historyConfigured||view.historyLoading}
+     hint="GET de historial autorizado, no crea ni duplica una reserva."
+     onPress={resetHistory}/>
+    {!view.historyConfigured&&<Text style={styles.small}>Recuperación suspendida: A debe certificar ambos contratos HTTPS, la persistencia PostgreSQL y la autorización de pasajero.</Text>}
+    {view.historyConfigured&&!view.rideHistoryRecovery.readReady&&
+     <Text style={styles.small}>El seguimiento solo se habilita después de verificar una fila propia y el estado independiente del viaje. La ausencia de fila en una página no significa que no exista reserva.</Text>}
+   </Panel>
+   {view.history?.window.hasEvictedNewer&&<Panel>
+    <Text accessibilityRole="header" style={styles.heading}>Ventana de memoria activa</Text>
+    <Text style={styles.text}>Se liberaron {view.history.window.evictedCount.toLocaleString('es-PY')} servicios recientes ya recorridos para mantener estable el dispositivo. El historial completo continúa en el servidor.</Text>
+    <Action label="Volver a los servicios más recientes" secondary
+     disabled={view.historyLoading} onPress={resetHistory}/>
+   </Panel>}
+  </>}
+  ListEmptyComponent={<Panel>
+    <Text accessibilityRole="header" style={styles.heading}>Todavía no hay servicios consultados</Text>
+    <Text style={styles.text}>No hay historial autorizado conectado a esta sesión. No mostramos viajes, envíos ni recibos de otras cuentas.</Text>
+   </Panel>}
+  renderItem={({item})=><Panel>
+    <Text accessibilityRole="header" style={styles.heading}>{kind[item.kind]??'Servicio'}</Text>
+    <Text style={styles.text}>Estado: {item.status}</Text>
+    <Text style={styles.small}>Registrado: {new Date(item.createdAt).toLocaleString('es-PY')} · Revisión {item.revision}</Text>
+    <Text style={styles.small}>El comprobante y el total no se inventan ni se calculan en esta vista.</Text>
+    {item.kind==='RIDE'&&view.rideHistoryRecovery.readReady
+     &&!view.tracking.subscriptionActive
+     &&['searching','assigned','in_progress'].includes(item.status)&&
+     <Action label={view.rideHistoryRecovery.busy?'Verificando viaje…':'Recuperar seguimiento de mi viaje'}
+      disabled={view.rideHistoryRecovery.busy}
+      hint="Consulta privada de solo lectura; no crea viajes ni asigna conductor."
+      onPress={()=>{void resumeOwnRide(item.serviceId,item.revision);}}/>}
+    {item.kind==='DELIVERY'&&view.senderCustody.readReady&&
+     <Action label={view.senderCustody.loading?'Verificando entrega…':'Consultar custodia de mi envío'}
+      disabled={view.senderCustody.loading}
+      hint="Consulta privada de solo lectura. No confirma una entrega sin prueba registrada en servidor."
+      onPress={()=>{
+       const current=client.snapshot();
+       const old=current.history?.items.find(i=>i.kind==='DELIVERY'
+        &&i.serviceId===item.serviceId);
+       if(!current.authenticated||!old
+        ||current.account?.subject!==view.account?.subject
+        ||current.privateViewRevision!==view.privateViewRevision
+        ||current.history?.ownerId!==view.history?.ownerId
+        ||old.revision!==item.revision
+        ||!current.senderCustody.readReady)return;
+       void client.readOwnDeliveryCustody(item.serviceId);
+      }}/>}
+    {item.kind==='DELIVERY'&&view.senderCustody.deliveryId===item.serviceId&&
+     <View>
+      {view.senderCustody.state!==null?
+       <Text accessibilityLiveRegion="polite" style={styles.text}>
+        Custodia verificada en QA: {view.senderCustody.state}.
+        {' '}Revisión {view.senderCustody.revision}.
+        {' '}{view.senderCustody.state==='delivered'&&view.senderCustody.proofVerified
+         ?'Prueba independiente confirmada por servidor de QA.'
+         :'No hay entrega final verificada en esta consulta.'}
+       </Text>:null}
+      {view.senderCustody.error&&
+       <Text accessibilityLiveRegion="polite" style={styles.small}>
+        No se pudo verificar el estado actual del envío. No se confirma ninguna entrega.
+       </Text>}
+     </View>}
+    {canShowPassengerServiceChat({authenticated:view.authenticated,
+     contractReady:view.chat.contractReady,accountSubject:view.account?.subject,
+     historyOwnerId:view.history?.ownerId,serviceId:item.serviceId,
+     kind:item.kind,status:item.status})&&
+     <Action label={item.kind==='RIDE'?'Mensajes con mi conductor':'Mensajes con mi repartidor'}
+      secondary onPress={()=>router.push({pathname:'/mensajes',
+       params:{serviceId:item.serviceId,serviceKind:item.kind}})}/>}
+    {['assigned','in_progress'].includes(item.status)&&!view.chat.contractReady&&
+     <Text style={styles.small}>La conversación estará disponible solo cuando el servidor verifique la asignación del conductor o repartidor.</Text>}
+   </Panel>}
+  ListFooterComponent={<Panel>
+    {resumeMessage!==''&&<Text accessibilityRole="alert" style={styles.small}>{resumeMessage}</Text>}
+    <Text style={styles.small}>{view.historyConfigured
+      ?'Consulta segura habilitada para esta sesión de prueba.'
+      :'Lectura no disponible hasta certificar la API y permisos del pasajero.'}</Text>
+    {view.historyLoadError&&<Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.small}>
+      No se pudo validar el historial: {safeMessage[view.historyLoadError]??'No se pudo completar la consulta.'}
+    </Text>}
+    {view.historyLoadError&&view.historyConfigured&&view.authenticated&&
+      <Action label="Reiniciar consulta desde la primera página"
+       disabled={view.historyLoading}
+       onPress={resetHistory}/>}
+    {view.history?.nextCursor
+      ?<Action label={view.historyLoading?'Consultando…':'Cargar más servicios'}
+        disabled={!view.historyConfigured||view.historyLoading} busy={view.historyLoading}
+        onPress={nextManual}/>
+      :<Action label={view.historyLoading?'Consultando…':view.history?'Actualizar desde el inicio':'Consultar historial'}
+        disabled={!view.authenticated||!view.historyConfigured||view.historyLoading}
+        busy={view.historyLoading}
+        onPress={resetHistory}/>}
+    <Text style={styles.small}>Desplazate hacia abajo para consultar más páginas automáticamente. No existe un límite total de registros; también podés utilizar el botón manual.</Text>
+   </Panel>}
+ />;
 }
