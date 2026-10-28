@@ -144,7 +144,8 @@ try{
     '/v1/staging/buyer/orders/qa/cancel',
     '/v1/staging/buyer/orders/qa/requests/'+key,
     '/v1/staging/buyer/orders/qa/requests/'+ids(212),
-    '/v1/staging/buyer/orders/qa/requests/'+ids(240)].includes(u.pathname));
+    '/v1/staging/buyer/orders/qa/requests/'+ids(240),
+    '/v1/staging/buyer/orders/qa/requests/'+ids(242)].includes(u.pathname));
    assert(['POST','GET'].includes(opts.method));
    assert.equal(opts.credentials,'omit');
    if(opts.method==='POST')posts++;
