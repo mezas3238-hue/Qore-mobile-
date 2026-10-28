@@ -26,7 +26,7 @@ function make(kind,overrides={}){
  const response={ok:true,status:200,redirected:false,
   headers:{get:name=>name==='content-type'?'application/json':null},
   text:async()=>JSON.stringify(overrides.providerResponse??{
-   results:[{distance:5300,time:689.2,distance_units:'Meters',toll:false}]})};
+   results:[{distance:5300,time:689.2,distance_units:'meters',toll:false}]})};
  const api=createG128GeoapifyCargoRoadResolver({
   freePlanApproved:true,apiKey:key,now:()=>at,
   resolveCoveredCargoCoordinates:async()=>coverage,
@@ -117,4 +117,27 @@ test('G128 Geoapify invalid responses, overlength and peajes fail closed',async(
  for(const toll of [{tollsVerified:false},{source:'CLIENT'},{tollsPyg:-1}]){
   const f=make('MOTO',{toll});await assert.rejects(f.api(f.ctx),/toll/);
  }
+});
+
+test('G128 uppercase Meters from Geoapify docs remains backward-compatible',async()=>{
+ const f=make('AUTO',{providerResponse:{
+  results:[{distance:8253,time:808.305,distance_units:'Meters',toll:false}]
+ }});
+ const tollVariant=make('AUTO',{providerResponse:{
+  results:[{distance:5300,time:689.2,distance_units:'Meters',toll:false}]
+ }});
+ assert.equal((await tollVariant.api(tollVariant.ctx)).distanceMeters,5300);
+});
+test('G128 refuses spoofed units and oversized Content-Length',async()=>{
+ const f=make('MOTO',{providerResponse:{
+  results:[{distance:5300,time:689.2,distance_units:'miles',toll:false}]
+ }});
+ await assert.rejects(f.api(f.ctx),/distance/);
+ const h=make('MOTO',{http:{
+  ok:true,status:200,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':
+   k==='content-length'?'524289':null},
+  text:async()=>{throw Error('must not read oversized body');}
+ }});
+ await assert.rejects(h.api(h.ctx),/oversized/);
 });

@@ -20,11 +20,27 @@ async function readSmallJson(res){
  if(!/^application\/json(?:\s*;|$)/i.test(res?.headers?.get?.('content-type')??''))
   throw Error('G128 provider content-type unavailable');
  const length=res.headers?.get?.('content-length');
- if(length!==null&&length!==undefined&&(!/^\d+$/.test(length)||Number(length)>16384))
+ if(length!==null&&length!==undefined&&(!/^\d+$/.test(length)||Number(length)>524288))
   throw Error('G128 provider body oversized');
  let raw;
- try{raw=await res.text();}catch{throw Error('G128 provider response unreadable');}
- if(typeof raw!=='string'||Buffer.byteLength(raw,'utf8')>16384)
+ try{
+  if(res.body?.getReader){
+   const reader=res.body.getReader(),chunks=[];let bytes=0;
+   try{
+    for(;;){
+     const {done,value}=await reader.read();if(done)break;
+     if(!(value instanceof Uint8Array)||(bytes+=value.byteLength)>524288)
+      throw Error('G128 provider body oversized');
+     chunks.push(value);
+    }
+   }finally{reader.releaseLock();}
+   raw=Buffer.concat(chunks).toString('utf8');
+  }else raw=await res.text();
+ }catch(error){
+  if(error?.message==='G128 provider body oversized')throw error;
+  throw Error('G128 provider response unreadable');
+ }
+ if(typeof raw!=='string'||Buffer.byteLength(raw,'utf8')>524288)
   throw Error('G128 provider body oversized');
  try{return JSON.parse(raw);}catch{throw Error('G128 invalid Geoapify JSON');}
 }
@@ -95,7 +111,7 @@ export function createG128GeoapifyCargoRoadResolver({
   if(!obj(data)||!Array.isArray(data.results)||data.results.length!==1)
    throw Error('G128 no unique verified road');
   const route=data.results[0];
-  if(!obj(route)||route.distance_units!=='Meters'||
+  if(!obj(route)||!/^meters$/i.test(route.distance_units??'')||
    !int(route.distance,1,50000)||typeof route.time!=='number'||
    !Number.isFinite(route.time)||route.time<=0||route.time>86400)
    throw Error('G128 invalid distance or estimated duration');

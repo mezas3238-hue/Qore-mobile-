@@ -1,0 +1,31 @@
+# G129: One free-tier route probe per change to THIS smoke gate.
+# Push-only in owner-controlled A branch; forks/PRs get NO repository secrets.
+name: QORE Geoapify Free — Asunción real routing smoke
+on:
+  push:
+    branches:
+      - feature/mobility-monorepo-isolated-20261016
+    paths:
+      - .github/workflows/mobility-geoapify-free-smoke.yml
+      - apps/mobility-expo/server/g129-geoapify-real-free-smoke-ci.mjs
+permissions:
+  contents: read
+concurrency:
+  group: qore-geoapify-one-shot-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  geoapify-one-route:
+    if: github.repository == 'mezas3238-hue/Qore-mobile-' && github.event_name == 'push' && github.ref == 'refs/heads/feature/mobility-monorepo-isolated-20261016'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify one free Geoapify route in Asunción (no logging of secrets)
+        env:
+          GEOAPIFY_API_KEY: ${{ secrets.GEOAPIFY_API_KEY }}
+        run: node apps/mobility-expo/server/g129-geoapify-real-free-smoke-ci.mjs
