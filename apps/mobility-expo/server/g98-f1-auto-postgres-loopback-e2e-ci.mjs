@@ -448,10 +448,11 @@ async function main(){
   const dOrigin='https://qore-g131-same-tree-admin-ci.invalid';
   const adminExpiresAt=Date.now()+600000;
   let adminWebGets=0;
+  const allowedAdminPaths=new Set([adminPath]);
   const dFetch=(url,options)=>{
    const parsed=new URL(url);
    assert.equal(parsed.origin,dOrigin);
-   assert.equal(parsed.pathname,adminPath);
+   assert(allowedAdminPaths.has(parsed.pathname),'G131 only same-run PG trip paths');
    assert.equal(parsed.search,'');
    assert.equal(parsed.hash,'');
    assert.equal(options.method,'GET');
@@ -670,8 +671,11 @@ async function main(){
   assert.equal(auditFinal.data.tripId,secondTrip);
   assert.equal(auditFinal.data.status,'cancelled');
   assert.equal(auditFinal.data.revision,bridge.snapshot().tracking.revision);
-  // G131: even B's SECOND trip is visible in real D Admin through A G75.
-  assert.equal((await dExperience.loadF1RideAudit(secondTrip)).ok,true);
+  // G131: B's second booked trip can be inspected only after its real
+  // PostgreSQL ID is returned. Never authorize arbitrary Admin URL paths.
+  allowedAdminPaths.add('/v1/staging/admin/rides/'+secondTrip+'/f1-verification');
+  const dSecondRead=await dExperience.loadF1RideAudit(secondTrip);
+  assert.equal(dSecondRead.ok,true,JSON.stringify(dSecondRead));
   const dSecond=dExperience.snapshot().f1RideAudit.item;
   assert.equal(dSecond?.tripId,secondTrip);
   assert.equal(dSecond?.status,'cancelled');
