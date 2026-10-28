@@ -11,7 +11,7 @@ const STATES=Object.freeze({
  MOTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
  DELIVERY_MOTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
  DELIVERY_AUTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
- COMMERCE:['requested','confirmed','preparing','ready_for_pickup','in_transit','delivered','returned','cancelled']
+ COMMERCE:['requested','confirmed','preparing','ready','in_transit','delivered','returned','cancelled']
 });
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const ROOT=['mode','viewerId','serviceId','serviceKind','bookingRequestKey',
@@ -61,8 +61,10 @@ function validated(d,kind,id,subject,t){
   ||(d.assignment.state==='ASSIGNED'&&d.assignment.legalGate!=='CLEARED')
   ||!Array.isArray(d.events)||d.events.length<1||d.events.length>40
   ||(kind==='COMMERCE'&&(
-    !['requested','cancelled'].includes(d.status)
-    ||d.revision!==(d.status==='cancelled'?2:1)
+    !['requested','confirmed','preparing','ready','cancelled'].includes(d.status)
+    ||d.revision<1||d.revision>4
+    ||(d.status!=='cancelled'&&['requested','confirmed','preparing','ready'][d.revision-1]!==d.status)
+    ||(d.status==='cancelled'&&d.revision<2)
     ||d.events.length!==d.revision||d.ledger!==null
     ||d.assignment.state!=='NOT_ASSIGNABLE'
     ||d.assignment.legalGate!=='G38_BLOCKED')))return false;
@@ -75,6 +77,10 @@ function validated(d,kind,id,subject,t){
   ids.add(event.eventId);last=event.sequence;at=event.at;
  }
  if(d.events[d.events.length-1].status!==d.status)return false;
+ if(kind==='COMMERCE'&&d.events.some((e,i)=>
+  e.sequence!==i+1||
+  e.status!==(d.status==='cancelled'&&i===d.revision-1
+   ?'cancelled':['requested','confirmed','preparing','ready'][i])))return false;
  if(d.ledger!==null){
   const l=d.ledger;
   if(!exact(l,LEDGER)||l.serviceId!==id||l.currency!=='PYG'

@@ -8,6 +8,15 @@ const ROOT=['mode','viewerId','serviceId','serviceKind','bookingRequestKey',
  'productionEnabled','assignment','events','ledger'];
 const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs'];
 const EVENT=['eventId','serviceId','sequence','status','at'];
+const STEPS=['requested','confirmed','preparing','ready'];
+function validProgress(status,rev,events){
+ if(!['requested','confirmed','preparing','ready','cancelled'].includes(status)
+  ||rev<1||rev>4||!Array.isArray(events)||events.length!==rev)return false;
+ if(status!=='cancelled'&&STEPS[rev-1]!==status)return false;
+ if(status==='cancelled'&&rev<2)return false;
+ return events.every((e,i)=>e.status===(i===rev-1&&status==='cancelled'
+  ?'cancelled':STEPS[i]));
+}
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(o,keys)=>obj(o)&&Object.keys(o).length===keys.length&&
  keys.every(k=>Object.hasOwn(o,k));
@@ -67,15 +76,15 @@ export function createG146AdminCommerceTraceGateway({
   try{d=await loadCommerceTraceReceipt({actorId:user.id,orderId});}
   catch{return deny(503,'G146_SQL_UNAVAILABLE');}
   if(d===null)return deny(404,'G146_ORIGINAL_ORDER_NOT_FOUND');
-  const clock=now(),cancelled=d?.status==='cancelled',count=cancelled?2:1;
+  const clock=now(),count=d?.revision;
   if(!exact(d,COMMERCE_ROOT)||d.mode!=='STAGING_DEMO_ONLY'||
    d.productionEnabled!==false||d.serverPersisted!==true||
    d.viewerId!==user.id||d.serviceId!==orderId||
    d.serviceKind!=='COMMERCE'||!id(d.bookingRequestKey)||
    !id(d.branchId)||!['AUTO','MOTO'].includes(d.vehicleKind)||
    !time(d.orderSubtotalGs)||d.orderSubtotalGs<100||d.orderSubtotalGs>50000000||
-   d.quoteId!==null||!['requested','cancelled'].includes(d.status)||
-   d.revision!==count||!time(d.observedAt)||
+   d.quoteId!==null||!validProgress(d.status,d.revision,d.events)||
+   !time(d.observedAt)||
    d.observedAt>clock||clock-d.observedAt>30000||
    !time(d.expiresAt)||d.expiresAt<=clock||d.expiresAt>clock+60000||
    !exact(d.assignment,['state','legalGate'])||
@@ -84,7 +93,7 @@ export function createG146AdminCommerceTraceGateway({
    !Array.isArray(d.events)||d.events.length!==count||
    d.events.some((e,i)=>!exact(e,EVENT)||!id(e.eventId)||
     e.serviceId!==orderId||e.sequence!==i+1||
-    e.status!==(i===0?'requested':'cancelled')||!time(e.at)||
+    e.status!==(i===count-1&&d.status==='cancelled'?'cancelled':STEPS[i])||!time(e.at)||
     e.at>d.observedAt||i>0&&e.at<d.events[i-1].at))
    return deny(503,'G146_SOURCE_PROVENANCE_INVALID');
   return {status:200,body:d};

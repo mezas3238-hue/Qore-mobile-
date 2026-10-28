@@ -301,6 +301,19 @@ try{
  assert.equal(saved,null,'only verified terminal cancellation releases the key');
  assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'2');
  assert.equal(posts,13);
+ // G149: fourth original request is durable on the client, the 201 ACK
+ // disappears, and original G45 PostgreSQL booking survives for Merchant staff.
+ const staffKey=ids(242);
+ const readyVersion=Number(sql("SELECT revision FROM public.mobility_stage_g44_catalog_versions WHERE branch_id="+quote(branch)));
+ const staffRequest={...third,requestKey:staffKey,catalogVersion:readyVersion};
+ const staffUnknown=await g148.reserve(staffRequest);
+ assert.equal(staffUnknown.code,'POST_RESULT_UNKNOWN_RECOVER_ORIGINAL');
+ const staffRecovered=await g148.recover();
+ assert.equal(staffRecovered.ok,true,JSON.stringify(staffRecovered));
+ assert.equal(staffRecovered.receipt.requestKey,staffKey);
+ assert.equal(staffRecovered.receipt.status,'requested');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
+ assert.equal(posts,14);
  console.log('G148 PASS: Buyer durably records original request before HTTP, lost ACK recovery by same G45 PostgreSQL order, duplicate reserve blocked, cancel restores stock exactly once, terminal releases key');
  console.log('G144 COMMERCE: B -> A HTTP GET -> original PostgreSQL G45 orderId, current state, foreign/revoked denied, no duplicate stock or payment');
  console.log('G140 COMMERCE MOTO E2E PASS: original B Client -> A HTTP -> G44 vehicle matching -> G45 PG16 stock; wrong vehicle denied, MOTO receipt replay and exact restock; no LIVE/PSP');

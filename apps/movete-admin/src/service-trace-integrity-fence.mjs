@@ -11,7 +11,7 @@ const STATES=Object.freeze({
  MOTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
  DELIVERY_AUTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
  DELIVERY_MOTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
- COMMERCE:['requested','confirmed','preparing','ready_for_pickup','in_transit','delivered','returned','cancelled']
+ COMMERCE:['requested','confirmed','preparing','ready','in_transit','delivered','returned','cancelled']
 });
 const terminal=new Set(['completed','delivered','returned','cancelled']);
 const assignmentKey=a=>JSON.stringify([a?.state,a?.legalGate]);
