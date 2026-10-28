@@ -11,7 +11,7 @@ const row=kind=>({
  serviceKind:kind,bookingRequestKey:uuid(3),quoteId:kind==='COMMERCE'?null:uuid(4),
  status:'requested',revision:1,observedAt:at,expiresAt:at+30000,
  serverPersisted:true,productionEnabled:false,
- assignment:{state:'NOT_ASSIGNABLE',legalGate:'G71_BLOCKED'},
+ assignment:{state:'NOT_ASSIGNABLE',legalGate:kind==='COMMERCE'?'G38_BLOCKED':'G71_BLOCKED'},
  events:[{eventId:uuid(5),serviceId:id,sequence:1,status:'requested',at:at-1000}],
  ledger:kind==='COMMERCE'?null:{serviceId:id,currency:'PYG',grossGs:20000,
   platformCommissionGs:3000,customerSubsidyGs:2000,
