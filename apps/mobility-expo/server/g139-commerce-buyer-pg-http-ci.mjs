@@ -9,8 +9,8 @@ import {createG45BuyerOrderReservationQa}
  from './g45-buyer-order-reservation-qa.mjs';
 import {createG139CommerceQaHttpBridge}
  from './g139-commerce-qa-http-bridge.mjs';
-import {createG139CommerceQaHttpGateway}
- from '../../movete-cliente/src/domain/g139-commerce-qa-http-gateway.mjs';
+import {createClientExperience}
+ from '../../movete-cliente/src/domain/client-experience.mjs';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'
@@ -114,14 +114,15 @@ const server=createQoreRadarLoopbackTransport({
 });
 try{
  const base=await listenQoreRadarLoopback(server);
- const host='https://qore-g139-qa-only.invalid',sessionValue={
-  role:'passenger',subject:buyer,token,sessionRevision:1,expiresAt
- };
+ const host='https://qore-g139-qa-only.invalid';
  let posts=0;
- const B=createG139CommerceQaHttpGateway({
-  enabled:true,contractCertified:true,disposableQaVerified:true,
-  origin:host,pinnedOrigin:host,getSession:async()=>sessionValue,
-  fetchImpl:(url,opts)=>{
+ const BExperience=createClientExperience({
+  authProvider:{readSession:async()=>({role:'passenger',subject:buyer,
+   token,expiresAt}),signOut:async()=>{}},
+  commerceQaHttpOptions:{
+   enabled:true,contractCertified:true,disposableQaVerified:true,
+   origin:host,pinnedOrigin:host,
+   fetchImpl:(url,opts)=>{
    const u=new URL(url);
    assert.equal(u.origin,host);
    assert.equal(u.search,'');assert.equal(u.hash,'');
@@ -131,11 +132,15 @@ try{
    assert.equal(opts.credentials,'omit');
    posts++;
    return fetch(base+u.pathname,{...opts,redirect:'error'});
+   }
   }
  });
+ assert.equal((await BExperience.refreshSession()).ok,true);
+ const B={reserve:body=>BExperience.reserveCommerceQa(body),
+  cancel:body=>BExperience.cancelCommerceQa(body)};
  const request={requestKey:key,branchId:branch,catalogVersion:version,
   vehicleKind:'AUTO',items:[{itemId:item,quantity:1}]};
- assert.equal(B.isConfigured(),true);
+ assert.equal(BExperience.snapshot().authenticated,true);
  const first=await B.reserve(request);
  assert.equal(first.ok,true,JSON.stringify(first));
  assert.equal(first.receipt.subtotalPyg,25000);

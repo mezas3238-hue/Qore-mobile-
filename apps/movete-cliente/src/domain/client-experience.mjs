@@ -27,6 +27,7 @@ import {createCommerceCatalogPager} from './commerce-catalog-pages.mjs';
 import {createG44BranchDirectory} from './g44-branch-directory.mjs';
 import {createG44BuyerCatalogAdapter} from './g44-buyer-contract.mjs';
 import {createG44BuyerHttpGateway} from './g44-buyer-http-gateway.mjs';
+import {createG139CommerceQaHttpGateway} from './g139-commerce-qa-http-gateway.mjs';
 import {createPassengerChatFlow} from './passenger-chat-flow.mjs';
 import {createPassengerChatPushHintStore} from './passenger-chat-push-hint.mjs';
 import {createPassengerChatInbox} from './passenger-chat-inbox.mjs';
@@ -49,7 +50,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  bookingHttpOptions=null,deliveryRegistrationOptions=null,
  deliveryG5QaOptions=null,deliveryG122Options=null,deliveryRecoveryStore=null,deliveryQuoteKeyStore=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
- g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
+ g44BuyerHttpOptions=null,commerceQaHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
  g53ChatSendHttpOptions=null,now=()=>Date.now()}={}){
  const deliveryRecovery=createG5DurableDeliveryRecovery({store:deliveryRecoveryStore,now});
@@ -57,7 +58,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const history=createClientHistoryStore({now});
  const riderStore=createRiderStatusStore({now});
  const chatHintStore=createPassengerChatPushHintStore({now});
- let commerceFlow,commercePager,branchDirectory,g44Http=null,chatFlow,chatInbox,motoFlow=null,motoHttp=null,motoRideGateway=null;
+ let commerceFlow,commercePager,branchDirectory,g44Http=null,commerceQaHttp=null,chatFlow,chatInbox,motoFlow=null,motoHttp=null,motoRideGateway=null;
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let registrationEpoch=0,registration={busy:false,receipt:null};
@@ -127,6 +128,17 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor();
   return user?{...user,sessionRevision:session.privacyRevision()}:null;
  };
+ // G139 is an isolated GitHub disposable-DB-only stock reservation path.
+ // Injecting the gateway never enables payment, delivery or native checkout.
+ commerceQaHttp=commerceQaHttpOptions?createG139CommerceQaHttpGateway({
+  ...commerceQaHttpOptions,now,
+  getSession:()=>{
+   const user=actor(),privateSession=session.getSessionForGateway();
+   return user&&privateSession?{role:'passenger',subject:user.subject,
+    token:privateSession.token,expiresAt:privateSession.expiresAt,
+    sessionRevision:session.privacyRevision()}:null;
+  }
+ }):null;
  // G101 now has five separate Passenger HTTP contracts, but is only
  // mounted over A's local disposable PG16 CI. External QA flags remain OFF.
  // Never combine custom injected MOTO transport with production-style HTTP.
@@ -1572,6 +1584,17 @@ export function createClientExperience({authProvider=null,gateway=null,
   setCommerceQuantity:(itemId,quantity)=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeQuantity(itemId,quantity);notify();return r;},
   selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
   previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},
+  // Explicitly QA-only; no basket or cash flows are promoted to production.
+  reserveCommerceQa:async body=>{
+   if(!actor())return fail('AUTH_REQUIRED');
+   if(commerceQaHttp?.isConfigured()!==true)return fail('G139_NOT_CERTIFIED');
+   const result=await commerceQaHttp.reserve(body);notify();return result;
+  },
+  cancelCommerceQa:async body=>{
+   if(!actor())return fail('AUTH_REQUIRED');
+   if(commerceQaHttp?.isConfigured()!==true)return fail('G139_NOT_CERTIFIED');
+   const result=await commerceQaHttp.cancel(body);notify();return result;
+  },
   clearCommerce:()=>{commerceFlow.clear();notify();},
   prepareIncidentReport:request=>{const result=prepareIncidentReport(request);notify();return result;},
   discardIncidentReport:()=>{const result=incidentFlow.discard();notify();return result;},
