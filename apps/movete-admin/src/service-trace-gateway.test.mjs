@@ -9,6 +9,7 @@ const session={role:'admin',subject:admin,mfaVerified:true,authRevision:4,
 const row=kind=>({
  mode:'STAGING_DEMO_ONLY',viewerId:admin,serviceId:id,
  serviceKind:kind,bookingRequestKey:uuid(3),quoteId:kind==='COMMERCE'?null:uuid(4),
+ ...(kind==='COMMERCE'?{branchId:uuid(6),vehicleKind:'AUTO',orderSubtotalGs:20000}:{}),
  status:'requested',revision:1,observedAt:at,expiresAt:at+30000,
  serverPersisted:true,productionEnabled:false,
  assignment:{state:'NOT_ASSIGNABLE',legalGate:kind==='COMMERCE'?'G38_BLOCKED':'G71_BLOCKED'},
@@ -44,6 +45,11 @@ test('D five flows use precisely one server serviceId across events and ledger',
   assert.equal(out.data.serviceId,id);
   assert.equal(out.data.events[0].serviceId,id);
   assert.equal(out.data.ledger?.serviceId??null,kind==='COMMERCE'?null:id);
+  if(kind==='COMMERCE'){
+   assert.equal(out.data.quoteId,null);
+   assert.equal(out.data.orderSubtotalGs,20000);
+   assert.equal(out.data.vehicleKind,'AUTO');
+  }
   assert.equal(out.data.assignment.state,'NOT_ASSIGNABLE');
   assert.equal(out.data.viewerId,undefined);
   assert.equal(out.data.productionEnabled,false);
@@ -113,6 +119,11 @@ test('G146 Commerce requires explicit missing G7 quote and never renders a fabri
  assert.equal((await configured(async()=>response(good)).read('COMMERCE',id)).ok,true);
  for(const change of [
   x=>x.quoteId=uuid(66),
+  x=>x.branchId=uuid(77),
+  x=>x.vehicleKind='BICYCLE',
+  x=>x.orderSubtotalGs=0,
+  x=>x.orderSubtotalGs=50000001,
+  x=>x.unknownField=true,
   x=>x.status='delivered',
   x=>x.revision=2,
   x=>x.ledger={serviceId:id,currency:'PYG',grossGs:25000,

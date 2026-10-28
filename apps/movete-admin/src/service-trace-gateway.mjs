@@ -17,6 +17,7 @@ const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const ROOT=['mode','viewerId','serviceId','serviceKind','bookingRequestKey',
  'quoteId','status','revision','observedAt','expiresAt','serverPersisted',
  'productionEnabled','assignment','events','ledger'];
+const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs'];
 const ASSIGN=['state','legalGate'];
 const EVENT=['eventId','serviceId','sequence','status','at'];
 const LEDGER=['serviceId','currency','grossGs','platformCommissionGs',
@@ -43,10 +44,12 @@ const same=(a,b)=>a.subject===b.subject&&a.role===b.role
  &&a.mfaVerified===b.mfaVerified&&a.token===b.token
  &&a.expiresAt===b.expiresAt&&a.authRevision===b.authRevision;
 function validated(d,kind,id,subject,t){
- if(!exact(d,ROOT)||d.mode!=='STAGING_DEMO_ONLY'
+ if(!exact(d,kind==='COMMERCE'?COMMERCE_ROOT:ROOT)||d.mode!=='STAGING_DEMO_ONLY'
   ||d.productionEnabled!==false||d.viewerId!==subject
   ||d.serviceKind!==kind||d.serviceId!==id
-  ||(kind==='COMMERCE'?d.quoteId!==null:!uuid(d.quoteId))
+  ||(kind==='COMMERCE'?(d.quoteId!==null||!uuid(d.branchId)
+   ||!['AUTO','MOTO'].includes(d.vehicleKind)||!safeInt(d.orderSubtotalGs)
+   ||d.orderSubtotalGs<100||d.orderSubtotalGs>50000000):!uuid(d.quoteId))
   ||!uuid(d.bookingRequestKey)||!STATES[kind].includes(d.status)
   ||!safeInt(d.revision)||d.revision<1
   ||!safeInt(d.observedAt)||d.observedAt>t||t-d.observedAt>30000
@@ -167,6 +170,8 @@ export function createServiceTraceGateway({
     return fail('STALE_SESSION_RESPONSE');
    return Object.freeze({ok:true,data:Object.freeze({
     serviceKind:kind,serviceId:id,quoteId:dto.quoteId,
+    ...(kind==='COMMERCE'?{branchId:dto.branchId,
+     vehicleKind:dto.vehicleKind,orderSubtotalGs:dto.orderSubtotalGs}:{}),
     bookingRequestKey:dto.bookingRequestKey,status:dto.status,
     revision:dto.revision,assignment:Object.freeze({...dto.assignment}),
     events:Object.freeze(dto.events.map(e=>Object.freeze({...e}))),

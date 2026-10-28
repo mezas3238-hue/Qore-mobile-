@@ -28,7 +28,7 @@ function sql(statement){
 const decode=statement=>JSON.parse(sql(statement));
 assert.equal(sql("SELECT (to_regprocedure('public.mobility_stage_g146_commerce_trace_qa(uuid,uuid)') IS NOT NULL)::text"),'true');
 assert.equal(sql("SELECT (has_function_privilege('authenticated','public.mobility_stage_g146_commerce_trace_qa(uuid,uuid)','EXECUTE') OR has_function_privilege('anon','public.mobility_stage_g146_commerce_trace_qa(uuid,uuid)','EXECUTE'))::text"),'false');
-const existing=decode("SELECT jsonb_build_object('id',o.id,'key',r.request_key,'status',o.status,'revision',o.revision,'subtotal',o.subtotal_pyg) "+
+const existing=decode("SELECT jsonb_build_object('id',o.id,'key',r.request_key,'status',o.status,'revision',o.revision,'subtotal',o.subtotal_pyg,'branchId',o.branch_id,'vehicleKind',o.requested_vehicle_kind) "+
  "FROM public.mobility_stage_merchant_orders o "+
  "JOIN public.mobility_stage_g45_order_receipts r ON r.order_id=o.id "+
  "WHERE r.request_key='"+requestKey+"'");
@@ -89,6 +89,9 @@ try{
  assert.equal(d.serviceId,existing.id);
  assert.equal(d.bookingRequestKey,requestKey);
  assert.equal(d.quoteId,null,'G45 stock reservation does NOT mint G7 quote');
+ assert.equal(d.branchId,existing.branchId);
+ assert.equal(d.vehicleKind,existing.vehicleKind);
+ assert.equal(d.orderSubtotalGs,existing.subtotal,'G45 original catalog subtotal only');
  assert.equal(d.status,'cancelled');
  assert.equal(d.revision,2);
  assert.equal(d.events.length,2);
@@ -116,6 +119,9 @@ try{
  assert.equal(ui.ok,true,JSON.stringify(ui));
  assert.equal(ui.data.serviceId,existing.id);
  assert.equal(ui.data.quoteId,null);
+ assert.equal(ui.data.branchId,existing.branchId);
+ assert.equal(ui.data.vehicleKind,existing.vehicleKind);
+ assert.equal(ui.data.orderSubtotalGs,existing.subtotal);
  assert.equal(ui.data.ledger,null);
  assert.equal(ui.data.events.length,2);
  const before=reads;

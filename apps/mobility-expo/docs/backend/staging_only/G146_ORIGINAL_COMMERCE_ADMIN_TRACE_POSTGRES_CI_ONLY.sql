@@ -14,7 +14,8 @@ CREATE FUNCTION public.mobility_stage_g146_commerce_trace_qa(
  WITH stamp AS MATERIALIZED (
   SELECT floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint ms
  ), source AS MATERIALIZED (
-  SELECT o.id,o.request_key,o.buyer_id,o.status::text status,
+  SELECT o.id,o.request_key,o.buyer_id,o.branch_id,
+   o.requested_vehicle_kind,o.status::text status,
    o.revision,o.created_at,o.changed_at,o.delivery_id,
    r.receipt_id,r.catalog_version,r.subtotal_pyg
   FROM public.mobility_stage_merchant_orders o
@@ -48,7 +49,9 @@ CREATE FUNCTION public.mobility_stage_g146_commerce_trace_qa(
   'mode','STAGING_DEMO_ONLY','viewerId',_admin,
   'serviceId',s.id,'serviceKind','COMMERCE',
   'bookingRequestKey',s.request_key,
-  'quoteId',NULL,
+  'quoteId',NULL,'branchId',s.branch_id,
+  'vehicleKind',s.requested_vehicle_kind::text,
+  'orderSubtotalGs',s.subtotal_pyg,
   'status',s.status,'revision',s.revision,
   'observedAt',stamp.ms,'expiresAt',stamp.ms+30000,
   'serverPersisted',true,'productionEnabled',false,

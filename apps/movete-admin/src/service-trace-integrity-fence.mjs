@@ -22,7 +22,12 @@ const eventKey=e=>JSON.stringify([e.eventId,e.serviceId,e.sequence,e.status,e.at
 function compare(previous,current){
  if(previous.serviceKind!==current.serviceKind||
   previous.bookingRequestKey!==current.bookingRequestKey||
-  previous.quoteId!==current.quoteId)return 'TRACE_IMMUTABLE_LINK_CHANGED';
+  previous.quoteId!==current.quoteId||
+  (current.serviceKind==='COMMERCE'&&(
+    previous.branchId!==current.branchId||
+    previous.vehicleKind!==current.vehicleKind||
+    previous.orderSubtotalGs!==current.orderSubtotalGs)))
+  return 'TRACE_IMMUTABLE_LINK_CHANGED';
  if(current.revision<previous.revision
   ||current.observedAt<previous.observedAt)
   return 'TRACE_STALE_REVISION';
@@ -72,6 +77,8 @@ export function createServiceTraceIntegrityFence(){
   seen.set(dto.serviceId,Object.freeze({
    serviceKind:dto.serviceKind,serviceId:dto.serviceId,
    bookingRequestKey:dto.bookingRequestKey,quoteId:dto.quoteId,
+   ...(dto.serviceKind==='COMMERCE'?{branchId:dto.branchId,
+    vehicleKind:dto.vehicleKind,orderSubtotalGs:dto.orderSubtotalGs}:{}),
    status:dto.status,revision:dto.revision,observedAt:dto.observedAt,
    assignment:Object.freeze({...dto.assignment}),
    ledger:dto.ledger===null?null:Object.freeze({...dto.ledger}),

@@ -78,3 +78,18 @@ test('D refuses legacy delivery identifiers instead of silently mixing ledger se
  assert.equal(guard.observe({...build(),serviceKind:'AUTO_DELIVERY'}).code,'TRACE_INVALID_PROOF');
  assert.equal(guard.observe(build()).ok,true);
 });
+
+test('D G146 same orderId never changes branch, vehicle or original stock subtotal',()=>{
+ const baseline={...build(),serviceKind:'COMMERCE',quoteId:null,
+  branchId:id(19),vehicleKind:'AUTO',orderSubtotalGs:25000,
+  ledger:null,assignment:{state:'NOT_ASSIGNABLE',legalGate:'G38_BLOCKED'}};
+ const guard=createServiceTraceIntegrityFence();
+ assert.equal(guard.observe(baseline).ok,true);
+ for(const fields of [{branchId:id(20)},{vehicleKind:'MOTO'},
+  {orderSubtotalGs:26000}]){
+  assert.equal(guard.observe({...baseline,...fields,revision:2,observedAt:1003,
+   status:'cancelled',events:[...baseline.events,{
+    eventId:id(6),serviceId:id(1),sequence:2,status:'cancelled',at:1002}]
+  }).code,'TRACE_IMMUTABLE_LINK_CHANGED');
+ }
+});

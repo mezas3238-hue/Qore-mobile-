@@ -6,6 +6,7 @@ const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const ROOT=['mode','viewerId','serviceId','serviceKind','bookingRequestKey',
  'quoteId','status','revision','observedAt','expiresAt','serverPersisted',
  'productionEnabled','assignment','events','ledger'];
+const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs'];
 const EVENT=['eventId','serviceId','sequence','status','at'];
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(o,keys)=>obj(o)&&Object.keys(o).length===keys.length&&
@@ -67,10 +68,12 @@ export function createG146AdminCommerceTraceGateway({
   catch{return deny(503,'G146_SQL_UNAVAILABLE');}
   if(d===null)return deny(404,'G146_ORIGINAL_ORDER_NOT_FOUND');
   const clock=now(),cancelled=d?.status==='cancelled',count=cancelled?2:1;
-  if(!exact(d,ROOT)||d.mode!=='STAGING_DEMO_ONLY'||
+  if(!exact(d,COMMERCE_ROOT)||d.mode!=='STAGING_DEMO_ONLY'||
    d.productionEnabled!==false||d.serverPersisted!==true||
    d.viewerId!==user.id||d.serviceId!==orderId||
    d.serviceKind!=='COMMERCE'||!id(d.bookingRequestKey)||
+   !id(d.branchId)||!['AUTO','MOTO'].includes(d.vehicleKind)||
+   !time(d.orderSubtotalGs)||d.orderSubtotalGs<100||d.orderSubtotalGs>50000000||
    d.quoteId!==null||!['requested','cancelled'].includes(d.status)||
    d.revision!==count||!time(d.observedAt)||
    d.observedAt>clock||clock-d.observedAt>30000||
