@@ -53,6 +53,9 @@ import {createDriverKycExpiryStatusQa} from './driver-kyc-expiry-status-qa.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG65DriverTripStatusRepository} from './g65-driver-trip-status-repository.mjs';
 import {createG64PrivateDriverDecisionReconcileQa} from './g64-driver-offer-reconcile-qa.mjs';
+import {createG66CourierCustodyRepository} from './g66-courier-custody-repository.mjs';
+import {createG66CourierCustodyStatusQa} from './g66-courier-custody-status-qa.mjs';
+import {createG66CourierCustodyTransitionQa} from './g66-courier-custody-transition-qa.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -168,6 +171,7 @@ export async function prepareQoreG4StagingRuntime({
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
+ g66ProofTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
@@ -262,6 +266,11 @@ export async function prepareQoreG4StagingRuntime({
      &&typeof g77RouteOptions.verifyRouteTolls==='function'
      &&typeof g77RouteOptions.request==='function'
      &&verifiedAutoRoute===null))||
+   !(g66ProofTrust===null||(
+     driverKycTrust!==null&&Object.getPrototypeOf(g66ProofTrust)===Object.prototype
+     &&Object.keys(g66ProofTrust).length===2
+     &&typeof g66ProofTrust.verifyStoredProof==='function'
+     &&typeof g66ProofTrust.verifyIndependentProof==='function'))||
    !(readDriverDecisionOwnerQa===null||
       (typeof readDriverDecisionOwnerQa==='function'&&driverKycTrust!==null))||
    !(driverKycTrust===null||(
@@ -308,6 +317,8 @@ export async function prepareQoreG4StagingRuntime({
  await assertDatabaseG4(admin);
  const persistence=createSupabaseStagingDispatchRepository(admin);
  const deliveryPersistence=createSupabaseStagingDeliveryRepository(admin);
+ const courierCustodyPersistence=g66ProofTrust===null?null:
+  createG66CourierCustodyRepository(admin);
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
@@ -720,6 +731,34 @@ export async function prepareQoreG4StagingRuntime({
    allowRequest:({actorId})=>allowRequest({userId:actorId}),
    readStoredDecision:scope=>readDriverDecisionOwnerQa(scope)
   });
+ // G143: never accept direct G5 /courier/deliveries/:id/accept from HTTP.
+ // G10 private offer + persisted assignment is the sole acceptance path.
+ // G66 custody is mounted only with independent revocable IdP + proof registry.
+ const courierCustody=g66ProofTrust===null?null:(()=>{
+  const verifyG66=async token=>{
+   const u=await verifiedDriverOfferSession(token);
+   return {id:u.id,sessionId:u.sessionId,tokenIatMs:u.tokenIatMs,
+    expiresAtMs:u.expiresAtMs,is_anonymous:u.is_anonymous};
+  };
+  const shared={
+   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,now,
+   verifyAccessToken:verifyG66,
+   verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p),
+   resolveExclusiveRole:id=>singleRole(admin,id),
+   allowRequest:({actorId})=>allowRequest({userId:actorId})
+  };
+  const read=createG66CourierCustodyStatusQa({...shared,
+   loadAssignedDelivery:p=>courierCustodyPersistence.loadAssignedDelivery(p),
+   verifyStoredProof:p=>g66ProofTrust.verifyStoredProof(p)
+  });
+  const write=createG66CourierCustodyTransitionQa({...shared,
+   verifyIndependentProof:p=>g66ProofTrust.verifyIndependentProof(p),
+   transitionDelivery:p=>deliveryPersistence.transition({
+    mode:'SYNTHETIC_STAGING',liveEnabled:false,...p
+   })
+  });
+  return input=>input.method==='GET'?read(input):write(input);
+ })();
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -780,6 +819,7 @@ export async function prepareQoreG4StagingRuntime({
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
    deliveryOfferHandler:guard(deliveryOffers),
+   ...(courierCustody===null?{}:{courierCustodyHandler:guard(courierCustody)}),
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
    driverDocumentHandler:guard(driverDocuments),
