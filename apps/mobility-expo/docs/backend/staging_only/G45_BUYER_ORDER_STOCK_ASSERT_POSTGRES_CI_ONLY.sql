@@ -149,6 +149,52 @@ BEGIN
  EXCEPTION WHEN SQLSTATE 'G4503' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G45 foreign order cancelled'; END IF;
 
+ -- G140: AUTO-only branch must fail MOTO even with valid fresh revision.
+ SELECT revision INTO version3 FROM public.mobility_stage_g44_catalog_versions
+ WHERE branch_id=branch;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g45_reserve_order_qa(
+   third_buyer,ses3,iat,request3,branch,version3,'MOTO',items);
+ EXCEPTION WHEN SQLSTATE 'G4503' THEN denied:=true; END;
+ IF NOT denied OR EXISTS(SELECT 1 FROM public.mobility_stage_merchant_orders
+   WHERE request_key=request3)
+ THEN RAISE EXCEPTION 'G140 mismatched MOTO on AUTO zone'; END IF;
+ -- G44 synthetic geography never grants real courier legality.
+ INSERT INTO public.mobility_stage_g31_zone_coverage(
+  zone_id,municipality,service_kind,coverage_status
+ ) VALUES('45450000-0000-4545-8545-000000000010',
+   'Asuncion','MOTO_DELIVERY','ACTIVE');
+ UPDATE public.mobility_stage_g44_branch_geography
+ SET service_kind='MOTO_DELIVERY' WHERE branch_id=branch;
+ SELECT revision INTO version3 FROM public.mobility_stage_g44_catalog_versions
+ WHERE branch_id=branch;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g45_reserve_order_qa(
+   buyer,session,iat,'45450000-0000-4545-8545-000000000204',
+   branch,version3,'AUTO',items);
+ EXCEPTION WHEN SQLSTATE 'G4503' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G140 AUTO accepted MOTO-only zone'; END IF;
+ a:=public.mobility_stage_g45_reserve_order_qa(
+   third_buyer,ses3,iat,request3,branch,version3,'MOTO',items);
+ IF a->>'receiptStatus'<>'QA_RESERVED_NO_PAYMENT'
+ OR (SELECT requested_vehicle_kind FROM public.mobility_stage_merchant_orders
+   WHERE id=(a->>'orderId')::uuid) IS DISTINCT FROM 'MOTO'
+ OR (SELECT stock_units FROM public.mobility_stage_catalog_items
+   WHERE id=stock_item)<>0
+ THEN RAISE EXCEPTION 'G140 MOTO stock reservation failed'; END IF;
+ IF a<>public.mobility_stage_g45_reserve_order_qa(
+   third_buyer,ses3,iat,request3,branch,version3,'MOTO',items)
+ THEN RAISE EXCEPTION 'G140 MOTO key replay consumed stock'; END IF;
+ d:=public.mobility_stage_g45_cancel_order_qa(
+   third_buyer,ses3,iat,(a->>'orderId')::uuid,
+   '45450000-0000-4545-8545-000000000303');
+ IF d->>'receiptStatus'<>'QA_CANCELLED_STOCK_RESTORED'
+ OR (SELECT stock_units FROM public.mobility_stage_catalog_items
+   WHERE id=stock_item)<>1
+ THEN RAISE EXCEPTION 'G140 MOTO cancellation restock failed'; END IF;
+ RAISE NOTICE 'G140 PASS: mapped MOTO and AUTO branches cannot cross; PG16 reservation, idempotency and stock release';
  RAISE NOTICE 'G45 PASS: durable idempotent receipts, server PYG, version fence, stock and exact cancel';
 END $checks$;
 SET LOCAL ROLE service_role;
