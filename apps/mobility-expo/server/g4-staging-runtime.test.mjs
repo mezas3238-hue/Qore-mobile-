@@ -26,7 +26,8 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
-   adminRole:null,adminReceipt:null,g77RegisteredRoute:null,
+   adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,
+   g77RegisteredRoute:null,
    g84Enabled:false,g84OfferKey:null,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
@@ -161,6 +162,12 @@ function mockSupabase(){
     if(name==='mobility_stage_g75_admin_f1_receipt')
      return {data:params._admin_id===stranger&&params._trip_id===ride?
       state.adminReceipt:null,error:null};
+    if(name==='mobility_stage_g138_auto_trace_qa')
+     return {data:params._admin===stranger&&params._trip===ride?
+      state.autoTraceReceipt:null,error:null};
+    if(name==='mobility_stage_g142_moto_trace_qa')
+     return {data:params._admin===stranger&&params._trip===ride?
+      state.motoTraceReceipt:null,error:null};
     if(name==='mobility_stage_auto_demo_request'){
      if(params._passenger_id!==passenger)return {error:{message:'Wrong passenger'}};
      return {data:ride,error:null};
@@ -1132,4 +1139,70 @@ test('G90 private HTTP route allows only authenticated Passenger booking owner',
   assert.deepEqual(m.state.rpcs.filter(x=>x.name==='mobility_stage_g90_passenger_dispatch_status_qa')
    .map(x=>x.params),[{_passenger_id:passenger,_booking_key:requestKey}]);
  });
+});
+
+const g144AutoPath='/v1/staging/admin/services/AUTO_RIDE/'+ride+'/trace';
+const g144MotoPath='/v1/staging/admin/services/MOTO_RIDE/'+ride+'/trace';
+const g144BaseTrace=(kind)=>({
+ mode:'STAGING_DEMO_ONLY',viewerId:stranger,serviceId:ride,
+ serviceKind:kind,bookingRequestKey:requestKey,quoteId:fareQuote,
+ status:'searching',revision:1,observedAt:now-1000,expiresAt:now+29000,
+ serverPersisted:true,productionEnabled:false,
+ assignment:{state:'NOT_ASSIGNABLE',legalGate:'G38_BLOCKED'},
+ events:[{eventId:ride,serviceId:ride,sequence:1,
+  status:'searching',at:now-2000}],
+ ledger:null
+});
+test('G144 both source-backed Admin traces require configured IdP AAL2',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g144AutoPath,'stranger')).status,503);
+  assert.equal((await req(base,g144MotoPath,'stranger')).status,503);
+  assert(!m.state.rpcs.some(x=>/g138|g142/.test(x.name)));
+ });
+});
+test('G144 real runtime routes BOTH verified AUTO and MOTO SQL original IDs',async()=>{
+ const m=mockSupabase();m.state.adminRole='admin';
+ m.state.adminReceipt=adminF1Receipt();
+ m.state.autoTraceReceipt=g144BaseTrace('AUTO_RIDE');
+ m.state.motoTraceReceipt={...g144BaseTrace('MOTO_RIDE'),
+  ledger:{serviceId:ride,currency:'PYG',grossGs:13000,
+   platformCommissionGs:1500,customerSubsidyGs:1300,
+   driverPayoutGs:11500,reconciliationStatus:'PENDING'}};
+ const runtime=await prepare(m,{adminF1Trust:trust()});
+ await http(runtime,async base=>{
+  for(const [path,kind,rpc] of [
+   [g144AutoPath,'AUTO_RIDE','mobility_stage_g138_auto_trace_qa'],
+   [g144MotoPath,'MOTO_RIDE','mobility_stage_g142_moto_trace_qa']
+  ]){
+   const forbidden=await req(base,path,'rider');
+   assert.equal(forbidden.status,401);
+   const actual=await req(base,path,'stranger');
+   assert.equal(actual.status,200);
+   assert.equal(actual.body.serviceKind,kind);
+   assert.equal(actual.body.serviceId,ride);
+   assert.equal(actual.body.productionEnabled,false);
+   assert(m.state.rpcs.some(x=>x.name===rpc&&x.params._admin===stranger
+    &&x.params._trip===ride),'read original scoped SQL record');
+  }
+  assert(m.state.rpcs.filter(x=>x.name==='mobility_stage_g75_admin_f1_receipt').length>=1,
+   'G138 must verify original G75 evidence before reading its trace');
+ });
+});
+test('G144 revoked/MFA denied and missing SQL evidence fail closed in both Admin routes',async()=>{
+ for(const [override,status] of [
+  [{verifySessionNotRevoked:async()=>false},401],
+  [{verifyBackofficeMfa:async()=>({verifiedByProvider:false})},403],
+  [{},503]
+ ]){
+  const m=mockSupabase();m.state.adminRole='admin';
+  m.state.adminReceipt=adminF1Receipt();
+  const runtime=await prepare(m,{adminF1Trust:trust(override)});
+  await http(runtime,async base=>{
+   assert.equal((await req(base,g144AutoPath,'stranger')).status,status);
+   assert.equal((await req(base,g144MotoPath,'stranger')).status,
+    status===503?404:status);
+   if(status!==503)assert(!m.state.rpcs.some(x=>/g138|g142/.test(x.name)));
+  });
+ }
 });

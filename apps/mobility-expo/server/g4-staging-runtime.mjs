@@ -33,6 +33,8 @@ import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
+import {createG138AdminAutoTraceGateway} from './g138-admin-auto-trace-gateway.mjs';
+import {createG142AdminMotoTraceGateway} from './g142-admin-moto-trace-gateway.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-merchant-management-repository.mjs';
@@ -597,30 +599,65 @@ export async function prepareQoreG4StagingRuntime({
  });
  // G76: only an independently authenticated and AAL2-verified Admin may
  // access SQL G75. Unconfigured remains HTTP 503; nothing is exposed LIVE.
- const adminF1=adminF1Trust===null?null:createG75AdminF1AuditGateway({
-  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
-  projectRef:ref,now,allowRequest,
-  verifyAccessToken:async token=>{
-   const user=await verified(token);
-   const attested=await adminF1Trust.verifyAdminSession(token);
-   if(!attested||typeof attested!=='object'||attested.id!==user.id||
-      attested.is_anonymous!==false||
-      !(typeof user.email_confirmed_at==='string'||
-        typeof user.phone_confirmed_at==='string'))
-    throw Error('Admin IdP session mismatch');
-   return {...attested,email_confirmed_at:user.email_confirmed_at,
-    phone_confirmed_at:user.phone_confirmed_at};
-  },
+ // G144: same independently verified, revocable IdP/AAL2 Admin authority
+ // for both ORIGINAL source-backed passenger trace endpoints. No browser
+ // auth or privilege is inferred from unverified JWT claims.
+ const verifiedAdminSession=async token=>{
+  const user=await verified(token);
+  const attested=await adminF1Trust.verifyAdminSession(token);
+  if(!attested||typeof attested!=='object'||attested.id!==user.id||
+     attested.is_anonymous!==false||
+     !(typeof user.email_confirmed_at==='string'||
+       typeof user.phone_confirmed_at==='string'))
+   throw Error('Admin IdP session mismatch');
+  return {...attested,email_confirmed_at:user.email_confirmed_at,
+   phone_confirmed_at:user.phone_confirmed_at};
+ };
+ const adminRoleFromSql=async id=>{
+  const {data,error}=await admin.rpc('mobility_stage_g27_backoffice_role_of',{
+   _user:id
+  });
+  if(error)throw Error('Admin G27 exclusive role lookup unavailable');
+  return data;
+ };
+ const verifiedAdminTrust=adminF1Trust===null?null:{
+  verifyAccessToken:verifiedAdminSession,
   verifySessionNotRevoked:p=>adminF1Trust.verifySessionNotRevoked(p),
-  loadExclusiveBackofficeRole:async id=>{
-   const {data,error}=await admin.rpc('mobility_stage_g27_backoffice_role_of',{
-    _user:id
-   });
-   if(error)throw Error('Admin G27 exclusive role lookup unavailable');
-   return data;
-  },
+  loadExclusiveBackofficeRole:adminRoleFromSql,
   verifyBackofficeMfa:p=>adminF1Trust.verifyBackofficeMfa(p),
+  allowRequest,now
+ };
+ const adminF1=verifiedAdminTrust===null?null:createG75AdminF1AuditGateway({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  projectRef:ref,...verifiedAdminTrust,
   loadAdminRideReceipt:p=>adminF1Persistence.read(p),
+ });
+ // G138 requires a second read of G75 against the same original trip.
+ // Missing disposable SQL functions/error NEVER become a successful trace.
+ const adminAutoTrace=adminF1===null?null:createG138AdminAutoTraceGateway({
+  adminF1AuditGateway:adminF1,now,
+  loadAutoTraceReceipt:async({actorId,tripId})=>{
+   if(!UUID.test(actorId)||!UUID.test(tripId))
+    throw Error('Invalid G138 SQL scope');
+   const {data,error}=await admin.rpc('mobility_stage_g138_auto_trace_qa',{
+    _admin:actorId,_trip:tripId
+   });
+   if(error)throw Error('G138 original SQL trace unavailable');
+   return data;
+  }
+ });
+ const adminMotoTrace=verifiedAdminTrust===null?null:createG142AdminMotoTraceGateway({
+  projectRef:ref,environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  ...verifiedAdminTrust,
+  loadMotoTraceReceipt:async({actorId,tripId})=>{
+   if(!UUID.test(actorId)||!UUID.test(tripId))
+    throw Error('Invalid G142 SQL scope');
+   const {data,error}=await admin.rpc('mobility_stage_g142_moto_trace_qa',{
+    _admin:actorId,_trip:tripId
+   });
+   if(error)throw Error('G142 original SQL trace unavailable');
+   return data;
+  }
  });
  const safety=createQoreSafetyGateway({
   projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
@@ -813,6 +850,8 @@ export async function prepareQoreG4StagingRuntime({
    tripCommandHandler:guard(commands),
    f1AutoHandler:guard(f1Auto),motoHandler:guard(f1Moto),
    ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
+   ...(adminAutoTrace===null?{}:{adminServiceTraceHandler:guard(adminAutoTrace)}),
+   ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
    financeHandler:guard(finance),
