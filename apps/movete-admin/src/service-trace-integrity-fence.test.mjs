@@ -81,7 +81,7 @@ test('D refuses legacy delivery identifiers instead of silently mixing ledger se
 
 test('D G146 same orderId never changes branch, vehicle or original stock subtotal',()=>{
  const baseline={...build(),serviceKind:'COMMERCE',quoteId:null,
-  branchId:id(19),vehicleKind:'AUTO',orderSubtotalGs:25000,
+  branchId:id(19),vehicleKind:'AUTO',orderSubtotalGs:25000,deliveryId:null,
   ledger:null,assignment:{state:'NOT_ASSIGNABLE',legalGate:'G38_BLOCKED'}};
  const guard=createServiceTraceIntegrityFence();
  assert.equal(guard.observe(baseline).ok,true);
@@ -92,4 +92,27 @@ test('D G146 same orderId never changes branch, vehicle or original stock subtot
     eventId:id(6),serviceId:id(1),sequence:2,status:'cancelled',at:1002}]
   }).code,'TRACE_IMMUTABLE_LINK_CHANGED');
  }
+});
+
+test('G151 Admin allows precisely one original delivery link then prevents rewrite or rollback',()=>{
+ const guard=createServiceTraceIntegrityFence();
+ const base={...build(),serviceKind:'COMMERCE',quoteId:null,
+  branchId:id(19),vehicleKind:'MOTO',orderSubtotalGs:25000,
+  deliveryId:null,assignment:{state:'NOT_ASSIGNABLE',legalGate:'G38_BLOCKED'}};
+ base.status='ready';base.revision=4;
+ base.events=[
+  {...base.events[0]},
+  {eventId:id(6),serviceId:id(1),sequence:2,status:'confirmed',at:1000},
+  {eventId:id(7),serviceId:id(1),sequence:3,status:'preparing',at:1000},
+  {eventId:id(8),serviceId:id(1),sequence:4,status:'ready',at:1000}
+ ];
+ assert.equal(guard.observe(base).ok,true);
+ const linked={...base,revision:5,observedAt:1005,deliveryId:id(10),
+  events:[...base.events,{eventId:id(11),serviceId:id(1),
+   sequence:5,status:'ready',at:1002}]};
+ assert.equal(guard.observe(linked).ok,true);
+ assert.equal(guard.observe({...linked,revision:6,observedAt:1006,
+  deliveryId:id(12)}).code,'TRACE_DELIVERY_LINK_CHANGED');
+ assert.equal(guard.observe({...linked,revision:6,observedAt:1006,
+  deliveryId:null}).code,'TRACE_DELIVERY_LINK_CHANGED');
 });

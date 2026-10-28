@@ -9,7 +9,7 @@ const session={role:'admin',subject:admin,mfaVerified:true,authRevision:4,
 const row=kind=>({
  mode:'STAGING_DEMO_ONLY',viewerId:admin,serviceId:id,
  serviceKind:kind,bookingRequestKey:uuid(3),quoteId:kind==='COMMERCE'?null:uuid(4),
- ...(kind==='COMMERCE'?{branchId:uuid(6),vehicleKind:'AUTO',orderSubtotalGs:20000}:{}),
+ ...(kind==='COMMERCE'?{branchId:uuid(6),vehicleKind:'AUTO',orderSubtotalGs:20000,deliveryId:null}:{}),
  status:'requested',revision:1,observedAt:at,expiresAt:at+30000,
  serverPersisted:true,productionEnabled:false,
  assignment:{state:'NOT_ASSIGNABLE',legalGate:kind==='COMMERCE'?'G38_BLOCKED':'G71_BLOCKED'},
@@ -134,4 +134,30 @@ test('G146 Commerce requires explicit missing G7 quote and never renders a fabri
   const got=await configured(async()=>response(dto)).read('COMMERCE',id);
   assert.equal(got.code,'INVALID_TRACE_RECEIPT');
  }
+});
+
+test('G151 Admin rejects invented delivery IDs or revision and accepts only immutable priced-ready link',async()=>{
+ const base=row('COMMERCE');
+ const reject=[
+  {...base,deliveryId:uuid(40)},
+  {...base,revision:5,deliveryId:uuid(41)},
+  {...base,status:'ready',revision:5,deliveryId:null},
+ ];
+ for(const dto of reject){
+  const got=await configured(async()=>response(dto)).read('COMMERCE',id);
+  assert.equal(got.code,'INVALID_TRACE_RECEIPT');
+ }
+ const linked=row('COMMERCE');
+ linked.status='ready';linked.revision=5;linked.deliveryId=uuid(50);
+ linked.events=[
+  {...linked.events[0]},
+  {eventId:uuid(10),serviceId:id,sequence:2,status:'confirmed',at:at-900},
+  {eventId:uuid(11),serviceId:id,sequence:3,status:'preparing',at:at-800},
+  {eventId:uuid(12),serviceId:id,sequence:4,status:'ready',at:at-700},
+  {eventId:uuid(13),serviceId:id,sequence:5,status:'ready',at:at-600}
+ ];
+ const ok=await configured(async()=>response(linked)).read('COMMERCE',id);
+ assert.equal(ok.ok,true,JSON.stringify(ok));
+ assert.equal(ok.data.deliveryId,uuid(50));
+ assert.equal(ok.data.ledger,null);
 });

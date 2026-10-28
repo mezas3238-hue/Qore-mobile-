@@ -28,6 +28,10 @@ function compare(previous,current){
     previous.vehicleKind!==current.vehicleKind||
     previous.orderSubtotalGs!==current.orderSubtotalGs)))
   return 'TRACE_IMMUTABLE_LINK_CHANGED';
+ if(current.serviceKind==='COMMERCE'&&previous.deliveryId!==current.deliveryId&&
+  !(previous.deliveryId===null&&typeof current.deliveryId==='string'&&
+    current.revision===previous.revision+1&&current.revision===5&&current.status==='ready'))
+  return 'TRACE_DELIVERY_LINK_CHANGED';
  if(current.revision<previous.revision
   ||current.observedAt<previous.observedAt)
   return 'TRACE_STALE_REVISION';
@@ -78,7 +82,8 @@ export function createServiceTraceIntegrityFence(){
    serviceKind:dto.serviceKind,serviceId:dto.serviceId,
    bookingRequestKey:dto.bookingRequestKey,quoteId:dto.quoteId,
    ...(dto.serviceKind==='COMMERCE'?{branchId:dto.branchId,
-    vehicleKind:dto.vehicleKind,orderSubtotalGs:dto.orderSubtotalGs}:{}),
+    vehicleKind:dto.vehicleKind,orderSubtotalGs:dto.orderSubtotalGs,
+    deliveryId:dto.deliveryId}:{}),
    status:dto.status,revision:dto.revision,observedAt:dto.observedAt,
    assignment:Object.freeze({...dto.assignment}),
    ledger:dto.ledger===null?null:Object.freeze({...dto.ledger}),

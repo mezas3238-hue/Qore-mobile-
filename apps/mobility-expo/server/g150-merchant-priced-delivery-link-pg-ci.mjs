@@ -7,6 +7,9 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
+import {createG146AdminCommerceTraceGateway} from './g146-admin-commerce-trace-gateway.mjs';
+import {createServiceTraceGateway}
+ from '../../movete-admin/src/service-trace-gateway.mjs';
 import {createQoreDeliveryCommandGateway} from './g5-delivery-command-gateway.mjs';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
@@ -19,6 +22,9 @@ const buyer='13800000-0000-4138-8138-000000000001';
 const seller='13800000-0000-4138-8138-000000000002';
 const key='13800000-0000-4138-8138-000000000242';
 const sellerSession='15000000-0000-4150-8150-000000000001';
+const admin='14600000-0000-4146-8146-000000000002';
+const adminSession='15000000-0000-4150-8150-000000000003';
+const adminToken='g151-verifiable-admin-private-aal2-token-0000001';
 const buyerSession='15000000-0000-4150-8150-000000000002';
 const sellerToken='g150-merchant-provider-session-token-0000000000001';
 const buyerToken='g150-buyer-provider-session-token-0000000000000002';
@@ -129,11 +135,33 @@ const merchantOrders=createQoreMerchantOrderGateway({
  },
  loadOrder:async()=>{throw Error('Admin and Buyer read independently');}
 });
+const qaAdmin=createG146AdminCommerceTraceGateway({
+ environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+ now:()=>Date.now(),
+ verifyAccessToken:async token=>{
+  if(token!==adminToken)throw Error('Independent Admin IdP refused');
+  return {id:admin,sessionId:adminSession,expiresAtMs:Date.now()+60000,
+   is_anonymous:false};
+ },
+ verifySessionNotRevoked:async()=>true,
+ loadExclusiveBackofficeRole:async id=>
+  id===admin?sql("SET ROLE service_role; SELECT public.mobility_stage_g27_backoffice_role_of("+qs(admin)+")::text"):null,
+ verifyBackofficeMfa:async({userId,sessionId})=>({
+  verifiedByProvider:true,assuranceLevel:'aal2',userId,sessionId,
+  verifiedAtMs:Date.now()-1000,expiresAtMs:Date.now()+30000
+ }),
+ allowRequest:()=>true,
+ loadCommerceTraceReceipt:async({actorId,orderId})=>
+  read("SET ROLE service_role; SELECT COALESCE("+
+   "public.mobility_stage_g146_commerce_trace_qa("+qs(actorId)+
+   ","+qs(orderId)+"),'null'::jsonb)::text")
+});
 const noop=async()=>({status:404,body:{error:'not enabled'}});
 const server=createQoreRadarLoopbackTransport({
  riderHandler:noop,offerHandler:noop,tripCommandHandler:noop,
  deliveryHandler:deliveries,merchantHandler:merchantOrders,
  financeHandler:noop,safetyHandler:noop,
+ adminCommerceTraceHandler:qaAdmin,
  merchantManagementHandler:noop,deliveryOfferHandler:noop
 });
 const base=await listenQoreRadarLoopback(server);
@@ -213,9 +241,31 @@ try{
  assert.equal(buyerRead.revision,5);
  assert.equal(buyerRead.status,'ready');
  assert.equal(buyerRead.orderEnabled,false);
+ // D Admin HTTP independently reads the very same order and linked delivery.
+ const origin='https://g151-admin-ci.onrender.com',expiresAt=Date.now()+60000;
+ const adminClient=createServiceTraceGateway({
+  enabled:true,contractCertified:true,origin,pinnedOrigin:origin,
+  now:()=>Date.now(),
+  getSession:async()=>({role:'admin',mfaVerified:true,subject:admin,
+   authRevision:1,token:adminToken,expiresAt}),
+  fetchImpl:(url,opts)=>{
+   const u=new URL(url);
+   assert.equal(u.origin,origin);
+   return fetch(base+u.pathname,{...opts,redirect:'error'});
+  }
+ });
+ const adminResult=await adminClient.read('COMMERCE',original.id);
+ assert.equal(adminResult.ok,true,JSON.stringify(adminResult));
+ assert.equal(adminResult.data.deliveryId,deliveryId);
+ assert.equal(adminResult.data.serviceId,original.id);
+ assert.equal(adminResult.data.revision,5);
+ assert.equal(adminResult.data.events.length,5);
+ assert.equal(adminResult.data.events[4].status,'ready');
+ assert.equal(adminResult.data.assignment.state,'NOT_ASSIGNABLE');
+ assert.equal(adminResult.data.ledger,null);
  assert.equal(sql("SELECT status FROM public.mobility_stage_deliveries WHERE id="+qs(deliveryId)),'requested');
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_delivery_events WHERE delivery_id="+qs(deliveryId)),'0');
- console.log('G150 PASS: ORIGINAL G139 Buyer order -> G148 Merchant ready -> Buyer G5 delivery -> G7 server MOTO quote -> G122 immutable price consent -> G6 Merchant HTTP attach same orderId/deliveryId -> Buyer G144 recovery; no driver, PSP, LIVE or fake delivery.');
+ console.log('G150 PASS: ORIGINAL G139 Buyer order -> G148 Merchant ready -> Buyer G5 delivery -> G7 server MOTO quote -> G122 immutable price consent -> G6 Merchant HTTP attach same orderId/deliveryId -> Buyer G144 recovery AND Admin D AAL2 same link; no driver, PSP, LIVE or fake delivery.');
 } finally {
  await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
 }

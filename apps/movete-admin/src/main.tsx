@@ -572,6 +572,7 @@ function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSna
     {match.serviceKind==='COMMERCE'&&match.orderSubtotalGs!==undefined&&<>
      <small>Subtotal original de productos: Gs. {match.orderSubtotalGs.toLocaleString('es-PY')} — no cobrado</small>
      <small>Vehículo solicitado: {match.vehicleKind} · Comercio/sucursal {match.branchId}</small>
+     {match.deliveryId&&<small>Envío G5 asociado: {match.deliveryId} · Precio de envío aceptado en QA; repartidor todavía NO asignado</small>}
     </>}
     <small>Asignación: {match.assignment.state} — {match.assignment.legalGate}</small>
     <small>PG persistido reportado por servidor, aún no cotejado independientemente</small>

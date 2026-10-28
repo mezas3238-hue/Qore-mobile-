@@ -6,16 +6,17 @@ const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const ROOT=['mode','viewerId','serviceId','serviceKind','bookingRequestKey',
  'quoteId','status','revision','observedAt','expiresAt','serverPersisted',
  'productionEnabled','assignment','events','ledger'];
-const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs'];
+const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs','deliveryId'];
 const EVENT=['eventId','serviceId','sequence','status','at'];
 const STEPS=['requested','confirmed','preparing','ready'];
 function validProgress(status,rev,events){
  if(!['requested','confirmed','preparing','ready','cancelled'].includes(status)
-  ||rev<1||rev>4||!Array.isArray(events)||events.length!==rev)return false;
- if(status!=='cancelled'&&STEPS[rev-1]!==status)return false;
+  ||rev<1||rev>5||!Array.isArray(events)||events.length!==rev)return false;
+ if(rev===5&&status!=='ready')return false;
+ if(status!=='cancelled'&&(rev===5?'ready':STEPS[rev-1])!==status)return false;
  if(status==='cancelled'&&rev<2)return false;
  return events.every((e,i)=>e.status===(i===rev-1&&status==='cancelled'
-  ?'cancelled':STEPS[i]));
+  ?'cancelled':i===4?'ready':STEPS[i]));
 }
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(o,keys)=>obj(o)&&Object.keys(o).length===keys.length&&
@@ -84,6 +85,8 @@ export function createG146AdminCommerceTraceGateway({
    !id(d.branchId)||!['AUTO','MOTO'].includes(d.vehicleKind)||
    !time(d.orderSubtotalGs)||d.orderSubtotalGs<100||d.orderSubtotalGs>50000000||
    d.quoteId!==null||!validProgress(d.status,d.revision,d.events)||
+   !(d.deliveryId===null||(id(d.deliveryId)&&d.status==='ready'&&d.revision===5))||
+   (d.revision===5&&d.deliveryId===null)||
    !time(d.observedAt)||
    d.observedAt>clock||clock-d.observedAt>30000||
    !time(d.expiresAt)||d.expiresAt<=clock||d.expiresAt>clock+60000||
@@ -93,7 +96,7 @@ export function createG146AdminCommerceTraceGateway({
    !Array.isArray(d.events)||d.events.length!==count||
    d.events.some((e,i)=>!exact(e,EVENT)||!id(e.eventId)||
     e.serviceId!==orderId||e.sequence!==i+1||
-    e.status!==(i===count-1&&d.status==='cancelled'?'cancelled':STEPS[i])||!time(e.at)||
+    e.status!==(i===count-1&&d.status==='cancelled'?'cancelled':i===4?'ready':STEPS[i])||!time(e.at)||
     e.at>d.observedAt||i>0&&e.at<d.events[i-1].at))
    return deny(503,'G146_SOURCE_PROVENANCE_INVALID');
   return {status:200,body:d};

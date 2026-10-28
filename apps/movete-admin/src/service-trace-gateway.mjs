@@ -17,7 +17,7 @@ const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const ROOT=['mode','viewerId','serviceId','serviceKind','bookingRequestKey',
  'quoteId','status','revision','observedAt','expiresAt','serverPersisted',
  'productionEnabled','assignment','events','ledger'];
-const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs'];
+const COMMERCE_ROOT=[...ROOT,'branchId','vehicleKind','orderSubtotalGs','deliveryId'];
 const ASSIGN=['state','legalGate'];
 const EVENT=['eventId','serviceId','sequence','status','at'];
 const LEDGER=['serviceId','currency','grossGs','platformCommissionGs',
@@ -49,7 +49,10 @@ function validated(d,kind,id,subject,t){
   ||d.serviceKind!==kind||d.serviceId!==id
   ||(kind==='COMMERCE'?(d.quoteId!==null||!uuid(d.branchId)
    ||!['AUTO','MOTO'].includes(d.vehicleKind)||!safeInt(d.orderSubtotalGs)
-   ||d.orderSubtotalGs<100||d.orderSubtotalGs>50000000):!uuid(d.quoteId))
+   ||d.orderSubtotalGs<100||d.orderSubtotalGs>50000000
+   ||!(d.deliveryId===null||uuid(d.deliveryId))
+   ||(d.deliveryId!==null&&(d.status!=='ready'||d.revision!==5))
+   ||(d.revision===5&&d.deliveryId===null)):!uuid(d.quoteId))
   ||!uuid(d.bookingRequestKey)||!STATES[kind].includes(d.status)
   ||!safeInt(d.revision)||d.revision<1
   ||!safeInt(d.observedAt)||d.observedAt>t||t-d.observedAt>30000
@@ -62,8 +65,9 @@ function validated(d,kind,id,subject,t){
   ||!Array.isArray(d.events)||d.events.length<1||d.events.length>40
   ||(kind==='COMMERCE'&&(
     !['requested','confirmed','preparing','ready','cancelled'].includes(d.status)
-    ||d.revision<1||d.revision>4
-    ||(d.status!=='cancelled'&&['requested','confirmed','preparing','ready'][d.revision-1]!==d.status)
+    ||d.revision<1||d.revision>5
+    ||(d.status!=='cancelled'&&
+      (d.revision===5?'ready':['requested','confirmed','preparing','ready'][d.revision-1])!==d.status)
     ||(d.status==='cancelled'&&d.revision<2)
     ||d.events.length!==d.revision||d.ledger!==null
     ||d.assignment.state!=='NOT_ASSIGNABLE'
@@ -80,7 +84,7 @@ function validated(d,kind,id,subject,t){
  if(kind==='COMMERCE'&&d.events.some((e,i)=>
   e.sequence!==i+1||
   e.status!==(d.status==='cancelled'&&i===d.revision-1
-   ?'cancelled':['requested','confirmed','preparing','ready'][i])))return false;
+   ?'cancelled':i===4?'ready':['requested','confirmed','preparing','ready'][i])))return false;
  if(d.ledger!==null){
   const l=d.ledger;
   if(!exact(l,LEDGER)||l.serviceId!==id||l.currency!=='PYG'
@@ -177,7 +181,8 @@ export function createServiceTraceGateway({
    return Object.freeze({ok:true,data:Object.freeze({
     serviceKind:kind,serviceId:id,quoteId:dto.quoteId,
     ...(kind==='COMMERCE'?{branchId:dto.branchId,
-     vehicleKind:dto.vehicleKind,orderSubtotalGs:dto.orderSubtotalGs}:{}),
+     vehicleKind:dto.vehicleKind,orderSubtotalGs:dto.orderSubtotalGs,
+     deliveryId:dto.deliveryId}:{}),
     bookingRequestKey:dto.bookingRequestKey,status:dto.status,
     revision:dto.revision,assignment:Object.freeze({...dto.assignment}),
     events:Object.freeze(dto.events.map(e=>Object.freeze({...e}))),

@@ -742,6 +742,8 @@ jobs:
         run: node apps/mobility-expo/server/g145-admin-cargo-trace-pg-ci.mjs
       - name: G146 install original G45 Buyer commerce Admin source trace
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G146_ORIGINAL_COMMERCE_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
+      - name: G151 extend Admin original G45 order provenance to priced G5 link (disposable only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G151_ADMIN_ORIGINAL_PRICED_COMMERCE_DELIVERY_LINK_POSTGRES_CI_ONLY.sql
       - name: G146 real G139 Buyer reservation -> same PG16 G45 order -> Admin D AAL2 HTTP trace
         run: node apps/mobility-expo/server/g146-admin-commerce-trace-pg-ci.mjs
       - name: G148 original B Buyer order -> A Merchant staff confirmation/preparation/ready -> D Admin

@@ -3,6 +3,7 @@ export type ServiceTrace=Readonly<{
  serviceKind:TraceServiceKind;serviceId:string;quoteId:string|null;
  /** G146 source-backed stock reservation, never PSP settlement. */
  branchId?:string;vehicleKind?:'AUTO'|'MOTO';orderSubtotalGs?:number;
+ deliveryId?:string|null;
  bookingRequestKey:string;status:string;revision:number;
  observedAt:number;expiresAt:number;serverPersistedReported:true;
  qaOnly:true;productionEnabled:false;
