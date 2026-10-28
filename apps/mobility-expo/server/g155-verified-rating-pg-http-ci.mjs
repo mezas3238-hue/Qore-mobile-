@@ -16,8 +16,8 @@ if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const autoBuyer='10900000-0000-4109-8109-000000000021';
 const autoDriver='10900000-0000-4109-8109-000000000022';
-const cargoBuyer='88888888-8888-4888-8888-888888888888';
-const cargoCourier='11111111-1111-4111-8111-111111111111';
+const cargoBuyer='b6670000-0000-4667-8667-000000000001';
+const cargoCourier='00000000-0000-4000-8000-000000000181';
 const commerceBuyer='13800000-0000-4138-8138-000000000001';
 const ids=[autoBuyer,autoDriver,cargoBuyer,cargoCourier,commerceBuyer];
 const key=n=>'15500000-0000-4154-8154-'+String(n).padStart(12,'0');
@@ -31,12 +31,17 @@ const qs=x=>"'"+x+"'";
 const read=s=>JSON.parse(sql(s));
 const autoTrip=sql("SELECT id FROM public.mobility_stage_auto_demo_trips "+
  "WHERE request_key='10900000-0000-4109-8109-000000000023' AND status='completed'");
-const motoDelivery=sql("SELECT id FROM public.mobility_stage_deliveries "+
- "WHERE request_key='51000000-0000-4000-8000-000000000003' AND status='delivered'");
+const verifiedCargoDelivery=sql("SELECT d.id FROM public.mobility_stage_deliveries d "+
+ "JOIN public.mobility_stage_g67_delivery_proofs p ON p.delivery_id=d.id "+
+ "AND p.courier_id=d.courier_id AND p.proof_ref=d.proof_ref "+
+ "AND p.consumed_at IS NOT NULL AND p.revoked_at IS NULL "+
+ "WHERE d.sender_id="+qs(cargoBuyer)+" AND d.courier_id="+qs(cargoCourier)+
+ " AND d.requested_vehicle_kind='AUTO' AND d.status='delivered' "+
+ "ORDER BY p.consumed_at LIMIT 1");
 const commerceOrder=sql("SELECT id FROM public.mobility_stage_merchant_orders "+
  "WHERE request_key='13800000-0000-4138-8138-000000000242'");
 assert(UUID.test(autoTrip),'G109 real completed AUTO must exist');
-assert(UUID.test(motoDelivery),'G5 delivered cargo with custody proof must exist');
+assert(UUID.test(verifiedCargoDelivery),'G67 real delivered AUTO cargo with committed proof must exist');
 assert(UUID.test(commerceOrder),'G150 original non-delivered commerce must exist');
 for(let i=0;i<ids.length;i++){
  assert.equal(sql("SELECT count(*) FROM public.user_roles WHERE user_id="+qs(ids[i])),'1');
@@ -130,14 +135,14 @@ try{
  assert.equal((await send(3,ride)).status,409,'Foreign actor never rates AUTO driver');
  const reverse=await send(1,payload('AUTO_RIDE',autoTrip,'CLIENT',4,key(3)));
  assert.equal(reverse.status,201,JSON.stringify(reverse.body));
- const courier=await send(2,payload('DELIVERY_MOTO',motoDelivery,'COURIER',1,
+ const courier=await send(2,payload('DELIVERY_AUTO',verifiedCargoDelivery,'COURIER',1,
   key(4),'SUSPECTED_FRAUD'));
  assert.equal(courier.status,201,JSON.stringify(courier.body));
  assert(!JSON.stringify(courier.body).includes('SUSPECTED_FRAUD'),
   'Private incident not present in public receipt');
- const sender=await send(3,payload('DELIVERY_MOTO',motoDelivery,'CLIENT',4,key(5)));
+ const sender=await send(3,payload('DELIVERY_AUTO',verifiedCargoDelivery,'CLIENT',4,key(5)));
  assert.equal(sender.status,201,JSON.stringify(sender.body));
- assert.equal((await send(2,payload('DELIVERY_AUTO',motoDelivery,'COURIER',5,key(6)))).status,409,
+ assert.equal((await send(2,payload('DELIVERY_MOTO',verifiedCargoDelivery,'COURIER',5,key(6)))).status,409,
   'Wrong vehicle service kind is forbidden');
  assert.equal((await send(4,payload('COMMERCE',commerceOrder,'MERCHANT',5,key(7)))).status,409,
   'Ready but not delivered merchant order is not rateable');
@@ -164,9 +169,9 @@ try{
   "'public.mobility_stage_g155_submit_rating_qa(uuid,uuid,bigint,uuid,text,uuid,text,integer,text)',"+
   "'EXECUTE')::text"),'false');
  revoked=true;
- assert.equal((await send(2,payload('DELIVERY_MOTO',motoDelivery,'COURIER',1,key(4),'SUSPECTED_FRAUD'))).status,401);
+ assert.equal((await send(2,payload('DELIVERY_AUTO',verifiedCargoDelivery,'COURIER',1,key(4),'SUSPECTED_FRAUD'))).status,401);
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g155_verified_ratings"),'4');
- console.log('G155 PASS: B authenticated Client and original completed AUTO and G5 proved MOTO -> private two-sided verified ratings; idempotency, incident privacy, foreign/early/forged/revoked denied; no score-based dispatch or automatic bans.');
+ console.log('G155 PASS: B authenticated Client and original completed AUTO and G67 proved AUTO -> private two-sided verified ratings; idempotency, incident privacy, foreign/early/forged/revoked denied; no score-based dispatch or automatic bans.');
 }finally{
  await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
 }

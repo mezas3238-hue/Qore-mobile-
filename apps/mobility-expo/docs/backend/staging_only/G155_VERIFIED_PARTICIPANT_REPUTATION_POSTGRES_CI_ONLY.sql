@@ -7,6 +7,7 @@ DO $gate$ BEGIN
  OR pg_catalog.to_regclass('public.mobility_stage_auto_demo_trips') IS NULL
  OR pg_catalog.to_regclass('public.mobility_stage_g100_moto_trips') IS NULL
  OR pg_catalog.to_regclass('public.mobility_stage_deliveries') IS NULL
+ OR pg_catalog.to_regclass('public.mobility_stage_g67_delivery_proofs') IS NULL
  OR pg_catalog.to_regclass('public.mobility_stage_merchant_orders') IS NULL
  THEN RAISE EXCEPTION 'G155 requires isolated PG16 and original services'; END IF;
 END $gate$;
@@ -94,6 +95,10 @@ BEGIN
       AND d.requested_vehicle_kind='AUTO'::public.mobility_vehicle_kind)
      OR (_service_kind='DELIVERY_MOTO'
       AND d.requested_vehicle_kind='MOTO'::public.mobility_vehicle_kind))
+   AND EXISTS(SELECT 1 FROM public.mobility_stage_g67_delivery_proofs p
+    WHERE p.delivery_id=d.id AND p.proof_ref=d.proof_ref
+     AND p.courier_id=d.courier_id AND p.consumed_at IS NOT NULL
+     AND p.revoked_at IS NULL)
    AND NOT EXISTS(SELECT 1 FROM public.mobility_stage_merchant_orders m
     WHERE m.delivery_id=d.id)
   THEN
@@ -110,7 +115,11 @@ BEGIN
   IF FOUND AND o.status='delivered' AND o.delivery_id IS NOT NULL THEN
    SELECT * INTO d FROM public.mobility_stage_deliveries WHERE id=o.delivery_id;
    IF FOUND AND d.status='delivered' AND d.proof_ref IS NOT NULL
-    AND d.sender_id=o.buyer_id AND d.courier_id IS NOT NULL THEN
+    AND d.sender_id=o.buyer_id AND d.courier_id IS NOT NULL
+    AND EXISTS (SELECT 1 FROM public.mobility_stage_g67_delivery_proofs p
+      WHERE p.delivery_id=d.id AND p.proof_ref=d.proof_ref
+      AND p.courier_id=d.courier_id AND p.consumed_at IS NOT NULL
+      AND p.revoked_at IS NULL) THEN
     source_is_completed:=true;
     IF _reviewer=o.buyer_id AND _rated_kind='MERCHANT' THEN
      target:=o.merchant_id;required_role:='passenger';
