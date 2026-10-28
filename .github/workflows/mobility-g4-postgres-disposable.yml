@@ -24,6 +24,7 @@ on:
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.test.mjs'
       - 'apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G113_BOUNDED_AUTO_DISPATCH_RETRY_BATCH_POSTGRES_CI_ONLY.sql'
@@ -65,6 +66,7 @@ on:
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.test.mjs'
       - 'apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G113_BOUNDED_AUTO_DISPATCH_RETRY_BATCH_POSTGRES_CI_ONLY.sql'
@@ -264,6 +266,7 @@ jobs:
           node --test apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs
           node --test apps/mobility-expo/server/g101-moto-passenger-gateway.test.mjs
           node --check apps/mobility-expo/server/g4-staging-runtime.mjs
+          node --test apps/mobility-expo/server/g4-staging-runtime.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: Guard isolated local chain database
         run: |
