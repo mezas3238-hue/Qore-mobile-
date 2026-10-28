@@ -29,7 +29,7 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
   SELECT a.*,
    (SELECT pg_catalog.count(*) FROM public.mobility_stage_auto_demo_events e
     WHERE e.trip_id=a.id) n_events,
-   (SELECT pg_catalog.coalesce(pg_catalog.jsonb_agg(
+   (SELECT COALESCE(pg_catalog.jsonb_agg(
     pg_catalog.jsonb_build_object(
      'eventId',e.id,'serviceId',e.trip_id,
      'sequence',e.trip_revision,
@@ -47,7 +47,7 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
   SELECT l.*,
    (SELECT pg_catalog.count(*) FROM public.mobility_stage_g93_auto_ledger_entries e
     WHERE e.quote_id=l.quote_id) n_entries,
-   (SELECT pg_catalog.coalesce(pg_catalog.sum(
+   (SELECT COALESCE(pg_catalog.sum(
     CASE WHEN e.side='debit' THEN e.amount_gs ELSE -e.amount_gs END),0)
     FROM public.mobility_stage_g93_auto_ledger_entries e
     WHERE e.quote_id=l.quote_id) delta
