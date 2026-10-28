@@ -142,12 +142,12 @@ async function main(){
   assert.equal(originalMoto.ok,true,JSON.stringify(originalMoto));
   assert.deepEqual(
    [originalAuto.data.commissionBps,originalMoto.data.commissionBps],
-   [1500,1200]);
+   [1800,1200]);
   const changedAuto=await B.change('AUTO_RIDE',{
-   requestKey:autoKey,commissionBps:1800
+   requestKey:autoKey,commissionBps:2000
   });
   assert.equal(changedAuto.ok,true,JSON.stringify(changedAuto));
-  assert.equal(changedAuto.data.version,2);
+  assert.equal(changedAuto.data.version,3);
   assert.equal(changedAuto.data.subsidyBps,1000);
   const changedMoto=await B.change('MOTO_RIDE',{
    requestKey:motoKey,commissionBps:1400
@@ -156,13 +156,13 @@ async function main(){
   assert.equal(changedMoto.data.version,2);
   assert.equal(changedMoto.data.subsidyBps,1000);
   const afterAuto=await B.read('AUTO_RIDE'),afterMoto=await B.read('MOTO_RIDE');
-  assert.equal(afterAuto.data.commissionBps,1800);
+  assert.equal(afterAuto.data.commissionBps,2000);
   assert.equal(afterMoto.data.commissionBps,1400);
   assert.equal(readRequests,4);
   assert.equal(writeRequests,2);
   const p=queryJson("SELECT pg_catalog.jsonb_build_object("+
    "'policies',(SELECT count(*) FROM public.mobility_stage_g116_commission_policy"+
-   " WHERE version=2 AND changed_by='"+owner+"'),"+
+   " WHERE ((service_kind='AUTO_RIDE' AND version=3) OR (service_kind='MOTO_RIDE' AND version=2)) AND changed_by='"+owner+"'),"+
    "'audit',(SELECT count(*) FROM public.mobility_stage_g116_commission_audit"+
    " WHERE owner_id='"+owner+"'),"+
    "'distinctKeys',(SELECT count(DISTINCT request_key) FROM "+
@@ -170,10 +170,10 @@ async function main(){
   assert.deepEqual(p,{policies:2,audit:2,distinctKeys:2});
   // A replay cannot create a new audit row; PostgreSQL returns same receipt.
   const replay=await B.change('AUTO_RIDE',{
-   requestKey:autoKey,commissionBps:1800
+   requestKey:autoKey,commissionBps:2000
   });
   assert.equal(replay.ok,true);
-  assert.equal(replay.data.version,2);
+  assert.equal(replay.data.version,3);
   assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g116_commission_audit"+
    " WHERE owner_id='"+owner+"'"),'2');
   // Admin role cannot write even if an invalid B caller claims Owner.
@@ -183,13 +183,13 @@ async function main(){
   });
   assert.equal(denied.ok,false);
   assert.equal(sql("SELECT commission_bps FROM public.mobility_stage_g116_commission_policy"+
-   " WHERE service_kind='AUTO_RIDE'"),'1800');
+   " WHERE service_kind='AUTO_RIDE'"),'2000');
   activeToken=token;revoked=true;
   const revokedReply=await B.read('AUTO_RIDE');
   assert.equal(revokedReply.ok,false);
   assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g116_commission_audit"+
    " WHERE owner_id='"+owner+"'"),'2');
-  console.log('G117 CROSS-BRANCH PASS: B Owner web gateway HTTPS-pinned -> A Owner JWT/AAL2 HTTP localhost -> REAL PG16 G116 commission AUTO 15->18 and MOTO 12->14; unchanged 10% subsidy, audit exactly 2, replay idempotent, Admin/revoked denied; no live.');
+  console.log('G117 CROSS-BRANCH PASS: B Owner web gateway HTTPS-pinned -> A Owner JWT/AAL2 HTTP localhost -> REAL PG16 G116 commission AUTO 18->20 and MOTO 12->14; unchanged 10% subsidy, audit exactly 2, replay idempotent, Admin/revoked denied; no live.');
  }finally{
   server.close();if(server.listening)await once(server,'close');
  }
