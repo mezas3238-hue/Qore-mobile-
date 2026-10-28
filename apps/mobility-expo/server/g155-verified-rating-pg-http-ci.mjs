@@ -98,6 +98,15 @@ async function send(i,body,token=tokens[i]){
 }
 try{
  const ride=payload('AUTO_RIDE',autoTrip,'DRIVER',5,key(1));
+ const precheck={
+  keys:Object.keys(ride).sort(),
+  requestKey:ride.requestKey,serviceId:ride.serviceId,
+  requestUuid:UUID.test(ride.requestKey),serviceUuid:UUID.test(ride.serviceId),
+  stars:ride.stars,kind:ride.serviceKind,ratedKind:ride.ratedKind,
+  incidentCode:ride.incidentCode
+ };
+ console.log('G155 original Buyer form precheck',JSON.stringify(precheck));
+ assert(precheck.requestUuid&&precheck.serviceUuid);
  // Execute the REAL Buyer B HTTP gateway against the same A / PostgreSQL row.
  const origin='https://g155-ci-qore.onrender.com',expiresAt=Date.now()+90000;
  const buyerClient=createG155VerifiedRatingClient({
