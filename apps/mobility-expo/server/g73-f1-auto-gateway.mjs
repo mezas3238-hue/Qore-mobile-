@@ -64,11 +64,13 @@ const saneSubsidy=(x,uid,quoteId,now)=>exact(x,subsidyFields)&&
  x.ownerId===uid&&x.quoteId===quoteId&&id(x.campaignId)&&
  x.serviceKind==='AUTO_RIDE'&&x.currency==='PYG'&&
  money(x.originalFareGs)&&x.originalFareGs>0&&
- x.commissionBps===1500&&x.subsidyBps===1000&&
+ Number.isSafeInteger(x.commissionBps)&&
+ x.commissionBps>=1000&&x.commissionBps<=3000&&
+ x.subsidyBps===1000&&
  money(x.nominalCommissionGs)&&money(x.customerSubsidyGs)&&
  money(x.customerPaysGs)&&money(x.driverReceivesGs)&&
  money(x.platformRetainsGs)&&
- x.nominalCommissionGs===roundedBps(x.originalFareGs,1500)&&
+ x.nominalCommissionGs===roundedBps(x.originalFareGs,x.commissionBps)&&
  x.customerSubsidyGs===roundedBps(x.originalFareGs,1000)&&
  x.customerPaysGs===x.originalFareGs-x.customerSubsidyGs&&
  x.driverReceivesGs===x.originalFareGs-x.nominalCommissionGs&&
