@@ -10,7 +10,10 @@ export type ClientSnapshot={
  deliveryQaRegistration:{ready:boolean;commercialEnabled:false};
  deliveryRegistration:{readReady:boolean;busy:boolean;deliveryId:string|null;
   vehicleKind:'AUTO'|'MOTO'|null;revision:number|null;requestKey:string|null;
+  status:string|null;terminal:boolean;
   registrationOnly:true;qaOnly:true;productionEnabled:false};
+ deliveryTerminalRelease:{canFinalize:boolean;busy:boolean;deliveryId:string|null;
+  qaOnly:true;productionEnabled:false;changesServer:false};
  deliveryPriceConsent:{contractReady:boolean;phase:string;deliveryId:string|null;
   vehicleKind:'AUTO'|'MOTO'|null;
   quote:{quoteId:string;amountGs:number;fareVersion:string;expiresAt:number;currency:'PYG'}|null;
@@ -191,6 +194,7 @@ export type ClientExperience={
  discardPreparedMutation(args:{operation:'rideRequest'|'deliveryRequest';requestKey:string}):ClientResult;
  prepareDelivery(body:unknown):ClientResult;
  readUnconfirmedDeliveryRegistration():Promise<ClientResult>;
+ finalizeDeliveredDeliveryQa():Promise<ClientResult>;
  quoteRecoveredDelivery(quoteRequestKey:string):Promise<ClientResult>;
  recoverOriginalDeliveryQuote():Promise<ClientResult>;
  confirmRecoveredDeliveryQuote(args:{confirmationKey:string;
@@ -299,11 +303,13 @@ export declare function createClientExperience(options?:{
    createdAt:number;stage:'prepared'})=>Promise<unknown>;
   mark:(ownerId:string,quoteRequestKey:string,
    stage:'recovery_attempted'|'consent_attempted')=>Promise<unknown>;
+  clearMatching?:(ownerId:string,deliveryId:string,deliveryRequestKey:string)=>Promise<boolean>;
  }|null;
  deliveryRecoveryStore?:{
   read:(ownerId:string)=>Promise<unknown>;
   write:(value:{version:number;ownerId:string;requestKey:string;createdAt:number})=>Promise<unknown>;
   clear:(ownerId:string)=>Promise<unknown>;
+  clearMatching?:(ownerId:string,requestKey:string)=>Promise<boolean>;
  }|null;
  deliveryG122Options?:{
   enabled?:boolean;ownerApproved?:boolean;contractCertified?:boolean;

@@ -231,6 +231,24 @@ function OwnDeliveryActivityPanel({client,view}:{client:ClientExperience;view:Cl
  const selected=projection.selected;
  const [feedback,setFeedback]=useState('');
  const running=useRef(false);
+ async function finishQaDelivery(){
+  if(running.current||!view.deliveryTerminalRelease?.canFinalize)return;
+  const before=client.snapshot(),owner=view.account?.subject;
+  if(!before.authenticated||before.account?.subject!==owner
+   ||before.privateViewRevision!==view.privateViewRevision
+   ||before.deliveryTerminalRelease?.deliveryId!==view.deliveryTerminalRelease.deliveryId
+   ||!before.deliveryTerminalRelease.canFinalize)return;
+  running.current=true;setFeedback('');
+  try{
+   const answer=await client.finalizeDeliveredDeliveryQa();
+   const after=client.snapshot();
+   if(after.privateViewRevision!==view.privateViewRevision
+    ||after.account?.subject!==owner)return;
+   setFeedback(answer.ok?
+    'Entrega terminada verificada con G121 y G68. Se liberó la clave segura local para preparar otro envío de prueba. El historial sigue en el servidor.':
+    'No hay prueba terminal suficiente o la consulta falló. La solicitud original sigue protegida; no crees otra.');
+  }finally{running.current=false;}
+ }
  async function refreshHistory(){
   if(running.current||!projection.canLoad)return;
   running.current=true;setFeedback('');
@@ -294,6 +312,12 @@ function OwnDeliveryActivityPanel({client,view}:{client:ClientExperience;view:Cl
     </Text>
    </View>}
   </View>)}
+  {selected!==null&&view.deliveryTerminalRelease?.canFinalize
+   &&view.deliveryTerminalRelease.deliveryId===selected.deliveryId
+   &&<Action label="Cerrar envío de prueba finalizado y preparar otro"
+    hint="Relee G121 y G68: solo libera las claves del teléfono con prueba terminal válida. Sin cambios de pago ni entrega del servidor."
+    disabled={running.current||view.deliveryTerminalRelease.busy}
+    onPress={()=>{void finishQaDelivery();}}/>}
   {feedback!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{feedback}</Text>}
   <Text style={styles.small}>
    Seguimiento y comprobantes solo cuando el backend verifique identidad, titularidad y estado.

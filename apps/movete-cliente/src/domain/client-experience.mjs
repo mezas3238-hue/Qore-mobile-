@@ -4,6 +4,7 @@ import {createG121DeliveryRegistrationGateway} from './g121-delivery-registratio
 import {createG5G121VerifiedDeliveryBookingGateway} from './g5-g121-verified-delivery-booking-gateway.mjs';
 import {createG122DeliveryPriceConsentFlow} from './g122-delivery-price-consent-flow.mjs';
 import {createG5DurableDeliveryRecovery} from './g5-durable-delivery-recovery.mjs';
+import {releaseTerminalDeliveryKeys} from './g68-terminal-delivery-release.mjs';
 import {createClientMutationController} from './client-mutations.mjs';
 import {createQuoteViewStore} from './quote-view.mjs';
 import {createClientHistoryStore} from './history-feed.mjs';
@@ -60,6 +61,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let registrationEpoch=0,registration={busy:false,receipt:null};
+ let terminalReleaseBusy=false;
  let g121Registration=null,g122Consent=null,g5QaGateway=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
@@ -82,6 +84,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  const notify=()=>{for(const fn of observers){try{fn();}catch{/* listener UI aislado */}}};
  const clearPrivate=()=>{
   deliveryRecovery.clearMemory();
+  terminalReleaseBusy=false;
   registrationEpoch++;registration={busy:false,receipt:null};
   g121Registration?.cancelPending();
   g5QaGateway?.cancelPending();
@@ -1192,6 +1195,8 @@ export function createClientExperience({authProvider=null,gateway=null,
    deliveryId:belongs?saved.deliveryId:null,
    vehicleKind:belongs?saved.vehicleKind:null,
    revision:belongs?saved.revision:null,
+   status:belongs?saved.status??'requested':null,
+   terminal:belongs&&['delivered','returned','cancelled'].includes(saved.status),
    requestKey:belongs?saved.requestKey:null,
    registrationOnly:true,qaOnly:true,productionEnabled:false
   });
@@ -1220,7 +1225,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(result.ok){
    registration={busy:false,receipt:Object.freeze({
     requestKey,ownerId:owner,sessionRevision,
-    deliveryId:result.deliveryId,vehicleKind:result.vehicleKind,revision:result.revision
+    deliveryId:result.deliveryId,vehicleKind:result.vehicleKind,revision:result.revision,
+    status:result.status??'requested'
    })};
    // B23: after independent G121 ownership proof, restore only the
    // sealed original G7 quote key. This operation MUST NEVER send HTTP.
@@ -1236,6 +1242,95 @@ export function createClientExperience({authProvider=null,gateway=null,
    }
   }else registration={busy:false,receipt:null};
   notify();return result;
+ }
+ function publicTerminalRelease(){
+  const verified=publicDeliveryRegistration();
+  const user=actor(),custody=senderCustody?.snapshot();
+  const pending=mutations.publicState();
+  const page=user?history.current(user.subject):null;
+  const item=page?.items.find(x=>x.kind==='DELIVERY'
+   &&x.serviceId===verified.deliveryId);
+  const terminal=verified.status==='delivered'||verified.status==='returned';
+  const possible=Boolean(user&&terminal&&!terminalReleaseBusy
+   &&['failed','acknowledged'].includes(pending.phase)
+   &&pending.operation==='deliveryRequest'
+   &&pending.requestKey===verified.requestKey
+   &&item&&senderCustody?.isConfigured()===true
+   &&custodyAnchor?.deliveryId===verified.deliveryId
+   &&custodyAnchor?.subject===user.subject
+   &&custodyAnchor?.historyRevision===item.revision
+   &&custody?.deliveryId===verified.deliveryId
+   &&custody.vehicleKind===verified.vehicleKind
+   &&custody.state===verified.status&&custody.proofVerified===true
+   &&Number.isSafeInteger(custody.revision)
+   &&custody.revision>=verified.revision
+   &&typeof deliveryRecoveryStore?.clearMatching==='function'
+   &&typeof deliveryQuoteKeyStore?.clearMatching==='function');
+  return Object.freeze({canFinalize:possible,busy:terminalReleaseBusy,
+   deliveryId:possible?verified.deliveryId:null,
+   qaOnly:true,productionEnabled:false,changesServer:false});
+ }
+ /**
+  * Requires fresh G121 AND fresh G68 reads before deleting original keys.
+  * This only unlocks another QA draft; no payment or server row is deleted.
+  */
+ async function finalizeDeliveredDeliveryQa(){
+  const user=actor(),pending=mutations.publicState();
+  const first=publicDeliveryRegistration();
+  if(!user)return fail('AUTH_REQUIRED');
+  if(terminalReleaseBusy)return fail('TERMINAL_RELEASE_IN_FLIGHT');
+  if(!publicTerminalRelease().canFinalize)
+   return fail('TERMINAL_PROOF_REQUIRED');
+  const owner=user.subject,revision=session.privacyRevision();
+  const key=first.requestKey,deliveryId=first.deliveryId,vehicleKind=first.vehicleKind;
+  const page=history.current(owner);
+  const item=page?.items.find(x=>x.kind==='DELIVERY'&&x.serviceId===deliveryId);
+  if(!item||!key||!deliveryId||!vehicleKind)return fail('TERMINAL_HISTORY_REQUIRED');
+  const sameScope=()=>{
+   const nowUser=actor(),current=mutations.publicState();
+   const historyPage=history.current(owner);
+   const inHistory=historyPage?.items.some(x=>x.kind==='DELIVERY'
+    &&x.serviceId===deliveryId&&x.revision===item.revision);
+   return Boolean(nowUser&&nowUser.subject===owner
+    &&session.privacyRevision()===revision&&inHistory
+    &&current.operation==='deliveryRequest'
+    &&current.requestKey===key
+    &&['failed','acknowledged'].includes(current.phase));
+  };
+  terminalReleaseBusy=true;notify();
+  try{
+   const readback=await readUnconfirmedDeliveryRegistration();
+   if(!readback.ok||!sameScope())
+    return fail('TERMINAL_G121_UNVERIFIED');
+   const authoritative=publicDeliveryRegistration();
+   if(authoritative.deliveryId!==deliveryId
+    ||authoritative.vehicleKind!==vehicleKind
+    ||!['delivered','returned'].includes(authoritative.status))
+    return fail('TERMINAL_PROOF_REQUIRED');
+   custodyAnchor=Object.freeze({deliveryId,subject:owner,historyRevision:item.revision});
+   const read=await senderCustody.refresh(deliveryId,owner,revision);
+   if(!read.ok||!sameScope()||!guardCustodyScope())
+    return fail('TERMINAL_G68_UNVERIFIED');
+   const proof=senderCustody.snapshot();
+   const released=await releaseTerminalDeliveryKeys({
+    ownerId:owner,deliveryId,requestKey:key,vehicleKind,
+    g121:authoritative,g68:proof,
+    g5Store:deliveryRecoveryStore,g7Store:deliveryQuoteKeyStore,
+    stillAuthorized:sameScope
+   });
+   if(!released.ok)return released;
+   if(!sameScope())return fail('TERMINAL_SESSION_CHANGED');
+   mutations.clear();deliveryRecovery.clearMemory();
+   // Re-read the now-empty native record before enabling the next draft.
+   const empty=await deliveryRecovery.restore(owner);
+   if(empty.ok!==true||empty.restored===true)
+    return fail('TERMINAL_SECURE_RECHECK_FAILED');
+   registrationEpoch++;registration={busy:false,receipt:null};
+   g122Consent?.clear();
+   senderCustody.clear();custodyAnchor=null;
+   return Object.freeze({ok:true,qaOnly:true,productionEnabled:false,
+    localKeysReleased:true,deliveryId});
+  }finally{terminalReleaseBusy=false;notify();}
  }
  function publicDeliveryPriceConsent(){
   const verified=publicDeliveryRegistration(),current=g122Consent?.snapshot();
@@ -1326,6 +1421,8 @@ export function createClientExperience({authProvider=null,gateway=null,
     deliveryRegistration:publicDeliveryRegistration(),
     deliveryRecovery:deliveryRecovery.snapshot(null),
     deliveryQaRegistration:Object.freeze({ready:false,commercialEnabled:false}),
+    deliveryTerminalRelease:Object.freeze({canFinalize:false,busy:false,
+     deliveryId:null,qaOnly:true,productionEnabled:false,changesServer:false}),
     deliveryPriceConsent:publicDeliveryPriceConsent(),
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
@@ -1354,6 +1451,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    deliveryRecovery:deliveryRecovery.snapshot(user.subject),
    deliveryQaRegistration:Object.freeze({ready:Boolean(g5QaGateway?.isConfigured()),
     commercialEnabled:false}),
+   deliveryTerminalRelease:publicTerminalRelease(),
    deliveryPriceConsent:publicDeliveryPriceConsent(),
    rideContinuation:rideContinuation(),
    rideHistoryRecovery:rideHistoryRecovery(),
@@ -1561,6 +1659,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    const result=prepare('deliveryRequest',body);notify();return result;
   },
   readUnconfirmedDeliveryRegistration,
+  finalizeDeliveredDeliveryQa,
   quoteRecoveredDelivery,
   recoverOriginalDeliveryQuote,
   confirmRecoveredDeliveryQuote,

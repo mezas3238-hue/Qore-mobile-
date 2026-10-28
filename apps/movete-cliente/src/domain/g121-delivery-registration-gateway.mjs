@@ -5,6 +5,8 @@
  */
 import {readBoundedResponseText} from './bounded-http-response.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const STATUSES=new Set(['requested','accepted','picked_up','delivered',
+ 'disputed','returned','cancelled']);
 const KEYS=['mode','liveDeliveriesEnabled','serverPersisted','ownerId',
  'requestKey','deliveryId','vehicleKind','status','revision'];
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -37,7 +39,7 @@ function exactReceipt(dto,scope){
   &&dto.requestKey===scope.requestKey
   &&UUID.test(dto.deliveryId)
   &&['AUTO','MOTO'].includes(dto.vehicleKind)
-  &&dto.status==='requested'
+  &&STATUSES.has(dto.status)
   &&Number.isSafeInteger(dto.revision)&&dto.revision>=1;
 }
 export function createG121DeliveryRegistrationGateway({
@@ -110,6 +112,7 @@ export function createG121DeliveryRegistrationGateway({
    // dispatch authorization, courier, GPS, recipient or payment.
    return Object.freeze({ok:true,status:200,deliveryId:dto.deliveryId,
     requestKey,vehicleKind:dto.vehicleKind,revision:dto.revision,
+    status:dto.status,terminal:['delivered','returned','cancelled'].includes(dto.status),
     registrationOnly:true,commercialEnabled:false,qaOnly:true,
     productionEnabled:false});
   }catch{return fail(version!==epoch?'STALE_SESSION_RESPONSE':'NETWORK_OR_TIMEOUT');}

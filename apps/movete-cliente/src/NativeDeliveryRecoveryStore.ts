@@ -50,6 +50,24 @@ export function getNativeDeliveryRecoveryStore(){
    }),
   // Called ONLY after server-certified final reconciliation/cancellation,
   // not by logout or a client-side 404.
-  clear:(ownerId:string)=>ordered(async()=>SecureStore.deleteItemAsync(keyFor(ownerId)))
+  clear:(ownerId:string)=>ordered(async()=>SecureStore.deleteItemAsync(keyFor(ownerId))),
+  // B25: the caller must have just verified final G121+G68 custody.
+  // Compare-and-delete inside the same serialized native queue.
+  clearMatching:(ownerId:string,requestKey:string)=>ordered(async()=>{
+   if(!UUID.test(requestKey))throw Error('invalid original G5 key');
+   const key=keyFor(ownerId);
+   const raw=await SecureStore.getItemAsync(key);
+   if(raw===null)return false;
+   if(raw.length>500)throw Error('invalid saved G5 record');
+   const row:unknown=JSON.parse(raw);
+   if(!row||typeof row!=='object'||Array.isArray(row)
+    ||Object.keys(row).length!==4
+    ||(row as {version?:unknown}).version!==1
+    ||(row as {ownerId?:unknown}).ownerId!==ownerId
+    ||(row as {requestKey?:unknown}).requestKey!==requestKey)
+    throw Error('G5 terminal release scope mismatch');
+   await SecureStore.deleteItemAsync(key);
+   return true;
+  })
  };
 }

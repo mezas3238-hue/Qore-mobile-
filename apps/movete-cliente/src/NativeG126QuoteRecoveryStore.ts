@@ -52,6 +52,22 @@ export function getNativeG126QuoteRecoveryStore(){
     keychainAccessible:SecureStore.WHEN_UNLOCKED
    });
   }),
+  // Only a server-confirmed terminal delivery may release this ledger fence.
+  // Never delete an unrelated or in-flight quote by Owner ID alone.
+  clearMatching:(ownerId:string,deliveryId:string,deliveryRequestKey:string)=>
+   serial(async()=>{
+    if(!UUID.test(deliveryId)||!UUID.test(deliveryRequestKey))
+     throw Error('invalid delivery scope');
+    const key=keyFor(ownerId);
+    const raw=await SecureStore.getItemAsync(key);
+    if(raw===null)return false;
+    const row=parse(raw);
+    if(row.ownerId!==ownerId||row.deliveryId!==deliveryId
+     ||row.deliveryRequestKey!==deliveryRequestKey)
+     throw Error('G126 terminal release scope mismatch');
+    await SecureStore.deleteItemAsync(key);
+    return true;
+   }),
   mark:(ownerId:string,quoteRequestKey:string,stage:Stage)=>serial(async()=>{
    if(!UUID.test(quoteRequestKey)||
     !['recovery_attempted','consent_attempted'].includes(stage))
