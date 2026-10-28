@@ -153,7 +153,7 @@ function mockSupabase(){
       mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
       ownerId:passenger,routeId:offer,
       requestKey:state.g77RegisteredRoute._request_key,
-      service:'economico',routingVerified:true,expiresAt:now+10000
+      service:'economico',routingVerified:true,expiresAt:(state.routeClock??now)+10000
      }:null,error:null};
     }
     if(name==='mobility_stage_g27_backoffice_role_of')
@@ -607,6 +607,114 @@ function g79Options({coverageEnabled=true,chargesEnabled=true}={}){
  };
  return {options,calls};
 }
+const g141At=1790000000000;
+const g141Evidence='14100000-0000-4141-8141-000000000001';
+const g141Toll='14100000-0000-4141-8141-000000000002';
+const g141Reservation='14100000-0000-4141-8141-000000000003';
+function g141GeoapifyOptions({coverage=true,tolls=true}={}){
+ const calls={covered:0,provider:0,quota:0,verifiedToll:0};
+ const options={
+  enabled:true,freePlanApproved:true,
+  apiKey:'QA_GEOAPIFY_FREE_SERVER_KEY_NEVER_ACTUAL_0123456789',
+  tagSecret:'QA_G141_ADDRESS_HMAC_SECRET_NEVER_REAL_0123456789',
+  resolveCoveredAutoCoordinates:async p=>{
+   calls.covered++;
+   return {source:'INDEPENDENT_COVERAGE_AUTHORITY',
+    coverageVerified:coverage,evidenceId:g141Evidence,revision:1,
+    verifiedAtMs:g141At-500,actorId:p.actorId,
+    quoteRequestKey:p.quoteRequestKey,originAddress:p.origin,
+    destinationAddress:p.destination,service:p.service,
+    zoneTag:'AUTO_ASUNCION',
+    originCoordinates:{lat:-25.2773434,lon:-57.6371671},
+    destinationCoordinates:{lat:-25.2828767,lon:-57.5674503}};
+  },
+  verifyAutoTolls:async p=>{
+   calls.verifiedToll++;
+   return {source:'INDEPENDENT_TOLL_AUTHORITY',tollsVerified:tolls,
+    actorId:p.actorId,quoteRequestKey:p.quoteRequestKey,
+    evidenceId:g141Toll,distanceMeters:p.distanceMeters,
+    durationSeconds:p.durationSeconds,tollsPyg:0,
+    verifiedAtMs:g141At};
+  },
+  reserveFreeQuota:async p=>{
+   calls.quota++;
+   assert.equal(p.provider,'GEOAPIFY_FREE');
+   assert.equal(p.serviceKind,'AUTO_RIDE');
+   assert.equal(p.quoteRequestKey,requestKey);
+   return {approved:true,durable:true,reservationId:g141Reservation,
+    deliveryId:requestKey,vehicleKind:'AUTO',
+    coverageEvidenceId:g141Evidence};
+  },
+  request:async(url,opts)=>{
+   calls.provider++;
+   const parsed=new URL(url);
+   assert.equal(parsed.origin,'https://api.geoapify.com');
+   assert.equal(parsed.pathname,'/v1/routing');
+   assert.equal(parsed.searchParams.get('mode'),'drive');
+   assert.equal(parsed.searchParams.get('traffic'),'approximated');
+   assert.equal(opts.method,'GET');
+   return {ok:true,status:200,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify({results:[{
+     distance:8253,time:808.305,distance_units:'meters',toll:false
+    }]})};
+  }
+ };
+ return {options,calls};
+}
+test('G141 server-only Geoapify Free AUTO is mounted through real G73 HTTP and SQL',async()=>{
+ const m=mockSupabase(),route=g141GeoapifyOptions();
+ m.state.routeClock=g141At;
+ const runtime=await prepare(m,{now:()=>g141At,g134GeoapifyAutoOptions:route.options});
+ await http(runtime,async base=>{
+  const result=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,
+   destination:g79Destination,service:'economico'
+  });
+  assert.equal(result.status,200,JSON.stringify(result.body));
+  assert.equal(result.body.routingVerified,true);
+  assert.equal(result.body.coverageVerified,true);
+  assert.deepEqual(route.calls,{covered:1,provider:1,quota:1,verifiedToll:1});
+  assert.equal(m.state.g77RegisteredRoute._distance_meters,8253);
+  assert.equal(m.state.g77RegisteredRoute._duration_seconds,809);
+  assert.equal(m.state.g77RegisteredRoute._tolls_pyg,0);
+  assert.match(m.state.g77RegisteredRoute._origin_tag,/^LOC_[A-P]{32}$/);
+  assert(!JSON.stringify(m.state.g77RegisteredRoute).includes(g79Origin));
+  assert(!JSON.stringify(result.body).includes(route.options.apiKey));
+ });
+});
+test('G141 no external road lookup when coverage is unverified',async()=>{
+ const m=mockSupabase(),route=g141GeoapifyOptions({coverage:false});
+ m.state.routeClock=g141At;
+ const runtime=await prepare(m,{now:()=>g141At,g134GeoapifyAutoOptions:route.options});
+ await http(runtime,async base=>{
+  const result=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,
+   destination:g79Destination,service:'economico'
+  });
+  assert.equal(result.status,409);
+  assert.deepEqual(route.calls,{covered:1,provider:0,quota:0,verifiedToll:0});
+  assert.equal(m.state.g77RegisteredRoute,null);
+ });
+});
+test('G141 refuses Google + Geoapify together, user route override or incomplete proof authorities',async()=>{
+ const f=g141GeoapifyOptions(),g=g79Options();
+ for(const bad of [
+  {g134GeoapifyAutoOptions:f.options,g77RouteOptions:g.options},
+  {g134GeoapifyAutoOptions:f.options,verifiedAutoRoute:async()=>({})},
+  {g134GeoapifyAutoOptions:{...f.options,enabled:false}},
+  {g134GeoapifyAutoOptions:{...f.options,freePlanApproved:false}},
+  {g134GeoapifyAutoOptions:{...f.options,resolveCoveredAutoCoordinates:null}},
+  {g134GeoapifyAutoOptions:{...f.options,tagSecret:'short'}},
+  {g134GeoapifyAutoOptions:{...f.options,secretLeak:'bad'}}
+ ]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,bad));
+  assert.equal(m.state.clients.length,0);
+  assert.equal(m.state.rpcs.length,0);
+ }
+});
+
 test('G79 only selected precoverage G77 provider reaches exact G73 route SQL on loopback',async()=>{
  const m=mockSupabase(),f=g79Options();
  const runtime=await prepare(m,{g77RouteOptions:f.options});
