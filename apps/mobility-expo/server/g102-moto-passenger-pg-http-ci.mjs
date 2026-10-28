@@ -65,7 +65,7 @@ function fixture(){
  " AND current_setting('application_name')='qore_ci_disposable_chain')::text");
  assert.equal(guard,'true');
  sql("INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+stranger+"'),('"+admin+"');"+
-  "DELETE FROM public.user_roles WHERE user_id='"+owner+"';"+
+  "DELETE FROM public.user_roles WHERE user_id IN ('"+owner+"','"+admin+"');"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) "+
   "VALUES('"+owner+"','owner','active','"+owner+"'),('"+admin+"','admin','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_fare_rules(rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,minimum_pyg,commission_bps,valid_from,valid_until,active,approved_by,approved_at) VALUES"+
