@@ -658,7 +658,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G122_DELIVERY_VEHICLE_FARE_CONSENT_POSTGRES_CI_ONLY.sql
       - name: G122 HTTP original AUTO and MOTO delivery + G7 quote + exact price consent PostgreSQL
         run: node apps/mobility-expo/server/g122-delivery-price-consent-pg-http-ci.mjs
-      - name: G121 private AUTO/MOTO package lost-ACK booking recovery in disposable PG16
+      - name: G132 genuine B Cliente registration and C Driver denial across same A PostgreSQL deliveryId
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G123 install SQL private delivery offer/accept price fence AFTER G121/G122 receipts
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G123_DELIVERY_PRICE_BEFORE_PRIVATE_OFFER_FENCE_POSTGRES_CI_ONLY.sql

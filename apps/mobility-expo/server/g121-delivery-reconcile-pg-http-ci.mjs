@@ -94,6 +94,33 @@ async function main(){
  });
  try{
   const origin=await listenQoreRadarLoopback(server);
+  // G132: load ACTUAL B and C module code from the same G131 four-app
+  // checkout, not synthetic snapshots or a second local fork.
+  const bDomain=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  const cDomain=new URL('../../../ci-c-driver/apps/movete-driver/src/domain/',import.meta.url);
+  const [{createG121DeliveryRegistrationGateway},
+   {createG5G121VerifiedDeliveryBookingGateway},
+   {readPrivateCourierCustody}]=await Promise.all([
+    import(new URL('g121-delivery-registration-gateway.mjs',bDomain)),
+    import(new URL('g5-g121-verified-delivery-booking-gateway.mjs',bDomain)),
+    import(new URL('driver-custody-http.mjs',cDomain))
+   ]);
+  const bPin='https://qore-g132-ci.onrender.com';
+  let bPosts=0,bGets=0;
+  const proxy=(url,opts)=>{
+   const u=new URL(url);
+   assert.equal(u.origin,bPin,'No outside HTTP provider in GitHub chain');
+   assert.equal(u.search,'');assert.equal(u.hash,'');
+   assert(u.pathname.startsWith('/v1/staging/sender/deliveries/requests/')||
+    u.pathname==='/v1/staging/sender/deliveries/request');
+   if(opts.method==='POST')bPosts++;
+   else if(opts.method==='GET')bGets++;
+   else throw Error('G132 only original G5 POST and private G121 GET');
+   return fetch(origin+u.pathname,{...opts,redirect:'error'});
+  };
+  const bExp=Date.now()+600000;
+  const bActor=i=>({role:'passenger',subject:ids[i],token:tokens[i],
+   authRevision:1,sessionRevision:1,expiresAt:bExp});
   for(const [i,kind,grams,dims] of [[0,'MOTO',2000,[30,20,10]],
     [1,'AUTO',16000,[65,40,30]]]){
    const body={requestKey:keys[i],vehicleKind:kind,category:'PARCEL',
@@ -125,8 +152,67 @@ async function main(){
    assert.equal(altered.status,409);
    assert.equal((await http(origin,get,tokens[i])).data.deliveryId,
     created.data.deliveryId);
+   // B's real owner-scoped G121 HTTP implementation must read the exact
+   // original G5 row from PostgreSQL, with immutable identity + revision.
+   const getSession=async()=>bActor(i);
+   const bRead=createG121DeliveryRegistrationGateway({
+    enabled:true,contractCertified:true,externalRuntimeVerified:true,
+    passengerRlsVerified:true,ownerApproved:true,
+    origin:bPin,pinnedOrigin:bPin,getSession,fetchImpl:proxy
+   });
+   const proof=await bRead.read({requestKey:keys[i],
+    expectedSubject:ids[i],expectedSessionRevision:1});
+   assert.equal(proof.ok,true,JSON.stringify(proof));
+   assert.equal(proof.deliveryId,created.data.deliveryId);
+   assert.equal(proof.vehicleKind,kind);
+   assert.equal(proof.deliveryState,'requested');
+   assert.equal(proof.registrationOnly,true);
+   const bG5=createG5G121VerifiedDeliveryBookingGateway({
+    enabled:true,ownerApproved:true,g5ContractVerified:true,
+    g121ContractVerified:true,externalRuntimeVerified:true,
+    senderRlsVerified:true,ownerTariffGateVerified:true,
+    origin:bPin,pinnedOrigin:bPin,getSession,
+    readG121:scope=>bRead.read(scope),fetchImpl:proxy
+   });
+   assert.equal(bG5.isConfigured(),true);
+   const bSubmitted=await bG5.send('deliveryRequest',{
+    body,expectedSubject:ids[i],expectedSessionRevision:1
+   });
+   assert.equal(bSubmitted.ok,true,JSON.stringify(bSubmitted));
+   assert.equal(bSubmitted.status,201);
+   assert.equal(bSubmitted.data.serviceId,created.data.deliveryId);
+   assert.equal(bSubmitted.data.operation,'deliveryRequest');
+   assert.equal(bSubmitted.bookingConfirmedForProduction,false);
+   assert.equal(bSubmitted.commercialEnabled,false);
+   const bRecovery=await bG5.reconcile('deliveryRequest',{
+    requestKey:keys[i],expectedSubject:ids[i],
+    expectedSessionRevision:1,vehicleKind:kind
+   });
+   assert.equal(bRecovery.ok,true,JSON.stringify(bRecovery));
+   assert.equal(bRecovery.data.serviceId,created.data.deliveryId);
+   assert.equal(psql("SELECT COUNT(*) FROM public.mobility_stage_deliveries "+
+    "WHERE request_key='"+keys[i]+"'"),'1');
+   // C's real G66 cannot open custody merely because the sender's G5 row
+   // exists; backend has not assigned any courier. One GET, NEVER a POST.
+   let cReads=0;
+   await assert.rejects(()=>readPrivateCourierCustody({
+    apiOrigin:origin,
+    accessToken:'g132-unassigned-qa-courier-token-000000001',
+    deliveryId:created.data.deliveryId,
+    request:(url,opts)=>{
+     cReads++;assert.equal(opts.method,'GET');
+     return fetch(url,opts);
+    }
+   }),/not verified/);
+   assert.equal(cReads,1);
+   assert.equal(psql("SELECT COUNT(*) FROM public.mobility_stage_deliveries "+
+    "WHERE id='"+created.data.deliveryId+"' AND courier_id IS NOT NULL"),'0');
+   console.log('G132 '+kind+' cross-app: B real G5 POST/G121 GET -> A original PostgreSQL deliveryId -> C real G66 refuses unassigned custody, exactly one durable row, no fake proof or delivery');
    console.log('G121 '+kind+' PASS: PostgreSQL delivery with owner-private lost-ACK GET, one ID, replay safe, foreign denied');
   }
+  assert.equal(bPosts,2,'One B original registration replay per vehicle');
+  assert.equal(bGets,6,'One B private read, one after POST, one recovery per vehicle');
+  console.log('G132 B+C+Backend delivery both AUTO/MOTO across real PostgreSQL16, original immutable ID, zero Driver fake assignment');
   console.log('G121 PASS: both delivery types, NO LIVE, no forged offer/price/GPS');
  }finally{
   if(server.listening)await new Promise((resolve,reject)=>
