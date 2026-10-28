@@ -12,6 +12,7 @@ on:
       - 'apps/mobility-expo/server/g16-driver-private-inbox-gateway.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.test.mjs'
       - 'apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G113_BOUNDED_AUTO_DISPATCH_RETRY_BATCH_POSTGRES_CI_ONLY.sql'
@@ -38,6 +39,7 @@ on:
       - 'apps/mobility-expo/server/g16-driver-private-inbox-gateway.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.test.mjs'
       - 'apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G113_BOUNDED_AUTO_DISPATCH_RETRY_BATCH_POSTGRES_CI_ONLY.sql'
@@ -231,6 +233,7 @@ jobs:
           node --check apps/mobility-expo/server/g106-driver-current-trip-qa.mjs
           node --check apps/mobility-expo/server/g106-driver-current-trip-repository.mjs
           node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
+          node --check apps/mobility-expo/server/g4-staging-runtime.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: Guard isolated local chain database
         run: |
