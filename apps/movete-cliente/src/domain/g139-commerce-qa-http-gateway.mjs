@@ -3,7 +3,8 @@
  */
 import {readBoundedResponseText} from './bounded-http-response.mjs';
 import {validateG45ReserveRequest,projectG45QaReserveReceipt,
- prepareG45QaCancelDraft,projectG45QaCancelReceipt}
+ prepareG45QaCancelDraft,projectG45QaCancelReceipt,
+ projectG144OrderRecoveryReceipt}
  from './g45-order-qa-contract.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=code=>Object.freeze({ok:false,code,paymentEnabled:false});
@@ -79,6 +80,46 @@ export function createG139CommerceQaHttpGateway({
   }catch{return fail(abort.signal.aborted?'NETWORK_OR_TIMEOUT':'ORDER_NETWORK_UNAVAILABLE');}
   finally{clearTimeout(timeout);busy=false;}
  }
+
+ async function recover(requestKey){
+  if(!ready)return fail('G139_NOT_CERTIFIED');
+  if(typeof requestKey!=='string'||!UUID.test(requestKey)
+   ||requestKey!==requestKey.toLowerCase())return fail('INVALID_RECOVERY_KEY');
+  if(busy)return fail('G139_BUSY');
+  busy=true;
+  const abort=new AbortController(),ms=Number.isSafeInteger(timeoutMs)
+   &&timeoutMs>=1000&&timeoutMs<=30000?timeoutMs:8000;
+  const timeout=setTimeout(()=>abort.abort(),ms);
+  try{
+   const before=await getSession();
+   if(!good(before,now()))return fail('AUTH_REQUIRED');
+   const res=await fetchImpl(host+'/v1/staging/buyer/orders/qa/requests/'+requestKey,{
+    method:'GET',credentials:'omit',redirect:'error',cache:'no-store',
+    referrerPolicy:'no-referrer',signal:abort.signal,
+    headers:{Authorization:'Bearer '+before.token,Accept:'application/json'}
+   });
+   const after=await getSession();
+   if(!good(after,now())||!same(before,after))return fail('STALE_SESSION');
+   if(abort.signal.aborted)return fail('NETWORK_OR_TIMEOUT');
+   if(res?.redirected!==false)return fail('UNTRUSTED_REDIRECT');
+   if(res.status===404)return fail('ORDER_NOT_FOUND');
+   if(res.status!==200||res.ok!==true)return fail('ORDER_NOT_CONFIRMED');
+   if(!/^application\/json(?:\s*;|$)/i.test(
+    res.headers?.get?.('content-type')??''))return fail('BAD_CONTENT_TYPE');
+   const read=await readBoundedResponseText(res,{
+    limit:8192,signal:abort.signal,timedOut:()=>abort.signal.aborted
+   });
+   if(!read.ok)return fail(read.code);
+   const final=await getSession();
+   if(!good(final,now())||!same(before,final))return fail('STALE_SESSION');
+   let dto;try{dto=JSON.parse(read.text);}catch{return fail('BAD_JSON');}
+   const receipt=projectG144OrderRecoveryReceipt(dto,{requestKey});
+   if(!receipt)return fail('INVALID_SERVER_RECEIPT');
+   return Object.freeze({ok:true,receipt,checkoutEnabled:false,paymentEnabled:false});
+  }catch{return fail(abort.signal.aborted?'NETWORK_OR_TIMEOUT':'ORDER_NETWORK_UNAVAILABLE');}
+  finally{clearTimeout(timeout);busy=false;}
+ }
  return Object.freeze({isConfigured:()=>ready,
-  reserve:body=>send('reserve',body),cancel:body=>send('cancel',body)});
+  reserve:body=>send('reserve',body),cancel:body=>send('cancel',body),
+  recover});
 }

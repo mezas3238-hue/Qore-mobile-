@@ -447,6 +447,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_BUYER_ORDER_STOCK_FENCE_POSTGRES_CI_ONLY.sql
       - name: G45 prove server priced stock reservation, replay, version change and cancellation
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_BUYER_ORDER_STOCK_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G144 install original Buyer lost-ACK owner-private recovery (PG16 only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G45_G144_PRIVATE_ORDER_RECOVERY_POSTGRES_CI_ONLY.sql
       - name: G139 Buyer Cliente HTTP to A G45 real PostgreSQL stock reservation and cancellation
         run: node apps/mobility-expo/server/g139-commerce-buyer-pg-http-ci.mjs
       - name: G45 real two-session duplicate-key and oversell race in PostgreSQL

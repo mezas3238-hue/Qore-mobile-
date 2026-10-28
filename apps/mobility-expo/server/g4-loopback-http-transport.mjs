@@ -41,6 +41,7 @@ const courierCustodyGetRoute=/^\/v1\/staging\/courier\/deliveries\/[0-9a-f-]{36}
 const courierCustodyPostRoute=/^\/v1\/staging\/courier\/deliveries\/[0-9a-f-]{36}\/custody-transition$/i;
 const merchantRequestRoute=/^\/v1\/staging\/buyer\/orders\/request$/;
 const commerceQaRoute=/^\/v1\/staging\/buyer\/orders\/qa\/(reserve|cancel)$/;
+const commerceQaReadRoute=/^\/v1\/staging\/buyer\/orders\/qa\/requests\/[0-9a-f-]{36}$/i;
 const merchantTransitionRoute=/^\/v1\/staging\/(?:merchant|buyer)\/orders\/[0-9a-f-]{36}\/transition$/i;
 const merchantAttachRoute=/^\/v1\/staging\/merchant\/orders\/[0-9a-f-]{36}\/attach-delivery$/i;
 const merchantStatusRoute=/^\/v1\/staging\/orders\/[0-9a-f-]{36}\/status$/i;
@@ -157,6 +158,7 @@ export function createQoreRadarLoopbackTransport({
   const deliveryPost=req.method==='POST'&&
    (deliveryRequestRoute.test(path)||deliveryQuoteConfirmRoute.test(path)||deliveryTransitionRoute.test(path));
   const commerceQaPost=req.method==='POST'&&commerceQaRoute.test(path);
+  const commerceQaGet=req.method==='GET'&&commerceQaReadRoute.test(path);
   const courierCustodyGet=req.method==='GET'&&courierCustodyGetRoute.test(path);
   const courierCustodyPost=req.method==='POST'&&courierCustodyPostRoute.test(path);
   const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
@@ -188,7 +190,7 @@ export function createQoreRadarLoopbackTransport({
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
   if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
-    !merchantGet&&!merchantPost&&!commerceQaPost&&!courierCustodyGet&&!courierCustodyPost&&!financeGet&&!financePost&&
+    !merchantGet&&!merchantPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
     !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&
@@ -200,7 +202,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||merchantGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||merchantGet||commerceQaGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet||driverKycValidityGet||driverTripStatusGet||driverCurrentTripGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -241,7 +243,7 @@ export function createQoreRadarLoopbackTransport({
     offerRecoveryPost?(driverDecisionRecoveryHandler??(()=>({status:503,body:{error:'G64 owner-only decision reader unavailable',retrySafe:false}}))):
     tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
-    commerceQaPost?(commerceQaHandler??(()=>({status:503,body:{error:'G139 QA not mounted'}}))):
+    (commerceQaPost||commerceQaGet)?(commerceQaHandler??(()=>({status:503,body:{error:'G139 QA not mounted'}}))):
     (courierCustodyGet||courierCustodyPost)?(courierCustodyHandler??(()=>({status:503,body:{error:'G66 custody proof/session authority unavailable'}}))):
     (merchantGet||merchantPost)?merchantHandler:
     (financeGet||financePost)?financeHandler:

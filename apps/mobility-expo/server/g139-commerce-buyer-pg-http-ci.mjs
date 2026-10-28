@@ -19,9 +19,9 @@ if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'
  ||process.env.PGAPPNAME!=='qore_ci_disposable_chain')
  throw Error('G139 refuses remote/production PG');
 const ids=n=>'13800000-0000-4138-8138-'+String(n).padStart(12,'0');
-const buyer=ids(1),owner=ids(2),reviewer=ids(3),session=ids(101),
+const buyer=ids(1),owner=ids(2),reviewer=ids(3),stranger=ids(4),session=ids(101),otherSession=ids(102),
  branch=ids(30),item=ids(40),zone=ids(10),merchant=ids(20),
- key=ids(201),cancelKey=ids(301),token='g139-provider-authenticated-buyer-qa';
+ key=ids(201),cancelKey=ids(301),token='g139-provider-authenticated-buyer-qa',otherToken='g144-provider-other-buyer-qa-123';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const quote=s=>"'"+s+"'";
 function sql(statement){
@@ -32,13 +32,16 @@ function sql(statement){
 const read=s=>JSON.parse(sql(s));
 assert.equal(sql("SELECT (current_database()='qore_disposable_chain'"+
  " AND current_setting('application_name')='qore_ci_disposable_chain')"),'t');
-sql("INSERT INTO auth.users(id) VALUES "+[buyer,owner,reviewer].map(id=>'('+quote(id)+')').join(',')+";"+
- "INSERT INTO public.user_roles(user_id,role) VALUES("+quote(buyer)+",'passenger') ON CONFLICT DO NOTHING;"+
+sql("INSERT INTO auth.users(id) VALUES "+[buyer,owner,reviewer,stranger].map(id=>'('+quote(id)+')').join(',')+";"+
+ "INSERT INTO public.user_roles(user_id,role) VALUES("+quote(buyer)+",'passenger'),("+quote(stranger)+",'passenger') ON CONFLICT DO NOTHING;"+
  "INSERT INTO public.mobility_stage_g42_provider_session_grants("+
  "user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind)"+
  " VALUES("+quote(buyer)+","+quote(session)+","+
  "clock_timestamp()-interval '1 hour',clock_timestamp()-interval '2 minutes',"+
- "clock_timestamp()+interval '1 hour','QA_SYNTHETIC_PROVIDER_SESSION_ONLY');"+
+ "clock_timestamp()+interval '1 hour','QA_SYNTHETIC_PROVIDER_SESSION_ONLY'),("+
+ "'"+stranger+"','"+otherSession+"',clock_timestamp()-interval '1 hour',"+
+ "clock_timestamp()-interval '2 minutes',clock_timestamp()+interval '1 hour',"+
+ "'QA_SYNTHETIC_PROVIDER_SESSION_ONLY');"+
  "INSERT INTO public.mobility_stage_g31_zone_coverage("+
  "zone_id,municipality,service_kind,coverage_status) VALUES("+
  quote(zone)+",'Asuncion','AUTO_DELIVERY','ACTIVE');"+
@@ -65,12 +68,13 @@ const qa=createG45BuyerOrderReservationQa({
  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
  projectRef:'staging1234567890abcd',
  verifyAccessToken:async t=>{
-  if(t!==token)throw Error('Unknown IdP token');
-  return {id:buyer,sessionId:session,tokenIatMs:issuedAt,expiresAtMs:expiresAt,
+  if(t!==token&&t!==otherToken)throw Error('Unknown IdP token');
+  return {id:t===token?buyer:stranger,sessionId:t===token?session:otherSession,tokenIatMs:issuedAt,expiresAtMs:expiresAt,
    is_anonymous:false,email_confirmed_at:'2026-10-28T00:00:00Z'};
  },
  verifySessionNotRevoked:async({userId,sessionId})=>
-  revoked===false&&userId===buyer&&sessionId===session,
+  revoked===false&&((userId===buyer&&sessionId===session)||
+   (userId===stranger&&sessionId===otherSession)),
  loadExclusiveRole:async userId=>{
   if(!UUID.test(userId))throw Error('Invalid actor');
   return sql("SELECT role FROM public.user_roles WHERE user_id="+quote(userId));
@@ -102,6 +106,13 @@ const qa=createG45BuyerOrderReservationQa({
     args._iat_ms+","+[args._order_id,args._cancel_key].map(quote).join(',')+
     ")::text")};
   }
+  if(name==='mobility_stage_g144_recover_order_qa'){
+   if(![args._buyer,args._session,args._request_key].every(x=>UUID.test(x))
+    ||!Number.isSafeInteger(args._iat_ms))throw Error('Invalid G144 recovery scope');
+   return {data:read("SELECT COALESCE(public.mobility_stage_g144_recover_order_qa("+
+    [args._buyer,args._session].map(quote).join(',')+","+
+    args._iat_ms+","+quote(args._request_key)+"),'null'::jsonb)::text")};
+  }
   throw Error('Unapproved G45 SQL');
  }
 });
@@ -128,17 +139,20 @@ try{
    assert.equal(u.origin,host);
    assert.equal(u.search,'');assert.equal(u.hash,'');
    assert(['/v1/staging/buyer/orders/qa/reserve',
-    '/v1/staging/buyer/orders/qa/cancel'].includes(u.pathname));
-   assert.equal(opts.method,'POST');
+    '/v1/staging/buyer/orders/qa/cancel',
+    '/v1/staging/buyer/orders/qa/requests/'+key,
+    '/v1/staging/buyer/orders/qa/requests/'+ids(212)].includes(u.pathname));
+   assert(['POST','GET'].includes(opts.method));
    assert.equal(opts.credentials,'omit');
-   posts++;
+   if(opts.method==='POST')posts++;
    return fetch(base+u.pathname,{...opts,redirect:'error'});
    }
   }
  });
  assert.equal((await BExperience.refreshSession()).ok,true);
  const B={reserve:body=>BExperience.reserveCommerceQa(body),
-  cancel:body=>BExperience.cancelCommerceQa(body)};
+  cancel:body=>BExperience.cancelCommerceQa(body),
+  recover:requestKey=>BExperience.recoverCommerceQa(requestKey)};
  const request={requestKey:key,branchId:branch,catalogVersion:version,
   vehicleKind:'AUTO',items:[{itemId:item,quantity:1}]};
  assert.equal(BExperience.snapshot().authenticated,true);
@@ -148,6 +162,15 @@ try{
  assert.equal(first.receipt.paymentConfirmed,false);
  const orderId=first.receipt.orderId;
  assert(UUID.test(orderId));
+ const beforeRecovery=await B.recover(key);
+ assert.equal(beforeRecovery.ok,true,JSON.stringify(beforeRecovery));
+ assert.equal(beforeRecovery.receipt.orderId,orderId);
+ assert.equal(beforeRecovery.receipt.status,'requested');
+ assert.equal(beforeRecovery.receipt.revision,1);
+ assert.equal(beforeRecovery.receipt.paymentConfirmed,false);
+ const strangerRead=await qa.recover({bearer:otherToken,requestKey:key});
+ assert.equal(strangerRead.status,404,'valid foreign Buyer denied');
+ assert.equal((await qa.recover({bearer:token,requestKey:ids(999)})).status,404);
  assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
  assert.equal(sql("SELECT subtotal_pyg FROM public.mobility_stage_merchant_orders WHERE id="+quote(orderId)),'25000');
  const again=await B.reserve(request);
@@ -156,11 +179,18 @@ try{
  assert.equal(again.receipt.receiptId,first.receipt.receiptId);
  assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
  revoked=true;
+ assert.equal((await B.recover(key)).ok,false);
  assert.equal((await B.reserve(request)).ok,false);
  revoked=false;
  const canceled=await B.cancel({orderId,cancelKey});
  assert.equal(canceled.ok,true,JSON.stringify(canceled));
  assert.equal(canceled.receipt.refundStatus,'NO_PSP_NO_FINANCIAL_REFUND');
+ const afterCancel=await B.recover(key);
+ assert.equal(afterCancel.ok,true,JSON.stringify(afterCancel));
+ assert.equal(afterCancel.receipt.status,'cancelled');
+ assert.equal(afterCancel.receipt.revision,2);
+ assert.equal(afterCancel.receipt.orderId,orderId);
+ assert.equal(afterCancel.receipt.paymentConfirmed,false);
  assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'2');
  assert.equal(sql("SELECT status FROM public.mobility_stage_merchant_orders WHERE id="+quote(orderId)),'cancelled');
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_merchant_order_events WHERE order_id="+quote(orderId)+" AND action='cancel'"),'1');
@@ -204,7 +234,12 @@ try{
  const motoCancelReplay=await B.cancel({orderId:motoId,cancelKey:ids(312)});
  assert.equal(motoCancelReplay.ok,true);
  assert.equal(motoCancelReplay.receipt.eventId,motoCancel.receipt.eventId);
+ const recoveredMoto=await B.recover(motoRequest.requestKey);
+ assert.equal(recoveredMoto.ok,true,JSON.stringify(recoveredMoto));
+ assert.equal(recoveredMoto.receipt.orderId,motoId);
+ assert.equal(recoveredMoto.receipt.status,'cancelled');
  assert.equal(posts,11);
+ console.log('G144 COMMERCE: B -> A HTTP GET -> original PostgreSQL G45 orderId, current state, foreign/revoked denied, no duplicate stock or payment');
  console.log('G140 COMMERCE MOTO E2E PASS: original B Client -> A HTTP -> G44 vehicle matching -> G45 PG16 stock; wrong vehicle denied, MOTO receipt replay and exact restock; no LIVE/PSP');
  console.log('G139 B/A/PG16 COMMERCE PASS: authenticated original Client Buyer -> HTTP -> G45 server priced 25000 PYG catalog reserve; same order replay; revoked denied; cancel restores exact stock once; NO LIVE/PSP');
 }finally{

@@ -20,6 +20,9 @@ const allowedItems=items=>Array.isArray(items)&&items.length>=1&&
  )&&new Set(items.map(row=>row.itemId)).size===items.length;
 const RECEIPT=['receiptId','orderId','requestKey','branchId','catalogVersion',
  'subtotalPyg','receiptStatus','orderEnabled','productionEnabled'];
+const RECOVERY=[...RECEIPT,'status','revision','deliveryId'];
+const ORDER_STATES=new Set(['requested','confirmed','preparing','ready',
+ 'handed_to_courier','delivered','cancelled']);
 const CANCEL=['orderId','receiptId','eventId','receiptStatus',
  'refundStatus','orderEnabled','productionEnabled'];
 const validReceipt=(data,request)=>sealed(data,RECEIPT)&&
@@ -126,5 +129,36 @@ export function createG45BuyerOrderReservationQa({
   if(!validCancel(source.data,body))return fail(503,'UNSAFE_CANCEL_RECEIPT');
   return Object.freeze({status:200,body:Object.freeze({...source.data})});
  }
- return Object.freeze({reserve,cancel});
+ async function recover({bearer,requestKey}={}){
+  if(!validUuid(requestKey))return fail(400,'INVALID_RECOVERY_KEY');
+  const {actor,failure}=await actorFor(bearer,'buyer.order.recover.qa');
+  if(failure)return failure;
+  let source;
+  try{source=await rpc('mobility_stage_g144_recover_order_qa',{
+   _buyer:actor.id,_session:actor.sessionId,_iat_ms:actor.tokenIatMs,
+   _request_key:requestKey
+  });}
+  catch{return fail(503,'RECOVERY_SOURCE_UNAVAILABLE');}
+  if(!plain(source))return fail(503,'RECOVERY_SOURCE_UNAVAILABLE');
+  if(source.error){
+   if(source.error.code==='G4501')return fail(403,'BUYER_SESSION_DENIED');
+   return fail(503,'RECOVERY_SOURCE_UNAVAILABLE');
+  }
+  if(source.data===null)return fail(404,'ORDER_NOT_FOUND');
+  const data=source.data;
+  if(!sealed(data,RECOVERY)||data.requestKey!==requestKey
+   ||!ORDER_STATES.has(data.status)
+   ||!positive(data.revision)||data.revision>Number.MAX_SAFE_INTEGER
+   ||!(data.deliveryId===null||validUuid(data.deliveryId))){
+   return fail(503,'UNSAFE_RECOVERY_RECEIPT');
+  }
+  const base=Object.fromEntries(RECEIPT.map(key=>[key,data[key]]));
+  if(!validReceipt(base,{requestKey,
+   branchId:data.branchId,catalogVersion:data.catalogVersion}))
+   return fail(503,'UNSAFE_RECOVERY_RECEIPT');
+  if(['handed_to_courier','delivered'].includes(data.status)
+   &&data.deliveryId===null)return fail(503,'UNSAFE_RECOVERY_RECEIPT');
+  return Object.freeze({status:200,body:Object.freeze({...data})});
+ }
+ return Object.freeze({reserve,cancel,recover});
 }

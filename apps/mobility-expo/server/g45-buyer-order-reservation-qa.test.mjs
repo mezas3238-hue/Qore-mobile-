@@ -147,3 +147,34 @@ test('G45 rejects forged cancel body and production configuration',async()=>{
   {rpc:null},{verifyAccessToken:null}
  ])assert.throws(()=>fixture(bad));
 });
+
+test('G144 original order recovery uses verified Buyer scope, no second stock reservation',async()=>{
+ const dto={...order,status:'requested',revision:1,deliveryId:null};
+ const calls=[];
+ const f=fixture({rpc:async(name,args)=>{
+  calls.push({name,args});return {data:name==='mobility_stage_g144_recover_order_qa'?dto:null};
+ }});
+ const result=await f.api.recover({bearer,requestKey});
+ assert.equal(result.status,200);
+ assert.deepEqual(result.body,dto);
+ assert.deepEqual(calls,[{name:'mobility_stage_g144_recover_order_qa',
+  args:{_buyer:buyer,_session:sessionId,_iat_ms:at-20000,_request_key:requestKey}}]);
+ assert.equal((await f.api.recover({bearer,requestKey:'forged'})).status,400);
+});
+test('G144 fails closed for poisoned status, payment, foreign and invalid ledger projection',async()=>{
+ for(const delta of [
+  {status:'PAID'},{revision:0},{orderEnabled:true},
+  {productionEnabled:true},{requestKey:id(209)},{buyerId:buyer},
+  {deliveryId:'not-uuid'},
+  {status:'delivered',deliveryId:null},
+  {receiptStatus:'PAID'}
+ ]){
+  const dto={...order,status:'requested',revision:1,deliveryId:null,...delta};
+  const f=fixture({rpc:async()=>({data:dto})});
+  assert.equal((await f.api.recover({bearer,requestKey})).status,503,JSON.stringify(delta));
+ }
+ const absent=fixture({rpc:async()=>({data:null})});
+ assert.equal((await absent.api.recover({bearer,requestKey})).status,404);
+ const revoked=fixture({verifySessionNotRevoked:async()=>false});
+ assert.equal((await revoked.api.recover({bearer,requestKey})).status,401);
+});

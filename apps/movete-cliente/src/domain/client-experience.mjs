@@ -1595,6 +1595,11 @@ export function createClientExperience({authProvider=null,gateway=null,
    if(commerceQaHttp?.isConfigured()!==true)return fail('G139_NOT_CERTIFIED');
    const result=await commerceQaHttp.cancel(body);notify();return result;
   },
+  recoverCommerceQa:async requestKey=>{
+   if(!actor())return fail('AUTH_REQUIRED');
+   if(commerceQaHttp?.isConfigured()!==true)return fail('G139_NOT_CERTIFIED');
+   const result=await commerceQaHttp.recover(requestKey);notify();return result;
+  },
   clearCommerce:()=>{commerceFlow.clear();notify();},
   prepareIncidentReport:request=>{const result=prepareIncidentReport(request);notify();return result;},
   discardIncidentReport:()=>{const result=incidentFlow.discard();notify();return result;},
