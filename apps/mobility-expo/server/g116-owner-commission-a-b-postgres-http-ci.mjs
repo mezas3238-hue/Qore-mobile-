@@ -51,7 +51,8 @@ function callRpc(name,args){
     throw Error('G117 invalid bps');
    return String(value);
   }
-  if(key==='service'&&['AUTO_RIDE','MOTO_RIDE'].includes(value))
+  if(key==='service'&&['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO',
+   'DELIVERY_MOTO','COMMERCE'].includes(value))
    return quoted(value);
   if(typeof value==='string'&&legalUUID.test(value))return quoted(value);
   throw Error('G117 untrusted SQL parameter');
@@ -126,7 +127,10 @@ async function main(){
     assert.equal(destination.search,'');
     assert.equal(destination.hash,'');
     assert(['/v1/staging/owner/commissions/AUTO_RIDE',
-      '/v1/staging/owner/commissions/MOTO_RIDE'].includes(destination.pathname));
+      '/v1/staging/owner/commissions/MOTO_RIDE',
+      '/v1/staging/owner/commissions/DELIVERY_AUTO',
+      '/v1/staging/owner/commissions/DELIVERY_MOTO',
+      '/v1/staging/owner/commissions/COMMERCE'].includes(destination.pathname));
     assert.equal(opts.credentials,'omit');
     assert.equal(opts.redirect,'error');
     if(opts.method==='GET')readRequests++;
@@ -189,6 +193,38 @@ async function main(){
   assert.equal(revokedReply.ok,false);
   assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g116_commission_audit"+
    " WHERE owner_id='"+owner+"'"),'2');
+  // G136: one real Owner web -> A JWT/AAL2 HTTP -> PG16 read, write,
+  // independent readback per additional platform. Not merchant settlement.
+  activeToken=token;revoked=false;
+  const nonRides=[
+   ['DELIVERY_AUTO',800,'11700000-0000-4117-8117-000000000031'],
+   ['DELIVERY_MOTO',750,'11700000-0000-4117-8117-000000000032'],
+   ['COMMERCE',1200,'11700000-0000-4117-8117-000000000033']
+  ];
+  for(const [kind,bps,requestKey] of nonRides){
+   const before=await B.read(kind);
+   assert.equal(before.ok,true,JSON.stringify(before));
+   assert.equal(before.data.commissionBps,0);
+   assert.equal(before.data.subsidyBps,0);
+   const saved=await B.change(kind,{requestKey,commissionBps:bps});
+   assert.equal(saved.ok,true,JSON.stringify(saved));
+   assert.equal(saved.data.version,2);
+   assert.equal(saved.data.subsidyBps,0);
+   const verified=await B.read(kind);
+   assert.equal(verified.ok,true,JSON.stringify(verified));
+   assert.deepEqual(verified.data,saved.data);
+   assert.equal(sql("SELECT commission_bps FROM "+
+    "public.mobility_stage_g116_commission_policy WHERE service_kind='"+
+    kind+"'"),String(bps));
+  }
+  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g116_commission_audit"+
+   " WHERE owner_id='"+owner+"'"),'5');
+  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g116_commission_policy"+
+   " WHERE service_kind IN ('DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE')"+
+   " AND version=2"),'3');
+  assert.equal((await B.read('AUTO_RIDE')).data.subsidyBps,1000);
+  assert.equal((await B.read('MOTO_RIDE')).data.subsidyBps,1000);
+  console.log('G136 Owner cross-service PASS: B Admin -> A AAL2 HTTP -> original PostgreSQL16 policies and audit for AUTO/MOTO passengers, AUTO/MOTO cargo, COMMERCE; immutable passenger subsidy, no commercial settlement.');
   console.log('G117 CROSS-BRANCH PASS: B Owner web gateway HTTPS-pinned -> A Owner JWT/AAL2 HTTP localhost -> REAL PG16 G116 commission AUTO 18->20 and MOTO 12->14; unchanged 10% subsidy, audit exactly 2, replay idempotent, Admin/revoked denied; no live.');
  }finally{
   server.close();if(server.listening)await once(server,'close');
