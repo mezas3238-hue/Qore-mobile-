@@ -13,7 +13,7 @@ BEGIN;
 CREATE FUNCTION public.mobility_stage_g138_auto_trace_qa(_admin uuid,_trip uuid)
 RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
  WITH stamp AS MATERIALIZED (
-  SELECT pg_catalog.floor(pg_catalog.extract(epoch FROM
+  SELECT pg_catalog.floor(extract(epoch FROM
    pg_catalog.clock_timestamp())*1000)::bigint ms
  ), allowed AS MATERIALIZED (
   SELECT t.id,t.request_key,t.status::text status,t.revision,t.created_at,
@@ -35,7 +35,7 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
      'sequence',e.trip_revision,
      'status',CASE WHEN e.next_status='accepted' THEN 'assigned'
        ELSE e.next_status::text END,
-     'at',pg_catalog.floor(pg_catalog.extract(epoch FROM e.recorded_at)*1000)::bigint)
+     'at',pg_catalog.floor(extract(epoch FROM e.recorded_at)*1000)::bigint)
     ORDER BY e.trip_revision), '[]'::jsonb)
     FROM public.mobility_stage_auto_demo_events e
     WHERE e.trip_id=a.id) events,
@@ -66,7 +66,7 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
     pg_catalog.jsonb_build_object(
      'eventId',a.id,'serviceId',a.id,'sequence',1,
      'status','searching',
-     'at',pg_catalog.floor(pg_catalog.extract(epoch FROM a.created_at)*1000)::bigint)
+     'at',pg_catalog.floor(extract(epoch FROM a.created_at)*1000)::bigint)
    )||a.events,
   'ledger',CASE WHEN l.quote_id IS NULL THEN NULL
    ELSE pg_catalog.jsonb_build_object(
