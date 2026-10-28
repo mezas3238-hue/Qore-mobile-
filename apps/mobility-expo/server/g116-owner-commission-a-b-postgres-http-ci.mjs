@@ -11,7 +11,7 @@ import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 import {createG116OwnerCommissionGateway} from './g116-owner-commission-gateway.mjs';
 import {createOwnerCommissionGateway}
- from '../../../ci-b-client/apps/movete-admin/src/owner-commission-gateway.mjs';
+ from '../../movete-admin/src/owner-commission-gateway.mjs';
 
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'
  ||process.env.PGPORT!=='5432'

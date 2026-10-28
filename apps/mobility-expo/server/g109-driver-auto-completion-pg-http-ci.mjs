@@ -269,7 +269,7 @@ async function main(){
   // G114: ACTUAL Architect B Passenger codecs use A authenticated HTTP
   // and the SAME accepted pre-G38 fixture that A native Driver completes.
   // This is NONCOMMERCIAL CI, not legal approval of a new G73 booking.
-  const bRoot=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  const bRoot=new URL('../../movete-cliente/src/domain/',import.meta.url);
   const [{createRiderStatusGateway},{createClientHistoryGateway},
    {createRiderPollingCoordinator}]=await Promise.all([
     import(new URL('ride-status-gateway.mjs',bRoot)),

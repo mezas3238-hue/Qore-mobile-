@@ -58,11 +58,11 @@ export function AdminRuntimeProvider({children,experience}:{
   serverRbacVerified:import.meta.env.VITE_D_READ_SERVER_RBAC_VERIFIED==='true',
   serverRevocationVerified:import.meta.env.VITE_D_READ_REVOCATION_VERIFIED==='true',
   verifiedOperations:import.meta.env.VITE_D_READ_VERIFIED_OPERATIONS,
-  fetchImpl:webFetch
+  fetchImpl:fetch
  }):null,[auth]);
  const value=useMemo(()=>experience??createAdminExperience({
   authProvider:auth,readGatewayOptions:reads?{
-   ...reads,certifiedContracts:[...reads.certifiedContracts]
+   ...reads,certifiedContracts:[...reads.certifiedContracts],fetchImpl:webFetch
   }:null,
   f1RideAuditOptions:f1Qa,serviceTraceOptions:traceQa
  }),[experience,auth,reads,f1Qa,traceQa]);
