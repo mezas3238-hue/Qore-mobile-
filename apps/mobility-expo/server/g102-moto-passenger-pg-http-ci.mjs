@@ -12,6 +12,10 @@ import {createG101MotoPassengerGateway,createG101MotoPassengerRepository}
  from './g101-moto-passenger-gateway.mjs';
 import {createG128GeoapifyCargoRoadResolver}
  from './g128-geoapify-cargo-road-resolver.mjs';
+import {createG142AdminMotoTraceGateway}
+ from './g142-admin-moto-trace-gateway.mjs';
+import {createServiceTraceGateway}
+ from '../../movete-admin/src/service-trace-gateway.mjs';
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
  process.env.PGAPPNAME!=='qore_ci_disposable_chain')
@@ -20,6 +24,9 @@ const root='/v1/staging/rider/moto';
 const p='10200000-0000-4102-8102-000000000001';
 const owner='10200000-0000-4102-8102-000000000002';
 const stranger='10200000-0000-4102-8102-000000000003';
+const admin='10200000-0000-4102-8102-000000000004';
+const adminSession='10200000-0000-4102-8102-000000000005';
+const adminToken='g142-admin-aal2-qa-token-123456789';
 const campaign='10200000-0000-4102-8102-000000000020';
 const routeKey='10200000-0000-4102-8102-000000000010';
 const bookingKey='10200000-0000-4102-8102-000000000012';
@@ -57,10 +64,10 @@ function fixture(){
  const guard=sql("SELECT (current_database()='qore_disposable_chain'"+
  " AND current_setting('application_name')='qore_ci_disposable_chain')::text");
  assert.equal(guard,'true');
- sql("INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+stranger+"');"+
+ sql("INSERT INTO auth.users(id) VALUES ('"+p+"'),('"+owner+"'),('"+stranger+"'),('"+admin+"');"+
   "DELETE FROM public.user_roles WHERE user_id='"+owner+"';"+
   "INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by) "+
-  "VALUES('"+owner+"','owner','active','"+owner+"');"+
+  "VALUES('"+owner+"','owner','active','"+owner+"'),('"+admin+"','admin','active','"+owner+"');"+
   "INSERT INTO public.mobility_stage_fare_rules(rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,minimum_pyg,commission_bps,valid_from,valid_until,active,approved_by,approved_at) VALUES"+
   "('G102_MOTO_HTTP_QA','MOTO','MOTO_TEST_ZONE',4000,1000,200,4000,1200,"+
   "clock_timestamp()-interval '1 hour',clock_timestamp()+interval '60 days',true,'"+owner+"',clock_timestamp()-interval '2 hours');"+
@@ -157,11 +164,40 @@ async function main(){
   authorizePassenger:async id=>id===p||id===stranger,allowRequest:()=>true,
   resolveVerifiedMotoRoute:verifiedMotoRoad,repository:repo
  });
+ let adminRevoked=false;
+ const adminTrace=createG142AdminMotoTraceGateway({
+  projectRef:'staging1234567890abcd',
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  verifyAccessToken:async value=>{
+   if(value!==adminToken)throw Error('G142 unverified QA IdP token');
+   return {id:admin,sessionId:adminSession,is_anonymous:false,
+    expiresAtMs:Date.now()+600000};
+  },
+  verifySessionNotRevoked:async({userId,sessionId})=>
+   !adminRevoked&&userId===admin&&sessionId===adminSession,
+  loadExclusiveBackofficeRole:async id=>{
+   if(!UUID.test(id))throw Error('G142 unauthorized SQL role scope');
+   return sql("SET ROLE service_role; SELECT public."+
+    "mobility_stage_g27_backoffice_role_of('"+id+"')");
+  },
+  verifyBackofficeMfa:async({userId,sessionId})=>({
+   verifiedByProvider:true,assuranceLevel:'aal2',
+   userId,sessionId,verifiedAtMs:Date.now()-1000,
+   expiresAtMs:Date.now()+300000
+  }),
+  allowRequest:()=>true,
+  loadMotoTraceReceipt:async({actorId,tripId})=>{
+   if(actorId!==admin||!UUID.test(tripId))throw Error('G142 unsafe SQL');
+   return JSON.parse(sql("SET ROLE service_role; SELECT COALESCE("+
+    "public.mobility_stage_g142_moto_trace_qa('"+actorId+
+    "','"+tripId+"'),'null'::jsonb)::text;"));
+  }
+ });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:noop,offerHandler:noop,tripCommandHandler:noop,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
   safetyHandler:noop,merchantManagementHandler:noop,deliveryOfferHandler:noop,
-  motoHandler:gateway
+  motoHandler:gateway,adminMotoTraceHandler:adminTrace
  });
  try{
   const base=await listenQoreRadarLoopback(server);
@@ -183,6 +219,36 @@ async function main(){
   assert.equal(booking.body.financialState,'RESERVED_QA');
   assert.equal(booking.body.driverAssigned,false);
   assert.ok(UUID.test(booking.body.tripId));
+  const dPin='https://qore-g142-admin-qa.invalid';
+  const adminExpiry=Date.now()+600000;
+  const dTrace=createServiceTraceGateway({
+   enabled:true,contractCertified:true,origin:dPin,pinnedOrigin:dPin,
+   getSession:async()=>({role:'admin',subject:admin,mfaVerified:true,
+    authRevision:1,token:adminToken,expiresAt:adminExpiry}),
+   fetchImpl:(url,opts)=>{
+    const u=new URL(url);
+    assert.equal(u.origin,dPin);assert.equal(u.search,'');assert.equal(u.hash,'');
+    assert.equal(opts.method,'GET');
+    return fetch(base+u.pathname,{...opts,redirect:'error'});
+   }
+  });
+  const trip=booking.body.tripId;
+  const beforeTrace=await dTrace.read('MOTO_RIDE',trip);
+  assert.equal(beforeTrace.ok,true,JSON.stringify(beforeTrace));
+  assert.equal(beforeTrace.data.serviceId,trip);
+  assert.equal(beforeTrace.data.quoteId,quote.body.quoteId);
+  assert.equal(beforeTrace.data.bookingRequestKey,bookingKey);
+  assert.equal(beforeTrace.data.status,'searching');
+  assert.equal(beforeTrace.data.revision,1);
+  assert.equal(beforeTrace.data.events.length,1);
+  assert.equal(beforeTrace.data.assignment.legalGate,'G38_BLOCKED');
+  assert.equal(beforeTrace.data.ledger.grossGs,quote.body.amountGs);
+  assert.equal(beforeTrace.data.ledger.customerSubsidyGs,1100);
+  assert.equal(beforeTrace.data.ledger.platformCommissionGs,1320);
+  assert.equal(beforeTrace.data.ledger.driverPayoutGs,9680);
+  assert.equal((await http(base,
+   '/v1/staging/admin/services/MOTO_RIDE/'+trip+'/trace',
+   {accessToken:token})).status,401);
   const read=await http(base,root+'/bookings/'+bookingKey);
   assert.deepEqual(read.body,booking.body);
   assert.equal((await http(base,root+'/bookings/'+bookingKey,
@@ -194,6 +260,20 @@ async function main(){
   assert.equal(cancel.body.financialState,'VOIDED_QA');
   assert.equal(cancel.body.reversalEntriesBalanced,true);
   assert.equal(cancel.body.pspRefunded,false);
+  const afterTrace=await dTrace.read('MOTO_RIDE',booking.body.tripId);
+  assert.equal(afterTrace.ok,true,JSON.stringify(afterTrace));
+  assert.equal(afterTrace.data.revision,2);
+  assert.equal(afterTrace.data.status,'cancelled');
+  assert.equal(afterTrace.data.events.length,2);
+  assert.equal(afterTrace.data.events[1].serviceId,booking.body.tripId);
+  assert.equal(afterTrace.data.events[1].status,'cancelled');
+  assert.equal(afterTrace.data.ledger.reconciliationStatus,'PENDING');
+  adminRevoked=true;
+  assert.equal((await http(base,
+   '/v1/staging/admin/services/MOTO_RIDE/'+booking.body.tripId+'/trace',
+   {accessToken:adminToken})).status,401);
+  adminRevoked=false;
+
   assert.deepEqual((await http(base,root+'/bookings/'+bookingKey+'/cancellation')).body,cancel.body);
   assert.deepEqual((await http(base,root+'/bookings/'+bookingKey+'/cancel',
    {method:'POST',body:{requestKey:cancelKey,confirmed:true}})).body,cancel.body);

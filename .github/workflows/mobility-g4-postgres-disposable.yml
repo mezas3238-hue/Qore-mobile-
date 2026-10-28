@@ -30,6 +30,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G113_BOUNDED_AUTO_DISPATCH_RETRY_BATCH_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
+      - 'apps/mobility-expo/server/g142-admin-moto-trace-gateway.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
@@ -72,6 +74,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G113_BOUNDED_AUTO_DISPATCH_RETRY_BATCH_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G112_OWNER_SCOPED_AUTO_DISPATCH_WORKER_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs'
+      - 'apps/mobility-expo/server/g142-admin-moto-trace-gateway.mjs'
+      - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
       - 'apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs'
@@ -719,6 +723,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G126_RECOVER_ORIGINAL_CARGO_QUOTE_POSTGRES_CI_ONLY.sql
       - name: G125/G126 cargo HTTP quote, immutable replay and no second road request
         run: node apps/mobility-expo/server/g125-cargo-road-fare-pg-http-ci.mjs
+      - name: G142 install original MOTO booked trip and 4+4 ledger Admin trace
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G142_ORIGINAL_MOTO_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
       - name: G102 real PG16-backed MOTO Passenger HTTP quote, booking, cancel and 12-10-2 ledger certification
         run: node apps/mobility-expo/server/g102-moto-passenger-pg-http-ci.mjs
 
