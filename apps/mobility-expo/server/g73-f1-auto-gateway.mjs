@@ -206,7 +206,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   try{
    if(isRoute){
     const r=await resolveVerifiedRoute({
-     actorId:user.id,origin:body.origin,destination:body.destination,
+     actorId:user.id,quoteRequestKey:body.quoteRequestKey,
+     origin:body.origin,destination:body.destination,
      service:body.service});
     if(!obj(r)||r.routingVerified!==true||r.coverageVerified!==true||
       r.trafficAware!==true||

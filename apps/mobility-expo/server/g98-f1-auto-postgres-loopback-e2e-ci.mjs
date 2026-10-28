@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
+import {createG134GeoapifyAutoRouteResolver}
+ from './g134-geoapify-auto-route-resolver.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -133,6 +135,50 @@ async function main(){
    return targetedDispatch.runForBooking(scope);
   }
  });
+ const verifiedAutoRoad=createG134GeoapifyAutoRouteResolver({
+  freePlanApproved:true,
+  apiKey:'G98_QA_NOT_A_REAL_GEOAPIFY_KEY_123456789',
+  tagSecret:'G98_PRIVATE_QA_SERVER_TAG_SECRET_123456789',
+  resolveCoveredAutoCoordinates:async scope=>{
+   if(scope.actorId!==p||scope.quoteRequestKey!==routeKey||
+    scope.origin!=='Centro, Asunción'||scope.destination!=='Aeropuerto, Asunción'||
+    scope.service!=='economico')
+    throw Error('G134 QA independently covered route unavailable');
+   return {source:'INDEPENDENT_COVERAGE_AUTHORITY',coverageVerified:true,
+    ...scope,evidenceId:'98980000-0000-4989-8989-000000000043',
+    originAddress:scope.origin,destinationAddress:scope.destination,
+    revision:1,zoneTag:'AUTO_ASUNCION',
+    originCoordinates:{lat:-25.2773434,lon:-57.6371671},
+    destinationCoordinates:{lat:-25.2828767,lon:-57.5674503},
+    verifiedAtMs:Date.now()};
+  },
+  reserveFreeQuota:async req=>({
+   approved:true,durable:true,
+   reservationId:'98980000-0000-4989-8989-000000000044',
+   deliveryId:req.deliveryId,vehicleKind:req.vehicleKind,
+   coverageEvidenceId:req.coverageEvidenceId
+  }),
+  verifyAutoTolls:async req=>({
+   source:'INDEPENDENT_TOLL_AUTHORITY',tollsVerified:true,
+   quoteRequestKey:req.quoteRequestKey,actorId:req.actorId,
+   evidenceId:'98980000-0000-4989-8989-000000000045',
+   tollsPyg:0,verifiedAtMs:Date.now()
+  }),
+  request:async(url,opts)=>{
+   const u=new URL(url);
+   assert.equal(u.origin,'https://api.geoapify.com');
+   assert.equal(u.pathname,'/v1/routing');
+   assert.equal(u.searchParams.get('mode'),'drive');
+   assert.equal(opts.method,'GET');
+   // CI request stays in-memory: actual Geoapify Free provider credential
+   // is separately checked by the secret-only G129 smoke. No false GPS.
+   return {ok:true,status:200,redirected:false,
+    headers:{get:name=>name==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify({results:[{
+     distance:8253,time:808.305,distance_units:'meters',toll:false
+    }]})};
+  }
+ });
  const gateway=createQoreG73AutoGateway({
   projectRef:'staging1234567890abcd',now:Date.now,
   verifyAccessToken:async value=>{
@@ -142,13 +188,10 @@ async function main(){
   },
   authorizePassenger:async id=>id===p||id===outsider,
   allowRequest:()=>true,
-  // Synthetic independently attested route exclusively in disposable QA.
-  // This is NOT a real Google Maps, road/coverage or GPS verification.
-  resolveVerifiedRoute:async()=>({
-   routingVerified:true,coverageVerified:true,trafficAware:true,
-   fallbackUsed:false,originTag:'CENTRO_FIXTURE',
-   destinationTag:'AEROPUERTO',zoneTag:'ASUNCION_FIXTURE',
-   distanceMeters:5000,durationSeconds:600,tollsPyg:0}),
+  // G134: use the same real server-side Geoapify Free adapter G128 used
+  // for cargo; QA coverage/tolls/provider are explicitly injected fixtures.
+  // This is the ORIGINAL new G73 booking, not a second unrelated trip.
+  resolveVerifiedRoute:verifiedAutoRoad,
   registerRoute:x=>db.registerRoute(x),
   loadRoute:x=>db.routeReceipt(x),
   quoteRoute:x=>db.quote(x),
