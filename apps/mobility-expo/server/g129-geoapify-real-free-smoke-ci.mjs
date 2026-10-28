@@ -37,14 +37,14 @@ const raw=await new Promise((resolve,reject)=>{
    headers:{accept:'application/json','accept-encoding':'identity'}
   },res=>{
    if(res.statusCode!==200){
-    fail('G129_GEOAPIFY_HTTP_'+String(res.statusCode??0).replace(/\\D/g,''));
+    fail('G129_GEOAPIFY_HTTP_'+String(res.statusCode??0).replace(/\D/g,''));
     return;
    }
-   if(!/^application\\/json(?:\\s*;|$)/i.test(res.headers['content-type']??'')){
+   if(!/^application\/json(?:\s*;|$)/i.test(res.headers['content-type']??'')){
     fail('G129_RESPONSE_NOT_JSON');return;
    }
    const advertised=res.headers['content-length'];
-   if(advertised!==undefined&&(!/^\\d+$/.test(advertised)||
+   if(advertised!==undefined&&(!/^\d+$/.test(advertised)||
     Number(advertised)>maxBytes)){
     fail('G129_OVERSIZED_PROVIDER_RESPONSE');return;
    }
