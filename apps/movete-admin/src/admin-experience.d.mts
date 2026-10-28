@@ -5,10 +5,13 @@ export type AdminKycRecord={
 export type PageState={pageNumber:number;hasNext:boolean;hasPrevious:boolean;nextCursor:string|null};
 import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
 import type {F1AdminTripAudit} from './f1-auto-ride-audit-gateway.mjs';
+import type {TraceServiceKind,ServiceTrace} from './service-trace-gateway.mjs';
 export type AdminSnapshot={
  authenticated:boolean;
  merchantCases:MerchantCasePageSuccess|null;
  f1RideAudit:{contractReady:boolean;loading:boolean;item:F1AdminTripAudit|null;
+  error:string|null;qaOnly:true;productionEnabled:false};
+ serviceTrace:{contractReady:boolean;loading:boolean;item:ServiceTrace|null;
   error:string|null;qaOnly:true;productionEnabled:false};
  merchantCaseContractReady:false;
  account:{subject:string;role:'admin'|'owner';mfaVerified:true}|null;
@@ -19,7 +22,9 @@ export type AdminSnapshot={
    grossCollectedGs:number;driverPayoutGs:number;platformCommissionGs:number;refundsGs:number;
    processingFeesGs:number;netPlatformGs:number}}|null;
  zones:{revision:number;expiresAt:number;items:readonly {
-   zoneId:string;municipality:string;serviceKind:'AUTO_RIDE'|'AUTO_DELIVERY'|'MOTO_DELIVERY';
+   zoneId:string;municipality:string;serviceKind:'AUTO_RIDE'|'MOTO_RIDE'|'AUTO_DELIVERY'|'MOTO_DELIVERY'|'COMMERCE';
+   legalGate?:'CLEARED'|'G38_BLOCKED'|'G71_BLOCKED'|'UNVERIFIED';
+   merchantEligibilityVerified?:boolean;
    coverageStatus:string;eligibleByPolicy:boolean;onDutyVehicles:number|null;
    availabilityFresh:boolean;availabilityConfirmed:false;
  }[]}|null;
@@ -61,12 +66,20 @@ export type AdminExperience={
   Promise<{ok:boolean;code?:string;pageNumber?:number;hasNext?:boolean;hasPrevious?:boolean}>;
  loadF1RideAudit:(tripId:string)=>Promise<{ok:boolean;code?:string;qaOnly?:true;productionEnabled?:false}>;
  clearF1RideAudit:()=>void;
+ loadServiceTrace:(kind:TraceServiceKind,id:string)=>Promise<{ok:boolean;code?:string}>;
+ clearServiceTrace:()=>void;
  reviewVehicle:(dto:unknown)=>Promise<{ok:boolean;code?:string;refreshRequired?:boolean}>;
  snapshot:()=>AdminSnapshot;
 };
 export declare function createAdminExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
  gateway?:{isConfigured:()=>boolean;reviewVehicle:(body:unknown)=>unknown|Promise<unknown>}|null;
+ serviceTraceOptions?:{
+  enabled?:boolean;contractCertified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,request:unknown)=>unknown|Promise<unknown>;
+  timeoutMs?:number;maxBytes?:number;
+ }|null;
  f1RideAuditOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
   origin?:string;pinnedOrigin?:string;

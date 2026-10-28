@@ -4,18 +4,20 @@ import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
 import {AdminAuthPanel} from './AdminAuthPanel';
 import {OwnerCommissionEditor} from './OwnerCommissionEditor';
+import {OwnerCargoRateEditor} from './OwnerCargoRateEditor';
 import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
 import type {IncidentPageFilter,IncidentPageOrder} from './incident-page-triage.mjs';
 import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
+import {inspectAutoRideCrossEvidence} from './auto-ride-cross-evidence.mjs';
 import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
 type Page='resumen'|'servicios'|'propietario'|'viajes'|'kyc'|'zonas'|'incidentes'|'auditoria';
 const sections:{id:Page;label:string;hint:string}[]=[
  {id:'resumen',label:'Resumen',hint:'Indicadores operativos'},
- {id:'servicios',label:'Cuatro servicios',hint:'Cobertura verificada y bloqueos por modalidad'},
+ {id:'servicios',label:'Cinco flujos',hint:'AUTO/MOTO, envíos AUTO/MOTO y comercios'},
  {id:'propietario',label:'Propietario',hint:'Ingresos, comisiones y control estratégico'},
  {id:'viajes',label:'Viajes AUTO',hint:'Verificación de un viaje F1 desde el servidor'},
  {id:'kyc',label:'Documentos y KYC',hint:'Revisión por responsable'},
@@ -125,7 +127,7 @@ function AuthorizedQueue({items}:{items:readonly AdminKycRecord[]}){
  </Panel>;
 }
 type OwnerFinance=NonNullable<AdminSnapshot['finance']>;
-function OwnerPanel({finance,authorized}:{finance:OwnerFinance|null;authorized:boolean}){
+function OwnerPanel({finance,authorized,ownerSubject}:{finance:OwnerFinance|null;authorized:boolean;ownerSubject:string|null}){
  const amount=(x:number)=>new Intl.NumberFormat('es-PY',{maximumFractionDigits:0}).format(x)+' Gs.';
  const metrics:{key:keyof OwnerFinance['totals'];name:string;hint:string}[]=[
   {key:'grossCollectedGs',name:'Cobros brutos',hint:'Importes registrados'},
@@ -153,7 +155,8 @@ function OwnerPanel({finance,authorized}:{finance:OwnerFinance|null;authorized:b
    </div>
    <p className="training-disclaimer">Un guion indica dato no verificado, no cero. No se accede a cuentas bancarias ni información personal de conductores.</p>
   </Panel>
-  <OwnerCommissionEditor authorized={authorized}/>
+  <OwnerCommissionEditor key={ownerSubject??'no-owner'} authorized={authorized}/>
+  <OwnerCargoRateEditor key={'cargo-'+(ownerSubject??'no-owner')} authorized={authorized}/>
   <Panel><h2>Control estratégico</h2>
    <p>Las tarifas, comisiones, zonas y liquidaciones necesitan autorización de servidor, revisión y bitácora. Esta interfaz no habilita modificaciones.</p>
    <div className="empty-chip">SOLO LECTURA · NO LIVE</div></Panel>
@@ -176,9 +179,16 @@ function ZoneReadOnly({zones,allowed}:{
     <div className="zone-row" key={item.zoneId+":"+item.serviceKind}>
      <div><strong>{item.municipality}</strong>
       <small>{item.serviceKind.replaceAll('_',' ')} · Cobertura: {item.coverageStatus}</small>
-      <small>Permiso operativo: {item.eligibleByPolicy?'Reportado habilitado':'No habilitado'}</small></div>
-     <div className="zone-count">{item.availabilityFresh?String(item.onDutyVehicles):'—'}
-      <small>Vehículos en línea reportados</small></div>
+      <small>Permiso operativo: {item.eligibleByPolicy?'Reportado habilitado':'No habilitado'}</small>
+      {item.serviceKind==='MOTO_RIDE'&&
+       <small>Habilitación legal pasajeros MOTO: {item.legalGate??'NO VERIFICADA'}</small>}
+      {item.serviceKind==='COMMERCE'&&
+       <small>Habilitación comercial: {item.merchantEligibilityVerified?'Reportada verificada':'NO VERIFICADA'}</small>}
+     </div>
+     <div className="zone-count">
+      {item.serviceKind==='COMMERCE'?'—':item.availabilityFresh?String(item.onDutyVehicles):'—'}
+      <small>{item.serviceKind==='COMMERCE'?'Inventario de comercios no confirmado':
+       'Vehículos en línea reportados'}</small></div>
     </div>)}</div>}
   <p className="training-disclaimer">Estos datos son solo una vista del servidor. No estiman aceptación, tiempos de espera ni capacidad de despacho; no habilitan rutas, motos de pasajeros ni zonas nuevas.</p>
  </Panel>;
@@ -480,7 +490,109 @@ function F1RideAuditPanel({client,state}:{client:AdminExperience;state:AdminSnap
  </Panel>;
 }
 
-function FourServicesReadOnly({state}:{state:AdminSnapshot}){
+function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSnapshot}){
+ const kinds=['AUTO_RIDE','MOTO_RIDE','MOTO_DELIVERY','AUTO_DELIVERY','COMMERCE'] as const;
+ const [kind,setKind]=useState<typeof kinds[number]>('AUTO_RIDE');
+ const [id,setId]=useState('');
+ const [message,setMessage]=useState('');
+ const current=state.serviceTrace;
+ const ready=Boolean(state.account?.role==='admin'&&current.contractReady);
+ const match=current.item?.serviceKind===kind&&current.item.serviceId===id
+  ?current.item:null;
+ const f1Ready=state.f1RideAudit.contractReady&&kind==='AUTO_RIDE';
+ const f1ForSameTrip=state.f1RideAudit.item?.tripId===id
+  ?state.f1RideAudit.item:null;
+ const cross=match&&f1ForSameTrip
+  ?inspectAutoRideCrossEvidence({trace:match,f1:f1ForSameTrip}):null;
+ const inspectF1=async()=>{
+  if(!match||!f1Ready||current.loading||state.f1RideAudit.loading)return;
+  const result=await client.loadF1RideAudit(id);
+  setMessage(result.ok
+   ?'Segunda lectura F1 recibida. Comprueba abajo la coincidencia del ID, cotización y ledger.'
+   :'No se pudo verificar la auditoría F1 del mismo viaje. No hay confirmación cruzada.');
+ };
+ const inspect=async()=>{
+  if(!ready||!F1_TRIP.test(id)||current.loading)return;
+  const output=await client.loadServiceTrace(kind,id);
+  setMessage(output.ok?'Consulta STAGING verificada por estructura; no implica autorización comercial.':
+   'No se pudo confirmar una reserva persistida para esta identidad.');
+ };
+ return <Panel className="detail">
+  <div className="section-head"><div>
+   <h2>Seguimiento por serviceId — cinco modalidades</h2>
+   <p>Reserva, eventos y conciliación por el mismo ID emitido a Cliente y Driver.
+    Sin direcciones, nombres, teléfono, GPS ni acceso a pagos.</p>
+  </div><span className="muted-tag">SOLO LECTURA · NO GO</span></div>
+  {!ready&&<p role="status">Backend A todavía no certificó este contrato,
+   PostgreSQL externo y autorización Admin AAL2. Búsqueda bloqueada.</p>}
+  <label htmlFor="d-trace-kind">Servicio</label>
+  <select id="d-trace-kind" value={kind} disabled={current.loading}
+   onChange={e=>{setKind(e.target.value as typeof kind);setMessage('');
+    client.clearServiceTrace();}}>
+   {kinds.map(k=><option key={k} value={k}>{k}</option>)}
+  </select>
+  <label htmlFor="d-trace-id">Identificador exacto (UUID servidor)</label>
+  <input id="d-trace-id" autoComplete="off" maxLength={36}
+   placeholder="serviceId registrado" value={id}
+   disabled={!ready||current.loading}
+   onChange={e=>{setId(e.target.value.trim());setMessage('');
+    client.clearServiceTrace();}}/>
+  <div className="refresh-actions">
+   <button type="button" disabled={!ready||current.loading||!F1_TRIP.test(id)}
+    onClick={()=>{void inspect();}}>
+    {current.loading?'Consultando…':'Buscar en servidor'}
+   </button>
+   <button type="button" disabled={!match||current.loading}
+    onClick={()=>{client.clearServiceTrace();setMessage('');}}>Limpiar</button>
+  </div>
+  {match?.serviceKind==='AUTO_RIDE'&&<div className="refresh-actions">
+   <button type="button" disabled={!f1Ready||current.loading||state.f1RideAudit.loading}
+    onClick={()=>{void inspectF1();}}>
+    {state.f1RideAudit.loading?'Cotejando F1…':'Cruzar viaje AUTO con auditoría F1'}
+   </button>
+  </div>}
+  {cross&&<p role={cross.ok?'status':'alert'} className="kyc-notice">
+   {cross.ok?(cross.financiallyReconciled
+    ?'Dos respuestas Admin QA coinciden: mismo viaje, cotización, solicitud y total PYG conciliado declarado.'
+    :'Las dos respuestas QA coinciden en viaje, cotización y solicitud; falta una conciliación final.')
+    :'Cruce rechazado ('+cross.code+'). No se puede afirmar integridad del viaje y del ledger.'}
+   {' '}Esto NO certifica PostgreSQL externo, cobro bancario ni operación LIVE.
+  </p>}
+  {match?.serviceKind==='AUTO_RIDE'&&!f1Ready&&<p role="note">
+   Cruce F1 bloqueado: requiere contrato G75 independiente autorizado por Backend A.
+  </p>}
+  {message&&<p role="status">{message}</p>}
+  {current.error&&<p role="alert">Consulta rechazada: {current.error}</p>}
+  {match&&<div className="zone-rows">
+   <div className="zone-row"><div>
+    <strong>{match.serviceKind} · {match.serviceId}</strong>
+    <small>Estado: {match.status} · revisión {match.revision}</small>
+    <small>Reserva {match.bookingRequestKey}</small>
+    <small>Cotización {match.quoteId}</small>
+    <small>Asignación: {match.assignment.state} — {match.assignment.legalGate}</small>
+    <small>PG persistido reportado por servidor, aún no cotejado independientemente</small>
+   </div><div className="zone-count">QA<small>NO LIVE</small></div></div>
+   <h3>Historial del mismo ID</h3>
+   {match.events.map(ev=><div className="zone-row" key={ev.eventId}><div>
+    <strong>{ev.sequence} · {ev.status}</strong>
+    <small>{new Date(ev.at).toLocaleString('es-PY')}</small>
+   </div></div>)}
+   <h3>Conciliación del mismo ID</h3>
+   {match.ledger?<div className="zone-row"><div>
+    <strong>{match.ledger.reconciliationStatus}</strong>
+    <small>Cobro: Gs. {match.ledger.grossGs.toLocaleString('es-PY')}</small>
+    <small>Comisión: Gs. {match.ledger.platformCommissionGs.toLocaleString('es-PY')}</small>
+    <small>Subsidio: Gs. {match.ledger.customerSubsidyGs.toLocaleString('es-PY')}</small>
+    <small>Conductor: Gs. {match.ledger.driverPayoutGs.toLocaleString('es-PY')}</small>
+   </div></div>:<p>Sin recibo financiero confirmado; no equivale a importe cero.</p>}
+  </div>}
+  <p className="training-disclaimer">Un GET válido de STAGING no prueba
+   conciliación bancaria ni habilita G38/G71. Los permisos y la persistencia
+   se verifican en el backend, nunca en el navegador.</p>
+ </Panel>;
+}
+
+function FiveFlowsReadOnly({state}:{state:AdminSnapshot}){
  const allowed=state.account?.role==='admin'&&state.account.mfaVerified===true;
  const zones=allowed&&state.zones&&state.zones.expiresAt>Date.now()
   ?state.zones:null;
@@ -496,14 +608,14 @@ function FourServicesReadOnly({state}:{state:AdminSnapshot}){
   {id:'COMMERCE',label:'COMERCIOS · Pedidos',
    detail:'Supermercados, farmacias OTC, restaurantes y otros. Stock, pedido y entrega deben ser del backend.'}
  ] as const;
- return <div className="metric-grid" aria-label="Estado seguro de los cuatro servicios">
+ return <div className="metric-grid" aria-label="Estado seguro de los cinco flujos comerciales">
   {services.map(item=>{
    const observed=zones?.items.filter(z=>z.serviceKind===item.id)??[];
    return <Panel key={item.id} className="metric">
     <small>{item.id}</small><strong>{item.label}</strong>
     <p>{item.detail}</p>
-    {allowed&&zones&&item.id!=='MOTO_RIDE'&&item.id!=='COMMERCE'
-     ?<span>{observed.length} zonas reportadas en esta página de servidor; cobertura no significa disponibilidad ni aprobación comercial.</span>
+    {allowed&&zones
+     ?<span>{observed.length} zonas de {item.id} reportadas en esta página del servidor. No implica vehículo, comercio o permiso operativo disponible.</span>
      :<span>Sin lectura certificada de cobertura específica de este servicio.</span>}
     <div className="empty-chip">NO LIVE · Sin controles de activación</div>
    </Panel>;
@@ -511,7 +623,7 @@ function FourServicesReadOnly({state}:{state:AdminSnapshot}){
   <Panel className="metric">
    <small>Seguridad del panel</small><strong>Activación bloqueada</strong>
    <p>No se muestran usuarios, disponibilidad, tarifas ni ventas inventadas.
-    MOTO_RIDE no aparece todavía en el DTO de zonas de Admin.</p>
+    MOTO_RIDE exige prueba legal independiente y COMMERCE prueba de elegibilidad comercial. La cantidad de vehículos no sustituye ninguna de estas pruebas.</p>
    <span>{allowed?'Admin con MFA; operaciones sujetas a permisos específicos.':
     'Acceso restringido: se necesita rol Admin y MFA.'}</span>
   </Panel>
@@ -596,7 +708,7 @@ function App(){
    <div className="container">
     <div className="intro"><div><p className="overline">MOVETE FÁCIL · ADMINISTRACIÓN</p>
      <h1 ref={pageHeadingRef} tabIndex={-1}>{view.label}</h1><p>{view.hint} · {adminState.authenticated?'Sesión de QA por proveedor (sin backend certificado)':'Sin autenticación administrativa activa'}</p></div>
-     <div className="date">Versión de interfaz · 22 OCT 2026</div></div>
+     <div className="date">Versión de interfaz · 26 OCT 2026</div></div>
     <div role="status" className="notice"><span aria-hidden="true">ⓘ</span>
      <span><strong>Entorno de validación técnica.</strong> El panel no consulta datos personales, no ejecuta decisiones KYC ni modifica zonas. Solo ingresar credenciales de cuentas STAGING autorizadas cuando el proyecto de identidad esté configurado.</span></div>
     <AdminAuthPanel/>
@@ -633,7 +745,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='servicios'?<FourServicesReadOnly state={adminState}/>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='servicios'?<><ServiceTracePanel client={client} state={adminState}/><FiveFlowsReadOnly state={adminState}/></>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}
@@ -646,7 +758,7 @@ function App(){
        <div className="empty-chip">QA · SIN API</div>
      </Panel>}
 
-    <footer>Arquitecto B · PR #8 DRAFT · Sin despliegue, SQL remoto ni cobros</footer>
+    <footer>Arquitecto D · Issue #18 · Sin despliegue, SQL remoto ni cobros</footer>
    </div>
   </main>
  </div>;

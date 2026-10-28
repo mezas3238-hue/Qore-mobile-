@@ -54,7 +54,21 @@ export function createOwnerFinanceStore({now=()=>Date.now()}={}){
   });
   if(!next){clear();return false;}
   if(identity!==null&&identity!==session.subject){clear();return false;}
-  if(data&&next.ledgerRevision<data.ledgerRevision){clear();return false;}
+  if(data){
+   const samePeriod=next.period.from===data.period.from
+    &&next.period.to===data.period.to
+    &&next.period.timezone===data.period.timezone;
+   // For an unchanged accounting period, a server GET is not allowed to
+   // silently edit already-reconciled money or counts at the SAME ledger
+   // revision. Never show a contradictory balance by simply reloading.
+   if(next.ledgerRevision<data.ledgerRevision
+    ||(samePeriod&&(next.revision<data.revision
+     ||next.generatedAt<data.generatedAt
+     ||(next.ledgerRevision===data.ledgerRevision&&
+      OWNER_TOTAL_FIELDS.some(field=>next.totals[field]!==data.totals[field]))))){
+    clear();return false;
+   }
+  }
   identity=session.subject;data=next;return true;
  }
  function current(session){
