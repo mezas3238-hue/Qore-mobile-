@@ -1,0 +1,7 @@
+# B — Explorador de catálogo paginado del comprador, solo lectura
+
+23/10/2026 · PR #8 DRAFT, sin merge/LIVE. Implementado `commerce-catalog-pages.mjs` con límite de **100 artículos por respuesta exclusivamente**, sin límite global de sucursales o productos; se probaron 130 páginas y 13.000 artículos sintéticos. Cursor opaco, selector de sucursal UUID, navegación anterior/siguiente que vuelve a consultar servidor sin retener páginas previas. Anclas de cursor solo en memoria, sin JWT ni PII.
+
+Requiere el mismo `version` y `expiresAt` durante la cadena y validación exacta de `branchId/version/expiresAt/items/nextCursor`. Detecta cursor repetido, expiración, variación de catálogo y cambio de cuenta/JWT. Ante fallo descarta precios privados. El único resultado mutable es la página actual; operaciones y pagos siempre bloqueados.
+
+**Dependencia real:** Backend A v1.0.0-g41 carece de GET Buyer catálogo paginado/descubrimiento sucursales. El `gateway.readCatalogPage` es un contrato inyectado de interfaz B, **NO una API desplegada ni una URL inventada**. Este navegador solo lectura aún no se conecta al carrito comprador: seleccionar cantidades a través de páginas exige reserva/validación server-authoritative y contrato atómico, pendiente de A. La pantalla actual conserva el carrito de una sucursal y una respuesta validada. Integración futura con gate triple `enabled/contractCertified/stagingRuntimeVerified`. Ningún PSP, stock real, pedido, SOS o despliegue.

@@ -1,0 +1,634 @@
+{
+  "schemaVersion": "qore-mobile-r60-v1",
+  "project": "QORE Mobile / Movete Fácil",
+  "snapshotDate": "2026-10-24",
+  "source": {
+    "repository": "mezas3238-hue/Qore-mobile-",
+    "path": "docs/architecture/MOVETE_FACIL_LAUNCH_GATES_2026-10-24.json",
+    "commitSha": "dff966f340fd463f4597df7014853ed3912b5f19"
+  },
+  "release": {
+    "decision": "NO_GO",
+    "ownerGoLiveAuthorization": false
+  },
+  "gates": [
+    {
+      "id": "IDP_BACKEND_AUTH",
+      "owner": "A",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Proveedor IdP, JWKS y autorización JWT server-side no certificados en servidor HTTPS operativo",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "HTTPS_BACKEND",
+      "owner": "A",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "HTTPS móvil STAGING/producción sin endpoint desplegado y autorizado para dos dispositivos",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "POSTGRES_PERSISTENCE",
+      "owner": "A",
+      "sourceStatus": "qa-only",
+      "status": "QA_ONLY",
+      "reason": "PostgreSQL16 disposable CI no equivale a persistencia remota, respaldo y recuperación demostrada",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "DRIVER_ONBOARDING",
+      "owner": "A",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Registro Driver con carga documental, revisión KYC, revocación y aprobación real no conectado",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "DRIVER_LIVE_TRIPS",
+      "owner": "A",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Ofertas G63 son QA y no acreditan despacho, navegación, inicio ni cierre en dispositivos reales",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "CLIENT_LIVE_BOOKINGS",
+      "owner": "B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "POST de viajes y envíos solo opt-in QA; no existe recorrido autorizado persistido Cliente-Driver",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "PAYMENT_SETTLEMENT",
+      "owner": "A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Sin PSP autorizado ni reconciliación de capturas, comisiones, devoluciones o liquidaciones",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "PSP_RECONCILIATION"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "PRIVACY_KYC",
+      "owner": "A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Sin certificación real de cifrado documental, control de acceso, retención y eliminación",
+      "requiredEvidence": [
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "LEGAL_REVIEW"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "EMERGENCY_SAFETY",
+      "owner": "A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Sin ensayo SOS con operador y escalamiento en campo ni protocolos de respuesta aceptados",
+      "requiredEvidence": [
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "OPS_EXERCISE"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "MAPS_GPS_DEVICE",
+      "owner": "A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "GPS, permisos, reconexión, spoof y navegación sin evidencia física Android/iOS",
+      "requiredEvidence": [
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "NEGATIVE_SECURITY"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "DELIVERY_MERCHANTS",
+      "owner": "A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Pedidos y entregas comerciales sin inventario, autorización de stock, custodia ni E2E real",
+      "requiredEvidence": [
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "CHAT_PHYSICAL",
+      "owner": "A/B",
+      "sourceStatus": "qa-only",
+      "status": "QA_ONLY",
+      "reason": "Transportes de chat QA existentes sin entrega bidireccional y push comprobados entre dos móviles",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "ADMIN_OPERATIONS",
+      "owner": "B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Admin Web sin operación real KYC, soporte, zonas, pagos e incidentes autorizados",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "NATIVE_RELEASES",
+      "owner": "A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Sin AAB/APK e IPA firmados verificados con permisos y actualizaciones en teléfonos físicos",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "NEGATIVE_SECURITY"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "LEGAL_COMPLIANCE",
+      "owner": "Owner",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Permisos, seguros, política privacidad y acuerdos de Paraguay pendientes de validación profesional",
+      "requiredEvidence": [
+        "LEGAL_REVIEW",
+        "OWNER_SIGNOFF"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "OPS_24_7_MONITORING",
+      "owner": "Owner/A/B",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "Faltan alertas 24/7, guardias, escalamiento, telemetría y pruebas de recuperación operativa",
+      "requiredEvidence": [
+        "OPS_EXERCISE",
+        "STAGING_E2E"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "PROD_GO_NOGO",
+      "owner": "Owner",
+      "sourceStatus": "blocked",
+      "status": "BLOCKED",
+      "reason": "No existe acta explícita de Owner que autorice merge, despliegue, PSP y lanzamiento",
+      "requiredEvidence": [
+        "OWNER_SIGNOFF",
+        "OPS_EXERCISE",
+        "LEGAL_REVIEW"
+      ],
+      "evidence": []
+    }
+  ],
+  "flows": [
+    {
+      "id": "AUTH_PASSENGER",
+      "owner": "B",
+      "requiredGates": [
+        "IDP_BACKEND_AUTH",
+        "HTTPS_BACKEND"
+      ],
+      "acceptance": "Cliente inicia sesión con JWT exclusivo Passenger; revocación, sesión vencida, cambio de actor y logout deniegan peticiones; pruebas en ambos móviles.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "AUTH_DRIVER_KYC",
+      "owner": "A",
+      "requiredGates": [
+        "IDP_BACKEND_AUTH",
+        "DRIVER_ONBOARDING",
+        "PRIVACY_KYC"
+      ],
+      "acceptance": "Driver inicia sesión exclusiva, carga documentación cifrada, Admin verifica licencia y revocación, cuentas ajenas nunca consultan expedientes.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "FARE_QUOTE_GS",
+      "owner": "A+B",
+      "requiredGates": [
+        "HTTPS_BACKEND",
+        "MAPS_GPS_DEVICE"
+      ],
+      "acceptance": "Ruta y cotización en guaraníes muestran versión, vigencia, comisiones y categoría correcta; no se utilizan precios estimados caducados.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "AUTO_BOOKING",
+      "owner": "B",
+      "requiredGates": [
+        "CLIENT_LIVE_BOOKINGS",
+        "POSTGRES_PERSISTENCE"
+      ],
+      "acceptance": "Passenger solicita automóvil con requestKey único; backend confirma persistencia, reconciliación después de timeout y ausencia de segunda reserva.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "DRIVER_DISPATCH",
+      "owner": "A",
+      "requiredGates": [
+        "DRIVER_LIVE_TRIPS",
+        "POSTGRES_PERSISTENCE"
+      ],
+      "acceptance": "Oferta genuina se adjudica a un solo conductor elegible; aceptar/rechazar, asignación atómica y revocación funcionan sin doble compromiso.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "GPS_TRACKING",
+      "owner": "A+B",
+      "requiredGates": [
+        "MAPS_GPS_DEVICE",
+        "CLIENT_LIVE_BOOKINGS",
+        "DRIVER_LIVE_TRIPS"
+      ],
+      "acceptance": "Posición, ETA, cambios de red, cierre de asignación y pérdida de permisos se reflejan en Cliente y Driver con protección de privacidad.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "TRIP_COMPLETION_CANCELLATION",
+      "owner": "A+B",
+      "requiredGates": [
+        "CLIENT_LIVE_BOOKINGS",
+        "DRIVER_LIVE_TRIPS",
+        "PAYMENT_SETTLEMENT"
+      ],
+      "acceptance": "Viaje se inicia, finaliza y cancela con estados monotónicos y costos/reembolsos idempotentes; historial persiste tras reiniciar el móvil.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "MOTO_CARGO_DELIVERY",
+      "owner": "A+B",
+      "requiredGates": [
+        "DELIVERY_MERCHANTS",
+        "DRIVER_LIVE_TRIPS"
+      ],
+      "acceptance": "Cliente solicita envío de carga por moto; transportista autorizado acepta, recoge, entrega y confirma custodia; pasajeros en moto prohibidos.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "AUTO_CARGO_DELIVERY",
+      "owner": "A+B",
+      "requiredGates": [
+        "DELIVERY_MERCHANTS",
+        "DRIVER_LIVE_TRIPS"
+      ],
+      "acceptance": "Cliente solicita paquete por automóvil; se validan tarifa, tamaño, entrega, cancelación, evidencia de custodia y control de incidencias.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "SUPERMARKET_ORDER",
+      "owner": "A+B",
+      "requiredGates": [
+        "DELIVERY_MERCHANTS",
+        "PAYMENT_SETTLEMENT"
+      ],
+      "acceptance": "Supermercado publica stock certificado, recibe pedido, confirma preparación, sustituciones y entrega; cobro y reembolso concilian en ledger.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "PHARMACY_OTC_ORDER",
+      "owner": "A+B",
+      "requiredGates": [
+        "DELIVERY_MERCHANTS",
+        "LEGAL_COMPLIANCE"
+      ],
+      "acceptance": "Farmacia procesa solo artículos autorizados OTC, comprueba restricción por normativa y entrega con privacidad sin dispensación indebida.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "LEGAL_REVIEW"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "RESTAURANT_ORDER",
+      "owner": "A+B",
+      "requiredGates": [
+        "DELIVERY_MERCHANTS",
+        "PAYMENT_SETTLEMENT"
+      ],
+      "acceptance": "Restaurante acepta, prepara, modifica estado, entrega y liquida pedido sin duplicarlo por reconexión ni exponer información de terceros.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "CUSTOMER_DRIVER_CHAT",
+      "owner": "A+B",
+      "requiredGates": [
+        "CHAT_PHYSICAL",
+        "IDP_BACKEND_AUTH"
+      ],
+      "acceptance": "Cliente y conductor asignados intercambian mensajes en ambos dispositivos; bloquea cuentas ajenas, revocación, mensajes duplicados y pérdida de ACK.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "PAYMENTS_REFUNDS",
+      "owner": "A+B",
+      "requiredGates": [
+        "PAYMENT_SETTLEMENT",
+        "POSTGRES_PERSISTENCE"
+      ],
+      "acceptance": "PSP autorizado acredita cobro solo tras ACK persistido; cancelación/reembolso se concilian con ledger y no se repiten por timeout.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "POSTGRES_DURABILITY",
+        "PSP_RECONCILIATION"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "COMMISSIONS_PAYOUTS",
+      "owner": "A+B",
+      "requiredGates": [
+        "PAYMENT_SETTLEMENT",
+        "ADMIN_OPERATIONS"
+      ],
+      "acceptance": "Comisión de autos, moto y comercios sigue política aceptada; cada liquidación auditable cuadra con transacciones PSP y conductor.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "PSP_RECONCILIATION"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "ADMIN_KYC_ZONES",
+      "owner": "B",
+      "requiredGates": [
+        "ADMIN_OPERATIONS",
+        "PRIVACY_KYC"
+      ],
+      "acceptance": "Admin verifica identidad y documentos por permisos mínimos, gestiona zonas diferenciando cobertura de disponibilidad y conserva auditoría.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "API_CONTRACT",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "EMERGENCY_RESPONSE",
+      "owner": "A+B",
+      "requiredGates": [
+        "EMERGENCY_SAFETY",
+        "OPS_24_7_MONITORING"
+      ],
+      "acceptance": "SOS desde Cliente y Driver genera incidente auténtico; operador entrenado recibe alerta, ejecuta escalado y registra tiempos y resolución.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "OPS_EXERCISE"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "DATA_PRIVACY",
+      "owner": "A+B",
+      "requiredGates": [
+        "PRIVACY_KYC",
+        "LEGAL_COMPLIANCE"
+      ],
+      "acceptance": "Pruebas de acceso cruzado, redacción de logs, cifrado, eliminación, retención documental y consentimiento superan auditoría independiente.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "NEGATIVE_SECURITY",
+        "STAGING_E2E",
+        "LEGAL_REVIEW"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "SIGNED_NATIVE_RELEASES",
+      "owner": "A+B",
+      "requiredGates": [
+        "NATIVE_RELEASES",
+        "MAPS_GPS_DEVICE"
+      ],
+      "acceptance": "Driver y Cliente independientes se instalan desde builds firmados en Android y iOS, actualizan correctamente y respetan permisos de ubicación.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "ANDROID_DEVICE",
+        "IOS_DEVICE",
+        "NEGATIVE_SECURITY"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    },
+    {
+      "id": "ZONE_ACTIVATION_SUPPORT",
+      "owner": "Owner+A+B",
+      "requiredGates": [
+        "OPS_24_7_MONITORING",
+        "ADMIN_OPERATIONS",
+        "PROD_GO_NOGO"
+      ],
+      "acceptance": "Operación habilita zonas de forma gradual con guardia, métricas, rollback probado, soporte y aprobación explícita del propietario.",
+      "requiredEvidence": [
+        "DOMAIN_CI",
+        "STAGING_E2E",
+        "OPS_EXERCISE",
+        "OWNER_SIGNOFF"
+      ],
+      "status": "BLOCKED",
+      "evidence": []
+    }
+  ]
+}
