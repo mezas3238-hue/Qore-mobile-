@@ -320,10 +320,11 @@ export async function prepareQoreG4StagingRuntime({
   const provider=await verified(token);
   const attested=await driverKycTrust.verifyDriverSession(token);
   if(provider?.id!==attested?.id||provider?.is_anonymous===true||
+     attested?.is_anonymous!==false||
      !(typeof provider?.email_confirmed_at==='string'||
        typeof provider?.phone_confirmed_at==='string'))
    throw Error('G134 Driver identity source mismatch');
-  return {...attested,is_anonymous:false,
+  return {...attested,
    ...(typeof provider.email_confirmed_at==='string'?
     {email_confirmed_at:provider.email_confirmed_at}:
     {phone_confirmed_at:provider.phone_confirmed_at})};
