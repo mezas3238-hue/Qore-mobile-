@@ -11,6 +11,8 @@ import {createG139CommerceQaHttpBridge}
  from './g139-commerce-qa-http-bridge.mjs';
 import {createClientExperience}
  from '../../movete-cliente/src/domain/client-experience.mjs';
+import {createG148CommerceDurableOrder}
+ from '../../movete-cliente/src/domain/g148-commerce-durable-order.mjs';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'
@@ -238,7 +240,68 @@ try{
  assert.equal(recoveredMoto.ok,true,JSON.stringify(recoveredMoto));
  assert.equal(recoveredMoto.receipt.orderId,motoId);
  assert.equal(recoveredMoto.receipt.status,'cancelled');
- assert.equal(posts,11);
+
+ // G148: original Client -> native-equivalent durable key -> A HTTP -> PG16.
+ // Simulate a LOST 201 ACK after the SQL reserve already consumed stock.
+ let saved=null;
+ const secureStore={
+  read:async owner=>saved?.ownerId===owner?saved:null,
+  write:async row=>{
+   assert.equal(saved,null,'never overwrite unresolved original');
+   saved=Object.freeze({...row});
+  },
+  markCancel:async(ownerId,requestKey,key)=>{
+   assert.equal(saved?.ownerId,ownerId);
+   assert.equal(saved?.requestKey,requestKey);
+   assert(saved.cancelKey===null||saved.cancelKey===key);
+   saved=Object.freeze({...saved,cancelKey:key});
+  },
+  clearMatching:async(ownerId,requestKey)=>{
+   assert.equal(saved?.ownerId,ownerId);assert.equal(saved?.requestKey,requestKey);
+   saved=null;return true;
+  }
+ };
+ const g148=createG148CommerceDurableOrder({
+  store:secureStore,
+  api:{
+   isCommerceQaReady:()=>BExperience.isCommerceQaReady(),
+   snapshot:()=>BExperience.snapshot(),
+   reserveCommerceQa:async body=>{
+    const persisted=await BExperience.reserveCommerceQa(body);
+    assert.equal(persisted.ok,true,JSON.stringify(persisted));
+    throw Error('Synthetic dropped HTTP ACK AFTER G45 SQL committed');
+   },
+   recoverCommerceQa:key=>BExperience.recoverCommerceQa(key),
+   cancelCommerceQa:body=>BExperience.cancelCommerceQa(body)
+  }
+ });
+ assert.equal(g148.isConfigured(),true);
+ const freshVersion=Number(sql("SELECT revision FROM public.mobility_stage_g44_catalog_versions WHERE branch_id="+quote(branch)));
+ const third={...motoRequest,requestKey:ids(240),catalogVersion:freshVersion};
+ const unknown=await g148.reserve(third);
+ assert.equal(unknown.ok,false);
+ assert.equal(unknown.code,'POST_RESULT_UNKNOWN_RECOVER_ORIGINAL');
+ assert.equal(saved.requestKey,third.requestKey,'original key secured before POST');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
+ const original=await g148.recover();
+ assert.equal(original.ok,true,JSON.stringify(original));
+ assert.equal(original.receipt.requestKey,third.requestKey);
+ assert.equal(original.receipt.status,'requested');
+ assert.equal(original.receipt.paymentConfirmed,false);
+ const refused=await g148.reserve({...third,requestKey:ids(241)});
+ assert.equal(refused.code,'ORIGINAL_ORDER_RECOVERY_REQUIRED');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
+ const cancelG148=await g148.cancel(ids(340));
+ assert.equal(cancelG148.ok,true,JSON.stringify(cancelG148));
+ const recoveredCancel=await g148.recover();
+ assert.equal(recoveredCancel.ok,true);
+ assert.equal(recoveredCancel.receipt.status,'cancelled');
+ const released=await g148.releaseCancelled();
+ assert.equal(released.ok,true);
+ assert.equal(saved,null,'only verified terminal cancellation releases the key');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'2');
+ assert.equal(posts,13);
+ console.log('G148 PASS: Buyer durably records original request before HTTP, lost ACK recovery by same G45 PostgreSQL order, duplicate reserve blocked, cancel restores stock exactly once, terminal releases key');
  console.log('G144 COMMERCE: B -> A HTTP GET -> original PostgreSQL G45 orderId, current state, foreign/revoked denied, no duplicate stock or payment');
  console.log('G140 COMMERCE MOTO E2E PASS: original B Client -> A HTTP -> G44 vehicle matching -> G45 PG16 stock; wrong vehicle denied, MOTO receipt replay and exact restock; no LIVE/PSP');
  console.log('G139 B/A/PG16 COMMERCE PASS: authenticated original Client Buyer -> HTTP -> G45 server priced 25000 PYG catalog reserve; same order replay; revoked denied; cancel restores exact stock once; NO LIVE/PSP');

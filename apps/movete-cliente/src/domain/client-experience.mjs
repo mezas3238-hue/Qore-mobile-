@@ -1585,6 +1585,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   selectCommerceVehicle:vehicle=>{if(!actor())return fail('AUTH_REQUIRED');const r=commerceFlow.changeVehicle(vehicle);notify();return r;},
   previewCommerceOrder:key=>{if(!actor())return fail('AUTH_REQUIRED');return commerceFlow.preview(key);},
   // Explicitly QA-only; no basket or cash flows are promoted to production.
+  isCommerceQaReady:()=>commerceQaHttp?.isConfigured()===true,
   reserveCommerceQa:async body=>{
    if(!actor())return fail('AUTH_REQUIRED');
    if(commerceQaHttp?.isConfigured()!==true)return fail('G139_NOT_CERTIFIED');

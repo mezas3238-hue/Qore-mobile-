@@ -17,6 +17,10 @@ import {projectCommerceItemAccessible,projectCommercePageAccessible}
  from '../src/domain/commerce-accessible-summary.mjs';
 import {isCommercePageFresh} from '../src/domain/commerce-ttl-refresh.mjs';
 import {useCommerceExpiryClock} from '../src/useCommerceExpiryClock';
+import {getNativeG148CommerceRecoveryStore} from '../src/NativeG148CommerceRecoveryStore';
+import {createG148CommerceDurableOrder} from '../src/domain/g148-commerce-durable-order.mjs';
+import {G148CommerceReserveAction,G148CommerceRecoveryPanel}
+ from '../src/G148CommerceQaPanel';
 export default function Commerce(){
  const {client,view}=useClientView();
  // El key elimina búsqueda, rubro elegido y sucursal anterior ANTES de
@@ -25,6 +29,10 @@ export default function Commerce(){
 }
 function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnapshot}){
  const [preferredBranch,setPreferredBranch]=useState<string|null>(null);
+ // No runtime certification => QA controls stay hidden.
+ const commerceQa=useMemo(()=>createG148CommerceDurableOrder({
+  store:getNativeG148CommerceRecoveryStore(),api:client
+ }),[client]);
  const [selectedVertical,setSelectedVertical]=useState<CommerceVertical>('SUPERMARKET');
  const [query,setQuery]=useState('');
  const selected=selectCommerceVertical(selectedVertical);
@@ -70,10 +78,12 @@ function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnaps
     selectedVertical={selectedVertical} onSelect={setPreferredBranch}/>}
   {view.authenticated&&view.commerce.catalogReadReady&&
    <CertifiedCatalog key={selectedVertical} client={client} view={view} query={query}
-    preferredBranch={preferredBranch}/>}
+    preferredBranch={preferredBranch} commerceQa={commerceQa}/>}
   {view.authenticated&&view.commercePager.readReady&&
    <ReadOnlyCatalogPager key={selectedVertical} client={client} view={view} query={query}
     preferredBranch={preferredBranch}/>}
+  {view.authenticated&&<G148CommerceRecoveryPanel
+   client={client} view={view} controller={commerceQa}/>}
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>¿Cómo funcionará tu pedido?</Text>
    <Text style={styles.text}>Elegí un comercio habilitado, agregá productos con precio y stock vigentes, revisá el total del servidor y confirmá cuando el pago y el despacho estén certificados.</Text>
@@ -85,7 +95,10 @@ function PrivateCommerce({client,view}:{client:ClientExperience;view:ClientSnaps
 /** No presenta productos ni precios mientras falte el GET certificado de A.
  * Los ítems mostrados proceden exclusivamente del flujo de catálogo autorizado.
  */
-function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null;query:string}){
+function CertifiedCatalog({client,view,preferredBranch,query,commerceQa}:{
+ client:ClientExperience;view:ClientSnapshot;preferredBranch:string|null;query:string;
+ commerceQa:ReturnType<typeof createG148CommerceDurableOrder>;
+}){
  const commerce=view.commerce;
  const [branchInput,setBranchInput]=useState('');
  const [message,setMessage]=useState('');
@@ -282,6 +295,7 @@ function CertifiedCatalog({client,view,preferredBranch,query}:{client:ClientExpe
     Costo de entrega: pendiente del servidor. Descuentos: no confirmados.
     Total final: pendiente. No incluye cobro, reserva de stock ni confirmación de pedido.
    </Text>
+   <G148CommerceReserveAction client={client} view={view} controller={commerceQa}/>
    <Action label="Vaciar carrito y retirar catálogo de esta sesión" secondary disabled={busy}
     onPress={()=>{
      substitutionFlow.clear();setChoiceRevision(r=>r+1);

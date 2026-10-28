@@ -163,6 +163,17 @@ export type ClientExperience={
  setCommerceQuantity(itemId:string,quantity:number):ClientResult;
  selectCommerceVehicle(vehicle:'AUTO'|'MOTO'):ClientResult;
  previewCommerceOrder(requestKey:string):ClientResult;
+ isCommerceQaReady():boolean;
+ reserveCommerceQa(body:{requestKey:string;branchId:string;catalogVersion:number;
+  vehicleKind:'AUTO'|'MOTO';items:{itemId:string;quantity:number}[]}):
+  Promise<{ok:boolean;code?:string;receipt?:{requestKey:string;branchId:string;
+    orderId:string;paymentConfirmed:false;subtotalPyg:number}}>;
+ recoverCommerceQa(requestKey:string):
+  Promise<{ok:boolean;code?:string;receipt?:{requestKey:string;branchId:string;
+    orderId:string;status:string;revision:number;paymentConfirmed:false}}>;
+ cancelCommerceQa(body:{orderId:string;cancelKey:string}):
+  Promise<{ok:boolean;code?:string;receipt?:{orderId:string;
+    refundConfirmed:false}}>;
  clearCommerce():void;
  prepareIncidentReport(request:{requestKey:string;subjectKind:'RIDE'|'DELIVERY'|'MERCHANT_ORDER';
   subjectId:string;category:'SAFETY'|'LOSS'|'DISPUTE'|'FRAUD'|'QUALITY';
@@ -230,6 +241,11 @@ export type ClientExperience={
 };
 export declare function createClientExperience(options?:{
  authProvider?:{readSession:()=>unknown|Promise<unknown>;signOut?:()=>unknown|Promise<unknown>}|null;
+ commerceQaHttpOptions?:{
+  enabled?:boolean;contractCertified?:boolean;disposableQaVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,request:unknown)=>Promise<unknown>;
+ }|null;
  gateway?:{send:(operation:string,data?:unknown)=>unknown|Promise<unknown>}|null;
  motoRideStatusOptions?:{
   enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
