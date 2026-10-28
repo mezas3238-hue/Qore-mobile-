@@ -1,11 +1,13 @@
 /** D #18 — after an Owner G116 commission POST, demand a separate GET.
  * Neither browser nor HTTP 200 may attest a persisted change alone.
  */
-const kinds=new Set(['AUTO_RIDE','MOTO_RIDE']);
+const kinds=new Set(['AUTO_RIDE','MOTO_RIDE',
+ 'DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE']);
 const valid=d=>d!==null&&typeof d==='object'&&!Array.isArray(d)
  &&kinds.has(d.serviceKind)&&Number.isSafeInteger(d.commissionBps)
- &&d.commissionBps>=1000&&d.commissionBps<=3000
- &&d.subsidyBps===1000&&Number.isSafeInteger(d.version)
+ &&d.commissionBps>=0&&d.commissionBps<=3000
+ &&(['AUTO_RIDE','MOTO_RIDE'].includes(d.serviceKind)
+  ?d.commissionBps>=1000&&d.subsidyBps===1000:d.subsidyBps===0)&&Number.isSafeInteger(d.version)
  &&d.version>=1&&d.mode==='STAGING_DEMO_ONLY'
  &&d.productionEnabled===false;
 const deny=code=>Object.freeze({ok:false,code});

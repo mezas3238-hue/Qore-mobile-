@@ -2,7 +2,7 @@
  * Owner ID MUST come from independently verified Auth + AAL2, not JSON.
  */
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
-const PATH=/^\/v1\/staging\/owner\/commissions\/(AUTO_RIDE|MOTO_RIDE)$/;
+const PATH=/^\/v1\/staging\/owner\/commissions\/(AUTO_RIDE|MOTO_RIDE|DELIVERY_AUTO|DELIVERY_MOTO|COMMERCE)$/;
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(x,keys)=>obj(x)&&Object.keys(x).length===keys.length
@@ -10,8 +10,10 @@ const exact=(x,keys)=>obj(x)&&Object.keys(x).length===keys.length
 const deny=(status,code)=>({status,body:{code,qaOnly:true,productionEnabled:false}});
 const valid=(x,service)=>exact(x,['serviceKind','commissionBps','subsidyBps',
  'version','mode','productionEnabled'])&&x.serviceKind===service
- &&Number.isSafeInteger(x.commissionBps)&&x.commissionBps>=1000
- &&x.commissionBps<=3000&&x.subsidyBps===1000
+ &&Number.isSafeInteger(x.commissionBps)&&x.commissionBps>=0
+ &&x.commissionBps<=3000
+ &&(['AUTO_RIDE','MOTO_RIDE'].includes(service)
+  ?x.commissionBps>=1000&&x.subsidyBps===1000:x.subsidyBps===0)
  &&Number.isSafeInteger(x.version)&&x.version>=1
  &&x.mode==='STAGING_DEMO_ONLY'&&x.productionEnabled===false;
 export function createG116OwnerCommissionGateway({
@@ -32,7 +34,8 @@ export function createG116OwnerCommissionGateway({
   if(isWrite&&(!exact(body,['requestKey','commissionBps'])
    ||typeof body.requestKey!=='string'||!UUID.test(body.requestKey)
    ||!Number.isSafeInteger(body.commissionBps)
-   ||body.commissionBps<1000||body.commissionBps>3000))
+   ||body.commissionBps<0||body.commissionBps>3000
+   ||(['AUTO_RIDE','MOTO_RIDE'].includes(service)&&body.commissionBps<1000)))
    return deny(400,'INVALID_COMMISSION');
   if(typeof headers.authorization!=='string'||headers.Authorization!==undefined
    ||headers.cookie!==undefined)return deny(401,'BEARER_REQUIRED');

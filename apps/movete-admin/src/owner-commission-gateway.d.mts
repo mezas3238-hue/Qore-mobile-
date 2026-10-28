@@ -1,6 +1,7 @@
-export type CommissionKind='AUTO_RIDE'|'MOTO_RIDE';
+export type CommissionKind='AUTO_RIDE'|'MOTO_RIDE'|
+ 'DELIVERY_AUTO'|'DELIVERY_MOTO'|'COMMERCE';
 export type CommissionReceipt={serviceKind:CommissionKind;commissionBps:number;
- subsidyBps:1000;version:number;mode:'STAGING_DEMO_ONLY';productionEnabled:false};
+ subsidyBps:1000|0;version:number;mode:'STAGING_DEMO_ONLY';productionEnabled:false};
 export type CommissionOutcome={ok:boolean;code?:string;data?:CommissionReceipt};
 export type OwnerCommissionGateway={
  isConfigured:()=>boolean;

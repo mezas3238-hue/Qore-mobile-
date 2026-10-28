@@ -25,6 +25,8 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
  const [error,setError]=useState('');
  const [uncertain,setUncertain]=useState(false);
  const ready=authorized&&gateway.isConfigured();
+ const passenger=service==='AUTO_RIDE'||service==='MOTO_RIDE';
+ const minBps=passenger?1000:0;
  const scopeFence=useRef(createOwnerPolicyScopeFence());
  scopeFence.current.select(service,authorized,gateway);
  useEffect(()=>{
@@ -50,8 +52,8 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
   const numeric=Number(percent),bps=Math.round(numeric*100);
   if(!ready||busy||uncertain||!rate||percent.trim()===''
    ||!Number.isFinite(numeric)||!Number.isSafeInteger(bps)
-   ||Math.abs(bps/100-numeric)>0.000001||bps<1000||bps>3000){
-   setError('Consultá primero la comisión e ingresá un porcentaje entre 10 y 30.');
+   ||Math.abs(bps/100-numeric)>0.000001||bps<minBps||bps>3000){
+   setError('Consultá primero la comisión e ingresá un porcentaje entre '+(minBps/100)+' y 30.');
    return;
   }
   if(bps===rate.commissionBps)return;
@@ -88,9 +90,10 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
  }
  return <section className="panel">
   <h2>Configurar porcentaje de comisión</h2>
-  <p>Comisión individual para AUTO y MOTO pasajeros. El subsidio
-   al cliente es siempre <strong>10 %</strong>. Cotizaciones anteriores
-   mantienen el porcentaje aceptado.</p>
+  <p>Porcentaje individual del Owner por cada uno de los cinco servicios.
+   Los viajes AUTO y MOTO mantienen el subsidio fijo del <strong>10 %</strong>
+   al pasajero; no se aplica ese subsidio a envíos ni comercios.
+   Nunca se modifican cotizaciones anteriores.</p>
   {!ready&&<p role="status" className="owner-warning">
    Edición bloqueada: requiere propietario, MFA AAL2 y backend HTTPS certificado.
   </p>}
@@ -100,6 +103,9 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
     setService(e.currentTarget.value as CommissionKind);}}>
    <option value="AUTO_RIDE">AUTO · pasajeros</option>
    <option value="MOTO_RIDE">MOTO · pasajeros</option>
+   <option value="DELIVERY_AUTO">ENVÍOS · AUTO</option>
+   <option value="DELIVERY_MOTO">ENVÍOS · MOTO</option>
+   <option value="COMMERCE">COMERCIOS</option>
   </select>
   <p>Comisión verificada: <strong>{
    rate?String(rate.commissionBps/100)+' % · versión '+rate.version:'—'
@@ -109,7 +115,7 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
   </button>
   <form onSubmit={e=>{e.preventDefault();void save();}}>
    <label htmlFor="commission-percent">Nueva comisión (%)</label>
-   <input id="commission-percent" type="number" min="10" max="30"
+   <input id="commission-percent" type="number" min={minBps/100} max="30"
     step="0.01" value={percent} disabled={!ready||busy||!rate||uncertain}
     onChange={e=>setPercent(e.currentTarget.value)}/>
    <button type="submit" disabled={!ready||busy||!rate||uncertain
@@ -119,7 +125,9 @@ export function OwnerCommissionEditor({authorized}:{authorized:boolean}){
   </form>
   {error&&<p role="alert" className="owner-warning">{error}</p>}
   <p className="training-disclaimer">
-   Configuración de laboratorio, sin cobros reales ni cambios en producción.
+   Configuración de laboratorio. Las comisiones de envíos y comercios aún no
+   se aplican a cobros o liquidaciones: requieren integración financiera propia.
+   Sin cobros reales ni cambios en producción.
   </p>
  </section>;
 }

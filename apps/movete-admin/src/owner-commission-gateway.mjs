@@ -2,7 +2,8 @@ import {readBoundedResponseText} from './bounded-json-response.mjs';
 /** Browser Owner commission client: server decides prices, role and 10% subsidy.
  * Disabled until the external G116 backend and Owner AAL2 are certified.
  */
-const SERVICES=new Set(['AUTO_RIDE','MOTO_RIDE']);
+const SERVICES=new Set(['AUTO_RIDE','MOTO_RIDE',
+ 'DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE']);
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fail=code=>Object.freeze({ok:false,code});
 const exact=(o,keys)=>o!==null&&typeof o==='object'&&!Array.isArray(o)
@@ -17,8 +18,10 @@ function originOf(url){
 }
 const safe=x=>exact(x,['serviceKind','commissionBps','subsidyBps','version',
  'mode','productionEnabled'])&&SERVICES.has(x.serviceKind)
- &&Number.isSafeInteger(x.commissionBps)&&x.commissionBps>=1000
- &&x.commissionBps<=3000&&x.subsidyBps===1000
+ &&Number.isSafeInteger(x.commissionBps)&&x.commissionBps>=0
+ &&x.commissionBps<=3000
+ &&(['AUTO_RIDE','MOTO_RIDE'].includes(x.serviceKind)
+  ?x.commissionBps>=1000&&x.subsidyBps===1000:x.subsidyBps===0)
  &&Number.isSafeInteger(x.version)&&x.version>=1
  &&x.mode==='STAGING_DEMO_ONLY'&&x.productionEnabled===false;
 const active=(x,at)=>x?.role==='owner'&&x?.mfaVerified===true
@@ -43,7 +46,8 @@ export function createOwnerCommissionGateway({
   if(update!==null&&(!exact(update,['requestKey','commissionBps'])
     ||!UUID.test(update.requestKey)
     ||!Number.isSafeInteger(update.commissionBps)
-    ||update.commissionBps<1000||update.commissionBps>3000))
+    ||update.commissionBps<0||update.commissionBps>3000
+    ||(['AUTO_RIDE','MOTO_RIDE'].includes(service)&&update.commissionBps<1000)))
    return fail('INVALID_COMMISSION');
   busy=true;
   const ctl=new AbortController();

@@ -1,6 +1,6 @@
--- G116 Owner commission policy for PASSENGER AUTO/MOTO only.
+-- G136 Owner commission policies for five independent services (QA only).
 -- Disposable PostgreSQL16 CI ONLY; NEVER deploy to remote/production.
--- Passenger subsidy is invariant at 1000 basis points (10%).
+-- Passenger subsidy remains 1000 bps; cargo/commerce NEVER get a ride subsidy.
 DO $guard$ BEGIN
  IF current_database()<>'qore_disposable_chain'
  OR current_setting('application_name')<>'qore_ci_disposable_chain'
@@ -9,8 +9,9 @@ DO $guard$ BEGIN
 END $guard$;
 BEGIN;
 CREATE TABLE public.mobility_stage_g116_commission_policy(
- service_kind text PRIMARY KEY CHECK(service_kind IN ('AUTO_RIDE','MOTO_RIDE')),
- commission_bps integer NOT NULL CHECK(commission_bps BETWEEN 1000 AND 3000),
+ service_kind text PRIMARY KEY CHECK(service_kind IN ('AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE')),
+ commission_bps integer NOT NULL CHECK(commission_bps BETWEEN 0 AND 3000),
+ CHECK(service_kind NOT IN ('AUTO_RIDE','MOTO_RIDE') OR commission_bps>=1000),
  version integer NOT NULL DEFAULT 1 CHECK(version>0),
  changed_by uuid REFERENCES auth.users(id) ON DELETE RESTRICT,
  changed_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
@@ -19,14 +20,16 @@ CREATE TABLE public.mobility_stage_g116_commission_audit(
  request_key uuid PRIMARY KEY,
  owner_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
  service_kind text NOT NULL REFERENCES public.mobility_stage_g116_commission_policy(service_kind),
- old_bps integer NOT NULL CHECK(old_bps BETWEEN 1000 AND 3000),
- new_bps integer NOT NULL CHECK(new_bps BETWEEN 1000 AND 3000),
+ old_bps integer NOT NULL CHECK(old_bps BETWEEN 0 AND 3000),
+ new_bps integer NOT NULL CHECK(new_bps BETWEEN 0 AND 3000),
+ CHECK(service_kind NOT IN ('AUTO_RIDE','MOTO_RIDE') OR (old_bps>=1000 AND new_bps>=1000)),
  old_version integer NOT NULL CHECK(old_version>0),
  new_version integer NOT NULL CHECK(new_version=old_version+1),
  changed_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp()
 );
 INSERT INTO public.mobility_stage_g116_commission_policy(service_kind,commission_bps)
-VALUES ('AUTO_RIDE',1500),('MOTO_RIDE',1200);
+VALUES ('AUTO_RIDE',1500),('MOTO_RIDE',1200),
+ ('DELIVERY_AUTO',0),('DELIVERY_MOTO',0),('COMMERCE',0);
 ALTER TABLE public.mobility_stage_g116_commission_policy ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mobility_stage_g116_commission_audit ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mobility_stage_g116_commission_policy
@@ -37,7 +40,8 @@ CREATE FUNCTION public.mobility_stage_g116_read_commission_qa(_service text)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $fn$
  SELECT pg_catalog.jsonb_build_object(
  'serviceKind',p.service_kind,'commissionBps',p.commission_bps,
- 'subsidyBps',1000,'version',p.version,
+ 'subsidyBps',CASE WHEN p.service_kind IN ('AUTO_RIDE','MOTO_RIDE')
+ THEN 1000 ELSE 0 END,'version',p.version,
  'mode','STAGING_DEMO_ONLY','productionEnabled',false)
  FROM public.mobility_stage_g116_commission_policy p
  WHERE p.service_kind=_service
@@ -51,8 +55,9 @@ BEGIN
  IF current_database()<>'qore_disposable_chain'
  OR current_setting('application_name')<>'qore_ci_disposable_chain'
  OR _owner IS NULL OR _request_key IS NULL
- OR _service NOT IN ('AUTO_RIDE','MOTO_RIDE')
- OR _commission_bps NOT BETWEEN 1000 AND 3000
+ OR _service NOT IN ('AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE')
+ OR _commission_bps NOT BETWEEN 0 AND 3000
+ OR (_service IN ('AUTO_RIDE','MOTO_RIDE') AND _commission_bps<1000)
  OR public.mobility_stage_g27_backoffice_role_of(_owner) IS DISTINCT FROM 'owner'
  THEN RAISE EXCEPTION 'G116 unauthorized or unsupported commission'
   USING ERRCODE='P1161'; END IF;
@@ -67,7 +72,8 @@ BEGIN
    USING ERRCODE='P1161'; END IF;
   RETURN pg_catalog.jsonb_build_object(
    'serviceKind',previous.service_kind,'commissionBps',previous.new_bps,
-   'subsidyBps',1000,'version',previous.new_version,
+   'subsidyBps',CASE WHEN previous.service_kind IN ('AUTO_RIDE','MOTO_RIDE')
+ THEN 1000 ELSE 0 END,'version',previous.new_version,
    'mode','STAGING_DEMO_ONLY','productionEnabled',false);
  END IF;
  SELECT * INTO p FROM public.mobility_stage_g116_commission_policy

@@ -10,6 +10,8 @@ on:
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs'
+      - 'apps/movete-admin/src/owner-commission-gateway.mjs'
+      - 'apps/movete-admin/src/OwnerCommissionEditor.tsx'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.mjs'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs'
       - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
@@ -42,6 +44,8 @@ on:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs'
+      - 'apps/movete-admin/src/owner-commission-gateway.mjs'
+      - 'apps/movete-admin/src/OwnerCommissionEditor.tsx'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.mjs'
       - 'apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs'
       - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
@@ -656,6 +660,8 @@ jobs:
         run: |
           test -f apps/movete-cliente/src/domain/client-experience.mjs
           test -f apps/movete-cliente/src/domain/f1-auto-ride-continuation.mjs
+      - name: G136 five-service Owner commission SQL and subsidy invariants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G136_FIVE_SERVICE_OWNER_COMMISSION_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G135 Owner-configurable passenger AUTO commission and fixed subsidy API contract
         run: node --test apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs
       - name: G134 guarded private Driver inbox and offer decisions unit contracts
