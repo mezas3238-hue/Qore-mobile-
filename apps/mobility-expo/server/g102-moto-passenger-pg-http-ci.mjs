@@ -10,6 +10,8 @@ import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 import {createG101MotoPassengerGateway,createG101MotoPassengerRepository}
  from './g101-moto-passenger-gateway.mjs';
+import {createG128GeoapifyCargoRoadResolver}
+ from './g128-geoapify-cargo-road-resolver.mjs';
 if(process.env.PGHOST!=='localhost'||
  process.env.PGDATABASE!=='qore_disposable_chain'||
  process.env.PGAPPNAME!=='qore_ci_disposable_chain')
@@ -78,6 +80,73 @@ const noop=async()=>({status:404,body:{error:'Not found'}});
 async function main(){
  fixture();
  const repo=createG101MotoPassengerRepository({rpc});
+ // G137: the same two B/A passenger quotes now pass through the actual
+ // G128 Geoapify Free route parser, durable quota contract and independent
+ // toll proof BEFORE G100 PostgreSQL pricing. The provider response remains
+ // local/controlled in CI; G129 separately verifies real Geoapify by secret.
+ const approved=new Map([
+  [routeKey,['Centro Asuncion','Aeropuerto Asuncion']],
+  ['10200000-0000-4102-8102-000000000030',
+   ['Centro Asunción','Aeropuerto Asunción']]
+ ]);
+ let mapCalls=0,quotaCalls=0;
+ const motoRoad=createG128GeoapifyCargoRoadResolver({
+  freePlanApproved:true,apiKey:'G102_FAKE_GEOAPIFY_FREE_TEST_KEY_0123456789',
+  resolveCoveredCargoCoordinates:async scope=>{
+   if(scope.actorId!==p||scope.vehicleKind!=='MOTO'||
+    !approved.has(scope.deliveryId)||scope.pickupTag!=='CENTRO_FIXTURE'||
+    scope.deliveryTag!=='AEROPUERTO')
+    throw Error('G137 unauthorized MOTO road evidence');
+   return {...scope,source:'INDEPENDENT_COVERAGE_AUTHORITY',
+    coverageVerified:true,evidenceId:'10200000-0000-4102-8102-000000000040',
+    revision:1,zoneTag:'MOTO_TEST_ZONE',
+    origin:{lat:-25.2773434,lon:-57.6371671},
+    destination:{lat:-25.2778767,lon:-57.5994503},
+    verifiedAtMs:Date.now()};
+  },
+  reserveFreeQuota:async scope=>{
+   quotaCalls++;
+   assert.equal(scope.vehicleKind,'MOTO');
+   return {approved:true,durable:true,
+    reservationId:'10200000-0000-4102-8102-000000000041',
+    deliveryId:scope.deliveryId,vehicleKind:'MOTO',
+    coverageEvidenceId:scope.coverageEvidenceId};
+  },
+  verifyCargoTolls:async scope=>({
+   source:'INDEPENDENT_TOLL_AUTHORITY',tollsVerified:true,
+   deliveryId:scope.deliveryId,vehicleKind:'MOTO',
+   coverageEvidenceId:scope.coverageEvidenceId,
+   distanceMeters:scope.distanceMeters,
+   durationSeconds:scope.durationSeconds,tollsPyg:0,
+   evidenceId:'10200000-0000-4102-8102-000000000042',
+   verifiedAtMs:Date.now()
+  }),
+  request:async(url,opts)=>{
+   mapCalls++;
+   assert.equal(new URL(url).origin,'https://api.geoapify.com');
+   assert.equal(new URL(url).searchParams.get('mode'),'drive');
+   assert.equal(opts.method,'GET');
+   return {ok:true,status:200,redirected:false,
+    headers:{get:k=>k==='content-type'?'application/json':null},
+    text:async()=>JSON.stringify({results:[{
+     distance:5000,time:600,distance_units:'meters',toll:false
+    }]})};
+  }
+ });
+ const verifiedMotoRoad=async({actorId,quoteRequestKey,origin,destination,service})=>{
+  const addresses=approved.get(quoteRequestKey);
+  if(actorId!==p||service!=='moto_pasajero'||!addresses||
+   origin!==addresses[0]||destination!==addresses[1])
+   throw Error('G137 private MOTO quote not covered');
+  const road=await motoRoad({actorId,deliveryId:quoteRequestKey,
+   vehicleKind:'MOTO',pickupTag:'CENTRO_FIXTURE',deliveryTag:'AEROPUERTO'});
+  return Object.freeze({routingVerified:road.routingVerified,
+   coverageVerified:road.coverageVerified,
+   trafficAware:road.trafficAware,fallbackUsed:road.fallbackUsed,
+   originTag:road.pickupTag,destinationTag:road.deliveryTag,
+   zoneTag:road.zoneTag,distanceMeters:road.distanceMeters,
+   durationSeconds:road.durationSeconds,tollsPyg:road.tollsPyg});
+ };
  const gateway=createG101MotoPassengerGateway({
   projectRef:'staging1234567890abcd',now:Date.now,
   verifyAccessToken:async value=>{
@@ -86,13 +155,7 @@ async function main(){
    return {id,is_anonymous:false,email_confirmed_at:'2026-10-25T00:00:00Z'};
   },
   authorizePassenger:async id=>id===p||id===stranger,allowRequest:()=>true,
-  resolveVerifiedMotoRoute:async({service})=>{
-   assert.equal(service,'moto_pasajero');
-   // Test-only route proof. No external provider or real motorcycle zone.
-   return {routingVerified:true,coverageVerified:true,trafficAware:true,
-    fallbackUsed:false,originTag:'CENTRO_FIXTURE',destinationTag:'AEROPUERTO',
-    zoneTag:'MOTO_TEST_ZONE',distanceMeters:5000,durationSeconds:600};
-  },repository:repo
+  resolveVerifiedMotoRoute:verifiedMotoRoad,repository:repo
  });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:noop,offerHandler:noop,tripCommandHandler:noop,
@@ -217,6 +280,9 @@ async function main(){
   assert.equal(actual.body.pspRefunded,false);
   assert.equal(bPosts,3);
   assert.equal(bGets,0);
+  assert.equal(mapCalls,2,'Both MOTO quotes use the G128 Geoapify road resolver');
+  assert.equal(quotaCalls,2,'Both MOTO quotes reserve Free quota before pricing');
+  console.log('G137 MOTO GEOAPIFY ROAD E2E PASS: B Passenger -> A HTTP -> verified G128 Free road -> G100 PostgreSQL quote/book/cancel and 4+4 ledger, no external LIVE or PSP');
   console.log('G108 CROSS-BRANCH PASS: B genuine G101/G100 MOTO Passenger -> A HTTP + PG16 quote/book/cancel, one trip, 12/10/2 amounts and balanced reversal, no PSP, real Driver, legal approval or LIVE');
   console.log('G102 PASS: real PG16 MOTO Passenger quoted -> booked -> cancellation and 4+4 money entries via localhost HTTP; same trip, 12/10/2 %, no AUTO/ENVÍOS crossover, no PSP, no Driver assignment');
  }finally{
