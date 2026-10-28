@@ -68,8 +68,14 @@ BEGIN
    request_key,delivery_id,courier_id,vehicle_id,ttl_seconds,expires_at)
   VALUES ('15400000-0000-4154-8154-000000000005',other,
     fake_courier,fake_vehicle,30,pg_catalog.statement_timestamp()+interval '30 seconds');
- EXCEPTION WHEN SQLSTATE 'P1541' THEN denied:=true; END;
- IF NOT denied THEN RAISE EXCEPTION 'G154 direct offer DML passed without merchant order'; END IF;
+ EXCEPTION
+  WHEN SQLSTATE 'P1541' THEN denied:=true;
+  WHEN SQLSTATE 'P7401' THEN
+   -- G71's a00 trigger intentionally executes BEFORE G154's b11.
+   -- Lack of fake legal clearance must NOT be weakened for this test.
+   denied:=NOT public.mobility_stage_g154_merchant_dispatch_ready_qa(other);
+ END;
+ IF NOT denied THEN RAISE EXCEPTION 'G154 unlinked offer passed KYC/commerce defenses'; END IF;
  IF EXISTS (SELECT 1 FROM public.mobility_stage_delivery_offers
   WHERE delivery_id=other)
  THEN RAISE EXCEPTION 'G154 unauthorized offer inserted'; END IF;
