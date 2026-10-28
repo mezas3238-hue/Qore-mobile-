@@ -4,7 +4,7 @@ export type DriverDeliveryResumeResult=Readonly<{
 }>;
 export declare function createDriverDeliveryResume(config:{
  getSession:()=>Promise<unknown>;
- readAssignment:(id:string)=>Promise<unknown>;
+ readAssignment:(id:string,actor:{role:'driver';userId:string;accessToken:string})=>Promise<unknown>;
  storage?:null|{get:(key:string)=>Promise<string|null>;
  put:(key:string,value:string)=>Promise<void>;
  del:(key:string)=>Promise<void>};

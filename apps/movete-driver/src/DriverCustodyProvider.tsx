@@ -32,9 +32,15 @@ export function DriverCustodyProvider({
  const [state,setState]=useState<DriverCustodySnapshot>(()=>ctl?.current()??EMPTY);
  const recovery=useMemo(()=>ctl&&authAdapter?createDriverDeliveryResume({
   getSession:()=>authAdapter.getSession(),
-  readAssignment:id=>verifyAcceptedPrivateDeliveryCustody({
-   deliveryId:id,readCustody:()=>ctl.open(id)
-  }),
+  readAssignment:async(id,session)=>{
+   // Auth can rotate before React subscription resets the G66 controller.
+   // Never let the old JWT's assignment validate the new Driver's hint.
+   if(!ctl.isBoundTo(session))return null;
+   const verified=await verifyAcceptedPrivateDeliveryCustody({
+    deliveryId:id,readCustody:()=>ctl.open(id)
+   });
+   return ctl.isBoundTo(session)?verified:null;
+  },
   storage:Platform.OS==='web'?null:{
    get:key=>SecureStore.getItemAsync(key),
    put:(key,value)=>SecureStore.setItemAsync(key,value,{

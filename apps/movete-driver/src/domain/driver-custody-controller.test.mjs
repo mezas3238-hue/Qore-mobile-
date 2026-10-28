@@ -293,3 +293,12 @@ test('C G66 high-water is scoped to the currently opened delivery and driver',as
  ctl.setSession({role:'driver',userId:driver,accessToken:bearer});
  assert.equal((await ctl.open(delivery)).phase,'active');
 });
+
+test('G66 controller identifies the exact authenticated Driver session, not only role',()=>{
+ const x=scenario();
+ assert.equal(x.ctl.isBoundTo({role:'driver',userId:driver,accessToken:bearer}),true);
+ assert.equal(x.ctl.isBoundTo({role:'driver',userId:id(77),accessToken:bearer}),false);
+ assert.equal(x.ctl.isBoundTo({role:'driver',userId:driver,accessToken:'rotated-token'}),false);
+ x.ctl.clear();
+ assert.equal(x.ctl.isBoundTo({role:'driver',userId:driver,accessToken:bearer}),false);
+});

@@ -94,6 +94,8 @@ export function createDriverCustodyController({
  }
  return Object.freeze({
   current:()=>state,
+  isBoundTo(session){return !!actor&&session?.role==='driver'&&
+   session.userId===actor.userId&&session.accessToken===actor.accessToken;},
   subscribe(fn){if(typeof fn!=='function')throw Error('G66 listener required');
    listeners.add(fn);return()=>listeners.delete(fn);},
   clear,

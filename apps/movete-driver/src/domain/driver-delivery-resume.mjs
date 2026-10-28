@@ -29,8 +29,8 @@ export function createDriverDeliveryResume({getSession,readAssignment,
  const erase=async()=>{try{await storage?.del(KEY);}catch{/* fail closed */}};
  async function auth(){try{const s=await getSession();return sessionOK(s)?s:null;}
  catch{return null;}}
- async function verify(id){
-  try{const p=await readAssignment(id);return proofOK(p,id)?p:null;}
+ async function verify(id,actor){
+  try{const p=await readAssignment(id,actor);return proofOK(p,id)?p:null;}
   catch{return null;}
  }
  async function locked(operation){
@@ -42,7 +42,7 @@ export function createDriverDeliveryResume({getSession,readAssignment,
    if(!UUID.test(id??''))return fail('INVALID_DELIVERY_ID');
    const before=await auth();
    if(!before)return fail('DRIVER_AUTH_REQUIRED');
-   const proof=await verify(id);
+   const proof=await verify(id,before);
    const after=await auth();
    if(!same(before,after))return fail('DRIVER_SESSION_CHANGED');
    if(!proof)return fail('CUSTODY_NOT_VERIFIED');
@@ -83,7 +83,7 @@ export function createDriverDeliveryResume({getSession,readAssignment,
    if(saved.actorId!==before.userId){
     await erase();return fail('OTHER_DRIVER_DELIVERY');
    }
-   const proof=await verify(saved.deliveryId);
+   const proof=await verify(saved.deliveryId,before);
    const after=await auth();
    if(!same(before,after))return fail('DRIVER_SESSION_CHANGED');
    if(!proof)return fail('CUSTODY_NOT_VERIFIED');

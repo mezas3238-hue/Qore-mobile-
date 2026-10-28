@@ -77,3 +77,14 @@ test('Driver does not require a keychain to verify active delivery, but cannot p
  assert.equal(r.ok,true);assert.equal(r.saved,false);
  assert.equal((await x.ctl.resume()).code,'RECOVERY_STORAGE_NOT_AVAILABLE');
 });
+
+test('Driver recovery passes the verified actor to owner-scoped G66 reads',async()=>{
+ const scoped=setup({readAssignment:async(id,actor)=>{
+  assert.equal(id,delivery);
+  assert.equal(actor.userId,driver);
+  assert.equal(actor.accessToken,first.accessToken);
+  return good();
+ }});
+ assert.equal((await scoped.ctl.remember(delivery)).ok,true);
+ assert.equal((await scoped.ctl.resume()).ok,true);
+});
