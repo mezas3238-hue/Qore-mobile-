@@ -140,6 +140,29 @@ async function main(){
   "WHERE mode='AUTO' AND zone_tag='ASUNCION_FIXTURE' AND active=true");
  assert.equal(psql("SELECT count(*) FROM public.mobility_stage_fare_rules "+
   "WHERE rule_key='g134-geoapify-free-auto-qa' AND active=true"),'1');
+ // G135: this single PG16 integration needs a durable, Owner-approved
+ // synthetic AUTO fare rule before any newly booked G73 quote. The prior
+ // workflow depended on incidental fare fixtures from unrelated SQL suites.
+ // This is only a disposable QA rate rule, NEVER a commercial fallback.
+ const activeAutoRule=() => Number(psql(
+  "SELECT count(*) FROM public.mobility_stage_fare_rules WHERE "+
+  "mode='AUTO' AND zone_tag='ASUNCION_FIXTURE' AND active "+
+  "AND valid_from<=pg_catalog.clock_timestamp() "+
+  "AND valid_until>pg_catalog.clock_timestamp()"));
+ if(activeAutoRule()===0){
+  psql("INSERT INTO public.mobility_stage_fare_rules("+
+   "rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,"+
+   "minimum_pyg,commission_bps,valid_from,valid_until,active,"+
+   "approved_by,approved_at) VALUES("+
+   "'g135-auto-integrated-ci','AUTO','ASUNCION_FIXTURE',"+
+   "4000,2000,120,7000,1500,"+
+   "pg_catalog.clock_timestamp()-interval '1 hour',"+
+   "pg_catalog.clock_timestamp()+interval '2 hours',true,'"+owner+"',"+
+   "pg_catalog.clock_timestamp()-interval '2 hours') "+
+   "ON CONFLICT DO NOTHING");
+ }
+ assert.equal(activeAutoRule(),1,
+  'G135 requires a single active PG16 Owner-authorized AUTO fare rule');
  const db=createQoreG73AutoRepository({rpc});
  const targetedDispatch=createG112ScopedAutoDispatchRepository({rpc});
  let g111WorkerRuns=0,g111Receipt=null;
