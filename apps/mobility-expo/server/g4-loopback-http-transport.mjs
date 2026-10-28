@@ -36,6 +36,7 @@ const deliveryRecoverRoute=/^\/v1\/staging\/sender\/deliveries\/requests\/[0-9a-
 const deliveryTransitionRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/transition$/i;
 const deliveryStatusRoute=/^\/v1\/staging\/deliveries\/[0-9a-f-]{36}\/status$/i;
 const merchantRequestRoute=/^\/v1\/staging\/buyer\/orders\/request$/;
+const commerceQaRoute=/^\/v1\/staging\/buyer\/orders\/qa\/(reserve|cancel)$/;
 const merchantTransitionRoute=/^\/v1\/staging\/(?:merchant|buyer)\/orders\/[0-9a-f-]{36}\/transition$/i;
 const merchantAttachRoute=/^\/v1\/staging\/merchant\/orders\/[0-9a-f-]{36}\/attach-delivery$/i;
 const merchantStatusRoute=/^\/v1\/staging\/orders\/[0-9a-f-]{36}\/status$/i;
@@ -84,7 +85,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- f1AutoHandler,motoHandler,adminF1AuditHandler,adminServiceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,
+ f1AutoHandler,motoHandler,adminF1AuditHandler,adminServiceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,driverCurrentTripHandler,
 }){
@@ -98,6 +99,7 @@ export function createQoreRadarLoopbackTransport({
    (adminServiceTraceHandler!==undefined&&typeof adminServiceTraceHandler!=='function')||
    (ownerCommissionHandler!==undefined&&typeof ownerCommissionHandler!=='function')||
    (ownerCargoRateHandler!==undefined&&typeof ownerCargoRateHandler!=='function')||
+   (commerceQaHandler!==undefined&&typeof commerceQaHandler!=='function')||
    (driverDecisionRecoveryHandler!==undefined&&typeof driverDecisionRecoveryHandler!=='function')||
    typeof deliveryHandler!=='function'||
    typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
@@ -146,6 +148,7 @@ export function createQoreRadarLoopbackTransport({
    (deliveryStatusRoute.test(path)||deliveryRecoverRoute.test(path));
   const deliveryPost=req.method==='POST'&&
    (deliveryRequestRoute.test(path)||deliveryQuoteConfirmRoute.test(path)||deliveryTransitionRoute.test(path));
+  const commerceQaPost=req.method==='POST'&&commerceQaRoute.test(path);
   const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
   const merchantPost=req.method==='POST'&&
    (merchantRequestRoute.test(path)||merchantTransitionRoute.test(path)||
@@ -175,7 +178,7 @@ export function createQoreRadarLoopbackTransport({
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
   if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!adminF1AuditGet&&!adminServiceTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
-    !merchantGet&&!merchantPost&&!financeGet&&!financePost&&
+    !merchantGet&&!merchantPost&&!commerceQaPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
     !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&
@@ -196,19 +199,20 @@ export function createQoreRadarLoopbackTransport({
   }
   let body;
   if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||commerceQaPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
    const declared=Number(req.headers['content-length']??0);
-   if(!Number.isSafeInteger(declared)||declared<0||declared>maxBody){
+   const bodyLimit=commerceQaPost?8192:maxBody;
+   if(!Number.isSafeInteger(declared)||declared<0||declared>bodyLimit){
     send(res,413,{error:'Body too large'});return;
    }
    const chunks=[];let length=0;
    try{
     for await (const chunk of req){
      length+=chunk.byteLength;
-     if(length>maxBody){send(res,413,{error:'Body too large'});return;}
+     if(length>bodyLimit){send(res,413,{error:'Body too large'});return;}
      chunks.push(chunk);
     }
     body=JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -226,6 +230,7 @@ export function createQoreRadarLoopbackTransport({
     offerRecoveryPost?(driverDecisionRecoveryHandler??(()=>({status:503,body:{error:'G64 owner-only decision reader unavailable',retrySafe:false}}))):
     tripPost?tripCommandHandler:
     (deliveryGet||deliveryPost)?deliveryHandler:
+    commerceQaPost?(commerceQaHandler??(()=>({status:503,body:{error:'G139 QA not mounted'}}))):
     (merchantGet||merchantPost)?merchantHandler:
     (financeGet||financePost)?financeHandler:
     (safetyGet||safetyPost)?safetyHandler:
