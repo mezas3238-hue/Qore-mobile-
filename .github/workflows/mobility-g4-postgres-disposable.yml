@@ -9,6 +9,8 @@ on:
       - 'integration/qore-mobile-e2e-four-apps-20261027'
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
+      - 'apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox-gateway.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
@@ -36,6 +38,8 @@ on:
     paths:
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
+      - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
+      - 'apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox-gateway.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
@@ -645,6 +649,8 @@ jobs:
         run: |
           test -f apps/movete-cliente/src/domain/client-experience.mjs
           test -f apps/movete-cliente/src/domain/f1-auto-ride-continuation.mjs
+      - name: G135 Owner-configurable passenger AUTO commission and fixed subsidy API contract
+        run: node --test apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs
       - name: G134 guarded private Driver inbox and offer decisions unit contracts
         run: |
           node --test apps/mobility-expo/server/g16-driver-private-inbox.test.mjs
