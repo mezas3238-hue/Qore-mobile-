@@ -34,8 +34,11 @@ BEGIN
  -- price acceptance. G37 immutable cargo and G71 real KYC remain intact.
  INSERT INTO auth.users(id)
  VALUES('15400000-0000-4154-8154-000000000001');
- INSERT INTO public.user_roles(user_id,role)
- VALUES('15400000-0000-4154-8154-000000000001','passenger');
+ -- Existing G1 identity trigger assigns the Passenger role on auth.users INSERT.
+ IF (SELECT count(*) FROM public.user_roles
+  WHERE user_id='15400000-0000-4154-8154-000000000001'
+  AND role='passenger')<>1
+ THEN RAISE EXCEPTION 'G154 genuine G1 Passenger identity unavailable'; END IF;
  other:=public.mobility_stage_delivery_request(
   '15400000-0000-4154-8154-000000000001',
   '15400000-0000-4154-8154-000000000002',
