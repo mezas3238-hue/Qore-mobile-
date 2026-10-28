@@ -39,11 +39,14 @@ function validatedOffer(result,driverId,offerId,at){
 export function createQoreOfferGateway({
  projectRef,verifyAccessToken,authorizeDriver,loadOfferForDriver,
  acceptOffer,declineOffer,allowRequest,now=Date.now,
+ requireFreshSession=false,verifySessionNotRevoked,
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizeDriver,loadOfferForDriver,
    acceptOffer,declineOffer,allowRequest,now].every(x=>typeof x==='function'))
   throw new Error('QORE server-only offer gateway adapters required');
+ if(requireFreshSession===true&&typeof verifySessionNotRevoked!=='function')
+  throw Error('G4 guarded Driver decisions require revocation authority');
  return async({method,path,headers,body})=>{
   const found=typeof path==='string'?read.exec(path):null;
   const action=typeof path==='string'&&path.startsWith(routePrefix)?
@@ -58,6 +61,16 @@ export function createQoreOfferGateway({
   let user;
   try{user=await verifyAccessToken(token);}catch{return response(401,{error:'Session invalid'});}
   if(!verified(user))return response(401,{error:'Confirmed driver session required'});
+  if(requireFreshSession===true){
+   const at=now();
+   if(!UUID.test(user.sessionId??'')||!Number.isSafeInteger(user.expiresAtMs)||
+    !Number.isSafeInteger(at)||user.expiresAtMs<=at)
+    return response(401,{error:'Driver session expired or incomplete'});
+   try{
+    if(await verifySessionNotRevoked({userId:user.id,sessionId:user.sessionId,at})!==true)
+     return response(401,{error:'Driver session revoked'});
+   }catch{return response(503,{error:'Driver session authority unavailable'});}
+  }
   let allowed=false;
   try{allowed=await authorizeDriver(user.id);}catch{
    return response(503,{error:'Driver role verification unavailable'});
