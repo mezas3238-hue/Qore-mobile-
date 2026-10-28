@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mjs';
-import {createG155VerifiedRatingClient}
+import {createG155VerifiedRatingClient,validateG155RatingBody}
  from '../../movete-cliente/src/domain/g155-verified-rating-client.mjs';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
@@ -107,6 +107,7 @@ try{
  };
  console.log('G155 original Buyer form precheck',JSON.stringify(precheck));
  assert(precheck.requestUuid&&precheck.serviceUuid);
+ assert.equal(validateG155RatingBody(ride),true,'Native Buyer rating input must be accepted by shared strict shape');
  // Execute the REAL Buyer B HTTP gateway against the same A / PostgreSQL row.
  const origin='https://g155-ci-qore.onrender.com',expiresAt=Date.now()+90000;
  const buyerClient=createG155VerifiedRatingClient({

@@ -20,6 +20,24 @@ const auth=(s,at)=>s?.role==='passenger'&&UUID.test(s.subject??'')
  &&typeof s.token==='string'&&/^[A-Za-z0-9._~-]{20,7900}$/.test(s.token)
  &&Number.isSafeInteger(s.expiresAt)&&s.expiresAt>at+1000;
 const same=(a,b)=>a.subject===b.subject&&a.token===b.token&&a.expiresAt===b.expiresAt;
+/** Pure form fence, also validated independently in the B→A HTTP exam. */
+export function validateG155RatingBody(body){
+ if(body===null||typeof body!=='object'||Array.isArray(body))return false;
+ const required=['requestKey','serviceKind','serviceId','ratedKind','stars','incidentCode'];
+ if(Object.keys(body).length!==required.length||
+  !required.every(k=>Object.hasOwn(body,k)))return false;
+ if(typeof body.requestKey!=='string'||!UUID.test(body.requestKey)||
+  typeof body.serviceId!=='string'||!UUID.test(body.serviceId))return false;
+ if(!KINDS.has(body.serviceKind)||!TARGETS.has(body.ratedKind))return false;
+ if(!Number.isSafeInteger(body.stars)||body.stars<1||body.stars>5)return false;
+ if(body.incidentCode!==null&&!INCIDENTS.has(body.incidentCode))return false;
+ if(body.ratedKind==='MERCHANT')return body.serviceKind==='COMMERCE';
+ if(body.ratedKind==='DRIVER')
+  return body.serviceKind==='AUTO_RIDE'||body.serviceKind==='MOTO_RIDE';
+ return body.ratedKind==='COURIER'&&
+  (body.serviceKind==='DELIVERY_AUTO'||body.serviceKind==='DELIVERY_MOTO'||
+   body.serviceKind==='COMMERCE');
+}
 export function createG155VerifiedRatingClient({
  enabled=false,ownerApproved=false,contractVerified=false,
  originalCompletionVerified=false,externalRuntimeVerified=false,
@@ -36,19 +54,7 @@ export function createG155VerifiedRatingClient({
  async function submit(body){
   if(!ready)return fail('G155_EXTERNAL_CERTIFICATION_REQUIRED');
   if(busy)return fail('G155_BUSY');
-  const valid=body!==null&&typeof body==='object'&&!Array.isArray(body)
-   &&Object.keys(body).length===6
-   &&['requestKey','serviceKind','serviceId','ratedKind','stars','incidentCode']
-    .every(k=>Object.hasOwn(body,k))
-   &&typeof body.requestKey==='string'&&UUID.test(body.requestKey)
-   &&typeof body.serviceId==='string'&&UUID.test(body.serviceId)
-   &&KINDS.has(body.serviceKind)&&TARGETS.has(body.ratedKind)
-   &&Number.isSafeInteger(body.stars)&&body.stars>=1&&body.stars<=5
-   &&(body.incidentCode===null||INCIDENTS.has(body.incidentCode))
-   &&(body.ratedKind==='MERCHANT'?body.serviceKind==='COMMERCE':
-    body.ratedKind==='DRIVER'?['AUTO_RIDE','MOTO_RIDE'].includes(body.serviceKind):
-    ['DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE'].includes(body.serviceKind));
-  if(!valid)return fail('G155_INVALID_REVIEW');
+  if(!validateG155RatingBody(body))return fail('G155_INVALID_REVIEW');
   busy=true;
   const ctl=new AbortController();
   const deadline=now()+8000,timeout=setTimeout(()=>ctl.abort(),8000);

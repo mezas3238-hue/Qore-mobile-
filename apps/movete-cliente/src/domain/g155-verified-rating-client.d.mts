@@ -6,6 +6,7 @@ export type G155RatingBody={requestKey:string;serviceKind:G155RatingKind;
  incidentCode:G155IncidentCode|null};
 export type G155RatingResult={ok:false;code:string}|{ok:true;ratingId:string;
  qaOnly:true;dispatchPriorityChanged:false;productionEnabled:false};
+export declare function validateG155RatingBody(body:unknown):boolean;
 export declare function createG155VerifiedRatingClient(options?:{
  enabled?:boolean;ownerApproved?:boolean;contractVerified?:boolean;
  originalCompletionVerified?:boolean;externalRuntimeVerified?:boolean;
