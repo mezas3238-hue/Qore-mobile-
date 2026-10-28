@@ -13,7 +13,7 @@ const positive=(x:unknown)=>typeof x==='string'&&/^[1-9][0-9]{0,14}$/.test(x)
  &&Number.isSafeInteger(Number(x));
 const resultMessage=(r:G148Result)=>{
  if(r.ok)return r.receipt?.orderId?
-  'Pedido QA original '+r.receipt.orderId+'. Sin pago, envío ni operación comercial.':
+  'Pedido QA original '+r.receipt.orderId+'. Sin cobro ni entrega confirmada.':
   'Respuesta QA confirmada, sin pago ni despacho.';
  return r.code==='ORIGINAL_ORDER_RECOVERY_REQUIRED'
   ?'Ya existe una reserva pendiente en este dispositivo. Recuperala antes de solicitar otra.'
@@ -106,6 +106,15 @@ export function G148CommerceRecoveryPanel({client,view,controller}:{
   {data&&<View style={{gap:6}}>
    <Text style={styles.text}>Orden: {data.orderId}</Text>
    <Text style={styles.text}>Estado confirmado: {data.status??'RESERVA_QA'}</Text>
+   {data.deliveryId&&<View style={{gap:3}}>
+    <Text style={styles.text}>Envío G5 vinculado: {data.deliveryId}</Text>
+    <Text style={styles.small}>
+     El servidor confirmó la vinculación al pedido original.
+     Esto no acredita conductor asignado, ubicación, entrega ni pago.
+    </Text>
+   </View>}
+   {data.status==='ready'&&!data.deliveryId&&
+    <Text style={styles.small}>Comercio preparado; envío todavía sin vinculación verificada.</Text>}
    {data.subtotalPyg!==undefined&&<Text style={styles.text}>
     Subtotal de stock: {data.subtotalPyg.toLocaleString('es-PY')} Gs. · No cobrado
    </Text>}

@@ -7,6 +7,10 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createQoreMerchantOrderGateway} from './g6-merchant-order-gateway.mjs';
+import {createG45BuyerOrderReservationQa} from './g45-buyer-order-reservation-qa.mjs';
+import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs';
+import {createClientExperience}
+ from '../../movete-cliente/src/domain/client-experience.mjs';
 import {createG146AdminCommerceTraceGateway} from './g146-admin-commerce-trace-gateway.mjs';
 import {createServiceTraceGateway}
  from '../../movete-admin/src/service-trace-gateway.mjs';
@@ -135,6 +139,36 @@ const merchantOrders=createQoreMerchantOrderGateway({
  },
  loadOrder:async()=>{throw Error('Admin and Buyer read independently');}
 });
+// Authenticated B Buyer recovery goes through A HTTP, not a direct SQL
+// shortcut. G45/G144 enforce original requestKey and G42 session identity.
+const qaBuyer=createG45BuyerOrderReservationQa({
+ environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+ projectRef:'staging1234567890abcd',
+ verifyAccessToken:async token=>{
+  if(token!==buyerToken)throw Error('G152 verified Buyer token required');
+  return {id:buyer,sessionId:buyerSession,tokenIatMs:issued,
+   expiresAtMs:Date.now()+60000,is_anonymous:false,
+   email_confirmed_at:'2026-10-28T00:00:00Z'};
+ },
+ verifySessionNotRevoked:async({userId,sessionId})=>
+  userId===buyer&&sessionId===buyerSession&&fresh(buyer,buyerSession),
+ loadExclusiveRole:async id=>
+  id===buyer?sql("SELECT min(role::text) FROM public.user_roles WHERE user_id="+qs(id)):null,
+ allowRequest:()=>true,
+ rpc:async(name,args)=>{
+  if(name!=='mobility_stage_g144_recover_order_qa'||
+   args._buyer!==buyer||args._session!==buyerSession||
+   args._iat_ms!==issued||args._request_key!==key)
+   throw Error('G152 original Buyer private recovery only');
+  return {data:read("SET ROLE service_role; SELECT COALESCE("+
+   "public.mobility_stage_g144_recover_order_qa("+
+   qs(buyer)+","+qs(buyerSession)+","+issued+","+qs(key)+
+   "),'null'::jsonb)::text")};
+ }
+});
+const buyerHttp=createG139CommerceQaHttpBridge({
+ qa:qaBuyer,environment:'isolated_staging',liveEnabled:false
+});
 const qaAdmin=createG146AdminCommerceTraceGateway({
  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
  now:()=>Date.now(),
@@ -161,7 +195,7 @@ const server=createQoreRadarLoopbackTransport({
  riderHandler:noop,offerHandler:noop,tripCommandHandler:noop,
  deliveryHandler:deliveries,merchantHandler:merchantOrders,
  financeHandler:noop,safetyHandler:noop,
- adminCommerceTraceHandler:qaAdmin,
+ adminCommerceTraceHandler:qaAdmin,commerceQaHandler:buyerHttp,
  merchantManagementHandler:noop,deliveryOfferHandler:noop
 });
 const base=await listenQoreRadarLoopback(server);
@@ -241,6 +275,37 @@ try{
  assert.equal(buyerRead.revision,5);
  assert.equal(buyerRead.status,'ready');
  assert.equal(buyerRead.orderEnabled,false);
+ // Real B Client domain -> pinned HTTPS-shaped transport proxy -> A G139
+ // bearer trust -> G144 exact Buyer requestKey -> SAME PostgreSQL row.
+ const clientHost='https://qore-g152-buyer-ci.onrender.com';
+ const buyerExpiresAt=Date.now()+60000;
+ let buyerHttpGets=0;
+ const bExperience=createClientExperience({
+  authProvider:{readSession:async()=>({role:'passenger',subject:buyer,
+   token:buyerToken,expiresAt:buyerExpiresAt}),signOut:async()=>{}},
+  commerceQaHttpOptions:{
+   enabled:true,contractCertified:true,disposableQaVerified:true,
+   origin:clientHost,pinnedOrigin:clientHost,
+   fetchImpl:(url,opts)=>{
+    const u=new URL(url);
+    assert.equal(u.origin,clientHost);
+    assert.equal(u.pathname,'/v1/staging/buyer/orders/qa/requests/'+key);
+    assert.equal(opts.method,'GET');buyerHttpGets++;
+    return fetch(base+u.pathname,{...opts,redirect:'error'});
+   }
+  }
+ });
+ assert.equal((await bExperience.refreshSession()).ok,true);
+ const bRecovery=await bExperience.recoverCommerceQa(key);
+ assert.equal(bRecovery.ok,true,JSON.stringify(bRecovery));
+ assert.equal(bRecovery.receipt.orderId,original.id);
+ assert.equal(bRecovery.receipt.requestKey,key);
+ assert.equal(bRecovery.receipt.status,'ready');
+ assert.equal(bRecovery.receipt.revision,5);
+ assert.equal(bRecovery.receipt.deliveryId,deliveryId);
+ assert.equal(bRecovery.receipt.paymentConfirmed,false);
+ assert.equal(bRecovery.receipt.dispatchConfirmed,false);
+ assert.equal(buyerHttpGets,1,'One owner-scoped Buyer HTTP GET; no second reservation');
  // D Admin HTTP independently reads the very same order and linked delivery.
  const origin='https://g151-admin-ci.onrender.com',expiresAt=Date.now()+60000;
  const adminClient=createServiceTraceGateway({
@@ -265,7 +330,7 @@ try{
  assert.equal(adminResult.data.ledger,null);
  assert.equal(sql("SELECT status FROM public.mobility_stage_deliveries WHERE id="+qs(deliveryId)),'requested');
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_delivery_events WHERE delivery_id="+qs(deliveryId)),'0');
- console.log('G150 PASS: ORIGINAL G139 Buyer order -> G148 Merchant ready -> Buyer G5 delivery -> G7 server MOTO quote -> G122 immutable price consent -> G6 Merchant HTTP attach same orderId/deliveryId -> Buyer G144 recovery AND Admin D AAL2 same link; no driver, PSP, LIVE or fake delivery.');
+ console.log('G150 PASS: ORIGINAL G139 Buyer order -> G148 Merchant ready -> Buyer G5 delivery -> G7 server MOTO quote -> G122 immutable price consent -> G6 Merchant HTTP attach same orderId/deliveryId -> Buyer B original authenticated HTTP/G144 recovery AND Admin D AAL2 same link; no driver, PSP, LIVE or fake delivery.');
 } finally {
  await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
 }
