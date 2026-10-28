@@ -68,7 +68,7 @@ function fixture(other={}){
    return {routingVerified:true,coverageVerified:true,
     trafficAware:true,fallbackUsed:false,originTag:'CENTRO_FIXTURE',
     destinationTag:'AEROPUERTO',zoneTag:'MOTO_TEST_ZONE',
-    distanceMeters:5000,durationSeconds:600};
+    distanceMeters:5000,durationSeconds:600,tollsPyg:0};
   },
   repository:repo,...other
  });
@@ -77,7 +77,7 @@ function fixture(other={}){
 test('G101 MOTO Passenger quote->book->replay->cancel->lost ACK from same trip',async()=>{
  const f=fixture();
  assert.deepEqual(await f.h(quoteRequest),{status:200,body:q});
- assert.deepEqual(f.calls[0],[ 'route',{actorId:u,service:'moto_pasajero',
+ assert.deepEqual(f.calls[0],[ 'route',{actorId:u,quoteRequestKey:routeKey,service:'moto_pasajero',
   origin:quoteRequest.body.origin,destination:quoteRequest.body.destination} ]);
  assert.equal(f.calls[1][1].route.zoneTag,'MOTO_TEST_ZONE');
  assert.deepEqual(await f.h(bookRequest),{status:201,body:b});
@@ -143,6 +143,18 @@ test('G101 blocks spoofed financial percentages, Driver association and non-MOTO
   }}).h(bookRequest)).status,409,JSON.stringify(patch));
  }
 });
+test('G137 an unpriced MOTO toll cannot enter the passenger ledger',async()=>{
+ for(const tollsPyg of [undefined,100]){
+  const f=fixture({resolveVerifiedMotoRoute:async()=>({
+   routingVerified:true,coverageVerified:true,trafficAware:true,
+   fallbackUsed:false,originTag:'CENTRO_FIXTURE',destinationTag:'AEROPUERTO',
+   zoneTag:'MOTO_TEST_ZONE',distanceMeters:5000,durationSeconds:600,
+   tollsPyg
+  })});
+  assert.equal((await f.h(quoteRequest)).status,409);
+  assert.equal(f.calls.length,0,'No SQL quote without zero-toll proof');
+ }
+});
 test('G101 fail-closed on absent independent MOTO road authority and missing SQL',async()=>{
  assert.equal((await fixture({resolveVerifiedMotoRoute:async()=>null}).h(quoteRequest)).status,409);
  assert.equal((await fixture({resolveVerifiedMotoRoute:async()=>{throw Error('MAP_SECRET');}}).h(quoteRequest)).status,503);
@@ -163,7 +175,7 @@ test('G101 SQL repository calls only authorized private MOTO RPCs',async()=>{
   rpc:async(name,params)=>{names.push({name,params});return {data:q,error:null};}
  });
  const trusted={originTag:'CENTRO_FIXTURE',destinationTag:'AEROPUERTO',
-  zoneTag:'MOTO_TEST_ZONE',distanceMeters:5000,durationSeconds:600};
+  zoneTag:'MOTO_TEST_ZONE',distanceMeters:5000,durationSeconds:600,tollsPyg:0};
  assert.deepEqual(await repo.quote({actorId:u,requestKey:routeKey,route:trusted}),q);
  await repo.book({actorId:u,requestKey:bookingKey,quoteId});
  await repo.booking({actorId:u,bookingKey});

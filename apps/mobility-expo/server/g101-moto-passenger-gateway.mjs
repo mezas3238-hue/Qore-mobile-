@@ -194,7 +194,7 @@ export function createG101MotoPassengerGateway({
    if(quote){
     let r;
     try{r=await resolveVerifiedMotoRoute({
-     actorId:u.id,service:'moto_pasajero',
+     actorId:u.id,quoteRequestKey:body.requestKey,service:'moto_pasajero',
      origin:body.origin,destination:body.destination});}
     catch{return response(503,{error:'Independent MOTO route provider unavailable'});}
     if(!plain(r)||r.routingVerified!==true||r.coverageVerified!==true||
@@ -202,7 +202,8 @@ export function createG101MotoPassengerGateway({
      !tag(r.originTag)||!tag(r.destinationTag)||!tag(r.zoneTag)||
      r.originTag===r.destinationTag||
      !integer(r.distanceMeters)||r.distanceMeters>500000||
-     !integer(r.durationSeconds)||r.durationSeconds>86400)
+     !integer(r.durationSeconds)||r.durationSeconds>86400||
+     r.tollsPyg!==0)
      return response(409,{error:'MOTO route evidence unavailable'});
     const out=await repository.quote({actorId:u.id,requestKey:body.requestKey,route:r});
     if(!validQuote(out,u.id,body.requestKey,now()))
