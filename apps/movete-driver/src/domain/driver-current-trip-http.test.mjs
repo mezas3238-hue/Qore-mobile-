@@ -40,3 +40,51 @@ test('G106 rejects forged user/Passenger/private GPS, terminal state and LIVE cl
  ])await assert.rejects(()=>read({...scope,request:async()=>reply()}));
  await assert.rejects(()=>read({...base,request:async()=>reply(valid,401)}));
 });
+
+test('G106 stops hung GET and aborts its original signal without retrying a request',async()=>{
+ let requests=0,signal;
+ const request=async(_,options)=>{
+  requests++;signal=options.signal;return new Promise(()=>{});
+ };
+ await assert.rejects(()=>read({...base,request,timeoutMs:120}),/unavailable/);
+ assert.equal(requests,1);assert.equal(signal.aborted,true);
+});
+test('G106 stops a hung JSON reader, never returns a stale recovered AUTO trip',async()=>{
+ let signal;
+ const request=async(_,options)=>{
+  signal=options.signal;return {
+   status:200,redirected:false,headers:{get:()=>null},
+   json:()=>new Promise(()=>{})
+  };
+ };
+ await assert.rejects(()=>read({...base,request,timeoutMs:120}),/unavailable/);
+ assert.equal(signal.aborted,true);
+});
+test('G106 refuses declared and actual oversized responses, including UTF-8 bytes',async()=>{
+ const never=async()=>({status:200,redirected:false,
+  headers:{get:key=>key==='content-length'?'90000':'application/json'},
+  json:()=>{throw Error('Must not read body');}});
+ await assert.rejects(()=>read({...base,request:never}),/unavailable/);
+ const huge=async()=>({
+  ...reply({...valid,secretPadding:'a'.repeat(6000)}),
+  headers:{get:()=>null}
+ });
+ await assert.rejects(()=>read({...base,request:huge}),/unavailable/);
+ const unicode=async()=>({
+  ...reply({...valid,extra:'á'.repeat(600)}),
+  headers:{get:()=>null}
+ });
+ await assert.rejects(()=>read({...base,request:unicode,maxBytes:512}),/unavailable/);
+});
+test('G106 refuses redirect and non-JSON response without leaking Driver token',async()=>{
+ const bad=async()=>({...reply(),headers:{get:key=>
+  key==='content-type'?'text/html':null}});
+ await assert.rejects(()=>read({...base,request:bad}),/unavailable/);
+ const redirect=async()=>({...reply(),redirected:true});
+ await assert.rejects(()=>read({...base,request:redirect}),/unavailable/);
+ const absent=await read({...base,request:async()=>({
+  ...reply({...valid,activeTrip:null}),
+  headers:{get:key=>key==='content-type'?'application/json':null}
+ })});
+ assert.equal(absent,null);
+});

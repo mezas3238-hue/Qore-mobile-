@@ -5,4 +5,5 @@ export type DriverCurrentTrip=Readonly<{
 export declare function readDriverCurrentTrip(opts:{
  apiOrigin:string;approvedStagingHost?:string|null;
  allowedByOwner?:boolean;accessToken:string;request?:typeof fetch;
+ timeoutMs?:number;maxBytes?:number;
 }):Promise<DriverCurrentTrip|null>;
