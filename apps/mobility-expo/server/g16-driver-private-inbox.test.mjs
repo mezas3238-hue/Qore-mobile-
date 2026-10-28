@@ -115,3 +115,38 @@ test('G16 zero private offers is not an invented acceptance',async()=>{
  assert.deepEqual(result.body.offers,[]);
  assert.equal(result.body.deviceReceived,false);
 });
+
+test('G134 guarded G16 inbox denies revoked or expired Driver sessions before private SQL',async()=>{
+ let reads=0;
+ let revoked=false;
+ const authWithSession={...auth,sessionId:'77777777-7777-4777-8777-777777777777',expiresAtMs:now+60000};
+ const guarded=gateway({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>authWithSession,
+  verifySessionNotRevoked:async({userId,sessionId,at})=>{
+   assert.equal(userId,driver);
+   assert.equal(sessionId,authWithSession.sessionId);
+   assert.equal(at,now);
+   return !revoked;
+  },
+  listForDriver:async()=>{reads++;return {ok:true,liveEnabled:false,offers:[]};}
+ }).handler;
+ assert.equal((await guarded(request)).status,200);
+ assert.equal(reads,1);
+ revoked=true;
+ assert.equal((await guarded(request)).status,401);
+ assert.equal(reads,1,'revocation cannot leak private offers');
+ assert.equal((await gateway({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>({...authWithSession,expiresAtMs:now}),
+  verifySessionNotRevoked:async()=>true
+ }).handler(request)).status,401);
+ assert.equal((await gateway({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>authWithSession,
+  verifySessionNotRevoked:async()=>{throw Error('provider outage')}
+ }).handler(request)).status,503);
+ assert.throws(()=>gateway({
+  requireFreshSession:true,verifySessionNotRevoked:null
+ }));
+});
