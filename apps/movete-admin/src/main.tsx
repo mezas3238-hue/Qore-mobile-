@@ -10,6 +10,7 @@ import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
 import type {IncidentPageFilter,IncidentPageOrder} from './incident-page-triage.mjs';
 import type {MerchantCasePageSuccess} from './merchant-case-page.mjs';
+import {inspectAutoRideCrossEvidence} from './auto-ride-cross-evidence.mjs';
 import type {KycFilter} from './kyc-page-view.mjs';
 import './styles.css';
 
@@ -498,6 +499,18 @@ function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSna
  const ready=Boolean(state.account?.role==='admin'&&current.contractReady);
  const match=current.item?.serviceKind===kind&&current.item.serviceId===id
   ?current.item:null;
+ const f1Ready=state.f1RideAudit.contractReady&&kind==='AUTO_RIDE';
+ const f1ForSameTrip=state.f1RideAudit.item?.tripId===id
+  ?state.f1RideAudit.item:null;
+ const cross=match&&f1ForSameTrip
+  ?inspectAutoRideCrossEvidence({trace:match,f1:f1ForSameTrip}):null;
+ const inspectF1=async()=>{
+  if(!match||!f1Ready||current.loading||state.f1RideAudit.loading)return;
+  const result=await client.loadF1RideAudit(id);
+  setMessage(result.ok
+   ?'Segunda lectura F1 recibida. Comprueba abajo la coincidencia del ID, cotización y ledger.'
+   :'No se pudo verificar la auditoría F1 del mismo viaje. No hay confirmación cruzada.');
+ };
  const inspect=async()=>{
   if(!ready||!F1_TRIP.test(id)||current.loading)return;
   const output=await client.loadServiceTrace(kind,id);
@@ -532,6 +545,22 @@ function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSna
    <button type="button" disabled={!match||current.loading}
     onClick={()=>{client.clearServiceTrace();setMessage('');}}>Limpiar</button>
   </div>
+  {match?.serviceKind==='AUTO_RIDE'&&<div className="refresh-actions">
+   <button type="button" disabled={!f1Ready||current.loading||state.f1RideAudit.loading}
+    onClick={()=>{void inspectF1();}}>
+    {state.f1RideAudit.loading?'Cotejando F1…':'Cruzar viaje AUTO con auditoría F1'}
+   </button>
+  </div>}
+  {cross&&<p role={cross.ok?'status':'alert'} className="kyc-notice">
+   {cross.ok?(cross.financiallyReconciled
+    ?'Dos respuestas Admin QA coinciden: mismo viaje, cotización, solicitud y total PYG conciliado declarado.'
+    :'Las dos respuestas QA coinciden en viaje, cotización y solicitud; falta una conciliación final.')
+    :'Cruce rechazado ('+cross.code+'). No se puede afirmar integridad del viaje y del ledger.'}
+   {' '}Esto NO certifica PostgreSQL externo, cobro bancario ni operación LIVE.
+  </p>}
+  {match?.serviceKind==='AUTO_RIDE'&&!f1Ready&&<p role="note">
+   Cruce F1 bloqueado: requiere contrato G75 independiente autorizado por Backend A.
+  </p>}
   {message&&<p role="status">{message}</p>}
   {current.error&&<p role="alert">Consulta rechazada: {current.error}</p>}
   {match&&<div className="zone-rows">
