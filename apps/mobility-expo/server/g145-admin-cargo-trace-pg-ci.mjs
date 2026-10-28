@@ -12,7 +12,10 @@ if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
  process.env.PGPORT!=='5432'||process.env.PGDATABASE!=='qore_disposable_chain'||
  process.env.PGAPPNAME!=='qore_ci_disposable_chain')
  throw Error('G145 only in disposable CI PostgreSQL16');
-const admin='12200000-0000-4122-8122-000000000001';
+// G27 Admin is a SEPARATE exclusive backoffice identity from the G122
+// native QA tariff approver; dual native roles must remain forbidden.
+const tariffApprover='12200000-0000-4122-8122-000000000001';
+const admin='14500000-0000-4145-8145-000000000002';
 const senders=['12200000-0000-4122-8122-000000000011',
  '12200000-0000-4122-8122-000000000012'];
 const session='14500000-0000-4145-8145-000000000001';
@@ -29,6 +32,13 @@ function sql(statement){
 const read=s=>JSON.parse(sql(s));
 assert.equal(sql("SELECT (to_regprocedure('public.mobility_stage_g145_delivery_trace_qa(uuid,uuid)') IS NOT NULL)::text"),'true');
 assert.equal(sql("SELECT (has_function_privilege('anon','public.mobility_stage_g145_delivery_trace_qa(uuid,uuid)','EXECUTE') OR has_function_privilege('authenticated','public.mobility_stage_g145_delivery_trace_qa(uuid,uuid)','EXECUTE'))::text"),'false');
+// G145 SQL is intentionally read-only. The disposable test's privileged
+// setup seeds an independent G27 authority, never a native admin role.
+sql("INSERT INTO auth.users(id) VALUES ('"+admin+"') ON CONFLICT DO NOTHING");
+sql("INSERT INTO public.mobility_stage_backoffice_roles("+
+ "user_id,role,status,approved_by) VALUES ('"+admin+"','admin','active','"+
+ tariffApprover+"') ON CONFLICT DO NOTHING");
+assert.equal(sql("SET ROLE service_role; SELECT public.mobility_stage_g27_backoffice_role_of('"+admin+"')::text"),'admin');
 const rows=read("SELECT COALESCE(jsonb_agg(jsonb_build_object("+
  "'id',d.id,'key',d.request_key,'kind',d.requested_vehicle_kind,"+
  "'quoteId',c.quote_id) ORDER BY d.requested_vehicle_kind),'[]'::jsonb) "+
