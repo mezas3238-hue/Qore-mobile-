@@ -47,7 +47,8 @@ function callRpc(name,args){
  const values=keys.map(key=>{
   const value=args[key];
   if(key==='bps'){
-   if(!Number.isSafeInteger(value)||value<1000||value>3000)
+   if(!Number.isSafeInteger(value)||value<0||value>3000||
+    (['AUTO_RIDE','MOTO_RIDE'].includes(args.service)&&value<1000))
     throw Error('G117 invalid bps');
    return String(value);
   }
