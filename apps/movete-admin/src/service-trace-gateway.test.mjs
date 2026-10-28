@@ -119,7 +119,7 @@ test('G146 Commerce requires explicit missing G7 quote and never renders a fabri
  assert.equal((await configured(async()=>response(good)).read('COMMERCE',id)).ok,true);
  for(const change of [
   x=>x.quoteId=uuid(66),
-  x=>x.branchId=uuid(77),
+  x=>x.branchId='FORGED',
   x=>x.vehicleKind='BICYCLE',
   x=>x.orderSubtotalGs=0,
   x=>x.orderSubtotalGs=50000001,
