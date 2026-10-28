@@ -74,10 +74,13 @@ export default function DriverOffers(){
    decision.action!=='accept'||state.phase!=='connected')return;
   resumeLock.current=true;setResuming(true);setResumeMessage('');
   try{
-   const verified=await custody.openVerified(decision.serviceId);
-   if(verified)router.push({pathname:'/entrega',
-    params:{deliveryId:decision.serviceId}});
-   else setResumeMessage('El servidor no confirmó esta entrega asignada a tu sesión Driver. No se realizarán acciones de custodia hasta verificar el mismo envío.');
+   const verified=await custody.rememberDelivery(decision.serviceId);
+   if(verified.ok){
+    if(verified.saved===false)setResumeMessage(
+     'El servidor verificó la entrega. La recuperación tras reiniciar no quedó guardada en este dispositivo.'
+    );
+    router.push({pathname:'/entrega',params:{deliveryId:decision.serviceId}});
+   }else setResumeMessage('El servidor no confirmó esta entrega asignada a tu sesión Driver. No se realizarán acciones de custodia hasta verificar el mismo envío.');
   }finally{resumeLock.current=false;setResuming(false);}
  }
  async function continueAcceptedAuto(decision:DriverOfferDecisionStatus){

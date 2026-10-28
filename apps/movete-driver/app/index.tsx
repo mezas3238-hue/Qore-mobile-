@@ -4,6 +4,7 @@ import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
+import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
 import {verifyResumableDriverAutoTrip} from '../src/domain/driver-accepted-ride-resume.mjs';
@@ -58,6 +59,23 @@ export default function DriverHome(){
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
  const currentTrip=useDriverCurrentTrip();
+ const custody=useDriverCustody();
+ const [resumingDelivery,setResumingDelivery]=useState(false);
+ const [deliveryRecoveryMessage,setDeliveryRecoveryMessage]=useState('');
+ const deliveryLock=useRef(false);
+ async function resumeVerifiedDelivery(){
+  if(deliveryLock.current||!custody.enabled||state.phase!=='connected'
+    ||kyc.snapshot?.state!=='READY_QA')return;
+  deliveryLock.current=true;setResumingDelivery(true);setDeliveryRecoveryMessage('');
+  try{
+   const result=await custody.resumeDelivery();
+   if(result.ok&&result.deliveryId)
+    router.push({pathname:'/entrega',params:{deliveryId:result.deliveryId}});
+   else setDeliveryRecoveryMessage(result.code==='NO_REMEMBERED_DELIVERY'
+    ?'No hay un envío previamente verificado y guardado en este dispositivo.'
+    :'No se pudo confirmar un envío activo para esta sesión. No se abrirá sin verificar de nuevo la asignación.');
+  }finally{deliveryLock.current=false;setResumingDelivery(false);}
+ }
  const phase:Record<string,string>={
   'not-configured':'STAGING sin conectar — no hay sesión de conductor',
   'signed-out':'Sesión de conductor cerrada',
@@ -153,6 +171,16 @@ export default function DriverHome(){
    <Action label="Consultar mi asignación en el servidor" secondary
     disabled={!currentTrip.enabled||currentTrip.state.phase==='loading'}
     onPress={()=>{void currentTrip.refresh();}}/>
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>Recuperar mi envío asignado</Text>
+   <Text style={styles.small}>Si verificaste una entrega privada en este dispositivo, se guarda únicamente una referencia cifrada. Tras reiniciar, el backend G66 debe confirmar otra vez que el envío continúa asignado a esta cuenta. No permite usar un ID de otro conductor ni revivir entregas finalizadas.</Text>
+   <Action label={resumingDelivery?'Verificando envío…':'Recuperar envío verificado'}
+    secondary disabled={!custody.enabled||resumingDelivery||
+     state.phase!=='connected'||kyc.snapshot?.state!=='READY_QA'}
+    onPress={()=>{void resumeVerifiedDelivery();}}/>
+   {deliveryRecoveryMessage!==''&&<Text accessibilityRole="alert"
+    style={styles.text}>{deliveryRecoveryMessage}</Text>}
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mi disponibilidad</Text>
