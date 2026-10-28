@@ -14,6 +14,11 @@ import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
+import {createDriverPrivateInboxGateway} from './g16-driver-private-inbox-gateway.mjs';
+import {createDriverPrivateInboxRepository} from './g16-driver-private-inbox-repository.mjs';
+import {readDriverPrivateInbox} from '../../movete-driver/src/domain/driver-inbox.mjs';
+import {createDriverInboxSessionController}
+ from '../../movete-driver/src/domain/driver-inbox-session.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
 import {createG112ScopedAutoDispatchRepository}
@@ -268,6 +273,31 @@ async function main(){
     "LIMIT 1),'null'::jsonb)::text;");
   }
  });
+
+ // G132: real G16 SQL -> trusted JWT HTTP -> native C Driver inbox on the
+ // SAME newly booked G73 operation. No fabricated offer or legal approval.
+ // SQL remains the only source of offered/expired/owner-scoped assignments.
+ const driverInboxSql=createDriverPrivateInboxRepository({rpc:async(name,args)=>{
+  const supported={
+   mobility_stage_poll_driver_auto_offers:['_driver_id','trip_id'],
+   mobility_stage_poll_courier_delivery_offers:['_courier_id','delivery_id']
+  };
+  const spec=supported[name];
+  if(!spec||Object.keys(args).length!==1||!uuid.test(args[spec[0]]??''))
+   throw Error('G132 refuses unverified private poll scope');
+  const rows=sqlJson("SET ROLE service_role; SELECT COALESCE(("+
+   "SELECT pg_catalog.jsonb_agg(pg_catalog.to_jsonb(src)) "+
+   "FROM public."+name+"('"+args[spec[0]]+"') AS src),"+
+   "'[]'::jsonb)::text;");
+  if(!Array.isArray(rows))throw Error('G132 SQL poll unavailable');
+  return {data:rows,error:null};
+ }});
+ const driverInbox=createDriverPrivateInboxGateway({
+  projectRef:'staging1234567890abcd',
+  verifyAccessToken:driverIdentity,
+  authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
+  allowRequest:()=>true,listForDriver:x=>driverInboxSql.listForDriver(x)
+ });
  const tripCommands=createQoreTripCommandGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:driverIdentity,
@@ -289,7 +319,7 @@ async function main(){
   riderHandler:rider,adminF1AuditHandler:adminGateway,
   offerHandler:noop,tripCommandHandler:tripCommands,
   driverTripStatusHandler:driverStatus,
-  driverCurrentTripHandler:driverCurrent,
+  driverCurrentTripHandler:driverCurrent,driverInboxHandler:driverInbox,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
   safetyHandler:noop,merchantManagementHandler:noop,deliveryOfferHandler:noop,
   f1AutoHandler:gateway
@@ -419,6 +449,22 @@ async function main(){
   assert.equal(deniedAfterAdvance.driverId,null);
   assert.equal(Number(deniedAfterAdvance.events),0);
 
+  // Native C reads the actual G16 HTTP/PG16 inbox after B's G73 booking.
+  // G38/G71 withhold assignment, not an artificial empty mock response.
+  const cInbox=createDriverInboxSessionController({
+   readInbox:({accessToken})=>readDriverPrivateInbox({
+    apiOrigin:base,accessToken,request:fetch
+   })
+  });
+  cInbox.setSession({role:'driver',userId:driverId,accessToken:driverToken});
+  const cBefore=await cInbox.refresh();
+  assert.equal(cBefore.phase,'connected','C real HTTP inbox must be reachable');
+  assert.deepEqual(cBefore.offers,[],
+   'G71/G38 must never fabricate an offer for a Driver without valid KYC');
+  assert.equal((await http(base,'/v1/staging/driver/inbox',{auth:token})).status,401);
+  assert.equal((await http(base,'/v1/staging/driver/inbox',{auth:otherToken})).status,401);
+  assert.equal((await http(base,'/v1/staging/driver/inbox?driverId='+driverId,
+   {auth:driverToken})).status,404);
   // Two distinct HTTP clients read exactly the same G73 -> G3 trip.
   const riderBefore=await http(base,
    '/v1/staging/rider/trips/'+tripId+'/status');
@@ -543,6 +589,10 @@ async function main(){
   assert.equal(riderAfter.data.revision,2);
   assert.equal(riderAfter.data.driver,null);
   // An app restart cannot rediscover a canceled trip as active.
+  const cAfter=await cInbox.refresh();
+  assert.equal(cAfter.phase,'connected');
+  assert.deepEqual(cAfter.offers,[],
+   'G95 cancellation cannot resurrect private Driver offers');
   const recoveredAfter=await http(base,recoveryPath,{auth:driverToken});
   assert.equal(recoveredAfter.status,200,JSON.stringify(recoveredAfter.data));
   assert.equal(recoveredAfter.data.activeTrip,null);
@@ -686,6 +736,7 @@ async function main(){
   assert.equal(posts,5,'One route, quote, subsidy, booking and cancel');
   assert.equal(gets,4,'One status, financial, canceled status, voided financial');
   continuation.close();
+  console.log('G132 UNIFIED B+A+C+D PARTIAL: native Driver C polls G16 authenticated real PG16 inbox for B new G73 ride; zero offers when G71/G38 legal evidence is absent; Admin D sees same trip. EXTERNAL_LEGAL_EVIDENCE_BLOCKED, not an accepted trip.');
   console.log('G131 UNIFIED A+B+D PASS: real Client B booking and subsidy -> A HTTP/PostgreSQL persisted trip -> Admin Web D state -> B cancel -> D same ID/revision/fare and IdP revocation; Driver legal G38/G71 remains blocked, NO LIVE');
   // Provider revocation and stored backoffice suspension must both deny reads.
   adminSessionRevoked=true;
