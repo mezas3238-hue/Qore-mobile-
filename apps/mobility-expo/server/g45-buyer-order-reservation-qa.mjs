@@ -81,7 +81,7 @@ export function createG45BuyerOrderReservationQa({
  async function reserve({bearer,body}={}){
   if(!sealed(body,['requestKey','branchId','catalogVersion','vehicleKind','items'])||
    !validUuid(body.requestKey)||!validUuid(body.branchId)||
-   !positive(body.catalogVersion)||body.vehicleKind!=='AUTO'||
+   !positive(body.catalogVersion)||!['AUTO','MOTO'].includes(body.vehicleKind)||
    !allowedItems(body.items))
    return fail(400,'INVALID_ORDER_REQUEST');
   const {actor,failure}=await actorFor(bearer,'buyer.order.reserve.qa');
@@ -90,7 +90,7 @@ export function createG45BuyerOrderReservationQa({
   try{source=await rpc('mobility_stage_g45_reserve_order_qa',{
    _buyer:actor.id,_session:actor.sessionId,_iat_ms:actor.tokenIatMs,
    _request_key:body.requestKey,_branch:body.branchId,
-   _catalog_version:body.catalogVersion,_vehicle_kind:'AUTO',
+   _catalog_version:body.catalogVersion,_vehicle_kind:body.vehicleKind,
    _items:body.items
   });}
   catch{return fail(503,'ORDER_SOURCE_UNAVAILABLE')};
