@@ -746,6 +746,10 @@ jobs:
         run: node apps/mobility-expo/server/g146-admin-commerce-trace-pg-ci.mjs
       - name: G148 original B Buyer order -> A Merchant staff confirmation/preparation/ready -> D Admin
         run: node apps/mobility-expo/server/g148-merchant-fulfillment-pg-ci.mjs
+      - name: G150 require original G122 cargo price consent before G6 Merchant delivery link
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G150_PRICE_CONSENT_BEFORE_MERCHANT_DELIVERY_LINK_POSTGRES_CI_ONLY.sql
+      - name: G150 original B Buyer + Merchant ready -> G5/G7/G122 MOTO -> G6 HTTP same-order link -> Buyer G144
+        run: node apps/mobility-expo/server/g150-merchant-priced-delivery-link-pg-ci.mjs
       - name: G132 original B Client G5/G121 and C Driver G66 over A PostgreSQL16 (same SHA)
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G123 install SQL private delivery offer/accept price fence AFTER G121/G122 receipts
