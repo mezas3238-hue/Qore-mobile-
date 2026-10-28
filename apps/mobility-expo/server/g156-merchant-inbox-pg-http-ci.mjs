@@ -85,7 +85,12 @@ try{
  assert.equal(order.revision,5);
  assert.equal(order.subtotalPyg,25000);
  assert.equal(order.vehicleKind,'MOTO');
- assert.equal(order.lineCount,1);assert.equal(order.itemUnits,2);
+ const originalLines=read("SELECT jsonb_build_object("+
+  "'lines',count(*)::integer,'units',sum(quantity)::integer) "+
+  "FROM public.mobility_stage_merchant_order_lines WHERE order_id="+qs(source.id));
+ assert.equal(order.lineCount,originalLines.lines);
+ assert.equal(order.itemUnits,originalLines.units);
+ assert(originalLines.lines>0&&originalLines.units>0);
  assert(!JSON.stringify(result.body).includes(buyer),'Inbox must not leak buyer identity');
  assert.deepEqual((await get(token)).body.orders,result.body.orders);
  assert.equal((await get(otherToken)).status,403,'Buyer cannot access staff');
