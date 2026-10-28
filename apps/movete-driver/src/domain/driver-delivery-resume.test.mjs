@@ -15,8 +15,8 @@ function setup({readAssignment=async()=>good(),getSession=async()=>first,
   put:async(key,value)=>{hits.put++;mem.set(key,value);},
   del:async key=>{hits.del++;mem.delete(key);}
  }:null;
- const ctl=createDriverDeliveryResume({getSession,readAssignment:async id=>{
-  hits.read++;return readAssignment(id);},storage,now:clock});
+ const ctl=createDriverDeliveryResume({getSession,readAssignment:async(id,actor)=>{
+  hits.read++;return readAssignment(id,actor);},storage,now:clock});
  return {ctl,hits,mem};
 }
 test('Driver stores only owner-bound delivery ID and verifies fresh server on restart',async()=>{
