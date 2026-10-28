@@ -24,9 +24,9 @@ test('G45 pedido sintético solo prepara contrato, sin envío ni compra',()=>{
  assert.equal(Object.isFrozen(draft.body.items[0]),true);
  assert.equal(Object.hasOwn(draft.body,'unitPricePyg'),false);
 });
-test('G45 moto, PII, precio frontend y referencia insegura no entran en reserva',()=>{
+test('G45 PII, precio frontend y vehículo no admitido no entran en reserva',()=>{
  const bad=[
-  {...request(),vehicleKind:'MOTO'},
+  {...request(),vehicleKind:'BICYCLE'},
   {...request(),phone:'0981000000'},
   {...request(),unitPricePyg:1},
   {...request(),catalogVersion:0},
@@ -45,6 +45,16 @@ test('G45 moto, PII, precio frontend y referencia insegura no entran en reserva'
   assert.equal(validateG45ReserveRequest(input),false);
   assert.equal(prepareG45QaReserveDraft(input).ok,false);
  }
+});
+test('G140 MOTO puede reservar stock QA pero nunca supone pago o despacho',()=>{
+ const input={...request(),vehicleKind:'MOTO'};
+ assert.equal(validateG45ReserveRequest(input),true);
+ const draft=prepareG45QaReserveDraft(input);
+ assert.equal(draft.ok,true);
+ assert.equal(draft.submitted,false);
+ assert.equal(draft.paymentsEnabled,false);
+ assert.equal(draft.body.vehicleKind,'MOTO');
+ assert.equal(projectG45QaReserveReceipt(receipt(),{request:input})?.paymentConfirmed,false);
 });
 test('G45 50 líneas son tamaño de un pedido, no límite de registros',()=>{
  const fifty=Array.from({length:50},(_,i)=>({itemId:id(i+100),quantity:1}));
