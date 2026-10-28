@@ -13,6 +13,8 @@ import {createG134GeoapifyAutoRouteResolver}
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
+import {createG116OwnerCommissionGateway} from './g116-owner-commission-gateway.mjs';
+import {createOwnerCommissionGateway} from '../../movete-admin/src/owner-commission-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
@@ -40,6 +42,7 @@ const owner='98980000-0000-4989-8989-000000000002';
 const outsider='98980000-0000-4989-8989-000000000003';
 const adminId='98980000-0000-4989-8989-000000000004';
 const adminSessionId='98980000-0000-4989-8989-000000000005';
+const ownerSessionId='98980000-0000-4989-8989-000000000008';
 const driverId='98980000-0000-4989-8989-000000000006';
 const driverSessionId='98980000-0000-4989-8989-000000000007';
 const forgedDriverTransitionKey='98980000-0000-4989-8989-000000000026';
@@ -51,6 +54,7 @@ const cancelKey='98980000-0000-4989-8989-000000000013';
 const token='g98-verified-qa-session-'+p.replaceAll('-','');
 const otherToken='g98-verified-qa-session-'+outsider.replaceAll('-','');
 const adminToken='g99-admin-aal2-qa-'+adminId.replaceAll('-','');
+const ownerToken='g135-owner-aal2-qa-'+owner.replaceAll('-','');
 const driverToken='g105-private-driver-session-'+driverId.replaceAll('-','');
 const f1='/v1/staging/rider/auto';
 const noop=async()=>({status:404,body:{error:'Not found'}});
@@ -258,6 +262,46 @@ async function main(){
   loadAdminRideReceipt:x=>adminSql.read(x)
  });
 
+ // G135: the real D Admin Owner browser codec must change the SAME
+ // PostgreSQL commission policy that F1 Cliente B uses after the update.
+ // A verifies Owner authority, independent AAL2 and session revocation.
+ const allowCommissionService=service=>['AUTO_RIDE','MOTO_RIDE'].includes(service);
+ const commissionRead=async({serviceKind})=>{
+  if(!allowCommissionService(serviceKind))throw Error('G135 invalid Owner service');
+  return sqlJson("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_g116_read_commission_qa('"+serviceKind+"')::text");
+ };
+ const commissionChange=async({actorId,serviceKind,commissionBps,requestKey})=>{
+  if(!uuid.test(actorId)||!uuid.test(requestKey)||
+   !allowCommissionService(serviceKind)||!Number.isSafeInteger(commissionBps)||
+   commissionBps<1000||commissionBps>3000)
+   throw Error('G135 unverified Owner rate update');
+  return sqlJson("SET ROLE service_role; SELECT "+
+   "public.mobility_stage_g116_set_commission_qa('"+actorId+"','"+
+    serviceKind+"',"+commissionBps+",'"+requestKey+"')::text");
+ };
+ const ownerRates=createG116OwnerCommissionGateway({
+  projectRef:'staging1234567890abcd',
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  verifyAccessToken:async value=>{
+   if(value!==ownerToken)throw Error('G135 unverifiable Owner');
+   return {id:owner,sessionId:ownerSessionId,is_anonymous:false,
+    expiresAtMs:Date.now()+600000};
+  },
+  verifySessionNotRevoked:async({userId,sessionId})=>
+   userId===owner&&sessionId===ownerSessionId,
+  loadExclusiveBackofficeRole:async actorId=>{
+   if(!uuid.test(actorId))throw Error('G135 unverified backoffice actor');
+   return psql("SET ROLE service_role; SELECT "+
+    "public.mobility_stage_g27_backoffice_role_of('"+actorId+"')");
+  },
+  verifyBackofficeMfa:async({userId,sessionId})=>({
+   verifiedByProvider:true,userId,sessionId,assuranceLevel:'aal2',
+   verifiedAtMs:Date.now()-1000,expiresAtMs:Date.now()+300000
+  }),
+  allowRequest:()=>true,readPolicy:commissionRead,
+  changePolicy:commissionChange
+ });
  // G105: Driver is a distinct, server-verified actor reading the SAME
  // persistent G73 booking as Passenger and Admin. No fake assignment.
  const driverIdentity=async value=>{
@@ -406,6 +450,7 @@ async function main(){
  });
  const server=createQoreRadarLoopbackTransport({
   riderHandler:rider,adminF1AuditHandler:adminGateway,
+  ownerCommissionHandler:ownerRates,
   offerHandler:driverOffer,tripCommandHandler:tripCommands,
   driverTripStatusHandler:driverStatus,
   driverCurrentTripHandler:driverCurrent,driverInboxHandler:driverInbox,
@@ -729,12 +774,38 @@ async function main(){
    q.data.quoteId+"'");
   assert.equal(originalTerms.bps,1500);
   assert.equal(originalTerms.version,1);
-  const changedRate=sqlJson("SET ROLE service_role; SELECT "+
-   "public.mobility_stage_g116_set_commission_qa('"+owner+
-   "','AUTO_RIDE',1800,'98980000-0000-4989-8989-000000000034')::text");
-  assert.equal(changedRate.commissionBps,1800);
-  assert.equal(changedRate.subsidyBps,1000);
-  assert.equal(changedRate.version,2);
+  const ownerWebOrigin='https://qore-g135-owner-admin-ci.invalid';
+  let ownerWebWrites=0;
+  const ownerWeb=createOwnerCommissionGateway({
+   enabled:true,contractCertified:true,
+   origin:ownerWebOrigin,pinnedOrigin:ownerWebOrigin,
+   getSession:async()=>({role:'owner',mfaVerified:true,
+    subject:owner,token:ownerToken,expiresAt:Date.now()+600000}),
+   fetchImpl:(url,opts)=>{
+    const destination=new URL(url);
+    assert.equal(destination.origin,ownerWebOrigin);
+    assert.equal(destination.pathname,'/v1/staging/owner/commissions/AUTO_RIDE');
+    assert.equal(destination.search,'');
+    assert.equal(destination.hash,'');
+    if(opts.method==='POST')ownerWebWrites++;
+    assert(['GET','POST'].includes(opts.method));
+    return fetch(base+destination.pathname,{...opts,redirect:'error'});
+   }
+  });
+  const originalOwnerRate=await ownerWeb.read('AUTO_RIDE');
+  assert.equal(originalOwnerRate.ok,true,JSON.stringify(originalOwnerRate));
+  assert.equal(originalOwnerRate.data.commissionBps,1500);
+  const ownerUpdate=await ownerWeb.change('AUTO_RIDE',{
+   requestKey:'98980000-0000-4989-8989-000000000034',commissionBps:1800
+  });
+  assert.equal(ownerUpdate.ok,true,JSON.stringify(ownerUpdate));
+  assert.equal(ownerUpdate.data.commissionBps,1800);
+  assert.equal(ownerUpdate.data.subsidyBps,1000);
+  assert.equal(ownerUpdate.data.version,2);
+  assert.equal(ownerWebWrites,1);
+  const updatedOwnerRead=await ownerWeb.read('AUTO_RIDE');
+  assert.equal(updatedOwnerRead.ok,true);
+  assert.equal(updatedOwnerRead.data.commissionBps,1800);
   assert.deepEqual(sqlJson("SELECT pg_catalog.jsonb_build_object("+
    "'bps',commission_bps,'version',commission_version,'subsidy',subsidy_gs)::text "+
    "FROM public.mobility_stage_g93_auto_quote_terms WHERE quote_id='"+
@@ -880,7 +951,7 @@ async function main(){
    body:{offerId:deniedOfferKey,
     requestKey:'98980000-0000-4989-8989-000000000029'}})).status,401);
   console.log('G134 SESSION FENCE PASS: revoked Driver cannot poll G16 or accept G4 offers for the same G73 trip, with G38/G71 unchanged; CI-only.');
-  console.log('G135 OWNER COMMISSION INTEGRATED PASS: original AUTO quote stays 1500bps, new B/A/D same-trip quote uses Owner 1800bps and passenger subsidy remains 1000bps; no PSP or LIVE.');
+  console.log('G135 OWNER COMMISSION INTEGRATED PASS: D Owner Admin browser -> A JWT/AAL2 HTTP -> PG16 changes AUTO 1500 to 1800bps; B new ride and D audit retain same tripId, original quote frozen, passenger 10% unchanged; no PSP or LIVE.');
   console.log('G133 DRIVER DECISION PARTIAL: native C accept attempts use real authenticated G4 HTTP -> PG16 and fail closed with G38/G71 intact; no false assignment/settlement.');
   console.log('G132 UNIFIED B+A+C+D PARTIAL: native Driver C polls G16 authenticated real PG16 inbox for B new G73 ride; zero offers when G71/G38 legal evidence is absent; Admin D sees same trip. EXTERNAL_LEGAL_EVIDENCE_BLOCKED, not an accepted trip.');
   console.log('G131 UNIFIED A+B+D PASS: real Client B booking and subsidy -> A HTTP/PostgreSQL persisted trip -> Admin Web D state -> B cancel -> D same ID/revision/fare and IdP revocation; Driver legal G38/G71 remains blocked, NO LIVE');
