@@ -45,11 +45,11 @@ sql("INSERT INTO auth.users(id) VALUES "+[buyer,owner,reviewer].map(id=>'('+quot
  "INSERT INTO public.mobility_stage_merchants("+
  "id,onboarding_key,owner_id,kind,display_tag,status,reviewed_by,reviewed_at)"+
  " VALUES("+quote(merchant)+","+quote(ids(21))+","+quote(owner)+
- ",'SUPERMARKET','G139_SHOP','approved',"+quote(reviewer)+",clock_timestamp());"+
+ ",'SUPERMARKET','QA_SHOP','approved',"+quote(reviewer)+",clock_timestamp());"+
  "INSERT INTO public.mobility_stage_merchant_branches("+
  "id,merchant_id,branch_tag,pickup_tag,preparation_minutes,active,accepting_orders)"+
  " VALUES("+quote(branch)+","+quote(merchant)+
- ",'G139_BRANCH','G139_PICKUP',10,true,true);"+
+ ",'QA_BRANCH','QA_PICKUP',10,true,true);"+
  "INSERT INTO public.mobility_stage_g44_branch_geography("+
  "branch_id,zone_id,service_kind) VALUES("+quote(branch)+","+quote(zone)+
  ",'AUTO_DELIVERY');"+
