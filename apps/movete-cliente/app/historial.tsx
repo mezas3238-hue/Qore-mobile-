@@ -91,6 +91,16 @@ export default function ClientHistory(){
     {view.historyConfigured&&!view.rideHistoryRecovery.readReady&&
      <Text style={styles.small}>El seguimiento solo se habilita después de verificar una fila propia y el estado independiente del viaje. La ausencia de fila en una página no significa que no exista reserva.</Text>}
    </Panel>
+   <Panel>
+    <Text accessibilityRole="header" style={styles.heading}>Calificaciones verificadas</Text>
+    <Text style={styles.text}>
+     Calificá a tu conductor, repartidor o comercio únicamente después de que
+     el servidor confirme el viaje, entrega o pedido finalizado.
+     Podés reportar un incidente sin que se suspenda automáticamente a nadie.
+    </Text>
+    <Action label="Calificar un servicio terminado"
+     onPress={()=>router.push('/calificar')}/>
+   </Panel>
    {view.history?.window.hasEvictedNewer&&<Panel>
     <Text accessibilityRole="header" style={styles.heading}>Ventana de memoria activa</Text>
     <Text style={styles.text}>Se liberaron {view.history.window.evictedCount.toLocaleString('es-PY')} servicios recientes ya recorridos para mantener estable el dispositivo. El historial completo continúa en el servidor.</Text>
@@ -114,6 +124,10 @@ export default function ClientHistory(){
       disabled={view.rideHistoryRecovery.busy}
       hint="Consulta privada de solo lectura; no crea viajes ni asigna conductor."
       onPress={()=>{void resumeOwnRide(item.serviceId,item.revision);}}/>}
+    {item.kind==='RIDE'&&item.status==='completed'&&view.authenticated&&
+     <Action secondary label="Calificar al conductor de este viaje"
+      onPress={()=>router.push({pathname:'/calificar',
+       params:{serviceId:item.serviceId,serviceKind:'AUTO_RIDE'}})}/>}
     {item.kind==='DELIVERY'&&view.senderCustody.readReady&&
      <Action label={view.senderCustody.loading?'Verificando entrega…':'Consultar custodia de mi envío'}
       disabled={view.senderCustody.loading}

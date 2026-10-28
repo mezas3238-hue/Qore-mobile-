@@ -35,6 +35,10 @@ on:
       - 'apps/mobility-expo/server/g146-admin-commerce-trace-gateway.mjs'
       - 'apps/mobility-expo/server/g146-admin-commerce-trace-pg-ci.mjs'
       - 'apps/mobility-expo/server/g148-merchant-fulfillment-pg-ci.mjs'
+      - 'apps/mobility-expo/server/g155-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G155_*'
+      - 'apps/movete-cliente/src/domain/g155-*'
+      - 'apps/movete-cliente/app/calificar.tsx'
       - 'apps/mobility-expo/server/g150-merchant-priced-delivery-link-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G150_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G154_*'
@@ -99,6 +103,10 @@ on:
       - 'apps/mobility-expo/server/g146-admin-commerce-trace-gateway.mjs'
       - 'apps/mobility-expo/server/g146-admin-commerce-trace-pg-ci.mjs'
       - 'apps/mobility-expo/server/g148-merchant-fulfillment-pg-ci.mjs'
+      - 'apps/mobility-expo/server/g155-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G155_*'
+      - 'apps/movete-cliente/src/domain/g155-*'
+      - 'apps/movete-cliente/app/calificar.tsx'
       - 'apps/mobility-expo/server/g150-merchant-priced-delivery-link-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G150_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G154_*'
@@ -807,5 +815,9 @@ jobs:
         run: node apps/mobility-expo/server/g119-moto-status-pg-http-ci.mjs
       - name: G109 end-to-end Driver AUTO legacy QA lifecycle, Rider consistency and slot release
         run: node apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs
+      - name: G155 install private verified participant ratings on real completed services
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G155_VERIFIED_PARTICIPANT_REPUTATION_POSTGRES_CI_ONLY.sql
+      - name: G155 B Buyer original HTTP rating and A server G42 PG16 review provenance
+        run: node apps/mobility-expo/server/g155-verified-rating-pg-http-ci.mjs
       - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
         run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs
