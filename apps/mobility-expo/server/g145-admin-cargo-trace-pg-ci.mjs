@@ -35,6 +35,10 @@ assert.equal(sql("SELECT (has_function_privilege('anon','public.mobility_stage_g
 // G145 SQL is intentionally read-only. The disposable test's privileged
 // setup seeds an independent G27 authority, never a native admin role.
 sql("INSERT INTO auth.users(id) VALUES ('"+admin+"') ON CONFLICT DO NOTHING");
+ // G1 assigns Passenger on Auth signup. For this disposable G27 Admin the
+ // native Passenger role MUST be removed before backoffice activation.
+sql("DELETE FROM public.user_roles WHERE user_id='"+admin+"'");
+assert.equal(sql("SELECT count(*) FROM public.user_roles WHERE user_id='"+admin+"'"),'0');
 sql("INSERT INTO public.mobility_stage_backoffice_roles("+
  "user_id,role,status,approved_by) VALUES ('"+admin+"','admin','active','"+
  tariffApprover+"') ON CONFLICT DO NOTHING");
