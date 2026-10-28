@@ -56,7 +56,8 @@ test('G121 both MOTO and AUTO read same server deliveryId without any POST',asyn
   assert.equal(out.productionEnabled,false);assert.equal(out.commercialEnabled,false);
   assert.deepEqual(Object.keys(out).sort(),[
    'ok','status','deliveryId','requestKey','vehicleKind','revision',
-   'registrationOnly','commercialEnabled','qaOnly','productionEnabled'].sort());
+   'registrationOnly','commercialEnabled','qaOnly','productionEnabled',
+    'deliveryState','terminal'].sort());
   assert.equal(calls.length,1);
   assert.equal(calls[0].u,host+'/v1/staging/sender/deliveries/requests/'+requestKey);
   assert.equal(calls[0].opts.method,'GET');
@@ -82,7 +83,7 @@ test('G121 wrong actor/scope never reaches private endpoint',async()=>{
 test('G121 forged 200 or priced/paid/assigned response never accepted',async()=>{
  for(const patch of [
   {ownerId:id(2)},{requestKey:id(78)},{deliveryId:'invalid'},
-  {vehicleKind:'MOTO_RIDE'},{status:'delivered'},
+  {vehicleKind:'MOTO_RIDE'},{status:'TELEPORTED'},
   {liveDeliveriesEnabled:true},{serverPersisted:false},
   {revision:0},{fareGs:12000},{assignedDriver:'PRIVATE'}
  ]){

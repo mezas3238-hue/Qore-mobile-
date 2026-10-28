@@ -112,7 +112,7 @@ export function createG121DeliveryRegistrationGateway({
    // dispatch authorization, courier, GPS, recipient or payment.
    return Object.freeze({ok:true,status:200,deliveryId:dto.deliveryId,
     requestKey,vehicleKind:dto.vehicleKind,revision:dto.revision,
-    status:dto.status,terminal:['delivered','returned','cancelled'].includes(dto.status),
+    deliveryState:dto.status,terminal:['delivered','returned','cancelled'].includes(dto.status),
     registrationOnly:true,commercialEnabled:false,qaOnly:true,
     productionEnabled:false});
   }catch{return fail(version!==epoch?'STALE_SESSION_RESPONSE':'NETWORK_OR_TIMEOUT');}

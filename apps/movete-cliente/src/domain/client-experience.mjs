@@ -1226,7 +1226,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    registration={busy:false,receipt:Object.freeze({
     requestKey,ownerId:owner,sessionRevision,
     deliveryId:result.deliveryId,vehicleKind:result.vehicleKind,revision:result.revision,
-    status:result.status??'requested'
+    status:result.deliveryState??'requested'
    })};
    // B23: after independent G121 ownership proof, restore only the
    // sealed original G7 quote key. This operation MUST NEVER send HTTP.
