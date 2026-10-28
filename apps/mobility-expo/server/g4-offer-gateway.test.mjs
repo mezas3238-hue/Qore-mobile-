@@ -153,3 +153,31 @@ test('old backend and missing required role/SQL/limiter adapters rejected at sta
   assert.throws(()=>createQoreOfferGateway({...args,[key]:null}));
  }
 });
+
+test('G134 guarded G4 prevents revoked Driver from reading or accepting any private offer',async()=>{
+ const sessionId='77777777-7777-4777-8777-777777777777';
+ let revoked=false,accepted=0,reads=0;
+ const authWithSession={...confirmed,sessionId,expiresAtMs:200000};
+ const guard={
+  requireFreshSession:true,
+  verifyAccessToken:async()=>authWithSession,
+  verifySessionNotRevoked:async({userId,sessionId:claim,at})=>
+   userId===driver&&claim===sessionId&&at===100000&&!revoked,
+  loadOfferForDriver:async()=>{reads++;return data},
+  acceptOffer:async()=>{accepted++;return event}
+ };
+ const g=fixture(guard).gateway;
+ assert.equal((await g(req('GET',readPath))).status,200);
+ revoked=true;
+ assert.equal((await g(req('GET',readPath))).status,401);
+ assert.equal((await g(req('POST',acceptPath,{offerId:offer,requestKey}))).status,401);
+ assert.equal(reads,1);
+ assert.equal(accepted,0);
+ assert.equal((await fixture({...guard,verifyAccessToken:async()=>({
+  ...authWithSession,expiresAtMs:99999
+ })}).gateway(req('POST',acceptPath,{offerId:offer,requestKey}))).status,401);
+ assert.equal((await fixture({...guard,verifySessionNotRevoked:async()=>{
+  throw Error('revocation provider offline');
+ }}).gateway(req('GET',readPath))).status,503);
+ assert.throws(()=>fixture({...guard,verifySessionNotRevoked:undefined}));
+});
