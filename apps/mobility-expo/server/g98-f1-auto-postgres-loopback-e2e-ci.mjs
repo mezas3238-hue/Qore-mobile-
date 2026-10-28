@@ -440,6 +440,44 @@ async function main(){
   assert.equal(adminBefore.data.driverId,null);
   assert.equal(adminBefore.data.assignmentPersisted,false);
   assert.equal(adminBefore.data.amountGs,q.data.amountGs);
+  // G131: the ACTUAL D Admin Web state machine (same integrated commit)
+  // consumes the exact G75 response read from the real PostgreSQL trip.
+  // No duplicated fixture, synthetic Admin DTO or bypass of AAL2/RBAC.
+  const {createAdminExperience}=await import(
+   '../../movete-admin/src/admin-experience.mjs');
+  const dOrigin='https://qore-g131-same-tree-admin-ci.invalid';
+  const adminExpiresAt=Date.now()+600000;
+  let adminWebGets=0;
+  const dFetch=(url,options)=>{
+   const parsed=new URL(url);
+   assert.equal(parsed.origin,dOrigin);
+   assert.equal(parsed.pathname,adminPath);
+   assert.equal(parsed.search,'');
+   assert.equal(parsed.hash,'');
+   assert.equal(options.method,'GET');
+   adminWebGets++;
+   return fetch(base+parsed.pathname,{...options,redirect:'error'});
+  };
+  const dExperience=createAdminExperience({
+   authProvider:{readSession:async()=>({role:'admin',subject:adminId,
+    mfaVerified:true,token:adminToken,expiresAt:adminExpiresAt}),
+    signOut:async()=>{}},
+   f1RideAuditOptions:{enabled:true,contractCertified:true,
+    stagingRuntimeVerified:true,origin:dOrigin,pinnedOrigin:dOrigin,
+    fetchImpl:dFetch}
+  });
+  assert.equal((await dExperience.refreshSession()).ok,true);
+  assert.equal((await dExperience.loadF1RideAudit(tripId)).ok,true);
+  const dBefore=dExperience.snapshot();
+  assert.equal(dBefore.authenticated,true);
+  assert.equal(dBefore.f1RideAudit.item?.tripId,tripId);
+  assert.equal(dBefore.f1RideAudit.item?.bookingRequestKey,bookingKey);
+  assert.equal(dBefore.f1RideAudit.item?.quoteId,q.data.quoteId);
+  assert.equal(dBefore.f1RideAudit.item?.amountGs,q.data.amountGs);
+  assert.equal(dBefore.f1RideAudit.item?.status,riderBefore.data.state);
+  assert.equal(dBefore.f1RideAudit.item?.revision,riderBefore.data.revision);
+  assert.equal(dBefore.f1RideAudit.item?.assignmentPersisted,false);
+  assert.equal(dBefore.f1RideAudit.item?.qaOnly,true);
   assert.equal((await http(base,adminPath,{auth:token})).status,401);
   assert.equal((await http(base,
    '/v1/staging/rider/trips/'+tripId+'/status',{auth:otherToken})).status,404);
@@ -520,6 +558,16 @@ async function main(){
   assert.equal(adminAfter.data.revision,riderAfter.data.revision);
   assert.equal(adminAfter.data.driverId,null);
   assert.equal(adminAfter.data.assignmentPersisted,false);
+  // G131: re-read the SAME PostgreSQL row through D, not a new
+  // in-memory Admin fixture. B rider status and D Admin must reconcile.
+  assert.equal((await dExperience.loadF1RideAudit(tripId)).ok,true);
+  const dAfter=dExperience.snapshot().f1RideAudit.item;
+  assert.equal(dAfter?.tripId,tripId);
+  assert.equal(dAfter?.status,riderAfter.data.state);
+  assert.equal(dAfter?.revision,riderAfter.data.revision);
+  assert.equal(dAfter?.quoteId,q.data.quoteId);
+  assert.equal(dAfter?.bookingRequestKey,bookingKey);
+  assert.equal(dAfter?.assignmentPersisted,false);
   // G107 uses the actual Architect B Passenger state machine and strict
   // parsers, not copies, against A's HTTP loopback and disposable PG16.
   // B Client code MUST come from this same integrated Git tree, not stale checkout.
@@ -622,13 +670,27 @@ async function main(){
   assert.equal(auditFinal.data.tripId,secondTrip);
   assert.equal(auditFinal.data.status,'cancelled');
   assert.equal(auditFinal.data.revision,bridge.snapshot().tracking.revision);
+  // G131: even B's SECOND trip is visible in real D Admin through A G75.
+  assert.equal((await dExperience.loadF1RideAudit(secondTrip)).ok,true);
+  const dSecond=dExperience.snapshot().f1RideAudit.item;
+  assert.equal(dSecond?.tripId,secondTrip);
+  assert.equal(dSecond?.status,'cancelled');
+  assert.equal(dSecond?.revision,bridge.snapshot().tracking.revision);
+  assert.equal(dSecond?.quoteId,quote.quoteId);
+  assert.equal(dSecond?.amountGs,discount.originalFareGs);
+  assert.equal(adminWebGets,3,'D Admin rereads same original and second PG trip');
   assert.equal(posts,5,'One route, quote, subsidy, booking and cancel');
   assert.equal(gets,4,'One status, financial, canceled status, voided financial');
   continuation.close();
-  console.log('G107 CROSS-BRANCH PASS: B Client G73/G93 booking and subsidy -> A PostgreSQL G3 -> B G4 tracking -> Admin G75 -> B G95 cancel -> G94 void; no paid, GPS, LIVE or Driver assignment');
+  console.log('G131 UNIFIED A+B+D PASS: real Client B booking and subsidy -> A HTTP/PostgreSQL persisted trip -> Admin Web D state -> B cancel -> D same ID/revision/fare and IdP revocation; Driver legal G38/G71 remains blocked, NO LIVE');
   // Provider revocation and stored backoffice suspension must both deny reads.
   adminSessionRevoked=true;
   assert.equal((await http(base,adminPath,{auth:adminToken})).status,401);
+  const revokedD=await dExperience.loadF1RideAudit(secondTrip);
+  assert.equal(revokedD.ok,false);
+  assert.equal(dExperience.snapshot().authenticated,false,
+   'Backend IdP revocation must erase D Admin state');
+  assert.equal(dExperience.snapshot().f1RideAudit.item,null);
   adminSessionRevoked=false;
   psql("UPDATE public.mobility_stage_backoffice_roles SET status='suspended',"+
    "revision=revision+1 WHERE user_id='"+adminId+"'");
