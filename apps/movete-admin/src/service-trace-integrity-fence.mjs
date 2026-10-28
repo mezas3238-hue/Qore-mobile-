@@ -9,8 +9,8 @@ const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const STATES=Object.freeze({
  AUTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
  MOTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
- AUTO_DELIVERY:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
- MOTO_DELIVERY:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
+ DELIVERY_AUTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
+ DELIVERY_MOTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
  COMMERCE:['requested','confirmed','preparing','ready_for_pickup','in_transit','delivered','returned','cancelled']
 });
 const terminal=new Set(['completed','delivered','returned','cancelled']);

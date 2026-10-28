@@ -4,13 +4,13 @@ import {readBoundedResponseText} from './bounded-json-response.mjs';
  * This is NOT mounted in Backend A. Never turn on via UI/session toggles.
  */
 export const TRACE_SERVICE_KINDS=Object.freeze([
- 'AUTO_RIDE','MOTO_RIDE','MOTO_DELIVERY','AUTO_DELIVERY','COMMERCE'
+ 'AUTO_RIDE','MOTO_RIDE','DELIVERY_MOTO','DELIVERY_AUTO','COMMERCE'
 ]);
 const STATES=Object.freeze({
  AUTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
  MOTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
- MOTO_DELIVERY:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
- AUTO_DELIVERY:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
+ DELIVERY_MOTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
+ DELIVERY_AUTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
  COMMERCE:['requested','confirmed','preparing','ready_for_pickup','in_transit','delivered','returned','cancelled']
 });
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;

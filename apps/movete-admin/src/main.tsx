@@ -491,7 +491,7 @@ function F1RideAuditPanel({client,state}:{client:AdminExperience;state:AdminSnap
 }
 
 function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSnapshot}){
- const kinds=['AUTO_RIDE','MOTO_RIDE','MOTO_DELIVERY','AUTO_DELIVERY','COMMERCE'] as const;
+ const kinds=['AUTO_RIDE','MOTO_RIDE','DELIVERY_MOTO','DELIVERY_AUTO','COMMERCE'] as const;
  const [kind,setKind]=useState<typeof kinds[number]>('AUTO_RIDE');
  const [id,setId]=useState('');
  const [message,setMessage]=useState('');
@@ -601,9 +601,9 @@ function FiveFlowsReadOnly({state}:{state:AdminSnapshot}){
    detail:'El viaje F1 G73/G90 y el registro Admin G75 requieren entorno autorizado y pruebas en dos teléfonos.'},
   {id:'MOTO_RIDE',label:'MOTO · Pasajeros',
    detail:'Categoría independiente de MOTO DELIVERY. Falta contrato, habilitación legal/seguro, tarifa, KYC y dispositivo.'},
-  {id:'AUTO_DELIVERY',label:'ENVÍOS · Auto',
+  {id:'DELIVERY_AUTO',label:'ENVÍOS · Auto',
    detail:'El envío precisa cotización, custodia, aceptación, evidencia de entrega y persistencia.'},
-  {id:'MOTO_DELIVERY',label:'ENVÍOS · Moto',
+  {id:'DELIVERY_MOTO',label:'ENVÍOS · Moto',
    detail:'Carga en moto, no transporte de pasajero. Mantener controles de elegibilidad y peso.'},
   {id:'COMMERCE',label:'COMERCIOS · Pedidos',
    detail:'Supermercados, farmacias OTC, restaurantes y otros. Stock, pedido y entrega deben ser del backend.'}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServiceTraceIntegrityFence} from './service-trace-integrity-fence.mjs';
 const id=n=>'d0000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const build=(status='requested',revision=1)=>({
- serviceId:id(1),serviceKind:'AUTO_DELIVERY',bookingRequestKey:id(2),
+ serviceId:id(1),serviceKind:'DELIVERY_AUTO',bookingRequestKey:id(2),
  quoteId:id(3),status,revision,observedAt:1000+revision,
  assignment:{state:'NOT_ASSIGNABLE',legalGate:'G71_BLOCKED'},
  events:[{eventId:id(4),serviceId:id(1),sequence:1,status:'requested',at:1000}],
@@ -29,7 +29,7 @@ test('D cannot substitute booking request or quote for same serviceId',()=>{
  for(const field of ['quoteId','bookingRequestKey','serviceKind']){
   const guard=createServiceTraceIntegrityFence();guard.observe(build());
   const other=build('requested',2);
-  other[field]=field==='serviceKind'?'MOTO_DELIVERY':id(31);
+  other[field]=field==='serviceKind'?'DELIVERY_MOTO':id(31);
   assert.equal(guard.observe(other).code,'TRACE_IMMUTABLE_LINK_CHANGED');
  }
 });
@@ -70,5 +70,11 @@ test('D clearing identity also clears previous trace baseline',()=>{
   status:'delivered',at:1001});
  guard.observe(later);
  guard.clear();
+ assert.equal(guard.observe(build()).ok,true);
+});
+
+test('D refuses legacy delivery identifiers instead of silently mixing ledger services',()=>{
+ const guard=createServiceTraceIntegrityFence();
+ assert.equal(guard.observe({...build(),serviceKind:'AUTO_DELIVERY'}).code,'TRACE_INVALID_PROOF');
  assert.equal(guard.observe(build()).ok,true);
 });

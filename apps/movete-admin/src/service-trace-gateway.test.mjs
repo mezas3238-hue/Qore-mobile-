@@ -56,8 +56,8 @@ test('D mismatched reservation/history/ledger/viewer never displays as E2E',asyn
   d=>d.viewerId=uuid(98),
   d=>d.events[0].status='delivered'
  ]){
-  const d=row('AUTO_DELIVERY');tweak(d);
-  const got=await configured(async()=>response(d)).read('AUTO_DELIVERY',id);
+  const d=row('DELIVERY_AUTO');tweak(d);
+  const got=await configured(async()=>response(d)).read('DELIVERY_AUTO',id);
   assert.equal(got.code,'INVALID_TRACE_RECEIPT');
  }
 });
@@ -94,4 +94,14 @@ test('D duplicates in flight are rejected, cancellation discards late response',
  resolve(response(row('AUTO_RIDE')));
  assert.equal((await pending).code,'STALE_SESSION_RESPONSE');
  assert.equal(requests,1);
+});
+
+test('D rejects legacy delivery service aliases at the HTTP contract boundary',async()=>{
+ for(const legacy of ['AUTO_DELIVERY','MOTO_DELIVERY']){
+  const responseForLegacy=await configured(async()=>{throw Error('Legacy kind must not reach transport');}).read(legacy,id);
+  assert.equal(responseForLegacy.code,'INVALID_SERVICE_KIND');
+ }
+ assert.deepEqual(TRACE_SERVICE_KINDS,[
+  'AUTO_RIDE','MOTO_RIDE','DELIVERY_MOTO','DELIVERY_AUTO','COMMERCE'
+ ]);
 });
