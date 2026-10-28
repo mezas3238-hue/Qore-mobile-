@@ -14,9 +14,9 @@ const driver=id(1),second=id(2),service=id(3),conversation=id(4),
 const now=Date.parse('2026-10-24T17:00:00Z');
 const token='provider-verified-driver-token-000000000000000';
 const url='https://api-staging.movetefacil.example';
-function fixture(){
+function fixture({enableKycExpiryStatus=false}={}){
  const calls=[],grants=new Map([[driver,true],[second,true]]);
- let actor=driver,active=true,notify,network=true,lostAck=false;
+ let actor=driver,active=true,notify,network=true,lostAck=false,expired=false;
  let lostOfferAck=false;
  const auth={
   async getSession(){return {error:null,data:{session:active?{
@@ -53,6 +53,13 @@ function fixture(){
    mode:'STAGING_DEMO_ONLY',liveOperationsEnabled:false,
    documents:[{kind:'licencia',status:'approved',
     submittedAtMs:now-30000,reviewedAtMs:now-10000}]});
+  if(u===url+'/v1/staging/driver/kyc/validity')return reply(200,{
+   mode:'STAGING_DEMO_ONLY',state:expired?'BLOCKED_EXPIRED':'READY_QA',
+   expiredKinds:expired?['licencia']:[],
+   renewalRequiredKinds:expired?['licencia']:[],expiringSoonKinds:[],
+   nearestExpiryAtMs:null,accountBlocked:expired,
+   qaOnboardingActive:!expired,commercialDispatchAuthorized:false,
+   qaOnly:true,productionEnabled:false});
   if(u===url+'/v1/staging/driver/license-readiness')return reply(200,{
    mode:'STAGING_DEMO_ONLY',currentLicenseApproved:true,
    driverEligible:false,liveOperationsEnabled:false,
@@ -118,7 +125,7 @@ function fixture(){
    vehicleStopped:true,source:'trusted_navigation',observedAtMs:now-100}),
   allowedByOwner:true,liveEnabled:false,now:()=>now
  };
- const runtime=createDriverStagingRuntime(options);
+ const runtime=createDriverStagingRuntime({...options,enableKycExpiryStatus});
  const workspace=createDriverWorkspaceController({
   authAdapter:runtime.authAdapter,apiOrigin:runtime.apiOrigin,
   approvedStagingHost:runtime.approvedStagingHost,
@@ -128,6 +135,7 @@ function fixture(){
  const messenger=createDriverMessagingController({...runtime.chatAdapters,
   now:()=>now});
  return {runtime,workspace,messenger,calls,grants,
+  expireKyc:()=>{expired=true;},
   loseAck:()=>{lostAck=true;},
   loseOfferAck:()=>{lostOfferAck=true;},
   outage:()=>{network=false;},
@@ -312,4 +320,26 @@ test('G64 full Driver HTTPS offer recovery uses original key and zero second acc
  await actions.reconcilePending(offer);
  assert.equal(f.calls.filter(x=>x.url.endsWith('/offers/reconcile')).length,1);
  assert(!JSON.stringify(result).includes(token));
+});
+
+test('G121C approved Driver STAGING runtime reads real private KYC gate, never grants LIVE',async()=>{
+ const f=fixture({enableKycExpiryStatus:true});
+ assert(f.runtime.kycValidityAdapter);
+ const identity=await f.runtime.authAdapter.getSession();
+ const current=await f.runtime.kycValidityAdapter.readStatus({
+  accessToken:identity.accessToken});
+ assert.equal(current.state,'READY_QA');
+ assert.equal(current.accountBlocked,false);
+ assert.equal(current.commercialDispatchAuthorized,false);
+ f.expireKyc();
+ const expired=await f.runtime.kycValidityAdapter.readStatus({
+  accessToken:identity.accessToken});
+ assert.equal(expired.state,'BLOCKED_EXPIRED');
+ assert.equal(expired.accountBlocked,true);
+ assert.deepEqual(expired.renewalRequiredKinds,['licencia']);
+ const reads=f.calls.filter(c=>c.url.endsWith('/driver/kyc/validity'));
+ assert.equal(reads.length,2);
+ assert(reads.every(c=>c.method==='GET'&&c.authorization==='Bearer '+token));
+ assert.equal(f.runtime.qaOnly,true);
+ assert.equal(f.runtime.productionEnabled,false);
 });

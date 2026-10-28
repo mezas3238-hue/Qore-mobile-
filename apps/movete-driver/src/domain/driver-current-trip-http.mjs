@@ -12,21 +12,50 @@ const exact=(x,keys)=>x!==null&&typeof x==='object'&&!Array.isArray(x)
  &&Object.keys(x).length===keys.length&&keys.every(k=>Object.hasOwn(x,k));
 export async function readDriverCurrentTrip({
  apiOrigin,approvedStagingHost=null,allowedByOwner=false,
- accessToken,request=fetch
+ accessToken,request=fetch,timeoutMs=8000,maxBytes=4096
 }={}){
  if(typeof accessToken!=='string'||!TOKEN.test(accessToken)||
  typeof request!=='function')throw Error('G106 verified Driver Auth required');
  const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,
   allowedByOwner});
- let response;
- try{response=await request(origin+'/v1/staging/driver/trips/current',{
-  method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
-  headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
- });}catch{throw Error('G106 Driver trip recovery unavailable');}
- if(response?.status!==200||response.redirected===true)
-  throw Error('G106 Driver assignment unverified');
- let data;try{data=await response.json();}catch{
-  throw Error('G106 invalid recovery response');}
+ // G106 is the recovery authority after an AUTO accept and restart.
+ // Neither a hung GET nor JSON decoder may lock the app indefinitely.
+ const ctl=new AbortController();
+ const duration=Number.isSafeInteger(timeoutMs)&&timeoutMs>=100
+  &&timeoutMs<=30000?timeoutMs:8000;
+ const limit=Number.isSafeInteger(maxBytes)&&maxBytes>=512
+  &&maxBytes<=32768?maxBytes:4096;
+ let timer;
+ const deadline=new Promise((_,reject)=>{
+  timer=setTimeout(()=>{
+   ctl.abort();reject(Error('G106 Driver trip recovery unavailable'));
+  },duration);
+ });
+ const within=promise=>Promise.race([promise,deadline]);
+ let data;
+ try{
+  const response=await within(request(origin+'/v1/staging/driver/trips/current',{
+   method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
+   referrerPolicy:'no-referrer',signal:ctl.signal,
+   headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
+  }));
+  if(response?.status!==200||response.redirected===true)
+   throw Error('G106 Driver assignment unverified');
+  const contentType=response.headers?.get?.('content-type');
+  if(contentType!=null&&!/^application\/json(?:\s*;|$)/i.test(contentType))
+   throw Error('G106 invalid recovery response');
+  const length=response.headers?.get?.('content-length');
+  if(length!=null&&(!/^[0-9]+$/.test(length)||Number(length)>limit))
+   throw Error('G106 invalid recovery response');
+  data=await within(response.json());
+  // The transport may omit Content-Length. Reject a forged oversized JSON
+  // before any private assignment reaches Driver state.
+  const raw=JSON.stringify(data);
+  if(typeof raw!=='string'||new TextEncoder().encode(raw).byteLength>limit)
+   throw Error('G106 invalid recovery response');
+ }catch{
+  throw Error('G106 Driver trip recovery unavailable');
+ }finally{clearTimeout(timer);}
  if(!exact(data,['mode','activeTrip','liveTripsEnabled','qaOnly',
    'productionEnabled'])||
   data.mode!=='STAGING_DEMO_ONLY'||data.liveTripsEnabled!==false||

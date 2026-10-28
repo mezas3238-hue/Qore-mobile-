@@ -20,12 +20,14 @@ export type DriverCustodyAdapters=Readonly<{
 }>;
 export type DriverCustodyController=Readonly<{
  current:()=>DriverCustodySnapshot;
+ isBoundTo:(session:{role:'driver';userId:string;accessToken:string}|null)=>boolean;
  subscribe:(fn:(s:DriverCustodySnapshot)=>void)=>()=>void;
  clear:()=>DriverCustodySnapshot;
  setSession:(session:{role:'driver';userId:string;accessToken:string}|null)=>
  DriverCustodySnapshot;
  open:(deliveryId:string)=>Promise<DriverCustodySnapshot>;
  refresh:()=>Promise<DriverCustodySnapshot>;
+ poll:()=>Promise<DriverCustodySnapshot>;
  advance:()=>Promise<DriverCustodySnapshot>;
 }>;
 export declare function createDriverCustodyController(

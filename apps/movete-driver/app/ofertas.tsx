@@ -5,7 +5,9 @@ import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
+import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {verifyAcceptedDriverAutoResume} from '../src/domain/driver-accepted-ride-resume.mjs';
+import {acceptAndRecoverDriverAuto} from '../src/domain/driver-auto-accept-flow.mjs';
 import type {DriverOfferDecisionStatus} from '../src/domain/driver-offer-actions.mjs';
 import {router,useFocusEffect} from 'expo-router';
 
@@ -17,8 +19,10 @@ import {router,useFocusEffect} from 'expo-router';
 export default function DriverOffers(){
  const {state,refresh,poll}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
- const {state:actions,enabled,decide,reconcilePending}=useDriverOfferActions();
+ const {state:actions,enabled,decide,reconcilePending,detail,inspectDelivery}
+  =useDriverOfferActions();
  const currentTrip=useDriverCurrentTrip();
+ const custody=useDriverCustody();
  const resumeLock=useRef(false);
  const [resuming,setResuming]=useState(false);
  const [resumeMessage,setResumeMessage]=useState('');
@@ -44,6 +48,41 @@ export default function DriverOffers(){
    foreground.remove();
   };
  },[poll]));
+ async function acceptVerifiedAutoOffer(offerId:string){
+  // Exactly one user-initiated POST. Navigation requires a second private,
+  // owner-scoped SQL read matching the accepted offer's serviceId.
+  if(resumeLock.current||!enabled||!currentTrip.enabled||
+   actions.phase!=='ready'||state.phase!=='connected'||
+   !state.currentLicenseApproved||kyc.snapshot?.state!=='READY_QA'||
+   kyc.snapshot?.accountBlocked!==false)return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const result=await acceptAndRecoverDriverAuto({
+    offerId,decide,recoverCurrent:currentTrip.refresh
+   });
+   if(result.ok)router.push({pathname:'/viaje',
+    params:{tripId:result.tripId}});
+   else if(result.reason==='UNVERIFIED_ASSIGNMENT')
+    setResumeMessage('La decisión puede estar confirmada, pero no se verificó la asignación actual en el servidor. Consultá tu viaje antes de continuar; no se repetirá la aceptación.');
+   else if(result.reason==='NOT_CONFIRMED')
+    setResumeMessage('No se confirmó la aceptación. Consultá el comprobante de la oferta; no se enviará otra aceptación automáticamente.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
+ async function continueAcceptedDelivery(decision:DriverOfferDecisionStatus){
+  if(resumeLock.current||!enabled||!custody.enabled||
+   decision.kind!=='DELIVERY'||decision.phase!=='confirmed'||
+   decision.action!=='accept'||state.phase!=='connected')return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const verified=await custody.rememberDelivery(decision.serviceId);
+   if(verified.ok){
+    if(verified.saved===false)setResumeMessage(
+     'El servidor verificó la entrega. La recuperación tras reiniciar no quedó guardada en este dispositivo.'
+    );
+    router.push({pathname:'/entrega',params:{deliveryId:decision.serviceId}});
+   }else setResumeMessage('El servidor no confirmó esta entrega asignada a tu sesión Driver. No se realizarán acciones de custodia hasta verificar el mismo envío.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
  async function continueAcceptedAuto(decision:DriverOfferDecisionStatus){
   // G4 receipt alone cannot unlock the trip. G106 independently verifies
   // this exact ID against the currently authenticated Driver in PostgreSQL.
@@ -79,10 +118,16 @@ export default function DriverOffers(){
       <Text style={styles.small}>La aceptación exige volver a validar documentación, vehículo, ubicación y disponibilidad en el servidor. Ninguna respuesta de prueba habilita viajes comerciales.</Text>
       {(()=>{
        const decision=actions.decisions.find(x=>x.offerId===offer.offerId);
+       const preview=offer.kind==='DELIVERY'&&detail.item?.offerId===offer.offerId
+        &&detail.item.deliveryId===offer.serviceId
+        &&detail.item.expiresAtMs>clock+3000?detail.item:null;
        const allowed=enabled&&actions.phase==='ready'&&
         state.currentLicenseApproved&&kyc.snapshot?.state==='READY_QA'&&
         kyc.snapshot?.accountBlocked===false&&actions.offers.some(x=>x.offerId===offer.offerId)&&
-        !decision&&!actions.busy&&offer.expiresAtMs>clock+3000;
+        !decision&&!actions.busy&&!resuming&&
+        (offer.kind!=='AUTO_RIDE'||currentTrip.enabled)&&
+        (offer.kind!=='DELIVERY'||Boolean(preview))&&
+        offer.expiresAtMs>clock+3000;
        return <>
         {decision&&<Text style={styles.text}>
          {decision.phase==='confirmed'?'Decisión confirmada por el servidor de pruebas.':
@@ -95,14 +140,33 @@ export default function DriverOffers(){
          <Action label={resuming?'Verificando viaje…':'Verificar y continuar mi viaje'}
           secondary disabled={resuming||actions.phase!=='ready'}
           onPress={()=>{void continueAcceptedAuto(decision);}}/>}
+        {decision?.phase==='confirmed'&&decision.action==='accept'&&
+         decision.kind==='DELIVERY'&&enabled&&custody.enabled&&<Action
+          label={resuming?'Verificando entrega…':'Verificar asignación y abrir custodia'}
+          secondary disabled={resuming||actions.phase!=='ready'}
+          onPress={()=>{void continueAcceptedDelivery(decision);}}/>}
         {decision?.phase==='uncertain'&&enabled&&
          state.phase==='connected'&&<Action
           label="Consultar comprobante del servidor"
           secondary disabled={actions.busy}
           onPress={()=>{void reconcilePending(offer.offerId);}}/>}
+        {offer.kind==='DELIVERY'&&<Action
+         label={detail.phase==='loading'?'Consultando…':'Ver vehículo y paquete'}
+         secondary disabled={!enabled||detail.phase==='loading'
+          ||actions.busy||offer.expiresAtMs<=clock+3000}
+         onPress={()=>{void inspectDelivery(offer.offerId,offer.serviceId);}}/>}
+        {detail.phase==='unavailable'&&offer.kind==='DELIVERY'&&!preview&&
+         <Text style={styles.text}>No se pudo verificar el paquete privado.
+          Su aceptación permanece bloqueada.</Text>}
+        {preview&&<Text style={styles.text}>
+         Envío en {preview.vehicleKind} · {preview.category} · {preview.grams} g ·
+         {preview.dimensionsCm.length} × {preview.dimensionsCm.width} ×
+         {preview.dimensionsCm.height} cm. Solo QA; tarifa no confirmada en esta vista.
+        </Text>}
         {allowed&&<>
          <Action label="Aceptar oferta de prueba" onPress={()=>{
-          void decide(offer.offerId,'accept');
+          if(offer.kind==='AUTO_RIDE')void acceptVerifiedAutoOffer(offer.offerId);
+          else void decide(offer.offerId,'accept');
          }}/>
          <Action label="Rechazar oferta de prueba" secondary onPress={()=>{
           void decide(offer.offerId,'decline');
@@ -143,10 +207,10 @@ export default function DriverOffers(){
        secondary disabled={resuming||actions.phase!=='ready'}
        onPress={()=>{void continueAcceptedAuto(d);}}/>}
      {d.phase==='confirmed'&&d.action==='accept'&&
-      d.kind==='DELIVERY'&&enabled&&<Action
-       label="Abrir custodia de envío"
-       secondary onPress={()=>router.push({pathname:'/entrega',
-        params:{deliveryId:d.serviceId}})}/>}
+      d.kind==='DELIVERY'&&enabled&&custody.enabled&&<Action
+       label={resuming?'Verificando entrega…':'Verificar asignación y abrir custodia'}
+       secondary disabled={resuming||actions.phase!=='ready'}
+       onPress={()=>{void continueAcceptedDelivery(d);}}/>}
      {d.phase==='uncertain'&&enabled&&<Action
       label="Consultar decisión original" secondary
       disabled={actions.busy}

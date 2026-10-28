@@ -1,11 +1,20 @@
 import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {createDriverCustodyController} from './domain/driver-custody-controller.mjs';
+import {verifyAcceptedPrivateDeliveryCustody}
+ from './domain/driver-delivery-navigation.mjs';
+import {createDriverDeliveryResume} from './domain/driver-delivery-resume.mjs';
+import * as SecureStore from 'expo-secure-store';
+import {Platform} from 'react-native';
 import type {DriverCustodyController,DriverCustodyAdapters,
  DriverCustodySnapshot} from './domain/driver-custody-controller.mjs';
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 type ContextValue={
  state:DriverCustodySnapshot;enabled:boolean;hasProofSource:boolean;
- open:(id:string)=>Promise<void>;refresh:()=>Promise<void>;advance:()=>Promise<void>;
+ open:(id:string)=>Promise<void>;
+ openVerified:(id:string)=>Promise<boolean>;refresh:()=>Promise<void>;
+ poll:()=>Promise<void>;advance:()=>Promise<void>;
+ rememberDelivery:(id:string)=>Promise<{ok:boolean;code?:string;saved?:boolean}>;
+ resumeDelivery:()=>Promise<{ok:boolean;code?:string;deliveryId?:string}>;
 };
 const EMPTY:DriverCustodySnapshot=Object.freeze({
  phase:'signed-out',deliveryId:null,status:null,revision:null,
@@ -21,6 +30,25 @@ export function DriverCustodyProvider({
  const ctl:DriverCustodyController|null=useMemo(
   ()=>qaAdapters?createDriverCustodyController(qaAdapters):null,[qaAdapters]);
  const [state,setState]=useState<DriverCustodySnapshot>(()=>ctl?.current()??EMPTY);
+ const recovery=useMemo(()=>ctl&&authAdapter?createDriverDeliveryResume({
+  getSession:()=>authAdapter.getSession(),
+  readAssignment:async(id,session)=>{
+   // Auth can rotate before React subscription resets the G66 controller.
+   // Never let the old JWT's assignment validate the new Driver's hint.
+   if(!ctl.isBoundTo(session))return null;
+   const verified=await verifyAcceptedPrivateDeliveryCustody({
+    deliveryId:id,readCustody:()=>ctl.open(id)
+   });
+   return ctl.isBoundTo(session)?verified:null;
+  },
+  storage:Platform.OS==='web'?null:{
+   get:key=>SecureStore.getItemAsync(key),
+   put:(key,value)=>SecureStore.setItemAsync(key,value,{
+    keychainAccessible:SecureStore.WHEN_UNLOCKED
+   }),
+   del:key=>SecureStore.deleteItemAsync(key)
+  }
+ }):null,[ctl,authAdapter]);
  useEffect(()=>{
   if(!ctl||!authAdapter){setState(EMPTY);return;}
   let active=true,epoch=0;
@@ -42,9 +70,17 @@ export function DriverCustodyProvider({
   state,enabled:!!ctl&&!!authAdapter,
   hasProofSource:typeof qaAdapters?.obtainVerifiedProof==='function',
   open:async id=>{await ctl?.open(id);},
+  openVerified:async id=>Boolean((await verifyAcceptedPrivateDeliveryCustody({
+   deliveryId:id,readCustody:()=>ctl?.open(id)
+  })).ok),
   refresh:async()=>{await ctl?.refresh();},
-  advance:async()=>{await ctl?.advance();}
- }),[state,ctl,authAdapter]);
+  poll:async()=>{await ctl?.poll();},
+  advance:async()=>{await ctl?.advance();},
+  rememberDelivery:async id=>recovery
+   ?await recovery.remember(id):{ok:false,code:'CUSTODY_NOT_CONFIGURED'},
+  resumeDelivery:async()=>recovery
+   ?await recovery.resume():{ok:false,code:'CUSTODY_NOT_CONFIGURED'}
+ }),[state,ctl,authAdapter,recovery]);
  return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useDriverCustody(){

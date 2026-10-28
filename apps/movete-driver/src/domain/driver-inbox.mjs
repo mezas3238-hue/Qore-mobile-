@@ -9,7 +9,7 @@ const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
 export async function readDriverPrivateInbox({
  apiOrigin,accessToken,approvedStagingHost=null,allowedByOwner=false,
- request=fetch,now=Date.now
+ request=fetch,now=Date.now,timeoutMs=8000,maxJsonChars=8192
 }={}){
  if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||
     !bearer.test(accessToken)||typeof request!=='function'||typeof now!=='function')
@@ -17,18 +17,42 @@ export async function readDriverPrivateInbox({
  const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,allowedByOwner});
  const at=now();
  if(!Number.isSafeInteger(at)||at<0)throw Error('Driver QA clock invalid');
- let response;
+ // The 5s private-inbox polling must not hang indefinitely when a
+ // network stack or body reader ignores AbortSignal. No automatic POST.
+ const ctl=new AbortController();
+ const ms=Number.isSafeInteger(timeoutMs)&&timeoutMs>=100
+  &&timeoutMs<=30000?timeoutMs:8000;
+ const limit=Number.isSafeInteger(maxJsonChars)&&maxJsonChars>=1024
+  &&maxJsonChars<=32768?maxJsonChars:8192;
+ let timeoutId;
+ const timedOut=new Promise((_,reject)=>{
+  timeoutId=setTimeout(()=>{
+   ctl.abort();reject(Error('Driver inbox unavailable'));
+  },ms);
+ });
+ const within=p=>Promise.race([p,timedOut]);
+ let response,data;
  try{
-  response=await request(origin+'/v1/staging/driver/inbox',{
-   method:'GET',cache:'no-store',credentials:'omit',
-   headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
-  });
- }catch{throw Error('Driver inbox unavailable');}
- if(response?.status===401)throw Error('Driver session expired');
- if(response?.status===403)throw Error('Driver role not authorized');
- if(response?.status!==200)throw Error('Driver inbox unavailable');
- let data;
- try{data=await response.json();}catch{throw Error('Driver inbox invalid response');}
+  try{
+   response=await within(request(origin+'/v1/staging/driver/inbox',{
+    method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
+    referrerPolicy:'no-referrer',signal:ctl.signal,
+    headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
+   }));
+  }catch{throw Error('Driver inbox unavailable');}
+  if(response?.status===401)throw Error('Driver session expired');
+  if(response?.status===403)throw Error('Driver role not authorized');
+  if(response?.status!==200||response?.redirected===true)
+   throw Error('Driver inbox unavailable');
+  const length=response.headers?.get?.('content-length');
+  if(length!=null&&(!/^[0-9]+$/.test(length)||Number(length)>limit))
+   throw Error('Driver inbox invalid response');
+  try{
+   data=await within(response.json());
+   if(JSON.stringify(data).length>limit)
+    throw Error('Driver inbox body too large');
+  }catch{throw Error('Driver inbox invalid response');}
+ }finally{clearTimeout(timeoutId);}
  if(!object(data)||data.mode!=='STAGING_DEMO_ONLY'||
    data.liveTripsEnabled!==false||data.liveDeliveriesEnabled!==false||
    data.pushDelivered!==false||data.deviceReceived!==false||
