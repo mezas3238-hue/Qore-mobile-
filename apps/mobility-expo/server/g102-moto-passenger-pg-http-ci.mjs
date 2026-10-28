@@ -148,7 +148,7 @@ async function main(){
   // Passenger state machine against A's authenticated disposable PG16.
   // A fake pin satisfies CI parser shape; fetch redirects IN PROCESS to
   // the localhost server. No actual Render host, maps, devices or money.
-  const bDir=new URL('../../../ci-b-client/apps/movete-cliente/src/domain/',import.meta.url);
+  const bDir=new URL('../../movete-cliente/src/domain/',import.meta.url);
   const {createClientExperience}=await import(new URL('client-experience.mjs',bDir));
   const fake='https://qore-ci-test.onrender.com';
   let bPosts=0,bGets=0;

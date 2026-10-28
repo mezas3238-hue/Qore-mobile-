@@ -7,7 +7,7 @@ import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 import {createG101MotoPassengerGateway,createG101MotoPassengerRepository}
  from './g101-moto-passenger-gateway.mjs';
-import {createG119MotoStatusGateway} from '../../../ci-b-client/apps/movete-cliente/src/domain/g119-moto-ride-status-gateway.mjs';
+import {createG119MotoStatusGateway} from '../../movete-cliente/src/domain/g119-moto-ride-status-gateway.mjs';
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'
  ||process.env.PGPORT!=='5432'||process.env.PGDATABASE!=='qore_disposable_chain'
  ||process.env.PGAPPNAME!=='qore_ci_disposable_chain')

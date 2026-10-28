@@ -8,6 +8,8 @@ import {createAdminReadQaOptions} from './admin-read-qa-options.mjs';
 import type {WebAdminAuth} from './web-admin-auth.mjs';
 const Context=createContext<AdminExperience|null>(null);
 const AuthContext=createContext<WebAdminAuth|null>(null);
+// Match the verified Admin gateway's (url, unknown) transport contract.
+const webFetch=(url:string,options:unknown)=>fetch(url,options as RequestInit);
 export const useWebAdminAuth=()=>useContext(AuthContext);
 /**
  * Por defecto sin Auth/Admin API. Inyectar dependencias auditadas de A
@@ -40,7 +42,7 @@ export function AdminRuntimeProvider({children,experience}:{
   serverMfaVerified:import.meta.env.VITE_D_TRACE_SERVER_MFA_VERIFIED==='true',
   serverRbacVerified:import.meta.env.VITE_D_TRACE_SERVER_RBAC_VERIFIED==='true',
   serverRevocationVerified:import.meta.env.VITE_D_TRACE_REVOCATION_VERIFIED==='true',
-  fetchImpl:fetch
+  fetchImpl:webFetch
  }):null,[auth]);
  // D: the existing G27 Admin HTTP gateway was never attached at runtime.
  // Permit only explicitly certified HTTPS endpoints; server still enforces JWT,
@@ -56,10 +58,12 @@ export function AdminRuntimeProvider({children,experience}:{
   serverRbacVerified:import.meta.env.VITE_D_READ_SERVER_RBAC_VERIFIED==='true',
   serverRevocationVerified:import.meta.env.VITE_D_READ_REVOCATION_VERIFIED==='true',
   verifiedOperations:import.meta.env.VITE_D_READ_VERIFIED_OPERATIONS,
-  fetchImpl:fetch
+  fetchImpl:webFetch
  }):null,[auth]);
  const value=useMemo(()=>experience??createAdminExperience({
-  authProvider:auth,readGatewayOptions:reads,
+  authProvider:auth,readGatewayOptions:reads?{
+   ...reads,certifiedContracts:[...reads.certifiedContracts]
+  }:null,
   f1RideAuditOptions:f1Qa,serviceTraceOptions:traceQa
  }),[experience,auth,reads,f1Qa,traceQa]);
  useEffect(()=>{if(auth)void value.refreshSession();},[auth,value]);
