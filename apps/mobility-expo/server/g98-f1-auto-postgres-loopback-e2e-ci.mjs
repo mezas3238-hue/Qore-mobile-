@@ -219,8 +219,8 @@ async function main(){
  // persistent G73 booking as Passenger and Admin. No fake assignment.
  const driverIdentity=async value=>{
   if(value!==driverToken)throw Error('G105 untrusted synthetic Driver token');
-  return {id:driverId,is_anonymous:false,
-   email_confirmed_at:'2026-10-26T00:00:00Z'};
+  return {id:driverId,sessionId:driverSessionId,expiresAtMs:Date.now()+600000,
+   is_anonymous:false,email_confirmed_at:'2026-10-26T00:00:00Z'};
  };
  const resolveDbRole=async id=>{
   if(!uuid.test(id))throw Error('Invalid SQL actor');
@@ -295,9 +295,13 @@ async function main(){
   if(!Array.isArray(rows))throw Error('G132 SQL poll unavailable');
   return {data:rows,error:null};
  }});
+ let driverSessionRevoked=false;
+ const verifyDriverSession=async({userId,sessionId})=>
+  !driverSessionRevoked&&userId===driverId&&sessionId===driverSessionId;
  const driverInbox=createDriverPrivateInboxGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:driverIdentity,
+  requireFreshSession:true,verifySessionNotRevoked:verifyDriverSession,
   authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
   allowRequest:()=>true,listForDriver:x=>driverInboxSql.listForDriver(x)
  });
@@ -306,6 +310,7 @@ async function main(){
  const driverOffer=createQoreOfferGateway({
   projectRef:'staging1234567890abcd',
   verifyAccessToken:driverIdentity,
+  requireFreshSession:true,verifySessionNotRevoked:verifyDriverSession,
   authorizeDriver:async id=>(await resolveDbRole(id))==='driver',
   allowRequest:()=>true,
   loadOfferForDriver:async({offerId,driverId:actor})=>{
@@ -789,6 +794,16 @@ async function main(){
   assert.equal(posts,5,'One route, quote, subsidy, booking and cancel');
   assert.equal(gets,4,'One status, financial, canceled status, voided financial');
   continuation.close();
+  // One revoked identity must lose BOTH its private inbox and mutation ability.
+  // This check runs on the same G73 trip after the financial/cancel audit.
+  driverSessionRevoked=true;
+  assert.equal((await http(base,'/v1/staging/driver/inbox',
+   {auth:driverToken})).status,401);
+  assert.equal((await http(base,'/v1/staging/driver/offers/accept',{
+   method:'POST',auth:driverToken,
+   body:{offerId:deniedOfferKey,
+    requestKey:'98980000-0000-4989-8989-000000000029'}})).status,401);
+  console.log('G134 SESSION FENCE PASS: revoked Driver cannot poll G16 or accept G4 offers for the same G73 trip, with G38/G71 unchanged; CI-only.');
   console.log('G133 DRIVER DECISION PARTIAL: native C accept attempts use real authenticated G4 HTTP -> PG16 and fail closed with G38/G71 intact; no false assignment/settlement.');
   console.log('G132 UNIFIED B+A+C+D PARTIAL: native Driver C polls G16 authenticated real PG16 inbox for B new G73 ride; zero offers when G71/G38 legal evidence is absent; Admin D sees same trip. EXTERNAL_LEGAL_EVIDENCE_BLOCKED, not an accepted trip.');
   console.log('G131 UNIFIED A+B+D PASS: real Client B booking and subsidy -> A HTTP/PostgreSQL persisted trip -> Admin Web D state -> B cancel -> D same ID/revision/fare and IdP revocation; Driver legal G38/G71 remains blocked, NO LIVE');
