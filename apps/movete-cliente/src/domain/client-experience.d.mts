@@ -7,6 +7,7 @@ export type ClientSnapshot={
  bookingRecovery:{readReady:boolean;productionEnabled:false};
  deliveryRecovery:{storeReady:boolean;phase:string;unresolved:boolean;
   blocked:boolean;requestKey:string|null;productionEnabled:false};
+ deliveryQaRegistration:{ready:boolean;commercialEnabled:false};
  deliveryRegistration:{readReady:boolean;busy:boolean;deliveryId:string|null;
   vehicleKind:'AUTO'|'MOTO'|null;revision:number|null;requestKey:string|null;
   registrationOnly:true;qaOnly:true;productionEnabled:false};
@@ -311,6 +312,13 @@ export declare function createClientExperience(options?:{
   g126OriginalKeyRecoveryVerified?:boolean;
   requireDurableQuoteKey?:boolean;
   sourceOrigin?:string;pinnedOrigin?:string;
+  fetchImpl?:(url:string,req:unknown)=>Promise<unknown>;
+ }|null;
+ deliveryG5QaOptions?:{
+  enabled?:boolean;ownerApproved?:boolean;g5ContractVerified?:boolean;
+  g121ContractVerified?:boolean;externalRuntimeVerified?:boolean;
+  senderRlsVerified?:boolean;ownerTariffGateVerified?:boolean;
+  origin?:string;pinnedOrigin?:string;
   fetchImpl?:(url:string,req:unknown)=>Promise<unknown>;
  }|null;
  deliveryRegistrationOptions?:{

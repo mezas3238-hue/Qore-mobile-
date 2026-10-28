@@ -96,6 +96,17 @@ export function ClientRuntimeProvider({children,experience}:{
   origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
   pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
  }),[]);
+ const deliveryG5QaOptions=useMemo(()=>({
+  enabled:process.env.EXPO_PUBLIC_G5_QA_REGISTRATION_APPROVED==='true',
+  ownerApproved:process.env.EXPO_PUBLIC_G5_QA_REGISTRATION_APPROVED==='true',
+  g5ContractVerified:process.env.EXPO_PUBLIC_G5_CONTRACT_VERIFIED==='true',
+  g121ContractVerified:process.env.EXPO_PUBLIC_G121_CONTRACT_VERIFIED==='true',
+  externalRuntimeVerified:process.env.EXPO_PUBLIC_G5_EXTERNAL_RUNTIME_VERIFIED==='true',
+  senderRlsVerified:process.env.EXPO_PUBLIC_G5_PASSENGER_RLS_VERIFIED==='true',
+  ownerTariffGateVerified:process.env.EXPO_PUBLIC_G5_OWNER_TARIFF_GATE_VERIFIED==='true',
+  origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
+  pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN
+ }),[]);
  const deliveryG122Options=useMemo(()=>({
   enabled:process.env.EXPO_PUBLIC_G122_OWNER_APPROVED==='true',
   ownerApproved:process.env.EXPO_PUBLIC_G122_OWNER_APPROVED==='true',
@@ -112,11 +123,12 @@ export function ClientRuntimeProvider({children,experience}:{
  const client=useMemo(()=>experience??createClientExperience({
   authProvider:nativeAuth,autoG73HttpOptions:qaHttp,g95RecoveryStore,
   deliveryRegistrationOptions:g121Options,
+  deliveryG5QaOptions,
   deliveryG122Options,deliveryRecoveryStore,deliveryQuoteKeyStore,
   motoPassengerHttpOptions:motoG101,motoRecoveryStore,
   historyGatewayOptions:recoveryHttp?.historyGatewayOptions??null,
   statusGatewayOptions:recoveryHttp?.statusGatewayOptions??null
- }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options,deliveryG122Options,deliveryRecoveryStore,deliveryQuoteKeyStore]);
+ }),[experience,nativeAuth,qaHttp,recoveryHttp,g95RecoveryStore,motoG101,motoRecoveryStore,g121Options,deliveryG5QaOptions,deliveryG122Options,deliveryRecoveryStore,deliveryQuoteKeyStore]);
  useEffect(()=>{
   if(!nativeAuth)return;
   let active=true;

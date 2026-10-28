@@ -15,7 +15,8 @@ export function BookingRecoveryPanel({client,view,operation}:{
  const presented=projectBookingRecoveryUi(view,view,{operation});
  const current=client.snapshot();
  const canReadG121=operation==='deliveryRequest'&&presented.ok
-  &&presented.phase==='failed'&&view.deliveryRegistration?.readReady===true
+  &&['failed','acknowledged'].includes(presented.phase)
+  &&view.deliveryRegistration?.readReady===true
   &&current.deliveryRegistration?.readReady===true
   &&view.account?.subject===current.account?.subject
   &&view.privateViewRevision===current.privateViewRevision
@@ -52,7 +53,7 @@ export function BookingRecoveryPanel({client,view,operation}:{
   if(latest.account?.subject!==view.account?.subject
    ||latest.privateViewRevision!==view.privateViewRevision
    ||latest.mutation.requestKey!==view.mutation.requestKey
-   ||latest.mutation.phase!=='failed')return;
+   ||!['failed','acknowledged'].includes(latest.mutation.phase))return;
   lock.current=true;setBusy(true);setMessage('');
   try{
    const answer=await client.readUnconfirmedDeliveryRegistration();
@@ -71,7 +72,7 @@ export function BookingRecoveryPanel({client,view,operation}:{
   const latest=client.snapshot(),reg=latest.deliveryRegistration;
   if(!latest.authenticated||latest.account?.subject!==view.account?.subject
    ||latest.privateViewRevision!==view.privateViewRevision
-   ||latest.mutation.phase!=='failed'
+   ||!['failed','acknowledged'].includes(latest.mutation.phase)
    ||latest.mutation.operation!=='deliveryRequest'
    ||latest.mutation.requestKey!==view.mutation.requestKey
    ||reg.deliveryId!==view.deliveryRegistration.deliveryId
@@ -95,7 +96,7 @@ export function BookingRecoveryPanel({client,view,operation}:{
    price=current.deliveryPriceConsent;
   if(!current.authenticated||current.account?.subject!==view.account?.subject
    ||current.privateViewRevision!==view.privateViewRevision
-   ||current.mutation.phase!=='failed'
+   ||!['failed','acknowledged'].includes(current.mutation.phase)
    ||current.mutation.operation!=='deliveryRequest'
    ||current.mutation.requestKey!==view.mutation.requestKey
    ||reg.deliveryId!==view.deliveryRegistration.deliveryId
@@ -120,7 +121,8 @@ export function BookingRecoveryPanel({client,view,operation}:{
   if(!latest.authenticated||latest.account?.subject!==view.account?.subject
    ||latest.privateViewRevision!==view.privateViewRevision
    ||latest.mutation.requestKey!==view.mutation.requestKey
-   ||latest.mutation.phase!=='failed'||!price.canConfirm||!price.quote
+   ||!['failed','acknowledged'].includes(latest.mutation.phase)
+   ||!price.canConfirm||!price.quote
    ||price.deliveryId!==view.deliveryRegistration.deliveryId
    ||price.quote.quoteId!==view.deliveryPriceConsent.quote?.quoteId
    ||price.quote.amountGs!==view.deliveryPriceConsent.quote.amountGs

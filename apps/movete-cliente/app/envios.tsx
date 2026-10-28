@@ -74,6 +74,35 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
     'Hay una solicitud pendiente o no tenés autorización para preparar el envío.');
   }finally{lock.current=false;}
  }
+ async function registerQa(){
+  if(lock.current||!myDraft||!view.deliveryQaRegistration?.ready)return;
+  // STAGING-only server tags, not a free-text street address or geocode.
+  // A G5 accepts only authoritative zone codes; no pretend real routing.
+  if(!/^[A-Z_]{3,40}$/.test(pickup.trim())
+   ||!/^[A-Z_]{3,40}$/.test(destination.trim())
+   ||pickup.trim()===destination.trim()){
+   setResult('QA requiere códigos de zona del servidor, no direcciones de texto. No se envió el pedido.');
+   return;
+  }
+  const current=client.snapshot();
+  if(current.privateViewRevision!==view.privateViewRevision
+   ||current.account?.subject!==view.account?.subject
+   ||current.mutation.phase!=='ready'||current.mutation.operation!=='deliveryRequest'
+   ||current.mutation.requestKey!==mutation.requestKey
+   ||!current.deliveryQaRegistration?.ready)return;
+  lock.current=true;setResult('');
+  try{
+   const answer=await client.submit();
+   const latest=client.snapshot();
+   if(latest.privateViewRevision!==view.privateViewRevision
+    ||latest.account?.subject!==view.account?.subject
+    ||latest.mutation.requestKey!==mutation.requestKey)return;
+   setResult(answer.ok
+    ?'Registro de prueba confirmado por G5 y lectura privada G121. Sin precio, repartidor ni pago.'
+    :'El resultado de registro de prueba es incierto o fue rechazado. No vuelvas a enviar: consultá G121.');
+  }catch{setResult('Resultado de registro incierto; consultá G121, nunca repitas el POST.');}
+  finally{lock.current=false;}
+ }
  function discard(){
   if(!myDraft||!mutation.requestKey||lock.current)return;
   lock.current=true;
@@ -164,6 +193,10 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    </Text>}
    {myDraft&&<View>
     <Text style={styles.text}>Borrador preparado localmente. No se solicitó repartidor.</Text>
+    {view.deliveryQaRegistration?.ready===true&&
+     <Action label="Registrar envío de prueba QA (sin repartidor)"
+      hint="Único POST G5 con Keychain previo y verificación GET G121, sin precio, cobro o despacho."
+      disabled={lock.current} onPress={()=>{void registerQa();}}/>}
     <Action label="Descartar borrador sin enviar" secondary onPress={discard}/>
    </View>}
    {!free&&!myDraft&&<Text style={styles.small}>

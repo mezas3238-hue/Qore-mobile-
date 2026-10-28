@@ -1,6 +1,7 @@
 import {createClientSessionController} from './client-session.mjs';
 import {createPassengerBookingStagingGateway} from './passenger-booking-staging-gateway.mjs';
 import {createG121DeliveryRegistrationGateway} from './g121-delivery-registration-gateway.mjs';
+import {createG5G121VerifiedDeliveryBookingGateway} from './g5-g121-verified-delivery-booking-gateway.mjs';
 import {createG122DeliveryPriceConsentFlow} from './g122-delivery-price-consent-flow.mjs';
 import {createG5DurableDeliveryRecovery} from './g5-durable-delivery-recovery.mjs';
 import {createClientMutationController} from './client-mutations.mjs';
@@ -44,7 +45,8 @@ import {createG119MotoStatusGateway} from './g119-moto-ride-status-gateway.mjs';
  */
 const fail=code=>({ok:false,code});
 export function createClientExperience({authProvider=null,gateway=null,
- bookingHttpOptions=null,deliveryRegistrationOptions=null,deliveryG122Options=null,deliveryRecoveryStore=null,deliveryQuoteKeyStore=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
+ bookingHttpOptions=null,deliveryRegistrationOptions=null,
+ deliveryG5QaOptions=null,deliveryG122Options=null,deliveryRecoveryStore=null,deliveryQuoteKeyStore=null,motoPassengerOptions=null,motoPassengerHttpOptions=null,motoRideStatusOptions=null,motoRecoveryStore=null,autoPrequoteOptions=null,autoRouteIntakeOptions=null,autoG73HttpOptions=null,g95RecoveryStore=null,senderCustodyOptions=null,senderCustodyHttpOptions=null,historyGatewayOptions=null,cancelGatewayOptions=null,statusGatewayOptions=null,fareGatewayOptions=null,incidentGatewayOptions=null,commerceCatalogGateway=null,
  commerceCatalogPageGateway=null,g44BranchDirectoryOptions=null,
  g44BuyerHttpOptions=null,chatGateway=null,chatInboxGateway=null,
  g51ChatInboxHttpOptions=null,g52ChatHistoryHttpOptions=null,
@@ -58,7 +60,7 @@ export function createClientExperience({authProvider=null,gateway=null,
  let mutations,tracking,cancellation,fareFlow,incidentFlow,senderCustody=null,prequoteAuto=null,autoRouteIntake=null,autoG73Http=null;
  let historyLoading=false,historyLoadError=null;
  let registrationEpoch=0,registration={busy:false,receipt:null};
- let g121Registration=null,g122Consent=null;
+ let g121Registration=null,g122Consent=null,g5QaGateway=null;
  let historyRideProof=null,recoveredRide=null,resumeBusy=false,resumeGeneration=0;
  let completedProof=null,completedBusy=false,completedEpoch=0;
  let dispatch={busy:false,data:null,error:null,scope:null},dispatchEpoch=0;
@@ -82,6 +84,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   deliveryRecovery.clearMemory();
   registrationEpoch++;registration={busy:false,receipt:null};
   g121Registration?.cancelPending();
+  g5QaGateway?.cancelPending();
   g122Consent?.clear();
   g95Restored=null;
   g95Epoch++;g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
@@ -386,6 +389,18 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   onSessionInvalid:()=>{session.clear();notify();}
  });
+ // B24: separate STAGING G5 POST + owner-scoped G121 GET.
+ g5QaGateway=deliveryG5QaOptions&&g121Registration?.isConfigured()===true
+  ?createG5G121VerifiedDeliveryBookingGateway({
+  ...deliveryG5QaOptions,now,
+  getSession:()=>{
+   const token=session.getSessionForGateway(),user=actor();
+   return token&&user?{...token,subject:user.subject,
+    authRevision:session.revision(),sessionRevision:session.privacyRevision()}:null;
+  },
+  readG121:args=>g121Registration.read(args),
+  onSessionInvalid:()=>{session.clear();notify();}
+ }):null;
  // R56: real HTTP booking is opt-in and checked against a STRICT G11 QA
  // receipt. Generic 201 never certifies an actual trip or delivery.
  // No booking is wired in the default ClientRuntimeProvider.
@@ -398,8 +413,18 @@ export function createClientExperience({authProvider=null,gateway=null,
   },
   onSessionInvalid:()=>{session.clear();notify();}
  }):null;
+ const routedMutationGateway=g5QaGateway?.isConfigured()===true
+  ?Object.freeze({
+   isConfigured:()=>true,bookingReconciliationRequired:true,
+   send:(operation,args)=>operation==='deliveryRequest'
+    ?g5QaGateway.send(operation,args)
+    :(bookingGateway??gateway)?.send?.(operation,args)??fail('NOT_CONFIGURED'),
+   reconcile:(operation,args)=>operation==='deliveryRequest'
+    ?g5QaGateway.reconcile(operation,args)
+    :(bookingGateway?.reconcile?.(operation,args)??fail('BOOKING_RECONCILIATION_NOT_CERTIFIED'))
+  }):bookingGateway??gateway;
  mutations=createClientMutationController({
-  gateway:bookingGateway??gateway,getSession:async()=>actorSession()
+  gateway:routedMutationGateway,getSession:async()=>actorSession()
  });
  tracking=createRiderPollingCoordinator({
   gateway:trackGateway,getSession:async()=>actor(),store:riderStore,now
@@ -1175,8 +1200,9 @@ export function createClientExperience({authProvider=null,gateway=null,
   const user=actor(),pending=mutations.publicState();
   if(!user)return fail('AUTH_REQUIRED');
   if(!g121Registration?.isConfigured())return fail('G121_NOT_CERTIFIED');
-  if(pending.phase!=='failed'||pending.operation!=='deliveryRequest'
-   ||!pending.requestKey)return fail('G121_NO_UNCONFIRMED_DELIVERY');
+  if(!['failed','acknowledged'].includes(pending.phase)
+   ||pending.operation!=='deliveryRequest'||!pending.requestKey)
+   return fail('G121_NO_UNCONFIRMED_DELIVERY');
   if(registration.busy)return fail('G121_IN_FLIGHT');
   const epoch=++registrationEpoch,owner=user.subject;
   const sessionRevision=session.privacyRevision(),requestKey=pending.requestKey;
@@ -1188,7 +1214,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   const current=actor(),mutation=mutations.publicState();
   if(epoch!==registrationEpoch||!current||current.subject!==owner
    ||session.privacyRevision()!==sessionRevision
-   ||mutation.operation!=='deliveryRequest'||mutation.phase!=='failed'
+   ||mutation.operation!=='deliveryRequest'
+   ||!['failed','acknowledged'].includes(mutation.phase)
    ||mutation.requestKey!==requestKey)return fail('STALE_SESSION_RESPONSE');
   if(result.ok){
    registration={busy:false,receipt:Object.freeze({
@@ -1230,7 +1257,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   if(!user)return fail('AUTH_REQUIRED');
   if(!g122Consent?.isConfigured())return fail('G122_NOT_CERTIFIED');
   if(!verified.deliveryId||!verified.vehicleKind||!verified.requestKey
-   ||pending.phase!=='failed'||pending.operation!=='deliveryRequest'
+   ||!['failed','acknowledged'].includes(pending.phase)
+   ||pending.operation!=='deliveryRequest'
    ||pending.requestKey!==verified.requestKey)
    return fail('DELIVERY_REGISTRATION_NOT_VERIFIED');
   const revision=session.privacyRevision(),owner=user.subject,key=verified.requestKey;
@@ -1249,7 +1277,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   const pending=mutations.publicState(),scope=g122Consent?.snapshot();
   if(!user)return fail('AUTH_REQUIRED');
   if(!verified.deliveryId||!verified.vehicleKind||!verified.requestKey
-   ||pending.operation!=='deliveryRequest'||pending.phase!=='failed'
+   ||pending.operation!=='deliveryRequest'
+   ||!['failed','acknowledged'].includes(pending.phase)
    ||pending.requestKey!==verified.requestKey
    ||scope?.deliveryId!==verified.deliveryId
    ||scope?.vehicleKind!==verified.vehicleKind
@@ -1269,7 +1298,8 @@ export function createClientExperience({authProvider=null,gateway=null,
   const pending=mutations.publicState(),scope=g122Consent?.snapshot();
   if(!user)return fail('AUTH_REQUIRED');
   if(!verified.deliveryId||!verified.vehicleKind
-   ||pending.operation!=='deliveryRequest'||pending.phase!=='failed'
+   ||pending.operation!=='deliveryRequest'
+   ||!['failed','acknowledged'].includes(pending.phase)
    ||pending.requestKey!==verified.requestKey
    ||scope?.deliveryId!==verified.deliveryId
    ||scope?.vehicleKind!==verified.vehicleKind)return fail('G122_SCOPE_CHANGED');
@@ -1295,6 +1325,7 @@ export function createClientExperience({authProvider=null,gateway=null,
     bookingRecovery:Object.freeze({readReady:false,productionEnabled:false}),
     deliveryRegistration:publicDeliveryRegistration(),
     deliveryRecovery:deliveryRecovery.snapshot(null),
+    deliveryQaRegistration:Object.freeze({ready:false,commercialEnabled:false}),
     deliveryPriceConsent:publicDeliveryPriceConsent(),
     rideContinuation:Object.freeze({canVerify:false,tripId:null,qaOnly:true,productionEnabled:false}),
     rideHistoryRecovery:Object.freeze({readReady:false,busy:false,qaOnly:true,productionEnabled:false}),
@@ -1317,10 +1348,12 @@ export function createClientExperience({authProvider=null,gateway=null,
    account:Object.freeze({subject:user.subject,role:'passenger'}),
    privateViewRevision:session.privacyRevision(),
    mutation:mutations.publicState(),
-   bookingRecovery:Object.freeze({readReady:Boolean(bookingGateway?.reconciliationConfigured?.()),
+   bookingRecovery:Object.freeze({readReady:Boolean(bookingGateway?.reconciliationConfigured?.()||g5QaGateway?.isConfigured()),
     productionEnabled:false}),
    deliveryRegistration:publicDeliveryRegistration(),
    deliveryRecovery:deliveryRecovery.snapshot(user.subject),
+   deliveryQaRegistration:Object.freeze({ready:Boolean(g5QaGateway?.isConfigured()),
+    commercialEnabled:false}),
    deliveryPriceConsent:publicDeliveryPriceConsent(),
    rideContinuation:rideContinuation(),
    rideHistoryRecovery:rideHistoryRecovery(),
@@ -1543,10 +1576,11 @@ export function createClientExperience({authProvider=null,gateway=null,
     // Existing isolated legacy gateway mocks without a native store retain
     // their own unit-test semantics; the shipped App injects SecureStore.
     if(!deliveryRecovery.isConfigured()){
-     if(bookingGateway?.isConfigured()===true)
+     if(bookingGateway?.isConfigured()===true||g5QaGateway?.isConfigured()===true)
       return fail('G5_SECURE_STORE_REQUIRED');
     }else{
      if(bookingGateway?.isConfigured()!==true
+      &&g5QaGateway?.isConfigured()!==true
       &&gateway?.isConfigured?.()!==true)
       return fail('G5_NOT_CERTIFIED');
      if(!user||typeof requested.requestKey!=='string')
