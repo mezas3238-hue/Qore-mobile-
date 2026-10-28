@@ -1,0 +1,42 @@
+# Applies only when a collaborator PR targets the architect A integration branch.
+# No merges, deployments or remote credentials.
+name: Movete Facil Architect B ownership boundary
+on:
+  pull_request:
+    branches:
+      - feature/mobility-monorepo-isolated-20261016
+permissions:
+  contents: read
+jobs:
+  ownership:
+    name: Reject edits outside Client/Admin ownership
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce no overlapping files with Architect A
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$BASE_SHA^{commit}"
+          git cat-file -e "$HEAD_SHA^{commit}"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/movete_b_modified_paths.txt
+          test -s /tmp/movete_b_modified_paths.txt
+          echo "Files changed by independent Architect B:"
+          cat /tmp/movete_b_modified_paths.txt
+          while IFS= read -r file; do
+            case "$file" in
+              apps/movete-cliente/*|apps/movete-admin/*|docs/architect-b/*) ;;
+              *) echo "::error::Architect B cannot edit $file (owned by Architect A)."; exit 1 ;;
+            esac
+          done < /tmp/movete_b_modified_paths.txt
+          echo "PASS: Architect B stays in Client/Admin/docs/architect-b exclusive areas."
+      - name: Verify no Driver/Client cross imports and separate identities
+        run: node scripts/check-mobile-boundaries.mjs

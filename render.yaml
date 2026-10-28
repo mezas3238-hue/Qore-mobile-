@@ -1,0 +1,37 @@
+# Movete Fácil — Render STAGING only. This draft never deploys by itself.
+# Owner must approve creation, confirm any charges and set secrets in Render.
+# This Blueprint does NOT provision PostgreSQL: Supabase STAGING is required.
+previews:
+  generation: off
+services:
+  - type: web
+    name: movete-facil-staging-api
+    runtime: node
+    plan: free
+    rootDir: apps/mobility-expo
+    branch: feature/mobility-monorepo-isolated-20261016
+    buildCommand: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+    startCommand: node server/run-g4-render-staging.mjs
+    autoDeployTrigger: off
+    numInstances: 1
+    envVars:
+      - key: QORE_MOBILITY_ENV
+        value: staging
+      - key: LIVE_TRIPS_ENABLED
+        value: "false"
+      - key: QORE_RENDER_NO_COMMERCIAL_TRIPS
+        value: "true"
+      - key: QORE_RENDER_STAGING_APPROVED
+        sync: false
+      - key: QORE_RENDER_HOSTNAME
+        sync: false
+      - key: QORE_STAGING_PROJECT_REF
+        sync: false
+      - key: QORE_STAGING_PUBLISHABLE_KEY
+        sync: false
+      - key: QORE_STAGING_SERVICE_ROLE_KEY
+        sync: false
+      - key: QORE_HISTORY_CURSOR_SIGNING_KEY
+        sync: false
+      - key: QORE_ADMIN_BROWSER_ORIGIN
+        sync: false

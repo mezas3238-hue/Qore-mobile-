@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {quoteSyntheticFare} from './fare-engine.mjs';
+import {LEDGER_LIVE_ENABLED,buildSyntheticSettlement,verifyBalancedEntries} from './staging-ledger.mjs';
+const quote=quoteSyntheticFare({mode:'AUTO',distanceMeters:5500,durationSeconds:900,basePyg:5000,perKmPyg:2000,perMinutePyg:200,minPyg:8000,tollsPyg:3000,commissionBps:1500,ruleVersion:'staging-v1'});
+test('synthetic fare reconciles in double-entry ledger',()=>{const r=buildSyntheticSettlement({quote,transactionId:'test_1'});assert.equal(LEDGER_LIVE_ENABLED,false);assert.equal(r.ok,true);assert.equal(verifyBalancedEntries(r.entries),true);assert.equal(r.entries[0].amountPyg,22000);assert.equal(r.entries[2].amountPyg,2850);});
+test('tampered and malformed settlements fail closed',()=>{assert.equal(buildSyntheticSettlement({quote:{...quote,providerPyg:100},transactionId:'test_2'}).ok,false);assert.equal(buildSyntheticSettlement({quote,transactionId:'../../bad'}).ok,false);assert.equal(verifyBalancedEntries([{account:'synthetic_cash',side:'debit',amountPyg:100}]),false);assert.equal(verifyBalancedEntries([{account:'synthetic_cash',side:'debit',amountPyg:NaN}]),false);});
+
+test('reject altered toll, subtotal and commission components even when entries balance',()=>{
+ for(const altered of [{...quote,tollsPyg:0},{...quote,subtotalPyg:quote.subtotalPyg+1},{...quote,commissionBps:1200}]){
+  assert.equal(buildSyntheticSettlement({quote:altered,transactionId:'tamper_1'}).ok,false);
+ }
+});
+
+test('ledger refuses internally balanced but forged fare component breakdown',()=>{
+ const forged={...quote,breakdown:{...quote.breakdown,basePyg:quote.breakdown.basePyg+1000}};
+ assert.equal(buildSyntheticSettlement({quote:forged,transactionId:'forged_breakdown'}).ok,false);
+ assert.equal(buildSyntheticSettlement({quote:{...quote,ruleVersion:'../../unsafe'},transactionId:'forged_rule'}).ok,false);
+});
+
+test('ledger verification requires the canonical three accounts and debit-credit direction',()=>{
+ const valid=buildSyntheticSettlement({quote,transactionId:'canonical_1'});
+ assert.equal(valid.ok,true);
+ assert.equal(verifyBalancedEntries(valid.entries),true);
+ assert.equal(verifyBalancedEntries([...valid.entries,{account:'synthetic_extra',side:'debit',amountPyg:0}]),false);
+ assert.equal(verifyBalancedEntries(valid.entries.map((entry,i)=>i===1?{...entry,account:'synthetic_unrelated'}:entry)),false);
+ assert.equal(verifyBalancedEntries(valid.entries.map((entry,i)=>i===0?{...entry,side:'credit'}:entry)),false);
+});

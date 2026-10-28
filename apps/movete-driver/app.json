@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Movete Fácil Driver",
+    "slug": "movete-facil-driver",
+    "scheme": "movetefacildriver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.movetefacil.driver"
+    },
+    "android": {
+      "package": "com.movetefacil.driver",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "name": "Movete Fácil Driver",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Movete Fácil solicita fotos de documentos solo para verificar tu cuenta de conductor.",
+          "cameraPermission": "Movete Fácil usa la cámara para capturar documentos y verificar tu rostro con consentimiento.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "extra": {
+      "qoreAudience": "DRIVER",
+      "liveOperationsEnabled": false
+    },
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
