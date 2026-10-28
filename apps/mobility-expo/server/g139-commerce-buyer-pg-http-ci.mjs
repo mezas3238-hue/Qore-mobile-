@@ -83,7 +83,8 @@ const qa=createG45BuyerOrderReservationQa({
    if(Object.keys(args).length!==keys.length
     ||!keys.every(k=>Object.hasOwn(args,k))
     ||![args._buyer,args._session,args._request_key,args._branch]
-     .every(x=>UUID.test(x)))throw Error('Invalid G45 SQL scope');
+     .every(x=>UUID.test(x))||!['AUTO','MOTO'].includes(args._vehicle_kind))
+    throw Error('Invalid G45 SQL scope');
    const items=JSON.stringify(args._items);
    if(!args._items.every(x=>UUID.test(x.itemId)&&
     Number.isInteger(x.quantity)&&x.quantity>=1&&x.quantity<=999))
@@ -91,7 +92,7 @@ const qa=createG45BuyerOrderReservationQa({
    return {data:read("SELECT public.mobility_stage_g45_reserve_order_qa("+
     [args._buyer,args._session].map(quote).join(',')+","+
     args._iat_ms+","+quote(args._request_key)+","+quote(args._branch)+","+
-    args._catalog_version+",'AUTO',"+quote(items)+"::jsonb)::text")};
+    args._catalog_version+","+quote(args._vehicle_kind)+","+quote(items)+"::jsonb)::text")};
   }
   if(name==='mobility_stage_g45_cancel_order_qa'){
    if(![args._buyer,args._session,args._order_id,args._cancel_key]
@@ -166,7 +167,45 @@ try{
  const replay=await B.cancel({orderId,cancelKey});
  assert.equal(replay.ok,true);
  assert.equal(replay.receipt.eventId,canceled.receipt.eventId);
- assert.equal(posts,5);
+ // G140: original Cliente B HTTP client chooses vehicle. SQL enforces
+ // G44 branch geography; switching coverage invalidates catalog revision.
+ const invalidMoto={...request,requestKey:ids(211),vehicleKind:'MOTO'};
+ assert.equal((await B.reserve(invalidMoto)).ok,false,
+  'MOTO booking cannot use AUTO-only branch');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'2');
+ sql("INSERT INTO public.mobility_stage_g31_zone_coverage("+
+  "zone_id,municipality,service_kind,coverage_status) VALUES("+
+  quote(zone)+",'Asuncion','MOTO_DELIVERY','ACTIVE');"+
+  "UPDATE public.mobility_stage_g44_branch_geography SET service_kind='MOTO_DELIVERY'"+
+  " WHERE branch_id="+quote(branch));
+ const motoVersion=Number(sql("SELECT revision FROM public.mobility_stage_g44_catalog_versions WHERE branch_id="+quote(branch)));
+ assert(motoVersion>version);
+ const invalidAuto={...request,requestKey:ids(213),catalogVersion:motoVersion};
+ assert.equal((await B.reserve(invalidAuto)).ok,false,
+  'AUTO booking cannot use MOTO-only branch');
+ const motoRequest={...request,requestKey:ids(212),vehicleKind:'MOTO',
+  catalogVersion:motoVersion};
+ const moto=await B.reserve(motoRequest);
+ assert.equal(moto.ok,true,JSON.stringify(moto));
+ assert.equal(moto.receipt.subtotalPyg,25000);
+ assert.equal(moto.receipt.paymentConfirmed,false);
+ const motoId=moto.receipt.orderId;
+ assert.notEqual(motoId,orderId);
+ assert.equal(sql("SELECT requested_vehicle_kind FROM public.mobility_stage_merchant_orders WHERE id="+quote(motoId)),'MOTO');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
+ const motoRetry=await B.reserve(motoRequest);
+ assert.equal(motoRetry.ok,true);
+ assert.equal(motoRetry.receipt.receiptId,moto.receipt.receiptId);
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'1');
+ const motoCancel=await B.cancel({orderId:motoId,cancelKey:ids(312)});
+ assert.equal(motoCancel.ok,true,JSON.stringify(motoCancel));
+ assert.equal(motoCancel.receipt.refundStatus,'NO_PSP_NO_FINANCIAL_REFUND');
+ assert.equal(sql("SELECT stock_units FROM public.mobility_stage_catalog_items WHERE id="+quote(item)),'2');
+ const motoCancelReplay=await B.cancel({orderId:motoId,cancelKey:ids(312)});
+ assert.equal(motoCancelReplay.ok,true);
+ assert.equal(motoCancelReplay.receipt.eventId,motoCancel.receipt.eventId);
+ assert.equal(posts,11);
+ console.log('G140 COMMERCE MOTO E2E PASS: original B Client -> A HTTP -> G44 vehicle matching -> G45 PG16 stock; wrong vehicle denied, MOTO receipt replay and exact restock; no LIVE/PSP');
  console.log('G139 B/A/PG16 COMMERCE PASS: authenticated original Client Buyer -> HTTP -> G45 server priced 25000 PYG catalog reserve; same order replay; revoked denied; cancel restores exact stock once; NO LIVE/PSP');
 }finally{
  server.close();if(server.listening)await once(server,'close');
