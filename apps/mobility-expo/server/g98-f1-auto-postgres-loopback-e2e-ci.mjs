@@ -440,6 +440,51 @@ async function main(){
   assert.equal(adminBefore.data.driverId,null);
   assert.equal(adminBefore.data.assignmentPersisted,false);
   assert.equal(adminBefore.data.amountGs,q.data.amountGs);
+  // G131: consume the exact C Driver and D Admin production-code decoders
+  // against the SAME G73 booking on the real disposable PostgreSQL chain.
+  // No fake 200 response: all HTTP requests reach the A loopback gateways.
+  const cPath=new URL('../../../ci-c-driver/apps/movete-driver/src/domain/',import.meta.url);
+  const dPath=new URL('../../../ci-d-admin/apps/movete-admin/src/',import.meta.url);
+  const [{readDriverCurrentTrip},{verifyPrivateDriverCurrentTrip},
+   {createF1AutoRideAuditGateway}]=await Promise.all([
+    import(new URL('driver-current-trip-http.mjs',cPath)),
+    import(new URL('driver-current-trip-session.mjs',cPath)),
+    import(new URL('f1-auto-ride-audit-gateway.mjs',dPath))
+   ]);
+  const cSession=async()=>({role:'driver',userId:driverId,accessToken:driverToken});
+  const cFreshRead=()=>verifyPrivateDriverCurrentTrip({
+   session:{role:'driver',userId:driverId,accessToken:driverToken},
+   getSession:cSession,
+   readCurrent:({accessToken})=>readDriverCurrentTrip({
+    apiOrigin:base,accessToken,request:fetch
+   })
+  });
+  assert.equal(await cFreshRead(),null,
+   'C Driver must see no assigned trip when G38/G71 denied assignment');
+  const dFakeOrigin='https://qore-g131-admin-loopback.invalid';
+  const dSession=async()=>({role:'admin',subject:adminId,token:adminToken,
+   authRevision:1,mfaVerified:true,expiresAt:Date.now()+600000});
+  const dFetch=(url,opts)=>{
+   const u=new URL(url);
+   assert.equal(u.origin,dFakeOrigin);
+   assert.equal(u.pathname.startsWith('/v1/staging/admin/rides/'),true);
+   assert.equal(opts.method,'GET');
+   return fetch(base+u.pathname,{...opts,redirect:'error'});
+  };
+  const realD=createF1AutoRideAuditGateway({
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin:dFakeOrigin,pinnedOrigin:dFakeOrigin,
+   getSession:dSession,fetchImpl:dFetch
+  });
+  assert.equal(realD.isConfigured(),true);
+  const dBefore=await realD.read(tripId);
+  assert.equal(dBefore.ok,true,JSON.stringify(dBefore));
+  assert.equal(dBefore.data.tripId,tripId);
+  assert.equal(dBefore.data.quoteId,q.data.quoteId);
+  assert.equal(dBefore.data.bookingRequestKey,bookingKey);
+  assert.equal(dBefore.data.amountGs,q.data.amountGs);
+  assert.equal(dBefore.data.status,'searching');
+  assert.equal(dBefore.data.assignmentPersisted,false);
   assert.equal((await http(base,adminPath,{auth:token})).status,401);
   assert.equal((await http(base,
    '/v1/staging/rider/trips/'+tripId+'/status',{auth:otherToken})).status,404);
@@ -622,6 +667,16 @@ async function main(){
   assert.equal(auditFinal.data.tripId,secondTrip);
   assert.equal(auditFinal.data.status,'cancelled');
   assert.equal(auditFinal.data.revision,bridge.snapshot().tracking.revision);
+  const dAfter=await realD.read(secondTrip);
+  assert.equal(dAfter.ok,true,JSON.stringify(dAfter));
+  assert.equal(dAfter.data.tripId,secondTrip);
+  assert.equal(dAfter.data.status,'cancelled');
+  assert.equal(dAfter.data.driverId,undefined,
+   'D projected Admin model must never expose private Driver identity');
+  assert.equal(await cFreshRead(),null,
+   'C Driver still cannot recover forged assignment after cancellation');
+  realD.cancelPending();
+  console.log('G131 FOUR-APP GitHub integration: B Cliente booking -> A real PostgreSQL16 -> C Driver legally unassigned -> D Admin genuine F1 gateway -> B cancellation and durable void, exactly same trip IDs; noncommercial.');
   assert.equal(posts,5,'One route, quote, subsidy, booking and cancel');
   assert.equal(gets,4,'One status, financial, canceled status, voided financial');
   continuation.close();

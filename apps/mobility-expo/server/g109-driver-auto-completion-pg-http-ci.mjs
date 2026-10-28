@@ -26,9 +26,9 @@ import {createQoreRiderHistoryGateway}
 import {createQoreOwnHistoryRepository,HISTORY_PAGE_SIZE}
  from './g26-rider-history-repository.mjs';
 import {readPrivateDriverTripStatus,transitionPrivateDriverTrip}
- from '../../movete-driver/src/domain/driver-trip-lifecycle-http.mjs';
+ from '../../../ci-c-driver/apps/movete-driver/src/domain/driver-trip-lifecycle-http.mjs';
 import {createDriverTripLifecycleController}
- from '../../movete-driver/src/domain/driver-trip-lifecycle.mjs';
+ from '../../../ci-c-driver/apps/movete-driver/src/domain/driver-trip-lifecycle.mjs';
 
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const fixture='10900000-0000-4109-8109-000000000023';
@@ -266,6 +266,24 @@ async function main(){
   const transition='/v1/staging/trips/'+tripId+'/transition';
   const current='/v1/staging/driver/trips/current';
   const history='/v1/staging/rider/history';
+  // G131 C current-trip actual network client -> A authenticated G106
+  // -> SAME accepted PG16 record -> C second-session verification.
+  const cDir=new URL('../../../ci-c-driver/apps/movete-driver/src/domain/',import.meta.url);
+  const [{readDriverCurrentTrip},{verifyPrivateDriverCurrentTrip}]=await Promise.all([
+   import(new URL('driver-current-trip-http.mjs',cDir)),
+   import(new URL('driver-current-trip-session.mjs',cDir))
+  ]);
+  const verifyC=()=>verifyPrivateDriverCurrentTrip({
+   session:{role:'driver',userId:driver,accessToken:driverToken},
+   getSession:async()=>({role:'driver',userId:driver,accessToken:driverToken}),
+   readCurrent:({accessToken})=>readDriverCurrentTrip({
+    apiOrigin:origin,accessToken,request:fetch
+   })
+  });
+  const cInitial=await verifyC();
+  assert.equal(cInitial?.tripId,tripId);
+  assert.equal(cInitial?.status,'accepted');
+  assert.equal(cInitial?.revision,2);
   // G114: ACTUAL Architect B Passenger codecs use A authenticated HTTP
   // and the SAME accepted pre-G38 fixture that A native Driver completes.
   // This is NONCOMMERCIAL CI, not legal approval of a new G73 booking.
@@ -506,6 +524,9 @@ async function main(){
   nativeDriver.clear();
   assert.equal(nativeDriver.current().phase,'signed-out');
   assert.equal(nativeDriver.current().tripId,null);
+  assert.equal(await verifyC(),null,
+   'C Driver must see no active SQL trip after original AUTO completion');
+  console.log('G131 C positive AUTO: real Driver HEAD G65 controls and G106 dual-session recovery against one durable A PostgreSQL16 trip; Client B history shares the ID.');
   assert.equal((await http(origin,transition,{
    method:'POST',body:{event:'arrive',eventKey:keys[3]}})).status,409);
   assert.equal((await http(origin,transition,{

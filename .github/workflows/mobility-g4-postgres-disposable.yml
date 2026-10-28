@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - 'feature/mobility-monorepo-isolated-20261016'
+      - 'integration/qore-mobile-abcd-github-e2e-20261027'
     paths:
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs'
@@ -617,9 +618,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: mezas3238-hue/Qore-mobile-
-          ref: ad6569872d79c5c7fd948ae0a859706463678353
+          ref: 5c66e1616e0e75ac73b88b0b4ab6683536406bb6
           path: ci-b-client
           persist-credentials: false
+      - name: G131 checkout C Driver HEAD (no merge, no LIVE)
+        uses: actions/checkout@v4
+        with:
+          repository: mezas3238-hue/Qore-mobile-
+          ref: e025177f6125a9322bc90e763578f4d9d770f92e
+          path: ci-c-driver
+          persist-credentials: false
+      - name: G131 checkout D Admin HEAD (no merge, no LIVE)
+        uses: actions/checkout@v4
+        with:
+          repository: mezas3238-hue/Qore-mobile-
+          ref: 2f71f6672ac6f29b4092bddb8a31df9c000be75a
+          path: ci-d-admin
+          persist-credentials: false
+      - name: G131 preflight exact external C/D domain modules
+        run: |
+          node --check ci-c-driver/apps/movete-driver/src/domain/driver-current-trip-session.mjs
+          node --check ci-c-driver/apps/movete-driver/src/domain/driver-current-trip-http.mjs
+          node --check ci-c-driver/apps/movete-driver/src/domain/driver-trip-lifecycle.mjs
+          node --check ci-d-admin/apps/movete-admin/src/f1-auto-ride-audit-gateway.mjs
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation
         run: node apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
       - name: G113 real PostgreSQL automatic retry, backoff, idempotent cancellation and worker shutdown
