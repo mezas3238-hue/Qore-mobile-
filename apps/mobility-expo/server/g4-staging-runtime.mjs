@@ -35,6 +35,7 @@ import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
 import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG138AdminAutoTraceGateway} from './g138-admin-auto-trace-gateway.mjs';
 import {createG142AdminMotoTraceGateway} from './g142-admin-moto-trace-gateway.mjs';
+import {createG145AdminCargoTraceGateway} from './g145-admin-cargo-trace-gateway.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
 import {createSupabaseStagingMerchantManagementRepository} from './g9-supabase-merchant-management-repository.mjs';
@@ -659,6 +660,21 @@ export async function prepareQoreG4StagingRuntime({
    return data;
   }
  });
+ // G145: PRICE-CONSENTED original G5 rows only; neither an unpriced draft
+ // nor a courier with missing legal clearance may be called a paid delivery.
+ const adminCargoTrace=verifiedAdminTrust===null?null:createG145AdminCargoTraceGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  ...verifiedAdminTrust,
+  loadCargoTraceReceipt:async({actorId,deliveryId})=>{
+   if(!UUID.test(actorId)||!UUID.test(deliveryId))
+    throw Error('Invalid G145 SQL scope');
+   const {data,error}=await admin.rpc('mobility_stage_g145_delivery_trace_qa',{
+    _admin:actorId,_delivery:deliveryId
+   });
+   if(error)throw Error('G145 original SQL cargo trace unavailable');
+   return data;
+  }
+ });
  const safety=createQoreSafetyGateway({
   projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
   allowRequest,
@@ -852,6 +868,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
    ...(adminAutoTrace===null?{}:{adminServiceTraceHandler:guard(adminAutoTrace)}),
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
+   ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchants),
    financeHandler:guard(finance),

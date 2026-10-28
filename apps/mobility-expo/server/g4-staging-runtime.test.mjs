@@ -26,7 +26,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
-   adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,
+   adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
    g77RegisteredRoute:null,
    g84Enabled:false,g84OfferKey:null,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
@@ -168,6 +168,9 @@ function mockSupabase(){
     if(name==='mobility_stage_g142_moto_trace_qa')
      return {data:params._admin===stranger&&params._trip===ride?
       state.motoTraceReceipt:null,error:null};
+    if(name==='mobility_stage_g145_delivery_trace_qa')
+     return {data:params._admin===stranger&&params._delivery===deliveryId?
+      state.cargoTraceReceipt:null,error:null};
     if(name==='mobility_stage_auto_demo_request'){
      if(params._passenger_id!==passenger)return {error:{message:'Wrong passenger'}};
      return {data:ride,error:null};
@@ -1203,6 +1206,62 @@ test('G144 revoked/MFA denied and missing SQL evidence fail closed in both Admin
    assert.equal((await req(base,g144MotoPath,'stranger')).status,
     status===503?404:status);
    if(status!==503)assert(!m.state.rpcs.some(x=>/g138|g142/.test(x.name)));
+  });
+ }
+});
+
+const g145Auto='/v1/staging/admin/services/DELIVERY_AUTO/'+deliveryId+'/trace';
+const g145Moto='/v1/staging/admin/services/DELIVERY_MOTO/'+deliveryId+'/trace';
+function g145Snapshot(kind){
+ return {mode:'STAGING_DEMO_ONLY',viewerId:stranger,
+  serviceId:deliveryId,serviceKind:kind,
+  quoteId:fareQuote,bookingRequestKey:requestKey,
+  status:'requested',revision:1,observedAt:now-1000,expiresAt:now+29000,
+  serverPersisted:true,productionEnabled:false,
+  assignment:{state:'NOT_ASSIGNABLE',legalGate:'G38_BLOCKED'},
+  events:[{eventId:deliveryId,serviceId:deliveryId,sequence:1,
+   status:'requested',at:now-2000}],ledger:null};
+}
+test('G145 cargo original SQL trace is securely mounted for AUTO and MOTO',async()=>{
+ for(const [path,kind] of [[g145Auto,'DELIVERY_AUTO'],[g145Moto,'DELIVERY_MOTO']]){
+  const m=mockSupabase();m.state.adminRole='admin';
+  m.state.cargoTraceReceipt=g145Snapshot(kind);
+  const runtime=await prepare(m,{adminF1Trust:trust()});
+  await http(runtime,async base=>{
+   assert.equal((await req(base,path,'rider')).status,401);
+   const r=await req(base,path,'stranger');
+   assert.equal(r.status,200);
+   assert.equal(r.body.serviceKind,kind);
+   assert.equal(r.body.ledger,null);
+   assert.equal(r.body.assignment.state,'NOT_ASSIGNABLE');
+   assert(m.state.rpcs.some(x=>x.name==='mobility_stage_g145_delivery_trace_qa'
+    &&x.params._admin===stranger&&x.params._delivery===deliveryId));
+  });
+ }
+});
+test('G145 cargo trace rejects unconfigured, unpriced, revoked, forged and cross-kind',async()=>{
+ const unconfigured=mockSupabase();
+ await http(await prepare(unconfigured),async base=>{
+  assert.equal((await req(base,g145Moto,'stranger')).status,503);
+ });
+ for(const [kind,other] of [['DELIVERY_MOTO',g145Auto],['DELIVERY_AUTO',g145Moto]]){
+  const m=mockSupabase();m.state.adminRole='admin';
+  m.state.cargoTraceReceipt=g145Snapshot(kind);
+  const runtime=await prepare(m,{adminF1Trust:trust()});
+  await http(runtime,async base=>{
+   assert.equal((await req(base,other,'stranger')).status,503);
+  });
+ }
+ for(const [override,status] of [
+  [{verifySessionNotRevoked:async()=>false},401],
+  [{verifyBackofficeMfa:async()=>({verifiedByProvider:false})},403],
+  [{},404]
+ ]){
+  const m=mockSupabase();m.state.adminRole='admin';
+  const runtime=await prepare(m,{adminF1Trust:trust(override)});
+  await http(runtime,async base=>{
+   assert.equal((await req(base,g145Moto,'stranger')).status,status);
+   if(status!==404)assert(!m.state.rpcs.some(x=>x.name.includes('g145')));
   });
  }
 });

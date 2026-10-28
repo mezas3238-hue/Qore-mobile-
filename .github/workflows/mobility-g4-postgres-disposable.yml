@@ -710,6 +710,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G122_DELIVERY_VEHICLE_FARE_CONSENT_POSTGRES_CI_ONLY.sql
       - name: G122 HTTP original AUTO and MOTO delivery + G7 quote + exact price consent PostgreSQL
         run: node apps/mobility-expo/server/g122-delivery-price-consent-pg-http-ci.mjs
+      - name: G145 install original price-consented G5 deliveries Admin trace
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G145_ORIGINAL_DELIVERY_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
+      - name: G145 verify original AUTO and MOTO cargo traces with real G122 PostgreSQL consent
+        run: node apps/mobility-expo/server/g145-admin-cargo-trace-pg-ci.mjs
       - name: G132 original B Client G5/G121 and C Driver G66 over A PostgreSQL16 (same SHA)
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G123 install SQL private delivery offer/accept price fence AFTER G121/G122 receipts
