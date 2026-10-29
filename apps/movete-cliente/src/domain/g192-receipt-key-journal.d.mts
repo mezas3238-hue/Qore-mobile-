@@ -13,5 +13,5 @@ export declare function createG192ReceiptKeyJournal(args:{
  arm:(args:{subject:string;kind:G192ReceiptKind;deliveryId:string;
   requestKey:string;recipientId?:string|null})=>Promise<G192ReceiptRecord>;
  clearVerified:(args:{subject:string;kind:G192ReceiptKind;deliveryId:string;
-  requestKey:string;verifiedServerReceipt:true})=>Promise<boolean>;
+  requestKey:string;verifiedServerReceipt:Readonly<Record<string,unknown>>})=>Promise<boolean>;
 }>;
