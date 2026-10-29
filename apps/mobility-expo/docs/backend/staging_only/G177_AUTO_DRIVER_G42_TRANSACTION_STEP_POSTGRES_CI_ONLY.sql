@@ -37,6 +37,32 @@ BEGIN
   RAISE EXCEPTION 'G177 source provider session revoked'
    USING ERRCODE='P1771';
  END IF;
+ -- G204: require the SAME new G73 Passenger route, quoted booking and
+ -- legally accepted G4 offer. An assigned G3 legacy/pre-G38 fixture can
+ -- no longer complete through the integrated Driver HTTP command.
+ -- Locks on the original G3 trip are acquired after the G42 session lock,
+ -- in the same transaction as the original state transition below.
+ IF NOT EXISTS (
+  SELECT 1 FROM public.mobility_stage_auto_demo_trips t
+  JOIN public.mobility_stage_g72_auto_prequotes q
+   ON q.trip_id=t.id AND q.passenger_id=t.passenger_id
+   AND q.booking_key=t.request_key
+  JOIN public.mobility_stage_g73_auto_routes r
+   ON r.id=q.route_id AND r.passenger_id=t.passenger_id
+   AND r.service=t.service AND r.origin_tag=t.origin_tag
+   AND r.destination_tag=t.destination_tag
+  JOIN public.mobility_stage_auto_demo_offers o
+   ON o.trip_id=t.id AND o.driver_id=_driver
+   AND o.vehicle_id=t.vehicle_id AND o.status='accepted'
+  JOIN public.mobility_stage_auto_demo_events a
+   ON a.id=o.decision_event_id AND a.trip_id=t.id
+   AND a.actor_id=_driver AND a.next_status='accepted'
+  WHERE t.id=_trip AND t.driver_id=_driver
+   AND t.status IN ('accepted','arriving','in_progress','completed')
+ ) THEN
+  RAISE EXCEPTION 'G204 not the original G73/G71 accepted AUTO booking'
+   USING ERRCODE='P1771';
+ END IF;
  target:=CASE _event
   WHEN 'arrive' THEN 'arriving'::public.mobility_stage_trip_status
   WHEN 'pickup' THEN 'in_progress'::public.mobility_stage_trip_status
