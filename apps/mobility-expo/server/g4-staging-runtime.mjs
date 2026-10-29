@@ -28,6 +28,7 @@ import {createG128GeoapifyCargoRoadResolver} from './g128-geoapify-cargo-road-re
 import {createG134GeoapifyAutoRouteResolver} from './g134-geoapify-auto-route-resolver.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
+import {createG169DriverMotoJourneyGateway} from './g169-driver-moto-journey-gateway.mjs';
 import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
 import {createG112ScopedAutoDispatchRepository} from './g112-scoped-auto-dispatch-repository.mjs';
 import {createG113AutoDispatchRetryWorker,createG113AutoDispatchBatchRepository}
@@ -675,6 +676,30 @@ export async function prepareQoreG4StagingRuntime({
  // G101: isolated and independent MOTO ride contract. An AUTO-only
  // route provider is never accepted as authorization for passenger MOTO.
  // No configured provider => 503; G100 SQL itself requires disposable PG16.
+ // G169 original MOTO Driver: no municipal/legal permit is fabricated.
+ const driverMotoJourney=driverKycTrust===null?null:createG169DriverMotoJourneyGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+  verifyAccessToken:verifiedDriverOfferSession,
+  verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p),
+  resolveExclusiveRole:id=>singleRole(admin,id),
+  allowRequest:({userId})=>allowRequest({userId,operation:'g169_driver_moto'}),
+  readMoto:async({driverId,bookingKey})=>{
+   const {data,error}=await admin.rpc('mobility_stage_g169_driver_moto_status_qa',{
+    _driver:driverId,_booking:bookingKey
+   });
+   if(error)throw Error('G169 original MOTO ownership unavailable');
+   return data;
+  },
+  advanceMoto:async({driverId,bookingKey,expectedRevision,nextState,commandKey})=>{
+   const {data,error}=await admin.rpc('mobility_stage_g118_moto_driver_step_qa',{
+    _booking:bookingKey,_driver:driverId,_revision:expectedRevision,
+    _next:nextState,_command:commandKey
+   });
+   if(error||!data||data.serviceKind!=='MOTO_RIDE')
+    throw Error('G118 original Driver MOTO step unavailable');
+   return data;
+  }
+ });
  const f1Moto=createG101MotoPassengerGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
@@ -985,6 +1010,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(driverDecisionRecovery===null?{}:{driverDecisionRecoveryHandler:guard(driverDecisionRecovery)}),
    tripCommandHandler:guard(commands),
    f1AutoHandler:guard(f1Auto),motoHandler:guard(f1Moto),
+   ...(driverMotoJourney===null?{}:{driverMotoJourneyHandler:guard(driverMotoJourney)}),
        ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
     ...(adminFraud===null?{}:{adminFraudHandler:guard(adminFraud)}),
    ...(adminAutoTrace===null?{}:{adminServiceTraceHandler:guard(adminAutoTrace)}),

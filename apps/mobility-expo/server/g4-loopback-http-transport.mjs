@@ -24,6 +24,8 @@ const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}(?:\/(
 // G101 MOTO passenger is a different ride kind from AUTO/DELIVERY.
 const f1MotoPostRoute=/^\/v1\/staging\/rider\/moto\/(?:quotes|book|bookings\/[0-9a-f-]{36}\/cancel)$/i;
 const f1MotoGetRoute=/^\/v1\/staging\/rider\/moto\/bookings\/[0-9a-f-]{36}(?:\/(?:cancellation|status))?$/i;
+const g169DriverMotoGet=/^\/v1\/staging\/driver\/moto\/bookings\/[0-9a-f-]{36}\/status$/i;
+const g169DriverMotoPost=/^\/v1\/staging\/driver\/moto\/bookings\/[0-9a-f-]{36}\/advance$/i;
 const ownerCommissionRoute=/^\/v1\/staging\/owner\/commissions\/(AUTO_RIDE|MOTO_RIDE|DELIVERY_AUTO|DELIVERY_MOTO|COMMERCE)$/;
 const ownerCargoRateRoute=/^\/v1\/staging\/owner\/delivery-rates\/(AUTO|MOTO)\/[A-Z_]{3,20}$/;
 const adminF1AuditRoute=/^\/v1\/staging\/admin\/rides\/[0-9a-f-]{36}\/f1-verification$/i;
@@ -96,7 +98,7 @@ export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
  courierCustodyHandler,merchantInboxHandler,
- f1AutoHandler,motoHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
+ f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,driverCurrentTripHandler,
 }){
@@ -106,6 +108,7 @@ export function createQoreRadarLoopbackTransport({
    typeof tripCommandHandler!=='function'||
    (f1AutoHandler!==undefined&&typeof f1AutoHandler!=='function')||
    (motoHandler!==undefined&&typeof motoHandler!=='function')||
+   (driverMotoJourneyHandler!==undefined&&typeof driverMotoJourneyHandler!=='function')||
    (adminF1AuditHandler!==undefined&&typeof adminF1AuditHandler!=='function')||
    (adminServiceTraceHandler!==undefined&&typeof adminServiceTraceHandler!=='function')||
    (adminMotoTraceHandler!==undefined&&typeof adminMotoTraceHandler!=='function')||
@@ -151,6 +154,8 @@ export function createQoreRadarLoopbackTransport({
   const f1AutoGet=req.method==='GET'&&f1AutoGetRoute.test(path);
   const motoPost=req.method==='POST'&&f1MotoPostRoute.test(path);
   const motoGet=req.method==='GET'&&f1MotoGetRoute.test(path);
+  const driverMotoGet=req.method==='GET'&&g169DriverMotoGet.test(path);
+  const driverMotoPost=req.method==='POST'&&g169DriverMotoPost.test(path);
   const adminF1AuditGet=req.method==='GET'&&adminF1AuditRoute.test(path);
   const adminServiceTraceGet=req.method==='GET'&&adminServiceTraceRoute.test(path);
   const adminMotoTraceGet=req.method==='GET'&&adminMotoTraceRoute.test(path);
@@ -203,7 +208,7 @@ export function createQoreRadarLoopbackTransport({
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
-  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
+  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!driverMotoGet&&!driverMotoPost&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
@@ -217,7 +222,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||adminCargoTraceGet||adminCommerceTraceGet||adminFraudGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||merchantGet||merchantInboxGet||commerceQaGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||driverMotoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||adminCargoTraceGet||adminCommerceTraceGet||adminFraudGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||merchantGet||merchantInboxGet||commerceQaGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet||driverKycValidityGet||driverTripStatusGet||driverCurrentTripGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -225,7 +230,7 @@ export function createQoreRadarLoopbackTransport({
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
-  if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||deliveryPost||merchantPost||financePost||safetyPost||
+  if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||
     merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
@@ -250,6 +255,7 @@ export function createQoreRadarLoopbackTransport({
     riderHistory?(riderHistoryHandler??(()=>({status:503,body:{error:'History not configured'}}))):
     (f1AutoGet||f1AutoPost||f1AutoSubsidyPost)?(f1AutoHandler??(()=>({status:503,body:{error:'F1 Auto not configured'}}))):
     (motoGet||motoPost)?(motoHandler??(()=>({status:503,body:{error:'F1 MOTO passenger not configured'}}))):
+    (driverMotoGet||driverMotoPost)?(driverMotoJourneyHandler??(()=>({status:503,body:{error:'G169 MOTO Driver original SQL not authorized'}}))):
     (ownerCommissionGet||ownerCommissionPost)?(ownerCommissionHandler??(()=>({status:503,body:{error:'G116 Owner unavailable'}}))):
      (ownerCargoRateGet||ownerCargoRatePost)?(ownerCargoRateHandler??(()=>({status:503,body:{error:'G124 Owner cargo rate unavailable'}}))):
     adminF1AuditGet?(adminF1AuditHandler??(()=>({status:503,body:{error:'G75 IdP MFA unavailable'}}))):
