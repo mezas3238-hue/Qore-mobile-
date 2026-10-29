@@ -17,7 +17,7 @@ const req=(method,p,body=null)=>({method,path:p,
  headers:{authorization:'Bearer '+token},...(body===null?{}:{body})});
 const receipt=(actor)=>({mode:'STAGING_DEMO_ONLY',deliveryId:delivery,
  ownerId:actor,deliveryState:'delivered',revision:4,
- courierProofCommitted:true,recipientBound:true,recipientConfirmed:true,
+ courierProofCommitted:true,recipientBound:true,bindingKey:key,recipientConfirmed:true,
  eligibleForSettlement:true,paymentAuthorized:false,qaOnly:true,productionEnabled:false});
 function fixture(overrides={}){
  let actor=sender,revoked=false,commitCount=0,afterCommit=false;
