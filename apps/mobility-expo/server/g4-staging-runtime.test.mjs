@@ -1627,3 +1627,77 @@ test('G158 AAL2 failure and Owner role cannot see allegations or reach source SQ
   });
  }
 });
+
+const g170Path='/v1/staging/driver/trips/current';
+test('G170 current Driver AUTO recovery defaults closed without attested IdP',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g170Path,'driver')).status,503);
+  assert.equal(m.state.g106RecoveryReads??0,0);
+ });
+});
+test('G170 Driver resumes only its original ACTIVE AUTO SQL trip after restart',async()=>{
+ const m=mockSupabase(),trust=g80Trust();
+ const runtime=await prepare(m,{driverKycTrust:trust.trust});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g170Path,'rider')).status,401);
+  assert.equal((await req(base,g170Path,'stranger')).status,401);
+  const empty=await req(base,g170Path,'driver');
+  assert.equal(empty.status,200);
+  assert.equal(empty.body.activeTrip,null,'No G38-approved assignment means no trip');
+  assert.equal(empty.body.productionEnabled,false);
+  m.state.trip={...m.state.trip,driver_id:driver,vehicle_id:vehicle,
+   status:'accepted',revision:2};
+  const accepted=await req(base,g170Path,'driver');
+  assert.equal(accepted.status,200);
+  assert.deepEqual(accepted.body.activeTrip,{tripId:ride,status:'accepted',revision:2});
+  assert.equal(accepted.body.liveTripsEnabled,false);
+  assert.equal(accepted.body.productionEnabled,false);
+  assert.equal(Object.keys(accepted.body).length,5);
+  assert.doesNotMatch(JSON.stringify(accepted.body),
+   /passengerId|passenger_id|vehicleId|location|origin|destination|payment/i);
+  m.state.trip={...m.state.trip,status:'arriving',revision:3};
+  assert.deepEqual((await req(base,g170Path,'driver')).body.activeTrip,
+   {tripId:ride,status:'arriving',revision:3});
+  m.state.trip={...m.state.trip,status:'in_progress',revision:4};
+  assert.deepEqual((await req(base,g170Path,'driver')).body.activeTrip,
+   {tripId:ride,status:'in_progress',revision:4});
+  m.state.trip={...m.state.trip,status:'completed',revision:5};
+  assert.equal((await req(base,g170Path,'driver')).body.activeTrip,null);
+  assert.equal(m.state.g106RecoveryReads,5);
+ });
+});
+test('G170 revoked, dual-role and mismatched Driver sessions cannot query original trip',async()=>{
+ for(const mode of ['revoked','dualRole','foreignIdp']){
+  const m=mockSupabase();
+  m.state.trip={...m.state.trip,driver_id:driver,status:'accepted',revision:2};
+  const trust=g80Trust();
+  if(mode==='dualRole')m.state.dualRoleDriver=true;
+  if(mode==='revoked')trust.trust.verifySessionNotRevoked=async()=>false;
+  if(mode==='foreignIdp')trust.trust.verifyDriverSession=async()=>({
+   id:passenger,sessionId:vehicle,tokenIatMs:now-1000,
+   expiresAtMs:now+60000,is_anonymous:false
+  });
+  const runtime=await prepare(m,{driverKycTrust:trust.trust});
+  await http(runtime,async base=>{
+   const r=await req(base,g170Path,'driver');
+   assert.equal(r.status,mode==='dualRole'?403:401);
+   assert.equal(m.state.g106RecoveryReads??0,0);
+  });
+ }
+});
+test('G170 ambiguous/offline original PostgreSQL cannot manufacture Driver assignment',async()=>{
+ for(const failure of ['ambiguous','offline']){
+  const m=mockSupabase(),trust=g80Trust();
+  m.state.trip={...m.state.trip,driver_id:driver,status:'accepted',revision:2};
+  if(failure==='ambiguous')m.state.g106DuplicateAssignment=true;
+  else m.state.g89TripReadError=true;
+  const runtime=await prepare(m,{driverKycTrust:trust.trust});
+  await http(runtime,async base=>{
+   const response=await req(base,g170Path,'driver');
+   assert.equal(response.status,503);
+   assert.equal(response.body.productionEnabled,false);
+   assert.equal(response.body.activeTrip,undefined);
+  });
+ }
+});
