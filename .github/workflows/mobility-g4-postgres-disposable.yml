@@ -20,6 +20,8 @@ on:
       - 'apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox-gateway.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
+      - 'apps/mobility-expo/server/g10-delivery-offer-gateway.mjs'
+      - 'apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
@@ -99,6 +101,8 @@ on:
       - 'apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox-gateway.mjs'
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
+      - 'apps/mobility-expo/server/g10-delivery-offer-gateway.mjs'
+      - 'apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
@@ -764,10 +768,11 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G136_FIVE_SERVICE_OWNER_COMMISSION_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G135 Owner-configurable passenger AUTO commission and fixed subsidy API contract
         run: node --test apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs
-      - name: G134 guarded private Driver inbox and offer decisions unit contracts
+      - name: G182 guarded private AUTO and DELIVERY Driver offer decisions
         run: |
           node --test apps/mobility-expo/server/g16-driver-private-inbox.test.mjs
           node --test apps/mobility-expo/server/g4-offer-gateway.test.mjs
+          node --test apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs
       - name: G138 install original AUTO service ID event and ledger trace
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G138_ORIGINAL_AUTO_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation
