@@ -76,6 +76,7 @@ import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs
 import {createG175SovereignBuyerCommerceFence} from './g175-sovereign-buyer-commerce-fence.mjs';
 import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-custody-fence.mjs';
 import {createG177VerifiedAutoDriverStepGateway} from './g177-verified-auto-driver-step-gateway.mjs';
+import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-cancellation-fence.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -599,7 +600,8 @@ export async function prepareQoreG4StagingRuntime({
  // Every original assigned G3 AUTO advancement now locks G42 in SQL.
  const verifiedDriverSteps=createG177VerifiedAutoDriverStepGateway({
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
-  legacyGateway:commands,
+  // G184: legacy cancellation would skip G95's original booking receipt.
+  legacyGateway:createG184SovereignAutoCancellationFence({legacyGateway:commands}),
   verifyAccessToken:async token=>{
    const x=await verifiedDriverOfferSession(token);
    return {id:x.id,sessionId:x.sessionId,tokenIatMs:x.tokenIatMs,
