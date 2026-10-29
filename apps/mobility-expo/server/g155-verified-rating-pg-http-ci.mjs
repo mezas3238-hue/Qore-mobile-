@@ -7,6 +7,8 @@ import {execFileSync} from 'node:child_process';
 import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mjs';
 import {createG155VerifiedRatingClient,validateG155RatingBody}
  from '../../movete-cliente/src/domain/g155-verified-rating-client.mjs';
+import {createDriverVerifiedRating}
+ from '../../movete-driver/src/domain/driver-verified-rating.mjs';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
@@ -143,15 +145,41 @@ try{
   'One review per participant and service even with a new key');
  assert.equal((await send(1,ride)).status,409,'Driver cannot rate themself');
  assert.equal((await send(3,ride)).status,409,'Foreign actor never rates AUTO driver');
+ // C Driver native reciprocal G155 client -> same A HTTP -> the original
+ // G109 completed trip in disposable PG16. SQL, not the phone, verifies
+ // driver participation and forbids ratings before actual completion.
+ const reciprocal=(index,serviceKind,serviceId,stars,requestKey)=>{
+  const driverOrigin='https://g155-ci-qore.onrender.com';
+  return createDriverVerifiedRating({
+   enabled:true,ownerApproved:true,contractVerified:true,
+   originalCompletionVerified:true,externalRuntimeVerified:true,
+   providerRevocationVerified:true,apiOrigin:driverOrigin,
+   pinnedOrigin:driverOrigin,
+   getSession:async()=>({role:'driver',userId:ids[index],accessToken:tokens[index]}),
+   request:(url,opts)=>{
+    const u=new URL(url);
+    assert.equal(u.origin,driverOrigin);
+    assert.equal(u.pathname,path);
+    assert.equal(opts.method,'POST');
+    return fetch(base+u.pathname,{...opts,redirect:'error'});
+   }
+  }).submit(payload(serviceKind,serviceId,'CLIENT',stars,requestKey));
+ };
+ const reverseResult=await reciprocal(1,'AUTO_RIDE',autoTrip,4,key(3));
+ assert.equal(reverseResult.ok,true,JSON.stringify(reverseResult));
  const reverse=await send(1,payload('AUTO_RIDE',autoTrip,'CLIENT',4,key(3)));
  assert.equal(reverse.status,201,JSON.stringify(reverse.body));
+ assert.equal(reverse.body.ratingId,reverseResult.ratingId);
  const courier=await send(2,payload('DELIVERY_AUTO',verifiedCargoDelivery,'COURIER',1,
   key(4),'SUSPECTED_FRAUD'));
  assert.equal(courier.status,201,JSON.stringify(courier.body));
  assert(!JSON.stringify(courier.body).includes('SUSPECTED_FRAUD'),
   'Private incident not present in public receipt');
+ const courierResult=await reciprocal(3,'DELIVERY_AUTO',verifiedCargoDelivery,4,key(5));
+ assert.equal(courierResult.ok,true,JSON.stringify(courierResult));
  const sender=await send(3,payload('DELIVERY_AUTO',verifiedCargoDelivery,'CLIENT',4,key(5)));
  assert.equal(sender.status,201,JSON.stringify(sender.body));
+ assert.equal(sender.body.ratingId,courierResult.ratingId);
  assert.equal((await send(2,payload('DELIVERY_MOTO',verifiedCargoDelivery,'COURIER',5,key(6)))).status,409,
   'Wrong vehicle service kind is forbidden');
  assert.equal((await send(4,payload('COMMERCE',commerceOrder,'MERCHANT',5,key(7)))).status,409,
@@ -181,7 +209,7 @@ try{
  revoked=true;
  assert.equal((await send(2,payload('DELIVERY_AUTO',verifiedCargoDelivery,'COURIER',1,key(4),'SUSPECTED_FRAUD'))).status,401);
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_g155_verified_ratings"),'4');
- console.log('G155 PASS: B authenticated Client and original completed AUTO and G67 proved AUTO -> private two-sided verified ratings; idempotency, incident privacy, foreign/early/forged/revoked denied; no score-based dispatch or automatic bans.');
+ console.log('G155 PASS: B authenticated Client and C native Driver reverse-rating bridge and original completed AUTO and G67 proved AUTO -> private two-sided verified ratings; idempotency, incident privacy, foreign/early/forged/revoked denied; no score-based dispatch or automatic bans.');
 }finally{
  await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
 }
