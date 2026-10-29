@@ -77,6 +77,7 @@ const driverInboxRoute=/^\/v1\/staging\/driver\/inbox$/;
 const courierPollRoute=/^\/v1\/staging\/courier\/delivery-offers$/;
 const deliveryOfferReadRoute=/^\/v1\/staging\/courier\/delivery-offers\/[0-9a-f-]{36}$/i;
 const deliveryOfferDecisionRoute=/^\/v1\/staging\/courier\/delivery-offers\/(accept|decline)$/;
+const g187RecipientRoute=/^\/v1\/staging\/(?:sender|recipient)\/deliveries\/[0-9a-f-]{36}\/(?:recipient-bind|recipient-confirmation|confirm)$/i;
 const safe=(code,body)=>({status:code,body});
 const maxBody=2048;
 const JSON_HEADERS={
@@ -97,7 +98,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- courierCustodyHandler,merchantInboxHandler,
+ courierCustodyHandler,recipientConfirmationHandler,merchantInboxHandler,
  f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,driverCurrentTripHandler,
@@ -120,6 +121,7 @@ export function createQoreRadarLoopbackTransport({
    (ratingHandler!==undefined&&typeof ratingHandler!=='function')||
    (adminFraudHandler!==undefined&&typeof adminFraudHandler!=='function')||
    (courierCustodyHandler!==undefined&&typeof courierCustodyHandler!=='function')||
+   (recipientConfirmationHandler!==undefined&&typeof recipientConfirmationHandler!=='function')||
    (merchantInboxHandler!==undefined&&typeof merchantInboxHandler!=='function')||
    (driverDecisionRecoveryHandler!==undefined&&typeof driverDecisionRecoveryHandler!=='function')||
    typeof deliveryHandler!=='function'||
@@ -180,6 +182,8 @@ export function createQoreRadarLoopbackTransport({
   const commerceQaGet=req.method==='GET'&&commerceQaReadRoute.test(path);
   const courierCustodyGet=req.method==='GET'&&courierCustodyGetRoute.test(path);
   const courierCustodyPost=req.method==='POST'&&courierCustodyPostRoute.test(path);
+  const recipientConfirmationGet=req.method==='GET'&&g187RecipientRoute.test(path);
+  const recipientConfirmationPost=req.method==='POST'&&g187RecipientRoute.test(path);
   const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
    const merchantInboxGet=req.method==='GET'&&merchantInboxRoute.test(path);
   const merchantPost=req.method==='POST'&&
@@ -210,7 +214,7 @@ export function createQoreRadarLoopbackTransport({
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
   if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!driverMotoGet&&!driverMotoPost&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
-    !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!financeGet&&!financePost&&
+    !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!recipientConfirmationGet&&!recipientConfirmationPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
     !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&
@@ -222,7 +226,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||driverMotoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||adminCargoTraceGet||adminCommerceTraceGet||adminFraudGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||merchantGet||merchantInboxGet||commerceQaGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||driverMotoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||adminCargoTraceGet||adminCommerceTraceGet||adminFraudGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||recipientConfirmationGet||merchantGet||merchantInboxGet||commerceQaGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet||driverKycValidityGet||driverTripStatusGet||driverCurrentTripGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -231,7 +235,7 @@ export function createQoreRadarLoopbackTransport({
   }
   let body;
   if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -270,6 +274,7 @@ export function createQoreRadarLoopbackTransport({
     ratingPost?(ratingHandler??(()=>({status:503,body:{error:'G155 QA reputation not authorized'}}))):
     (commerceQaPost||commerceQaGet)?(commerceQaHandler??(()=>({status:503,body:{error:'G139 QA not mounted'}}))):
     (courierCustodyGet||courierCustodyPost)?(courierCustodyHandler??(()=>({status:503,body:{error:'G66 custody proof/session authority unavailable'}}))):
+    (recipientConfirmationGet||recipientConfirmationPost)?(recipientConfirmationHandler??(()=>({status:503,body:{error:'G187 independent recipient session authority unavailable',retrySafe:false}}))):
     merchantInboxGet?(merchantInboxHandler??(()=>({status:503,body:{error:'G156 staff inbox unavailable'}}))):
      (merchantGet||merchantPost)?merchantHandler:
     (financeGet||financePost)?financeHandler:
