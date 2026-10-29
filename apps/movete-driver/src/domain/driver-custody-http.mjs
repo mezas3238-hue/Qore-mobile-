@@ -28,11 +28,22 @@ export async function readPrivateCourierCustody({
 }={}){
  const base=origin({apiOrigin,approvedStagingHost,allowedByOwner,
   accessToken,deliveryId,request});
+ // A GET is read-only and may be repeated ONCE after a transport-only
+ // reset (e.g. an expired keep-alive socket). Never retry POST custody steps,
+ // and never treat a network failure as an assignment/identity proof.
+ const url=base+'/v1/staging/courier/deliveries/'+deliveryId+'/custody';
+ const options={method:'GET',cache:'no-store',credentials:'omit',
+  redirect:'error',headers:{authorization:'Bearer '+accessToken,
+   accept:'application/json'}};
  let res;
- try{res=await request(base+'/v1/staging/courier/deliveries/'+deliveryId+'/custody',{
-  method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
-  headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
- });}catch{throw Error('G66 custody unavailable');}
+ try{res=await request(url,options);}
+ catch(error){
+  if(!(error instanceof TypeError)||
+   !/fetch failed|network request failed|load failed/i.test(error.message))
+   throw Error('G66 custody unavailable');
+  try{res=await request(url,options);}
+  catch{throw Error('G66 custody unavailable');}
+ }
  if(res?.status!==200||res.redirected===true)
   throw Error('G66 assigned custody not verified');
  let b;try{b=await res.json()}catch{throw Error('G66 invalid custody JSON')}
