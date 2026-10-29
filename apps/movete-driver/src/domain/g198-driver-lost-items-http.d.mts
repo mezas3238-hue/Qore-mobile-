@@ -15,5 +15,6 @@ export declare function createG198DriverLostItemsHttp(options?:{
  inbox:()=>Promise<G198DriverResult>;
  read:(caseId:string)=>Promise<G198DriverResult>;
  send:(caseId:string,requestKey:string,body:string)=>Promise<G198DriverResult>;
+ close:(caseId:string,block:boolean)=>Promise<G198DriverResult>;
  productionEnabled:false;
 }>;
