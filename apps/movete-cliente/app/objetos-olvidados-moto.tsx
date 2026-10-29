@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {ScrollView,Text,TextInput,View} from 'react-native';
+import {Alert,ScrollView,Text,TextInput,View} from 'react-native';
 import {useLocalSearchParams} from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import {Action,Panel,styles} from '../src/ClientUI';
@@ -23,6 +23,8 @@ function PrivateLostItems({client,subject,privacy}:{
  const [caseId,setCaseId]=useState<string|null>(null);
  const [messages,setMessages]=useState<Array<{messageId:string;senderRole:'passenger'|'driver';body:string;createdAtMs:number}>>([]);
  const [canSend,setCanSend]=useState(false);
+ const [caseClosed,setCaseClosed]=useState(false);
+ const [closureUncertain,setClosureUncertain]=useState(false);
  const [uncertainSend,setUncertainSend]=useState(false);
  const [draft,setDraft]=useState('');
  const [notice,setNotice]=useState('');
@@ -42,7 +44,8 @@ function PrivateLostItems({client,subject,privacy}:{
   }
  }),[auth,client]);
  useEffect(()=>{setCaseId(null);setMessages([]);setNotice('');setDraft('');
-  attempted.current=false;setUncertainSend(false);},[tripId]);
+  attempted.current=false;setUncertainSend(false);
+  setCaseClosed(false);setClosureUncertain(false);},[tripId]);
  const owned=Boolean(tripId&&subject&&client.snapshot().authenticated
   &&client.snapshot().account?.subject===subject
   &&client.snapshot().privateViewRevision===privacy
@@ -64,6 +67,7 @@ function PrivateLostItems({client,subject,privacy}:{
    }
    if(!owned)return;
    setCaseId(r.data.caseId);
+   setCaseClosed(r.data.state!=='OPEN');
    setNotice('Expediente privado vinculado al viaje original. El motociclista no recibe tu número.');
   }finally{lock.current=false;setBusy(false);}
  }
@@ -79,6 +83,7 @@ function PrivateLostItems({client,subject,privacy}:{
    if(!owned)return;
    setMessages(r.data.messages);
    setCanSend(r.data.canSend===true);
+   setCaseClosed(r.data.state!=='OPEN');
    setNotice('Mensajes originales comprobados en el servidor. No se presume que fueron leídos.');
   }finally{lock.current=false;setBusy(false);}
  }
@@ -98,6 +103,32 @@ function PrivateLostItems({client,subject,privacy}:{
    setDraft('');
    setNotice('Mensaje registrado. Actualizá la conversación para ver la respuesta del conductor.');
   }finally{lock.current=false;setBusy(false);}
+ }
+ async function closeCase(block:boolean){
+  if(lock.current||!configured||!caseId||caseClosed||closureUncertain)return;
+  lock.current=true;setBusy(true);setNotice('');
+  try{
+   const r=await gateway.close({...scope,caseId,block});
+   if(!r.ok||r.data?.state!==(block?'BLOCKED':'CLOSED')){
+    // A POST with uncertain COMMIT must never be repeated automatically.
+    setClosureUncertain(true);setCanSend(false);
+    setNotice('El cierre puede haberse guardado. No repetiremos la operación; consultá soporte y el estado del expediente.');
+    return;
+   }
+   if(!owned)return;
+   setCaseClosed(true);setCanSend(false);setDraft('');
+   setNotice(block?'Contacto bloqueado y confirmado por el servidor.':
+    'Expediente cerrado y confirmado por el servidor.');
+  }finally{lock.current=false;setBusy(false);}
+ }
+ function confirmCaseClosure(block:boolean){
+  if(!caseId||busy||caseClosed||closureUncertain)return;
+  Alert.alert(block?'Bloquear contacto':'Cerrar expediente',
+   block?'Se deshabilitará el contacto sobre este objeto olvidado.':
+    'Al cerrar el expediente dejarás de poder enviar mensajes.',
+   [{text:'Cancelar',style:'cancel'},
+    {text:block?'Bloquear':'Cerrar',style:block?'destructive':'default',
+     onPress:()=>{void closeCase(block);}}]);
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
   contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
@@ -134,6 +165,14 @@ function PrivateLostItems({client,subject,privacy}:{
    <Action label="Enviar mensaje al motociclista" disabled={!canSend||busy||uncertainSend||!draft.trim()}
     onPress={()=>{void send();}}/>
    <Text style={styles.small}>El conductor solo puede responder cuando esté detenido y autenticado. Nunca se comparte información personal de contacto.</Text>
+   {!caseClosed&&!closureUncertain&&<>
+    <Action label="Cerrar expediente" secondary disabled={busy||!configured}
+     onPress={()=>confirmCaseClosure(false)}/>
+    <Action label="Bloquear contacto" secondary disabled={busy||!configured}
+     onPress={()=>confirmCaseClosure(true)}/>
+   </>}
+   {caseClosed&&<Text accessibilityRole="alert" style={styles.small}>Expediente cerrado: ya no se pueden enviar mensajes.</Text>}
+   {closureUncertain&&<Text accessibilityRole="alert" style={styles.small}>Cierre sin comprobante confirmado. No vuelvas a enviarlo; consultá el expediente o soporte.</Text>}
   </Panel>}
  </ScrollView>;
 }

@@ -89,9 +89,12 @@ export function createG201FiveJourneyRuntimeBridges({
    driverInbox:p=>call('driver_inbox',{
     _driver:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs
    }),
-   // Closure must return an independently read-backed state; the existing
-   // G198/G200 Boolean SQL API does not. Refuse until audited response RPC.
-   closeCase:async()=>{throw Error('G201 terminal case write needs verified state receipt');}
+   // G211 invokes G198/G200's original G42-locked close and verifies its
+   // terminal row in the SAME database transaction before returning a JSON
+   // receipt. Unavailable migrations or foreign identities remain fail-closed.
+   closeCase:p=>rpc('mobility_stage_g211_'+prefix+'_close_case_receipt_qa',{
+    _case:p.caseId,...scope(p),_block:p.block
+   })
   };
  };
  return Object.freeze({

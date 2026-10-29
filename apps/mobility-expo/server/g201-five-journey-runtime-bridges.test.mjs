@@ -56,6 +56,9 @@ function scenario(){
   if(name.endsWith('_send_message_qa'))
    return {data:receipt({caseId:c,messageId:req,
     requestKey:params._request,serverPersisted:true}),error:null};
+  if(/^mobility_stage_g211_g(?:198|200)_close_case_receipt_qa$/.test(name))
+   return {data:receipt({caseId:params._case,
+    state:params._block?'BLOCKED':'CLOSED'}),error:null};
   throw Error('Unexpected or unsafe SQL call '+name);
  }};
  const gateways=createG201FiveJourneyRuntimeBridges({
@@ -162,4 +165,55 @@ test('G201 G4 loopback only mounts original PG-backed handlers when explicitly c
   headers:{authorization:'Bearer '+tokenPassenger,'content-type':'application/json'},
   body:'{}'});
  assert.equal(unavailable.status,503);
+});
+
+test('G211 AUTO and MOTO lost-object closure uses same original G42 actor and audited SQL receipt',async()=>{
+ for(const [kind,prefix,route] of [
+  ['AUTO','g198','/v1/staging/lost-items/'+c+'/close'],
+  ['MOTO','g200','/v1/staging/moto/lost-items/'+c+'/close']
+ ]){
+  for(const block of [false,true]){
+   const s=scenario();
+   const response=await s.gateways[kind==='AUTO'?'lostItemsHandler':'motoLostItemsHandler'](
+    s.p('POST',route,tokenPassenger,{block}));
+   assert.equal(response.status,200,JSON.stringify(response.body));
+   assert.equal(response.body.caseId,c);
+   assert.equal(response.body.state,block?'BLOCKED':'CLOSED');
+   assert.equal(response.body.productionEnabled,false);
+   const calls=s.sqlCalls.filter(x=>x.name.includes('_close_case_'));
+   assert.equal(calls.length,1);
+   assert.equal(calls[0].name,'mobility_stage_g211_'+prefix+'_close_case_receipt_qa');
+   assert.deepEqual(calls[0].params,{
+    _case:c,_actor:passenger,_session:session,_iat_ms:now-1000,_block:block
+   });
+  }
+ }
+});
+
+test('G211 refuses revocation, missing SQL closure, and foreign role before any case mutation',async()=>{
+ const s=scenario();
+ s.revoke();
+ for(const route of ['/v1/staging/lost-items/'+c+'/close',
+  '/v1/staging/moto/lost-items/'+c+'/close']){
+  const handler=route.includes('/moto/')?
+   s.gateways.motoLostItemsHandler:s.gateways.lostItemsHandler;
+  const denied=await handler(s.p('POST',route,tokenPassenger,{block:true}));
+  assert.notEqual(denied.status,200);
+ }
+ assert.equal(s.sqlCalls.length,0);
+ const missing=createG201FiveJourneyRuntimeBridges({
+  independentTrust:{
+   verifyParticipantSession:async()=>common(passenger),
+   verifySessionNotRevoked:async()=>true,
+   verifyDriverStopped:async()=>true
+  },verifySupabaseUser:async()=>({
+   id:passenger,is_anonymous:false,email_confirmed_at:'2026-10-29T00:00:00Z'
+  }),resolveExclusiveRole:async()=> 'passenger',
+  allowRequest:()=>true,now:()=>now,
+  admin:{rpc:async()=>{throw Error('G211 SQL migration absent');}}
+ });
+ const unavailable=await missing.lostItemsHandler(s.p('POST',
+  '/v1/staging/lost-items/'+c+'/close',tokenPassenger,{block:false}));
+ assert.equal(unavailable.status,503);
+ assert.equal(unavailable.body.code,'G198_SQL_OUTCOME_UNKNOWN');
 });
