@@ -28,7 +28,7 @@ function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
    adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
    g77RegisteredRoute:null,
-   g84Enabled:false,g84OfferKey:null,g89TripReadError:false,
+   g84Enabled:false,g84DispatchAttempts:0,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -124,15 +124,15 @@ function mockSupabase(){
       routeId:offer,tripId:ride,revision:1,serverPersisted:true,
       status:'ACCEPTED_QA'},error:null};
     }
-    if(state.g84Enabled&&name==='mobility_stage_g82_offer_first_eligible_auto_qa'){
-     assert.equal(params._passenger_id,passenger);
-     assert.equal(params._booking_key,requestKey);
-     assert.equal(params._ttl_seconds,30);
-     state.g84OfferKey=params._offer_key;
-     return {data:offer,error:null};
+    if(state.g84Enabled&&name==='mobility_stage_g112_run_booked_auto_dispatch_qa'){
+     assert.deepEqual(params,{_passenger_id:passenger,_booking_key:requestKey,
+      _trip_id:ride});
+     state.g84DispatchAttempts++;
+     return {data:{mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+      status:'OFFERED',tripId:ride,offerId:offer},error:null};
     }
     if(state.g84Enabled&&name==='mobility_stage_poll_driver_auto_offers'){
-     return {data:state.g84OfferKey?[{offer_id:offer,trip_id:ride,
+     return {data:state.g84DispatchAttempts>0?[{offer_id:offer,trip_id:ride,
       expires_at:new Date(now+20000).toISOString()}]:[],error:null};
     }
     if(state.g84Enabled&&name==='mobility_stage_poll_courier_delivery_offers'){
@@ -142,7 +142,10 @@ function mockSupabase(){
      return {data:params._passenger_id===passenger&&params._booking_key===requestKey?
       {mode:'STAGING_DEMO_ONLY',commercialEnabled:false,ownerId:passenger,
        bookingKey:requestKey,tripId:ride,tripState:'searching',
-       dispatchState:'RETRY_PENDING',attempts:1,offerPendingAcceptance:false}:null,
+       dispatchState:state.g84Enabled?(state.g84DispatchAttempts>0?
+        'OFFER_PENDING':'SEARCHING_DRIVER'):'RETRY_PENDING',
+       attempts:state.g84Enabled?state.g84DispatchAttempts:1,
+       offerPendingAcceptance:state.g84Enabled&&state.g84DispatchAttempts>0}:null,
        error:null};
     }
     if(name==='mobility_stage_g73_route'){
@@ -1040,7 +1043,7 @@ test('G64 owner-only reader requires independently verified driver session',asyn
  }
 });
 
-test('G84 real HTTP booking from Client invokes one private G82 SQL offer for original G73 trip',async()=>{
+test('G160 new G73 AUTO booking produces same-trip G112 private Driver offer once',async()=>{
  const m=mockSupabase();m.state.g84Enabled=true;
  const runtime=await prepare(m);
  await http(runtime,async base=>{
@@ -1065,26 +1068,32 @@ test('G84 real HTTP booking from Client invokes one private G82 SQL offer for or
   assert.equal(offerDetail.body.tripId,first.body.tripId);
   assert.equal(offerDetail.body.offerId,offer);
   assert.equal(offerDetail.body.confirmedAcceptance,false);
-  const calls=m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa');
+  const calls=m.state.rpcs.filter(x=>x.name==='mobility_stage_g112_run_booked_auto_dispatch_qa');
   assert.equal(calls.length,1);
-  assert.match(calls[0].params._offer_key,/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
-  assert.equal(calls[0].params._offer_key,m.state.g84OfferKey);
-  const original=m.state.g84OfferKey;
+  assert.deepEqual(calls[0].params,{_passenger_id:passenger,
+   _booking_key:requestKey,_trip_id:first.body.tripId});
+  const privateStatus=await req(base,
+   '/v1/staging/rider/auto/bookings/'+requestKey+'/dispatch','rider');
+  assert.equal(privateStatus.status,200);
+  assert.equal(privateStatus.body.tripId,first.body.tripId);
+  assert.equal(privateStatus.body.dispatchState,'OFFER_PENDING');
+  assert.equal(privateStatus.body.offerPendingAcceptance,true);
+  assert(!JSON.stringify(privateStatus.body).includes(offer));
   const second=await req(base,'/v1/staging/rider/auto/book','rider','POST',request);
   assert.equal(second.status,201);
   assert.equal(second.body.tripId,ride);
-  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa').length,2);
-  assert.equal(m.state.g84OfferKey,original,'retry must use exact same server-only offer key');
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g112_run_booked_auto_dispatch_qa').length,1,
+   'replayed ACK must not mint a second offer');
   const get=await req(base,'/v1/staging/rider/auto/bookings/'+requestKey);
   assert.equal(get.status,200);
   assert.equal(get.body.tripId,ride);
-  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g82_offer_first_eligible_auto_qa').length,2,
-   'read-only booking reconciliation must not trigger offer');
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g112_run_booked_auto_dispatch_qa').length,1,
+   'read-only recovery must not create another offer');
   assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_request'),false,
    'old unpriced booking RPC forbidden');
  });
 });
-test('G84 G82 candidate shortage or SQL denial cannot invalidate confirmed G73 booking',async()=>{
+test('G160 G112 worker shortage or SQL denial cannot invalidate confirmed G73 booking',async()=>{
  for(const result of [{data:null,error:null},{data:null,error:{code:'P8201'}}]){
   const m=mockSupabase();m.state.g84Enabled=true;
   const original=m.createClient;
@@ -1092,7 +1101,7 @@ test('G84 G82 candidate shortage or SQL denial cannot invalidate confirmed G73 b
    const client=original(url,key);
    if(key===serviceKey){
     const call=client.rpc;
-    client.rpc=async(n,p)=>n==='mobility_stage_g82_offer_first_eligible_auto_qa'?
+    client.rpc=async(n,p)=>n==='mobility_stage_g112_run_booked_auto_dispatch_qa'?
      result:call(n,p);
    }
    return client;

@@ -25,10 +25,10 @@ import {createG125CargoPricingContext} from './g125-cargo-pricing-context.mjs';
 import {createG127GoogleCargoRoadResolver} from './g127-google-cargo-road-resolver.mjs';
 import {createG128GeoapifyCargoRoadResolver} from './g128-geoapify-cargo-road-resolver.mjs';
 import {createG134GeoapifyAutoRouteResolver} from './g134-geoapify-auto-route-resolver.mjs';
-import {createHash} from 'node:crypto';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
-import {createG82PrivateAutoCandidateDispatch} from './g82-f1-auto-candidate-dispatch.mjs';
+import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
+import {createG112ScopedAutoDispatchRepository} from './g112-scoped-auto-dispatch-repository.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -327,7 +327,7 @@ export async function prepareQoreG4StagingRuntime({
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
  const f1MotoPersistence=createG101MotoPassengerRepository(admin);
- const candidateDispatch=createG82PrivateAutoCandidateDispatch(admin);
+ const scopedAutoDispatch=createG112ScopedAutoDispatchRepository(admin);
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
@@ -555,19 +555,14 @@ export async function prepareQoreG4StagingRuntime({
  const resolvedAutoRoute=preparedG134AutoRoute??preparedG77Route??
   verifiedAutoRoute??unavailablePricingContext;
 
- // Stable server-derived G82 idempotency UUID. Never supplied by a handset:
- // repeated G73 POSTs cannot create independent offer keys. No secret/auth
- // semantics are attributed to this deterministic identifier.
- const privateAutoOfferKey=(passengerId,bookingKey)=>{
-  const value=createHash('sha256')
-   .update('QORE:MOVETE:F1:G82:BOOKING:v1:')
-   .update(passengerId).update(':').update(bookingKey).digest();
-  value[6]=(value[6]&15)|80;
-  value[8]=(value[8]&63)|128;
-  const hex=value.subarray(0,16).toString('hex');
-  return hex.slice(0,8)+'-'+hex.slice(8,12)+'-'+hex.slice(12,16)+
-   '-'+hex.slice(16,20)+'-'+hex.slice(20);
- };
+ // G160 original G73 booking -> G90 ownership -> G112 scoped G85 worker.
+ // No global queue, no additional offers on POST replay, no G38/G71 bypass.
+ const afterBookingAutoDispatch=createG111AfterBookingAutoDispatch({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  readPrivateDispatchStatus:({actorId,requestKey})=>
+   f1AutoPersistence.dispatchStatus({actorId,requestKey}),
+  runForBooking:scope=>scopedAutoDispatch.runForBooking(scope)
+ });
  const f1Auto=createQoreG73AutoGateway({
   projectRef:ref,verifyAccessToken:verified,now,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
@@ -586,9 +581,7 @@ export async function prepareQoreG4StagingRuntime({
   readAutoFinancialState:params=>f1AutoPersistence.autoFinancialState(params),
   cancelBookedAuto:params=>f1AutoPersistence.cancelBookedAuto(params),
   readCancellation:params=>f1AutoPersistence.cancellationReceipt(params),
-  dispatchBookedAuto:async({passengerId,bookingKey})=>
-   candidateDispatch.offerFirstEligible({passengerId,bookingKey,
-    offerKey:privateAutoOfferKey(passengerId,bookingKey),ttlSeconds:30}),
+  dispatchBookedAuto:scope=>afterBookingAutoDispatch.dispatchBookedAuto(scope),
  });
  // G101: isolated and independent MOTO ride contract. An AUTO-only
  // route provider is never accepted as authorization for passenger MOTO.
