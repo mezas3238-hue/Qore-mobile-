@@ -41,22 +41,21 @@ with db() as con:
    """,(kind,)).fetchone()
    assert original is not None,kind+" original G122 consent missing"
    did,sender=original
-   vehicle=con.execute("""
-    SELECT v.id,v.driver_id FROM public.mobility_vehicles v
-    JOIN public.user_roles r ON r.user_id=v.driver_id AND r.role='driver'
-    WHERE v.vehicle_kind=%s AND v.review_status NOT IN ('rejected','suspended')
-    AND v.driver_id<>%s
-    ORDER BY (
-      SELECT count(*) FROM public.mobility_stage_g36_driver_slots active
-      WHERE active.driver_id=v.driver_id),v.id LIMIT 1
-   """,(kind,sender)).fetchone()
-   assert vehicle is not None,kind+" G5 courier vehicle fixture missing"
-   vid,driver=vehicle
-   # Earlier disposable G67/G109 tests can leave an occupied G36 slot.
-   # This test holds one transactional sandbox: free only this fixture slot
-   # and ROLLBACK restores the prior assignment without leaking a second job.
-   con.execute("DELETE FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s",
+   # Create an isolated synthetic courier/vehicle ONLY inside this
+   # roll-back-only PG16 test. No real identity or municipal authorization.
+   # This avoids borrowing a Driver's busy G36 slot from earlier tests.
+   driver=uid()
+   vid=uid()
+   con.execute("INSERT INTO auth.users(id) VALUES(%s)",(driver,))
+   con.execute("INSERT INTO public.user_roles(user_id,role) VALUES(%s,'driver')",
       (driver,))
+   con.execute("""INSERT INTO public.mobility_vehicles(
+     id,driver_id,vehicle_kind,service_kind,municipality_code,
+     plate_normalized,brand,model,manufacture_year,passenger_capacity,review_status)
+     VALUES(%s,%s,%s,%s,'ASUNCION',%s,'TEST','QA',2020,%s,'approved')""",
+     (vid,driver,kind,
+      'economico' if kind=='AUTO' else 'moto_pasajero',
+      'QA'+uuid.uuid4().hex[:8].upper(),4 if kind=='AUTO' else 1))
    sid=uid()
    at=int(time.time()*1000)
    con.execute("""INSERT INTO public.mobility_stage_g42_provider_session_grants(
