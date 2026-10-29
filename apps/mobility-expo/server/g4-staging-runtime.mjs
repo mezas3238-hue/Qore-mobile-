@@ -558,6 +558,7 @@ export async function prepareQoreG4StagingRuntime({
  });
  const driver=createQoreOfferGateway({
   projectRef:ref,verifyAccessToken:verified,...guardedDriverAuth,
+  requireOriginalBookingAcceptance:true,
   authorizeDriver:id=>roleHas(admin,id,'driver'),
   allowRequest,
   loadOfferForDriver:async({offerId,driverId})=>{
@@ -580,12 +581,16 @@ export async function prepareQoreG4StagingRuntime({
    };
   },
   acceptOffer:async params=>{
-   const result=await persistence.accept({
-    mode:'SYNTHETIC_STAGING',liveEnabled:false,
-    actorId:params._driver_id,offerId:params._offer_id,
-    decisionKey:params._decision_key,
+   // G205: a new G73 reservation is the only accepted AUTO source.
+   // Same PostgreSQL transaction checks G42 revocation, G71 dossier,
+   // G38 legal proof, original G4 offer and committed G3 event.
+   const {data,error}=await admin.rpc('mobility_stage_g205_accept_original_auto_qa',{
+    _driver:params._driver_id,_session:params._session,_iat:params._iat,
+    _offer:params._offer_id,_decision:params._decision_key
    });
-   return result.eventId;
+   if(error||typeof data!=='string'||!UUID.test(data))
+    throw Error('G205 original booked AUTO acceptance denied');
+   return data;
   },
   declineOffer:async params=>{
    const {data,error}=await admin.rpc('mobility_stage_auto_demo_decline_offer',params);
