@@ -37,14 +37,16 @@ const runtime=await prepareQoreG4StagingRuntime({
  },
  createClient
 });
-// G171 distributed edge quotas are explicitly opted in and fail-closed.
- // This proof-of-integration permits only local QA Redis; a separate secured,
- // private TLS/ACL Redis deployment is required before external STAGING use.
+// G171: existing ingress accepts disposable local Redis, or separate
+// explicitly Owner-approved STAGING Redis over pinned TLS with ACL.
+// Never auto-activate a paid provider, LIVE work or production traffic.
 const redisEnabled=process.env.QORE_G171_REDIS_QUOTA_ENABLED==='true';
 if(!['true','false',undefined].includes(process.env.QORE_G171_REDIS_QUOTA_ENABLED))
  throw Error('G171 invalid Redis opt-in value');
 const redisClient=redisEnabled?await connectG171StagingRedis({
- url:process.env.QORE_G171_REDIS_URL
+ url:process.env.QORE_G171_REDIS_URL,
+ privateStagingApproved:process.env.QORE_G171_PRIVATE_REDIS_APPROVED==='true',
+ pinnedHostname:process.env.QORE_G171_REDIS_PINNED_HOST??null
 }):null;
 const distributedQuota=redisClient===null?null:createG171DistributedQuota({
  redisClient

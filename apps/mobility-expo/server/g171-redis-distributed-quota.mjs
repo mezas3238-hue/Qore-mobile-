@@ -55,15 +55,46 @@ export function hashG171Credential(header){
   throw Error('G171 invalid credential syntax');
  return createHash('sha256').update(header).digest('hex');
 }
-/** Never attempt Redis connections without explicitly opted-in STAGING env. */
-export async function connectG171StagingRedis({url}={}){
- if(typeof url!=='string'||
-  !/^redis:\/\/(?:127\.0\.0\.1|localhost):6379(?:\/0)?$/.test(url))
-  throw Error('G171 QA accepts only local disposable Redis');
+/**
+ * G174 deployment configuration: no plaintext Redis on external networks.
+ * Local CI accepts ONLY loopback redis://:6379. A separate private STAGING
+ * deployment requires explicit Owner opt-in, a pinned DNS name, TLS and an
+ * independent ACL principal/secret. No external service is provisioned.
+ */
+export function validateG171RedisEndpoint({
+ url,privateStagingApproved=false,pinnedHostname=null
+}={}){
+ if(typeof url!=='string'||url.length>1500||
+    typeof privateStagingApproved!=='boolean')
+  throw Error('G174 Redis endpoint invalid');
+ if(/^redis:\/\/(?:127\.0\.0\.1|localhost):6379(?:\/0)?$/.test(url))
+  return Object.freeze({mode:'DISPOSABLE_LOOPBACK_CI',tls:false});
+ let parsed;
+ try{parsed=new URL(url);}catch{throw Error('G174 Redis endpoint invalid');}
+ if(parsed.protocol!=='rediss:'||privateStagingApproved!==true||
+    typeof pinnedHostname!=='string'||
+    !/^[a-z0-9](?:[a-z0-9.-]{1,248}[a-z0-9])$/.test(pinnedHostname)||
+    parsed.hostname!==pinnedHostname||!parsed.port||
+    Number(parsed.port)<1||Number(parsed.port)>65535||
+    !['/','/0'].includes(parsed.pathname)||
+    parsed.search||parsed.hash||
+    !parsed.username||!parsed.password||
+    !/^[A-Za-z0-9_-]{3,64}$/.test(decodeURIComponent(parsed.username))||
+    decodeURIComponent(parsed.password).length<24)
+  throw Error('G174 requires pinned private STAGING TLS Redis and ACL');
+ return Object.freeze({mode:'OWNER_APPROVED_STAGING_TLS',tls:true});
+}
+export async function connectG171StagingRedis({
+ url,privateStagingApproved=false,pinnedHostname=null
+}={}){
+ const endpoint=validateG171RedisEndpoint({
+  url,privateStagingApproved,pinnedHostname
+ });
  const {createClient}=await import('redis');
  const client=createClient({url,
-  socket:{connectTimeout:2000,reconnectStrategy:false}});
- client.on('error',()=>{}); // a disconnect is handled by claim(); never fallback.
+  socket:{connectTimeout:2000,reconnectStrategy:false,
+   ...(endpoint.tls?{tls:true,rejectUnauthorized:true}:{})}});
+ client.on('error',()=>{}); // Redis outage is handled in ingress; no bypass.
  await client.connect();
  return client;
 }
