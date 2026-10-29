@@ -41,7 +41,8 @@ function call(port,method='GET',token=TOKEN){
    hostname:'127.0.0.1',port,path:PATH,method,
    headers:{host:HOST,'x-forwarded-proto':'https',
     authorization:token,
-    ...(method==='POST'?{'content-type':'application/json'}:{})}
+    ...(method==='POST'?{'content-type':'application/json',
+     'content-length':'2'}:{})}
   },res=>{
    const body=[];
    res.on('data',chunk=>body.push(chunk));
