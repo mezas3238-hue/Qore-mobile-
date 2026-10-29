@@ -112,7 +112,8 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
   }finally{inFlight.current=false;setBusy(false);}
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
-  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
+  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
+  keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>Confirmar una entrega</Text>
    <Text style={styles.heroSub}>El repartidor acredita la entrega; el destinatario confirma la recepción por separado. Ninguna acción de esta pantalla cobra dinero.</Text>

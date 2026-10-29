@@ -55,6 +55,11 @@ const gateway=createG169DriverMotoJourneyGateway({
    "mobility_stage_g169_driver_moto_status_qa('"+driverId+"','"+bookingKey+"')::text");
   return value&&value!=='null'?JSON.parse(value):null;
  },
+ readCurrentMoto:async({driverId})=>{
+  const data=sql('SET ROLE service_role; SELECT public.'+
+   "mobility_stage_g189_driver_moto_current_qa('"+driverId+"')::text");
+  return data&&data!=='null'?JSON.parse(data):null;
+ },
  advanceMoto:async()=>{steps++;throw Error('Never advance synthetic completed fixture');}
 });
 const noop=async()=>({status:404,body:{error:'Not found'}});
@@ -94,5 +99,96 @@ try{
  })).status,409);
  assert.equal(steps,0);
  assert.equal(reads,2);
+ // G188: the actual Driver C native HTTP decoder must read this EXACT
+ // PostgreSQL G119 booking, not a copied fixture or a second trip. A
+ // completed QA booking is not a new legally authorized MOTO acceptance.
+ const {readDriverMotoJourney,advanceDriverMotoJourney}=await import(
+  '../../movete-driver/src/domain/driver-moto-journey-http.mjs');
+ const native=await readDriverMotoJourney({
+  apiOrigin:base,bookingKey:booking,accessToken:activeToken,request:fetch
+ });
+ assert.equal(native.bookingKey,booking);
+ assert.equal(native.tripId,original.tripId);
+ assert.equal(native.status,'completed');
+ assert.equal(native.revision,5);
+ assert.equal(native.nextState,null);
+ assert.equal(native.productionEnabled,false);
+ assert.equal(native.qaOnly,true);
+ assert(!JSON.stringify(native).includes(passenger));
+ await assert.rejects(readDriverMotoJourney({
+  apiOrigin:base,bookingKey:booking,accessToken:otherToken,request:fetch
+ }),/unavailable/);
+ // Native C cannot re-send the stale terminal command. G169 blocks it
+ // transactionally and no SQL transition may be fabricated.
+ await assert.rejects(advanceDriverMotoJourney({
+  apiOrigin:base,bookingKey:booking,accessToken:activeToken,request:fetch,
+  expectedRevision:4,nextState:'completed',
+  commandKey:'16900000-0000-4169-8169-000000000008'
+ }),/UNKNOWN/);
+ assert.equal(steps,0,'Native Driver cannot advance a completed original MOTO booking');
+ assert.equal(reads,4,'Native C reads original SQL once and stale POST is read-only at G169');
+ // G189: real PG16 current owner lookup NEVER fabricates an accepted MOTO
+ // service. In the terminal fixture the only active assignment is null.
+ assert.equal(sql("SELECT has_function_privilege('service_role',"+
+  "'public.mobility_stage_g189_driver_moto_current_qa(uuid)','EXECUTE')"),'t');
+ assert.equal(sql("SELECT has_function_privilege('authenticated',"+
+  "'public.mobility_stage_g189_driver_moto_current_qa(uuid)','EXECUTE')"),'f');
+ const {readCurrentDriverMoto}=await import(
+  '../../movete-driver/src/domain/driver-moto-journey-http.mjs');
+ const currentPath='/v1/staging/driver/moto/current';
+ const getCurrent=async token=>{
+  const response=await fetch(base+currentPath,{
+   method:'GET',headers:{authorization:'Bearer '+token}
+  });
+  return {status:response.status,body:await response.json()};
+ };
+ const empty=await getCurrent(activeToken);
+ assert.equal(empty.status,200);
+ assert.equal(empty.body.activeBooking,null);
+ assert.equal(await readCurrentDriverMoto({
+  apiOrigin:base,accessToken:activeToken,request:fetch
+ }),null);
+ assert.equal((await getCurrent(otherToken)).status,403);
+ assert.equal((await getCurrent('untrusted-123')).status,401);
+ // An explicitly QA-seeded original completed fixture is temporarily
+ // restored to its earlier accepted revision to prove the active-only owner
+ // discovery through the REAL C module and REAL HTTP/SQL. This SQL edit
+ // cannot authorize a new offer and is always reverted below.
+ try{
+  assert.equal(sql("UPDATE public.mobility_stage_g100_moto_trips "+
+   "SET status='accepted',revision=2,completed_at=NULL "+
+   "WHERE booking_key='"+booking+"' AND driver_id='"+driver+"' "+
+   "AND status='completed'; SELECT COUNT(*) FROM "+
+   "public.mobility_stage_g100_moto_trips WHERE booking_key='"+booking+
+   "' AND status='accepted'"),'1');
+  const current=await getCurrent(activeToken);
+  assert.equal(current.status,200);
+  assert.equal(current.body.activeBooking.bookingKey,booking);
+  assert.equal(current.body.activeBooking.tripId,original.tripId);
+  assert.equal(current.body.activeBooking.tripState,'accepted');
+  assert.equal(current.body.activeBooking.tripRevision,2);
+  assert(!JSON.stringify(current.body).includes(passenger));
+  const resumed=await readCurrentDriverMoto({
+   apiOrigin:base,accessToken:activeToken,request:fetch
+  });
+  assert.equal(resumed.bookingKey,booking);
+  assert.equal(resumed.tripId,original.tripId);
+  assert.equal(resumed.status,'accepted');
+  const originalStatus=await readDriverMotoJourney({
+   apiOrigin:base,bookingKey:booking,accessToken:activeToken,request:fetch
+  });
+  assert.equal(originalStatus.tripId,resumed.tripId);
+  assert.equal(originalStatus.revision,resumed.revision);
+ }finally{
+  sql("UPDATE public.mobility_stage_g100_moto_trips "+
+   "SET status='completed',revision=5,completed_at=pg_catalog.clock_timestamp() "+
+   "WHERE booking_key='"+booking+"' AND driver_id='"+driver+"' "+
+   "AND status='accepted'");
+ }
+ assert.equal((await getCurrent(activeToken)).body.activeBooking,null);
+ assert.equal(sql("SELECT COUNT(*) FROM public.mobility_stage_g100_moto_trips "+
+  "WHERE booking_key='"+booking+"'"),'1');
+ console.log('G189 CROSS-APP PASS: C native current MOTO GET -> G169 revocable Driver HTTP -> G189 scoped PostgreSQL16 -> same G119 booking/revision; active-only, foreign denied, terminal null, NO synthetic new offer.');
+ console.log('G188 CROSS-APP PASS: Driver native G169 HTTP contract reads same durable original completed PostgreSQL MOTO trip and fails closed on foreign or stale commands.');
  console.log('G169 PASS: original G119 MOTO SQL booking -> G169 own Driver GET -> same completed trip/revision; foreign/rejected/terminal transition denied, no legal acceptance fabricated, no PII/PSP/GPS/LIVE.');
 }finally{await new Promise(resolve=>server.close(resolve));}
