@@ -23,6 +23,9 @@ async function replica(){
  clients.push(client);
  const ingress=createRenderStagingIngress({
   loopbackOrigin:'http://127.0.0.1:18080',expectedHost:HOST,
+  // If shared Redis is authoritative, the legacy local identity cap of ONE
+  // must not reject a SECOND valid actor before global Redis checks it.
+  maxIdentityBuckets:1,
   distributedQuota:createG171DistributedQuota({redisClient:client}),
   request:async()=>{reached++;return{
    status:200,redirected:false,text:async()=>JSON.stringify({
@@ -93,6 +96,33 @@ try{
  assert.equal(disconnected.status,503);
  assert.equal(disconnected.body.retrySafe,false);
  assert.equal(reached,111,'no Redis-unavailable request reached G4');
+ // G178: >16,384 distinct signed-shaped synthetic credentials through REAL
+ // HTTP, real Redis EVAL and the existing ingress. No fake success at edge
+ // limit. A disconnected replica still rejects, but another stays available.
+ const identities=16500,workers=64;
+ let cursor=0,passed=0,failures=0;const started=Date.now();
+ await Promise.all(Array.from({length:workers},async()=>{
+  while(cursor<identities){
+   const index=cursor++;
+   const bearer='Bearer '+index.toString(36).padStart(44,'Z');
+   const result=await call(restarted,'GET',bearer);
+   if(result.status===200&&result.body?.qaOnly===true)passed++;
+   else failures++;
+  }
+ }));
+ const seconds=Math.max(.001,(Date.now()-started)/1000);
+ assert.equal(passed,identities,'shared Redis must not have old local 16k ceiling');
+ assert.equal(failures,0,'no false 429/503 for unique admitted identities');
+ console.log(JSON.stringify({lab:'G178_SHARED_REDIS_IDENTITY_CAPACITY',
+  distinctSyntheticTokens:identities,maxLocalIdentityBuckets:1,
+  realRedisEvals:identities,uniqueTokensAccepted:passed,
+  failed:failures,loadWorkers:workers,
+  requestsPerSecond:Math.round(identities/seconds),
+  redisUnavailableStillRejected:true,
+  actualClientAuthentication:'NOT_EXERCISED',
+  realPostgresBusiness:'NOT_EXERCISED',
+  verdict:'DISTRIBUTED_QUOTA_LOCAL_CAP_REMOVED_PASS'}));
+
  console.log(JSON.stringify({lab:'G171_REDISTRIBUTED_INGRESS',
   realRedis:true,ingressReplicas:3,restarted:true,
   get:seen,post:counts(posts),upstreamReached:reached,
