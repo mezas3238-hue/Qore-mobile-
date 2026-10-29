@@ -461,6 +461,16 @@ test('G176 denies legacy courier pickup/deliver/return and retains original send
   assert.doesNotMatch(JSON.stringify(status),/sb_secret|service_role/);
  });
 });
+test('G183 original G15 courier polling is unavailable without revocable Driver IdP',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const before=m.state.rpcs.length;
+  const response=await req(base,'/v1/staging/courier/delivery-offers','driver');
+  assert.equal(response.status,401);
+  assert(!JSON.stringify(response).includes(offer));
+  assert.equal(m.state.rpcs.length,before);
+ });
+});
 test('G182 unprovisioned courier IdP denies delivery preview and acceptance before SQL',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
  await http(runtime,async base=>{
