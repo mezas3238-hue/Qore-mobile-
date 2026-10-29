@@ -80,6 +80,20 @@ export function createQoreOfferGateway({
    if(allowRequest({userId:user.id,operation:detail?'offer_read':'offer_'+action})!==true)
     return response(429,{error:'Offer request limit reached'});
   }catch{return response(503,{error:'Request limiter unavailable'});}
+  // A Driver may be revoked WHILE the private SQL read or decision runs.
+  // Recheck the independently verified session before returning any data or
+  // positive decision receipt. For a committed POST the outcome is UNKNOWN,
+  // never safe to re-issue with a different requestKey.
+  const stillAuthorized=async()=>{
+   const at=now();
+   if(!Number.isSafeInteger(at)||at<0||
+      !Number.isSafeInteger(user.expiresAtMs)||user.expiresAtMs<=at)
+    return 'expired';
+   try{
+    return await verifySessionNotRevoked({
+     userId:user.id,sessionId:user.sessionId,at})===true?'valid':'revoked';
+   }catch{return 'unavailable';}
+  };
   if(detail){
    try{
     const timestamp=now();
@@ -87,6 +101,11 @@ export function createQoreOfferGateway({
     const data=await loadOfferForDriver({offerId:found[1],driverId:user.id});
     if(!validatedOffer(data,user.id,found[1],timestamp))
      return response(404,{error:'No active private offer'});
+    if(requireFreshSession===true){
+     const check=await stillAuthorized();
+     if(check!=='valid')return response(check==='unavailable'?503:401,
+      {error:'Driver session no longer verified'});
+    }
     return response(200,{
      mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
      offerId:data.offerId,tripId:data.tripId,
@@ -103,7 +122,10 @@ export function createQoreOfferGateway({
    };
    const result=await (action==='accept'?acceptOffer(params):declineOffer(params));
    if(typeof result!=='string'||!UUID.test(result))
-    return response(503,{error:'Invalid database decision receipt'});
+    return response(503,{error:'Invalid database decision receipt',retrySafe:false});
+   if(requireFreshSession===true&&await stillAuthorized()!=='valid')
+    return response(503,{error:'Private decision status uncertain; reconcile with original requestKey',
+     retrySafe:false});
    return response(200,{
     mode:'STAGING_DEMO_ONLY',commercialRidesEnabled:false,
     outcome:action==='accept'?'accepted':'declined',
