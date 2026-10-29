@@ -75,10 +75,23 @@ export function createG192ReceiptKeyJournal({readSecure,writeSecure,
   }),
   clearVerified:({subject,kind,deliveryId,requestKey,
    verifiedServerReceipt}={})=>serial(async()=>{
-   // The UI MUST just have received a verified G187 sender / G190 recipient GET
-   // for this exact original delivery. A timer, logout or HTTP error cannot clear.
-   if(verifiedServerReceipt!==true||!isUuid(deliveryId)
-    ||!isUuid(requestKey))throw Error('G192_VERIFIED_SERVER_GET_REQUIRED');
+   // A POST receipt is NOT sufficient: only a separately verified sender GET
+   // (recipientBound), or G190 recipient GET (same original confirmationId)
+   // may release this local fence. Fail closed on lost/forged evidence.
+   if(!isUuid(deliveryId)||!isUuid(requestKey)||
+    !plain(verifiedServerReceipt)||
+    verifiedServerReceipt.mode!=='STAGING_DEMO_ONLY'||
+    verifiedServerReceipt.deliveryId!==deliveryId.toLowerCase()||
+    verifiedServerReceipt.productionEnabled!==false||
+    verifiedServerReceipt.qaOnly!==true||
+    verifiedServerReceipt.paymentAuthorized!==false||
+    !(kind==='bind'?
+      verifiedServerReceipt.ownerId===subject?.toLowerCase()&&
+       verifiedServerReceipt.recipientBound===true:
+      kind==='confirm'?
+       verifiedServerReceipt.recipientConfirmed===true&&
+       verifiedServerReceipt.confirmationId===requestKey.toLowerCase():false))
+    throw Error('G192_VERIFIED_SERVER_GET_REQUIRED');
    const key=nameFor(subject,kind),prior=await load(key);
    if(!prior)return false;
    scoped(prior,subject,kind);
