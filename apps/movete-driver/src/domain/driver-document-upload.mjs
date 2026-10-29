@@ -5,6 +5,7 @@
  * The phone does NOT attest authenticity, expiry, identity or face match.
  */
 import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
+import {driverAwaitWithDeadline} from './driver-async-deadline.mjs';
 export const DRIVER_DOCUMENT_UPLOAD_LIVE_ENABLED=false;
 export const DRIVER_KYC_UPLOAD_KINDS=Object.freeze([
  'licencia','identidad_frente','identidad_dorso','cedula_verde',
@@ -14,6 +15,10 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN=/^[A-Za-z0-9._~-]{20,7900}$/;
 const BUCKET='mobility-staging-driver-evidence';
 const MAX=5242880;
+const DEFAULT_DEADLINES=Object.freeze({
+ authMs:8000,keyMs:6000,captureMs:45000,uploadMs:25000,
+ checkSessionMs:8000,observeMs:12000,receiptMs:6000
+});
 const exact=(obj,keys)=>obj!==null&&typeof obj==='object'&&
  !Array.isArray(obj)&&Object.keys(obj).length===keys.length&&
  keys.every(k=>Object.hasOwn(obj,k));
@@ -37,8 +42,16 @@ const receipt=(kind)=>Object.freeze({kind,phase:'pending-review',
 export async function submitPrivateDriverEvidence({
  kind,faceConsent=false,authAdapter,
  apiOrigin,approvedStagingHost=null,allowedByOwner=false,
- captureEvidence,uploadPrivateObject,makeRequestKey,request=fetch
+ captureEvidence,uploadPrivateObject,makeRequestKey,request=fetch,
+ deadlines=DEFAULT_DEADLINES,onProgress=()=>{}
 }={}){
+ if(typeof onProgress!=='function')throw Error('DOCUMENT_PROGRESS_INVALID');
+ if(!deadlines||Object.keys(DEFAULT_DEADLINES).some(k=>
+   !Number.isSafeInteger(deadlines[k])||deadlines[k]<1||deadlines[k]>120000))
+  throw Error('DOCUMENT_TIMEOUT_POLICY_INVALID');
+ const within=(op,ms,code,other={})=>driverAwaitWithDeadline(op,{
+  ms,timeoutCode:code,...other
+ });
  if(!KINDS.has(kind)||typeof authAdapter?.getSession!=='function'||
   typeof captureEvidence!=='function'||typeof uploadPrivateObject!=='function'||
   typeof makeRequestKey!=='function'||typeof request!=='function'||
@@ -48,19 +61,31 @@ export async function submitPrivateDriverEvidence({
   throw Error('FACE_CONSENT_REQUIRED');
  const origin=resolveDriverStatusOrigin({
   apiOrigin,approvedStagingHost,allowedByOwner:true});
- const session=await authAdapter.getSession().catch(()=>null);
+ onProgress('identity');
+ let session;
+ try{session=await within(()=>authAdapter.getSession(),deadlines.authMs,
+  'PRIVATE_AUTH_TIMEOUT');}
+ catch(error){if(error?.message==='PRIVATE_AUTH_TIMEOUT')throw error;
+  session=null;}
  if(session?.role!=='driver'||!UUID.test(session.userId??'')||
    typeof session.accessToken!=='string'||!TOKEN.test(session.accessToken))
   throw Error('DRIVER_SESSION_REQUIRED');
- const nonce=await makeRequestKey();
+ const nonce=await within(()=>makeRequestKey(),deadlines.keyMs,
+  'PRIVATE_REQUEST_KEY_TIMEOUT');
  if(typeof nonce!=='string'||!UUID.test(nonce))
   throw Error('PRIVATE_DOCUMENT_KEY_UNAVAILABLE');
  const key=session.userId+'/'+kind+'-'+nonce.replace(/-/g,'')+'.jpg';
  let bytes;
  try{
-  const capture=await captureEvidence({
+  onProgress('camera');
+  const capture=await within(()=>captureEvidence({
    kind,source:kind==='rostro_selfie'?'camera':'camera_or_library',
    maxBytes:MAX
+  }),deadlines.captureMs,'PRIVATE_CAPTURE_TIMEOUT',{
+   onLateValue:shot=>{
+    // A native picker may outlive the JS deadline; never retain a late selfie.
+    if(shot?.bytes instanceof Uint8Array)shot.bytes.fill(0);
+   }
   });
   if(capture===null)return Object.freeze({kind,phase:'cancelled',
    accountApproved:false,driverEligible:false,qaOnly:true,
@@ -77,33 +102,45 @@ export async function submitPrivateDriverEvidence({
   const objectKey=key.slice(0,-3)+ext;
   // The Storage SDK must use the verified account session and private bucket
   // RLS; never upload via a general-purpose URL, public bucket or signed URL.
-  const uploaded=await uploadPrivateObject({
+  onProgress('uploading');
+  const uploaded=await within(()=>uploadPrivateObject({
    bucket:BUCKET,objectKey,mimeType:capture.mimeType,
    bytes,upsert:false,accessToken:session.accessToken
-  });
+  }),deadlines.uploadMs,'PRIVATE_STORAGE_OUTCOME_UNKNOWN');
   if(!exact(uploaded,['storedPrivately'])||
     uploaded.storedPrivately!==true)
    throw Error('PRIVATE_STORAGE_NOT_CONFIRMED');
   // Session/account changes mid-upload must never register a cross-user file.
-  const later=await authAdapter.getSession().catch(()=>null);
+  let later;
+  try{later=await within(()=>authAdapter.getSession(),
+   deadlines.checkSessionMs,'PRIVATE_SESSION_RECHECK_TIMEOUT');}
+  catch(error){if(error?.message==='PRIVATE_SESSION_RECHECK_TIMEOUT')throw error;
+   later=null;}
   if(later?.role!=='driver'||later.userId!==session.userId||
     later.accessToken!==session.accessToken)
    throw Error('DRIVER_SESSION_CHANGED');
+  onProgress('observing');
   let answer;
+  const controller=new AbortController();
   try{
-   answer=await request(origin+'/v1/staging/driver/documents/observe',{
-    method:'POST',cache:'no-store',credentials:'omit',
+   answer=await within(()=>request(origin+'/v1/staging/driver/documents/observe',{
+    method:'POST',cache:'no-store',credentials:'omit',redirect:'error',
+    signal:controller.signal,
     headers:{authorization:'Bearer '+session.accessToken,
      'content-type':'application/json',accept:'application/json'},
     body:JSON.stringify({requestKey:nonce,kind,objectKey})
-   });
-  }catch{throw Error('PRIVATE_OBSERVATION_OUTCOME_UNKNOWN');}
-  if(answer?.status!==202)
-   throw Error('PRIVATE_OBSERVATION_NOT_CONFIRMED');
-  let parsed;
-  try{parsed=await answer.json();}catch{
+   }),deadlines.observeMs,'PRIVATE_OBSERVATION_OUTCOME_UNKNOWN');
+  }catch{
+   controller.abort();
    throw Error('PRIVATE_OBSERVATION_OUTCOME_UNKNOWN');
   }
+  if(answer?.status!==202||answer?.redirected===true)
+   throw Error('PRIVATE_OBSERVATION_NOT_CONFIRMED');
+  let parsed;
+  try{
+   parsed=await within(()=>answer.json(),deadlines.receiptMs,
+    'PRIVATE_OBSERVATION_OUTCOME_UNKNOWN');
+  }catch{throw Error('PRIVATE_OBSERVATION_OUTCOME_UNKNOWN');}
   if(!exact(parsed,['mode','documentId','status',
     'evidenceAuthenticityVerified','driverEligible'])||
     parsed.mode!=='STAGING_DEMO_ONLY'||!UUID.test(parsed.documentId??'')||

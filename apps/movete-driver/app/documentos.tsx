@@ -67,6 +67,7 @@ export default function DriverDocuments(){
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mi documentación privada</Text>
+   <Text style={styles.small}>Para tu seguridad, detené el vehículo en un lugar seguro antes de abrir la cámara. Nunca te tomes una selfie mientras conducís.</Text>
    <Text style={styles.small}>Expediente obligatorio: licencia, cédula de identidad de ambos lados, cédula verde, habilitación, seguro, inspección y selfie actual con consentimiento y verificación facial. Una foto subida no basta para aprobar la cuenta.</Text>
    {state.phase==='connected'?<>
     <Text style={styles.text}>Último estado del servidor STAGING. No se muestran archivos ni identificaciones personales.</Text>
@@ -95,6 +96,7 @@ export default function DriverDocuments(){
      secondary onPress={()=>setConsent(value=>!value)}/>
     <Text style={styles.small}>La fotografía del rostro requiere consentimiento expreso y captura de cámara; su carga no verifica automáticamente la identidad. El sistema solo confirma la recepción privada.</Text>
     {upload.state.message!==''&&<Text accessibilityRole="alert" style={styles.text}>{upload.state.message}</Text>}
+    {upload.state.phase==='sending'&&<Text style={styles.small}>La verificación tiene tiempos máximos para evitar una espera interminable. Si la cámara del sistema permanece abierta, podés cerrarla de forma segura.</Text>}
    </>:<Text style={styles.small}>Captura y subida deshabilitadas hasta conectar una cámara nativa, Storage privado y un backend STAGING autorizados; no se envían fotos a destinos públicos.</Text>}
   </Panel>
  </ScrollView>;

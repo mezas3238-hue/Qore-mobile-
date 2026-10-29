@@ -138,9 +138,9 @@ export function createDriverStagingRuntime({
   (typeof captureEvidence!=='function'||typeof uploadPrivateObject!=='function'))
   throw Error('Driver KYC requires authorized private camera and Storage SDK');
  const documentUploads=captureEvidence===null?null:Object.freeze({
-  upload:({kind,faceConsent})=>submitPrivateDriverEvidence({
+  upload:({kind,faceConsent,onProgress})=>submitPrivateDriverEvidence({
    kind,faceConsent,authAdapter,apiOrigin:origin,approvedStagingHost,
-   allowedByOwner:true,captureEvidence,uploadPrivateObject,
+   allowedByOwner:true,captureEvidence,uploadPrivateObject,onProgress,
    makeRequestKey:chatAdapters.makeRequestKey,request
   })
  });

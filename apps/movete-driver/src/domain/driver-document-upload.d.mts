@@ -4,7 +4,8 @@ export declare const DRIVER_KYC_UPLOAD_KINDS:ReadonlyArray<
  'habilitacion'|'seguro'|'inspeccion'|'rostro_selfie'>;
 export type DriverKycUploadKind=typeof DRIVER_KYC_UPLOAD_KINDS[number];
 export type DriverDocumentUploadAdapters=Readonly<{
- upload:(args:{kind:DriverKycUploadKind;faceConsent:boolean})=>Promise<Readonly<{
+ upload:(args:{kind:DriverKycUploadKind;faceConsent:boolean;
+  onProgress?:(stage:'identity'|'camera'|'uploading'|'observing')=>void})=>Promise<Readonly<{
   kind:DriverKycUploadKind;phase:'pending-review'|'cancelled';
   accountApproved:false;driverEligible:false;qaOnly:true;productionEnabled:false;
  }>>;
@@ -17,6 +18,9 @@ export declare function submitPrivateDriverEvidence(opts:{
  uploadPrivateObject:(x:{bucket:string;objectKey:string;mimeType:string;bytes:Uint8Array;upsert:false;accessToken:string})=>Promise<{storedPrivately:boolean}>;
  makeRequestKey:()=>string|Promise<string>;
  request?:typeof fetch;
+ deadlines?:Readonly<{authMs:number;keyMs:number;captureMs:number;uploadMs:number;
+  checkSessionMs:number;observeMs:number;receiptMs:number}>;
+ onProgress?:(stage:'identity'|'camera'|'uploading'|'observing')=>void;
 }):Promise<Readonly<{
  kind:DriverKycUploadKind;phase:'pending-review'|'cancelled';
  accountApproved:false;driverEligible:false;qaOnly:true;productionEnabled:false;

@@ -31,17 +31,40 @@ export function DriverDocumentUploadProvider({children,authAdapter=null,
   if(!enabled||busy.current)return;
   busy.current=true;
   const nonce=generation.current;
-  setState({phase:'sending',kind,message:''});
+  setState({phase:'sending',kind,message:'Comprobando sesión segura…'});
   try{
-   const result=await qaAdapters.upload({kind,faceConsent});
+   const result=await qaAdapters.upload({kind,faceConsent,
+    onProgress:stage=>{
+     if(nonce!==generation.current)return;
+     const messages={
+      identity:'Comprobando identidad y sesión…',
+      camera:'Esperando cámara. Permití el acceso o cancelá la captura.',
+      uploading:'Enviando imagen al almacenamiento privado…',
+      observing:'Comprobando recepción en el servidor…'
+     };
+     setState({phase:'sending',kind,message:messages[stage]??'Comprobando…'});
+    }
+   });
    if(nonce!==generation.current)return;
    setState({phase:result.phase,kind,message:result.phase==='pending-review'?
     'Archivo recibido para revisión. La cuenta aún no está aprobada.':
     'Captura cancelada. No se registró el documento.'});
-  }catch{
+  }catch(error){
    if(nonce!==generation.current)return;
-   setState({phase:'error',kind,message:
-    'No se pudo confirmar la recepción. Revisá el estado privado antes de intentar nuevamente.'});
+   const code=error instanceof Error?error.message:'';
+   const camera=code==='PRIVATE_CAPTURE_TIMEOUT';
+   const permission=code==='CAMERA_PERMISSION_DENIED';
+   const auth=code==='PRIVATE_AUTH_TIMEOUT'||code==='PRIVATE_REQUEST_KEY_TIMEOUT';
+   const unknown=code==='PRIVATE_STORAGE_OUTCOME_UNKNOWN'||
+    code==='PRIVATE_OBSERVATION_OUTCOME_UNKNOWN'||
+    code==='PRIVATE_SESSION_RECHECK_TIMEOUT';
+   setState({phase:'error',kind,message:permission
+    ?'Permiso de cámara denegado. Activá la cámara desde Ajustes del teléfono y volvé a intentarlo cuando estés detenido.'
+    :camera
+    ?'La cámara no respondió. Cerrá el selector de cámara y volvé a esta pantalla para reintentar. No se envió ninguna imagen.'
+    :unknown?'No se pudo confirmar si el documento llegó. Actualizá el expediente privado antes de intentar otra carga; no se repetirá automáticamente.'
+    :auth?'La verificación de sesión tardó demasiado. Comprobá tu conexión e ingresá nuevamente si es necesario.'
+    :'No se pudo confirmar la recepción. Revisá el estado privado antes de intentar nuevamente.'});
   }finally{
    if(nonce===generation.current)busy.current=false;
   }
