@@ -55,7 +55,8 @@ function rawHeaderCount(req,name){
 export function createRenderStagingIngress({
  loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
  maxIdentityBuckets=MAX_IDENTITY_BUCKETS,
- maxUpstreamReads=MAX_UPSTREAM_READS,maxUpstreamWrites=MAX_UPSTREAM_WRITES
+ maxUpstreamReads=MAX_UPSTREAM_READS,maxUpstreamWrites=MAX_UPSTREAM_WRITES,
+ distributedQuota=null
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
@@ -70,7 +71,8 @@ export function createRenderStagingIngress({
     !Number.isSafeInteger(maxUpstreamReads)||maxUpstreamReads<1||
     maxUpstreamReads>2048||
     !Number.isSafeInteger(maxUpstreamWrites)||maxUpstreamWrites<1||
-    maxUpstreamWrites>1024)
+    maxUpstreamWrites>1024||
+    (distributedQuota!==null&&typeof distributedQuota.claim!=='function'))
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
  // Original fixed-window deadlines are monotonic in insertion order;
  // a request from an existing identity never extends or reorders its TTL.
@@ -159,6 +161,28 @@ export function createRenderStagingIngress({
    json(res,429,{error:'STAGING identity capacity reached'},{
     ...cors,'retry-after':'1'
    });return;
+  }
+  // G171: an opt-in Redis atomic decision is shared across all replicas.
+  // Local limits remain as a secondary safety ceiling; Redis failure is 503,
+  // NEVER an unrestricted fallback. Do not forward a denied request to G4.
+  if(distributedQuota!==null){
+   let quota;
+   try{quota=await distributedQuota.claim({
+    credentialHash:hash,method:req.method
+   });}
+   catch{json(res,503,{error:'Shared STAGING quota unavailable',
+    retrySafe:false},cors);return;}
+   if(!quota||typeof quota.admitted!=='boolean'||
+    !Number.isSafeInteger(quota.retryAfterSeconds)||
+    quota.retryAfterSeconds<1||quota.retryAfterSeconds>60){
+    json(res,503,{error:'Shared STAGING quota untrusted',
+     retrySafe:false},cors);return;
+   }
+   if(!quota.admitted){
+    json(res,429,{error:'Shared STAGING rate limited'},{
+     ...cors,'retry-after':String(quota.retryAfterSeconds)
+    });return;
+   }
   }
   requests.set(hash,{until:bucket?.until??at+WINDOW_MS,
    count:(bucket?.count??0)+1});

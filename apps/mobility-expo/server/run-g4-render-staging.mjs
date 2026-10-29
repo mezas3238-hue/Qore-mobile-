@@ -8,6 +8,7 @@ import {once} from 'node:events';
 import {prepareQoreG4StagingRuntime} from './g4-staging-runtime.mjs';
 import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createRenderStagingIngress} from './render-staging-ingress.mjs';
+import {createG171DistributedQuota,connectG171StagingRedis} from './g171-redis-distributed-quota.mjs';
 
 if(process.env.QORE_RENDER_STAGING_APPROVED!=='true'||
    process.env.QORE_MOBILITY_ENV!=='staging'||
@@ -36,13 +37,26 @@ const runtime=await prepareQoreG4StagingRuntime({
  },
  createClient
 });
+// G171 distributed edge quotas are explicitly opted in and fail-closed.
+ // This proof-of-integration permits only local QA Redis; a separate secured,
+ // private TLS/ACL Redis deployment is required before external STAGING use.
+const redisEnabled=process.env.QORE_G171_REDIS_QUOTA_ENABLED==='true';
+if(!['true','false',undefined].includes(process.env.QORE_G171_REDIS_QUOTA_ENABLED))
+ throw Error('G171 invalid Redis opt-in value');
+const redisClient=redisEnabled?await connectG171StagingRedis({
+ url:process.env.QORE_G171_REDIS_URL
+}):null;
+const distributedQuota=redisClient===null?null:createG171DistributedQuota({
+ redisClient
+});
 const localOrigin=await listenQoreRadarLoopback(runtime.server);
 const ingress=createRenderStagingIngress({
- loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin
+ loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin,distributedQuota
 });
 const shutdown=()=>{
  ingress.close();
  runtime.server.close();
+ if(redisClient!==null)void redisClient.quit().catch(()=>{});
 };
 process.on('SIGTERM',shutdown);
 process.on('SIGINT',shutdown);
