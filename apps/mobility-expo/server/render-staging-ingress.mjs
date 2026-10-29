@@ -12,6 +12,7 @@ const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com)$/;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const MAX_BODY=2048;
 const MAX_REPLY=32768;
+const MAX_IN_FLIGHT=64;
 const LIMIT=90;
 const WINDOW_MS=60000;
 const JSON_HEADERS=Object.freeze({
@@ -31,7 +32,31 @@ const validOrigin=x=>{
    !u.username&&!u.password&&!u.port&&!u.search&&!u.hash;
  }catch{return false;}
 };
-const json=(res,status,body,extra={})=>{
+// Read a bounded HTTP RESPONSE STREAM, never .text() before checking size:
+ // an upstream error or malicious 100MB JSON must not exhaust a Render worker.
+ async function boundedJsonReply(upstream){
+  if(!upstream.body||typeof upstream.body.getReader!=='function')
+   throw Error('Missing bounded upstream stream');
+  const reader=upstream.body.getReader();
+  const chunks=[];let bytes=0,complete=false;
+  try{
+   for(;;){
+    const {value,done}=await reader.read();
+    if(done){complete=true;break;}
+    if(!(value instanceof Uint8Array))throw Error('Untrusted upstream chunk');
+    bytes+=value.byteLength;
+    if(bytes>MAX_REPLY)throw Error('G4 response exceeds configured budget');
+    chunks.push(value);
+   }
+  }finally{
+   if(!complete)await reader.cancel().catch(()=>{});
+  }
+  const parsed=JSON.parse(Buffer.concat(chunks,bytes).toString('utf8'));
+  if(parsed===null||typeof parsed!=='object'||Array.isArray(parsed))
+   throw Error('G4 returned untrusted JSON shape');
+  return parsed;
+ }
+ const json=(res,status,body,extra={})=>{
  if(res.writableEnded||res.destroyed)return;
  res.writeHead(status,{...JSON_HEADERS,...extra});
  res.end(JSON.stringify(body));
@@ -60,6 +85,7 @@ export function createRenderStagingIngress({
     typeof request!=='function'||typeof now!=='function')
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
  const requests=new Map();
+ let inFlight=0;
  const server=createServer(async(req,res)=>{
   // Transport-only liveness; not a DB, E2E, or commercial readiness claim.
   if(req.url==='/_qore/liveness'&&req.method==='GET'&&
@@ -158,6 +184,11 @@ export function createRenderStagingIngress({
     JSON.parse(body);
    }catch{json(res,400,{error:'Invalid JSON'},cors);return;}
   }
+  if(inFlight>=MAX_IN_FLIGHT){
+   json(res,503,{error:'STAGING ingress capacity exhausted'},cors);
+   return;
+  }
+  inFlight++;
   try{
    const upstream=await request(url.origin+req.url,{
     method:req.method,
@@ -174,19 +205,10 @@ export function createRenderStagingIngress({
       upstream.status<200||upstream.status>599){
     json(res,503,{error:'G4 unavailable'},cors);return;
    }
-   const reply=await upstream.text();
-   if(Buffer.byteLength(reply)>MAX_REPLY){
-    json(res,503,{error:'G4 oversized response'},cors);return;
-   }
-   let parsed;
-   try{parsed=JSON.parse(reply);}catch{
-    json(res,503,{error:'G4 non-JSON response'},cors);return;
-   }
-   if(parsed===null||typeof parsed!=='object'||Array.isArray(parsed)){
-    json(res,503,{error:'G4 untrusted response'},cors);return;
-   }
+   const parsed=await boundedJsonReply(upstream);
    json(res,upstream.status,parsed,cors);
   }catch{json(res,503,{error:'G4 unavailable'},cors);}
+  finally{inFlight--;}
  });
  server.requestTimeout=9000;
  server.headersTimeout=8000;

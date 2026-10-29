@@ -307,7 +307,9 @@ test('G178 Driver G65 stream validates original G177 receipt before returning to
  const actual=await transitionPrivateDriverTrip({
   ...scope,event:'arrive',eventKey:key,request
  });
- assert.equal(actual.receiptId,receipt);
+ assert.equal(actual.receiptId,receipt.eventId);
+ assert.equal(actual.tripId,receipt.tripId);
+ assert.equal(actual.event,receipt.event);
  assert.equal(actual.serverPersisted,true);
  assert.equal(n,3);
 });

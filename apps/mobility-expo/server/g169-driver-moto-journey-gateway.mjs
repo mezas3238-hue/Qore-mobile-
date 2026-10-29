@@ -9,6 +9,7 @@
  */
 const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const TOKEN=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
+const CURRENT='/v1/staging/driver/moto/current';
 const GET=/^\/v1\/staging\/driver\/moto\/bookings\/([0-9a-f-]{36})\/status$/i;
 const POST=/^\/v1\/staging\/driver\/moto\/bookings\/([0-9a-f-]{36})\/advance$/i;
 const NEXT=Object.freeze({accepted:'arriving',arriving:'in_progress',
@@ -39,21 +40,24 @@ export const G169_MOTO_DRIVER_LIVE_ENABLED=false;
 export function createG169DriverMotoJourneyGateway({
  environment,qaOnly,liveEnabled,verifyAccessToken,
  verifySessionNotRevoked,resolveExclusiveRole,allowRequest,
- readMoto,advanceMoto,now=Date.now
+ readMoto,advanceMoto,readCurrentMoto=null,now=Date.now
 }={}){
  if(environment!=='isolated_staging'||qaOnly!==true||liveEnabled!==false||
   [verifyAccessToken,verifySessionNotRevoked,resolveExclusiveRole,
    allowRequest,readMoto,advanceMoto,now].some(x=>typeof x!=='function'))
   throw Error('G169 requires original private MOTO SQL and verified Driver');
+ if(readCurrentMoto!==null&&typeof readCurrentMoto!=='function')
+  throw Error('G189 requires trusted unique active MOTO owner RPC');
  return async({method,path,headers={},body}={})=>{
+  const current=method==='GET'&&path===CURRENT;
   const get=method==='GET'&&typeof path==='string'?GET.exec(path):null;
   const post=method==='POST'&&typeof path==='string'?POST.exec(path):null;
-  if(!get&&!post)return fail(404,'G169_ROUTE_DENIED');
-  const booking=(get??post)[1];
-  if(!ID.test(booking)||headers.cookie!==undefined||
+  if(!current&&!get&&!post)return fail(404,'G169_ROUTE_DENIED');
+  const booking=(get??post)?.[1]??null;
+  if((!current&&!ID.test(booking))||headers.cookie!==undefined||
    headers.Authorization!==undefined||typeof headers.authorization!=='string')
    return fail(401,'G169_VERIFIED_BEARER_REQUIRED');
-  if((get&&body!=null)||(post&&(!exact(body,
+  if(((get||current)&&body!=null)||(post&&(!exact(body,
    ['expectedRevision','nextState','commandKey'])||
    !Number.isSafeInteger(body.expectedRevision)||
    body.expectedRevision<2||body.expectedRevision>4||
@@ -78,6 +82,19 @@ export function createG169DriverMotoJourneyGateway({
   try{if(allowRequest({userId:actor.id,operation:'driver.moto.journey'})!==true)
    return fail(429,'G169_RATE_LIMITED');}
   catch{return fail(503,'G169_RATE_UNAVAILABLE');}
+  if(current){
+   if(readCurrentMoto===null)return fail(503,'G189_CURRENT_MOTO_DISABLED');
+   let active;
+   try{active=await readCurrentMoto({driverId:actor.id});}
+   catch{return fail(503,'G189_CURRENT_MOTO_UNAVAILABLE');}
+   if(active!==null&&(!ID.test(active?.bookingKey??'')||
+    !verify(active,actor.id,active.bookingKey)||
+    !['accepted','arriving','in_progress'].includes(active.tripState)))
+    return fail(503,'G189_UNTRUSTED_ACTIVE_MOTO');
+   return {status:200,body:{mode:'STAGING_DEMO_ONLY',
+    qaOnly:true,productionEnabled:false,
+    activeBooking:active===null?null:output(active)}};
+  }
   let before;
   try{before=await readMoto({driverId:actor.id,bookingKey:booking});}
   catch{return fail(503,'G169_ORIGINAL_READ_UNAVAILABLE');}
