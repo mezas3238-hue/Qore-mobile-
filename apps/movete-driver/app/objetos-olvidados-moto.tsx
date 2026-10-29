@@ -68,6 +68,22 @@ export default function DriverLostObjects(){
    setFeedback('Mensaje de respuesta guardado. Actualizá para comprobarlo.');
   }finally{lock.current=false;setBusy(false);}
  }
+ async function closeCase(block:boolean){
+  if(lock.current||!api.isConfigured()||!current||!canSend||uncertainSend)return;
+  lock.current=true;setBusy(true);setFeedback('');
+  try{
+   const result=await api.close(current,block);
+   if(!result.ok||result.data?.state!==(block?'BLOCKED':'CLOSED')){
+    setUncertainSend(true);setCanSend(false);
+    setFeedback('Cierre con resultado desconocido. No repetir la solicitud; consultar soporte.');
+    return;
+   }
+   setCases(previous=>previous.filter(x=>x.caseId!==current));
+   setCurrent(null);setMessages([]);setBody('');setCanSend(false);
+   setFeedback(block?'Contacto bloqueado y confirmado por PostgreSQL.':
+    'Expediente cerrado y confirmado por PostgreSQL.');
+  }finally{lock.current=false;setBusy(false);}
+ }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
   keyboardShouldPersistTaps="handled">
   <View style={styles.hero}>
@@ -101,6 +117,12 @@ export default function DriverLostObjects(){
     accessibilityLabel="Respuesta privada al pasajero por objeto olvidado"/>
    <Action label="Responder al pasajero" disabled={!canSend||busy||uncertainSend||!body.trim()}
     onPress={()=>{void send();}}/>
+   {canSend&&!uncertainSend&&<Action secondary
+    label="Cerrar expediente: pertenencia recuperada"
+    disabled={busy} onPress={()=>{void closeCase(false);}}/>}
+   {canSend&&!uncertainSend&&<Action secondary
+    label="Bloquear contacto de este expediente"
+    disabled={busy} onPress={()=>{void closeCase(true);}}/>}
    <Action label="Actualizar este caso" secondary disabled={busy}
     onPress={()=>{void open(current);}}/>
    <Text style={styles.small}>No manipules el teléfono mientras conducís. El servidor debe verificar que estás detenido antes de permitir respuestas.</Text>
