@@ -1701,3 +1701,102 @@ test('G170 ambiguous/offline original PostgreSQL cannot manufacture Driver assig
   });
  }
 });
+
+const g173Path='/v1/staging/merchant/orders/'+ride+'/transition';
+const g173AttachPath='/v1/staging/merchant/orders/'+ride+'/attach-delivery';
+test('G173 original G4 merchant writes never fall through to weaker G6 authentication',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const order={event:'confirm',eventKey:requestKey};
+  const r=await req(base,g173Path,'stranger','POST',order);
+  assert.equal(r.status,401,'Merchant G6 legacy path cannot write without IdP');
+  assert.equal((await req(base,g173AttachPath,'stranger','POST',{
+   deliveryId,requestKey})).status,401);
+  assert.equal((await req(base,g173Path.toUpperCase(),'stranger','POST',order)).status,404,
+   'Case variants cannot escape G173 merchant authority');
+  assert.equal((await req(base,g173Path,'stranger','POST',{
+   event:'cancel',eventKey:requestKey})).status,400);
+  assert.equal(m.state.rpcs.filter(x=>x.name.includes('merchant_order_transition')).length,0);
+  assert.equal(m.state.rpcs.filter(x=>x.name.includes('g173')).length,0);
+ });
+});
+test('G173 G4 original merchant mutations require independent staff + G42 SQL and preserve replay key',async()=>{
+ const m=mockSupabase(),old=m.createClient;
+ const writes=[];let sqlDenied=false,revoked=false;
+ m.createClient=(url,key)=>{
+  const sdk=old(url,key);
+  if(key===serviceKey){
+   const rpc=sdk.rpc;
+   sdk.rpc=async(name,args)=>{
+    if(name==='mobility_stage_g173_merchant_transition_qa'||
+       name==='mobility_stage_g173_merchant_attach_qa'){
+     writes.push({name,args});
+     return sqlDenied?{data:null,error:{code:'P1731'}}:{data:offer,error:null};
+    }
+    return rpc(name,args);
+   };
+  }
+  return sdk;
+ };
+ const trust={...merchantStaffTrust(),
+  verifySessionNotRevoked:async()=>!revoked};
+ const runtime=await prepare(m,{merchantStaffTrust:trust});
+ await http(runtime,async base=>{
+  const body={event:'confirm',eventKey:requestKey};
+  assert.equal((await req(base,g173Path,'rider','POST',body)).status,401);
+  const first=await req(base,g173Path,'stranger','POST',body);
+  assert.equal(first.status,200,JSON.stringify(first.body));
+  assert.equal(first.body.eventId,offer);
+  assert.equal(first.body.event,'confirm');
+  assert.equal(first.body.serverPersisted,true);
+  assert.equal(first.body.liveCommerceEnabled,false);
+  const repeat=await req(base,g173Path,'stranger','POST',body);
+  assert.equal(repeat.status,200);
+  assert.equal(repeat.body.eventId,offer);
+  assert.deepEqual(writes.slice(0,2),Array(2).fill(null).map(()=>({
+   name:'mobility_stage_g173_merchant_transition_qa',
+   args:{_actor:stranger,_session:offer,_iat:now-1000,
+    _order:ride,_request:requestKey,_action:'confirm'}
+  })));
+  const link=await req(base,g173AttachPath,'stranger','POST',{deliveryId,requestKey});
+  assert.equal(link.status,200);
+  assert.deepEqual(writes[2],{
+   name:'mobility_stage_g173_merchant_attach_qa',
+   args:{_actor:stranger,_session:offer,_iat:now-1000,
+    _order:ride,_request:requestKey,_delivery:deliveryId}
+  });
+  sqlDenied=true;
+  assert.equal((await req(base,g173Path,'stranger','POST',body)).status,409);
+  revoked=true;
+  assert.equal((await req(base,g173Path,'stranger','POST',body)).status,401);
+  assert.equal(writes.length,4,'Revocation must never reach source SQL');
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_merchant_order_transition'),false);
+ });
+});
+test('G173 mid-mutation revocation cannot return successful merchant receipt',async()=>{
+ const m=mockSupabase(),old=m.createClient;
+ let active=true;
+ m.createClient=(url,key)=>{
+  const sdk=old(url,key);
+  if(key===serviceKey){
+   const former=sdk.rpc;
+   sdk.rpc=async(name,args)=>{
+    if(name==='mobility_stage_g173_merchant_transition_qa'){
+     active=false;return {data:offer,error:null};
+    }
+    return former(name,args);
+   };
+  }
+  return sdk;
+ };
+ const runtime=await prepare(m,{merchantStaffTrust:{
+  ...merchantStaffTrust(),verifySessionNotRevoked:async()=>active
+ }});
+ await http(runtime,async base=>{
+  const r=await req(base,g173Path,'stranger','POST',{
+   event:'ready',eventKey:requestKey
+  });
+  assert.equal(r.status,401);
+  assert.equal(r.body.serverPersisted,undefined);
+ });
+});
