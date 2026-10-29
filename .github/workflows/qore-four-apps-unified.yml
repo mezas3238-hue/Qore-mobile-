@@ -82,6 +82,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund --ignore-scripts
           npm run check
+          node --check src/g214-delivery-handoff-client.mjs
+          node --test src/g214-delivery-handoff-client.test.mjs
           npm run build
           test -f dist/index.html
       - name: Backend HTTP/SQL modules checked without external secrets
