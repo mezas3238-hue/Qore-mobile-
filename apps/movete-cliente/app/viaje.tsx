@@ -62,6 +62,8 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
  const autoContinuation=useMemo(()=>createF1AutoRideContinuation({
   readSnapshot:()=>client.snapshot(),
   verifyRide:()=>client.continueVerifiedRide(),
+  // Reauthenticate the SAME persisted trip on return from the background.
+  reverifyTracking:()=>client.syncTracking(),
   isForeground:()=>AppState.currentState==='active',
   onBusy:setAutoChecking,
   onFailure:()=>setFeedback('La reserva quedó registrada, pero el seguimiento todavía no está verificado. Podés consultar sin generar otra solicitud.'),
