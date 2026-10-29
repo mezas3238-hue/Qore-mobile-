@@ -80,6 +80,7 @@ const deliveryOfferDecisionRoute=/^\/v1\/staging\/courier\/delivery-offers\/(acc
 const g187RecipientRoute=/^\/v1\/staging\/(?:sender|recipient)\/deliveries\/[0-9a-f-]{36}\/(?:recipient-bind|recipient-confirmation|confirmation|confirm)$/i;
 const g197PickupRoute=/^\/v1\/staging\/driver\/pickup-preferences$/;
 const g198LostItemRoute=/^\/v1\/staging\/(?:rider\/trips\/[0-9a-f-]{36}\/lost-items|driver\/lost-items|lost-items\/[0-9a-f-]{36}(?:\/(?:messages|close))?)$/i;
+const g200MotoLostItemRoute=/^\/v1\/staging\/(?:rider\/moto\/trips\/[0-9a-f-]{36}\/lost-items|driver\/moto\/lost-items|moto\/lost-items\/[0-9a-f-]{36}(?:\/(?:messages|close))?)$/i;
 const safe=(code,body)=>({status:code,body});
 const maxBody=2048;
 const JSON_HEADERS={
@@ -100,7 +101,7 @@ function send(res,status,body) {
 export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
- courierCustodyHandler,recipientConfirmationHandler,pickupPreferenceHandler,lostItemsHandler,merchantInboxHandler,
+ courierCustodyHandler,recipientConfirmationHandler,pickupPreferenceHandler,lostItemsHandler,motoLostItemsHandler,merchantInboxHandler,
  f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,driverCurrentTripHandler,
@@ -126,6 +127,7 @@ export function createQoreRadarLoopbackTransport({
    (recipientConfirmationHandler!==undefined&&typeof recipientConfirmationHandler!=='function')||
    (pickupPreferenceHandler!==undefined&&typeof pickupPreferenceHandler!=='function')||
    (lostItemsHandler!==undefined&&typeof lostItemsHandler!=='function')||
+   (motoLostItemsHandler!==undefined&&typeof motoLostItemsHandler!=='function')||
    (merchantInboxHandler!==undefined&&typeof merchantInboxHandler!=='function')||
    (driverDecisionRecoveryHandler!==undefined&&typeof driverDecisionRecoveryHandler!=='function')||
    typeof deliveryHandler!=='function'||
@@ -192,6 +194,8 @@ export function createQoreRadarLoopbackTransport({
   const pickupPreferencePut=req.method==='PUT'&&g197PickupRoute.test(path);
   const lostItemsGet=req.method==='GET'&&g198LostItemRoute.test(path);
   const lostItemsPost=req.method==='POST'&&g198LostItemRoute.test(path);
+  const motoLostItemsGet=req.method==='GET'&&g200MotoLostItemRoute.test(path);
+  const motoLostItemsPost=req.method==='POST'&&g200MotoLostItemRoute.test(path);
   const merchantGet=req.method==='GET'&&merchantStatusRoute.test(path);
    const merchantInboxGet=req.method==='GET'&&merchantInboxRoute.test(path);
   const merchantPost=req.method==='POST'&&
@@ -222,7 +226,7 @@ export function createQoreRadarLoopbackTransport({
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
   if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!driverMotoGet&&!driverMotoPost&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
-    !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!recipientConfirmationGet&&!recipientConfirmationPost&&!pickupPreferenceGet&&!pickupPreferencePut&&!lostItemsGet&&!lostItemsPost&&!financeGet&&!financePost&&
+    !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!recipientConfirmationGet&&!recipientConfirmationPost&&!pickupPreferenceGet&&!pickupPreferencePut&&!lostItemsGet&&!lostItemsPost&&!motoLostItemsGet&&!motoLostItemsPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
     !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&
@@ -234,7 +238,7 @@ export function createQoreRadarLoopbackTransport({
    // The loopback test is explicitly NOT a browser or session-cookie API.
    send(res,403,{error:'Browser origins and cookies unsupported'});return;
   }
-  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||driverMotoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||adminCargoTraceGet||adminCommerceTraceGet||adminFraudGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||recipientConfirmationGet||pickupPreferenceGet||lostItemsGet||merchantGet||merchantInboxGet||commerceQaGet||financeGet||safetyGet||
+  if((rider||riderHistory||offerGet||f1AutoGet||f1AutoSubsidyPost||motoGet||driverMotoGet||adminF1AuditGet||adminServiceTraceGet||adminMotoTraceGet||adminCargoTraceGet||adminCommerceTraceGet||adminFraudGet||ownerCommissionGet||ownerCargoRateGet||deliveryGet||courierCustodyGet||recipientConfirmationGet||pickupPreferenceGet||lostItemsGet||motoLostItemsGet||merchantGet||merchantInboxGet||commerceQaGet||financeGet||safetyGet||
       deliveryOfferGet||courierPollGet||driverInboxGet||driverDocumentGet||
       driverLicenseReadinessGet||driverKycValidityGet||driverTripStatusGet||driverCurrentTripGet)&&
      (req.headers['transfer-encoding']!==undefined||
@@ -243,7 +247,7 @@ export function createQoreRadarLoopbackTransport({
   }
   let body;
   if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost||motoLostItemsPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -285,6 +289,7 @@ export function createQoreRadarLoopbackTransport({
     (recipientConfirmationGet||recipientConfirmationPost)?(recipientConfirmationHandler??(()=>({status:503,body:{error:'G187 independent recipient session authority unavailable',retrySafe:false}}))):
     (pickupPreferenceGet||pickupPreferencePut)?(pickupPreferenceHandler??(()=>({status:503,body:{error:'G197 Driver road distance authority unavailable',retrySafe:false}}))):
     (lostItemsGet||lostItemsPost)?(lostItemsHandler??(()=>({status:503,body:{error:'G198 post-trip contact authority unavailable',retrySafe:false}}))):
+    (motoLostItemsGet||motoLostItemsPost)?(motoLostItemsHandler??(()=>({status:503,body:{error:'G200 original MOTO post-trip contact authority unavailable',retrySafe:false}}))):
     merchantInboxGet?(merchantInboxHandler??(()=>({status:503,body:{error:'G156 staff inbox unavailable'}}))):
      (merchantGet||merchantPost)?merchantHandler:
     (financeGet||financePost)?financeHandler:
