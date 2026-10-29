@@ -198,24 +198,27 @@ export function createRenderStagingIngress({
   }
   lastTime=at;
   pruneExpired(at);
-  // Store only a token digest. Existing identities remain enforceable even
-  // at capacity; silently evicting a live bucket would reset its 90/min cap.
+  // G178: Redis (G171) is the authority for ALL per-token decisions when
+  // opted-in. Do not double-count 60s identities in each Node process:
+  // the old per-process 16,384 bucket cap would reject valid shared-quota
+  // users before Redis even sees them. No eviction/bypass of Redis quotas.
+  // In-process mode retains its bounded legacy behavior in disposable QA.
   const hash=createHash('sha256').update(req.headers.authorization).digest('hex');
-  const bucket=requests.get(hash);
-  if(bucket&&bucket.count>=LIMIT){
-   json(res,429,{error:'STAGING rate limited'},{
-    ...cors,'retry-after':String(Math.max(1,Math.ceil((bucket.until-at)/1000)))
-   });return;
-  }
-  if(!bucket&&requests.size>=maxIdentityBuckets){
-   json(res,429,{error:'STAGING identity capacity reached'},{
-    ...cors,'retry-after':'1'
-   });return;
-  }
-  // G171: an opt-in Redis atomic decision is shared across all replicas.
-  // Local limits remain as a secondary safety ceiling; Redis failure is 503,
-  // NEVER an unrestricted fallback. Do not forward a denied request to G4.
-  if(distributedQuota!==null){
+  if(distributedQuota===null){
+   const bucket=requests.get(hash);
+   if(bucket&&bucket.count>=LIMIT){
+    json(res,429,{error:'STAGING rate limited'},{
+     ...cors,'retry-after':String(Math.max(1,Math.ceil((bucket.until-at)/1000)))
+    });return;
+   }
+   if(!bucket&&requests.size>=maxIdentityBuckets){
+    json(res,429,{error:'STAGING identity capacity reached'},{
+     ...cors,'retry-after':'1'
+    });return;
+   }
+   requests.set(hash,{until:bucket?.until??at+WINDOW_MS,
+    count:(bucket?.count??0)+1});
+  }else{
    let quota;
    try{quota=await distributedQuota.claim({
     credentialHash:hash,method:req.method
@@ -223,8 +226,8 @@ export function createRenderStagingIngress({
    catch{json(res,503,{error:'Shared STAGING quota unavailable',
     retrySafe:false},cors);return;}
    if(!quota||typeof quota.admitted!=='boolean'||
-    !Number.isSafeInteger(quota.retryAfterSeconds)||
-    quota.retryAfterSeconds<1||quota.retryAfterSeconds>60){
+      !Number.isSafeInteger(quota.retryAfterSeconds)||
+      quota.retryAfterSeconds<1||quota.retryAfterSeconds>60){
     json(res,503,{error:'Shared STAGING quota untrusted',
      retrySafe:false},cors);return;
    }
@@ -234,8 +237,6 @@ export function createRenderStagingIngress({
     });return;
    }
   }
-  requests.set(hash,{until:bucket?.until??at+WINDOW_MS,
-   count:(bucket?.count??0)+1});
   if(req.method==='GET'&&
      (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0')){
    json(res,400,{error:'GET body not allowed'},cors);return;
