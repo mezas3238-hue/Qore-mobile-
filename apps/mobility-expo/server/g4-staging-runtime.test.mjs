@@ -1344,3 +1344,92 @@ test('G165 default loopback server never starts an auto retry process',async()=>
  assert.equal(m.state.g113BatchCalls,0);
  await new Promise(resolve=>runtime.server.close(resolve));
 });
+
+const ratingPath='/v1/staging/reputation/ratings';
+const ratingPayload={requestKey,serviceKind:'AUTO_RIDE',serviceId:ride,
+ ratedKind:'CLIENT',stars:4,incidentCode:null};
+function independentRatingTrust(){
+ return {
+  verifyRatingSession:async token=>{
+   if(token!==jwt.driver)throw Error('No independent IdP');
+   return {id:driver,sessionId:vehicle,tokenIatMs:now-1000,
+    expiresAtMs:now+60000,is_anonymous:false};
+  },
+  verifySessionNotRevoked:async()=>true
+ };
+}
+test('G155 original runtime refuses rating without verified IdP or G42 SQL',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,ratingPath,'driver','POST',ratingPayload)).status,503);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g155_submit_rating_qa').length,0);
+ });
+ for(const trust of [{}, {...independentRatingTrust(),clientCanApprove:true},
+  {...independentRatingTrust(),verifySessionNotRevoked:null}]){
+  const next=mockSupabase();
+  await assert.rejects(prepare(next,{ratingTrust:trust}));
+  assert.equal(next.state.clients.length,0);
+ }
+});
+test('G155 G4 HTTP invokes original source SQL with verified Driver and immutable key',async()=>{
+ const m=mockSupabase(),original=m.createClient;
+ let valid=true,sqlDenied=false;
+ m.createClient=(url,key)=>{
+  const sdk=original(url,key);
+  if(key===serviceKey){
+   const old=sdk.rpc;
+   sdk.rpc=async(name,params)=>{
+    if(name!=='mobility_stage_g155_submit_rating_qa')return old(name,params);
+    m.state.rpcs.push({name,params});
+    if(sqlDenied)return {data:null,error:{code:'P1552'}};
+    return {data:{
+     ratingId:'15500000-0000-4155-8155-000000000004',
+     serviceId:params._service_id,serviceKind:params._service_kind,
+     ratedKind:params._rated_kind,stars:params._stars,
+     requestKey:params._request_key,serverPersisted:true,qaOnly:true,
+     productionEnabled:false,dispatchPriorityChanged:false,
+     automatedSuspension:false},error:null};
+   };
+  }
+  return sdk;
+ };
+ const runtime=await prepare(m,{ratingTrust:{
+  ...independentRatingTrust(),
+  verifySessionNotRevoked:async({userId,sessionId})=>
+   valid&&userId===driver&&sessionId===vehicle
+ }});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,ratingPath,'rider','POST',ratingPayload)).status,401);
+  let writes=m.state.rpcs.filter(x=>x.name==='mobility_stage_g155_submit_rating_qa');
+  assert.equal(writes.length,0);
+  const sent=await req(base,ratingPath,'driver','POST',ratingPayload);
+  assert.equal(sent.status,201,JSON.stringify(sent.body));
+  assert.equal(sent.body.serviceId,ride);
+  assert.equal(sent.body.automatedSuspension,false);
+  writes=m.state.rpcs.filter(x=>x.name==='mobility_stage_g155_submit_rating_qa');
+  assert.equal(writes.length,1);
+  assert.deepEqual(writes[0].params,{
+   _reviewer:driver,_session:vehicle,_iat_ms:now-1000,
+   _request_key:requestKey,_service_kind:'AUTO_RIDE',_service_id:ride,
+   _rated_kind:'CLIENT',_stars:4,_incident_code:null
+  });
+  sqlDenied=true;
+  assert.equal((await req(base,ratingPath,'driver','POST',ratingPayload)).status,409);
+  valid=false;
+  assert.equal((await req(base,ratingPath,'driver','POST',ratingPayload)).status,401);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g155_submit_rating_qa').length,2);
+  assert.equal((await req(base,ratingPath,'driver','POST',{...ratingPayload,stars:6})).status,400);
+  assert.doesNotMatch(JSON.stringify(sent.body),/service_role|sb_secret|sessionId/);
+ });
+});
+test('G155 mismatched provider cannot claim successful rating in original runtime',async()=>{
+ const m=mockSupabase();
+ const trust={...independentRatingTrust(),
+  verifyRatingSession:async()=>({id:passenger,sessionId:vehicle,
+   tokenIatMs:now-1000,expiresAtMs:now+60000,is_anonymous:false})};
+ const runtime=await prepare(m,{ratingTrust:trust});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,ratingPath,'driver','POST',ratingPayload)).status,401);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g155_submit_rating_qa').length,0);
+ });
+});
