@@ -213,6 +213,25 @@ function mockSupabase(){
      state.offer.status='accepted';
      return {data:requestKey,error:null};
     }
+    if(name==='mobility_stage_g177_driver_auto_step_qa'){
+     // G210: contract-level simulation ONLY. G38 deliberately forbids
+     // legal policy issuance inside disposable PostgreSQL (no commercial GO).
+     state.g210Events??=new Map();
+     const existing=state.g210Events.get(params._key);
+     if(existing)return existing.event===params._event&&existing.trip===params._trip?
+      {data:params._key,error:null}:{error:{code:'P1771'}};
+     const before={arrive:'accepted',pickup:'arriving',complete:'in_progress'};
+     const after={arrive:'arriving',pickup:'in_progress',complete:'completed'};
+     if(params._driver!==driver||params._session!==vehicle||
+      params._iat!==99000||params._trip!==ride||
+      state.offer.status!=='accepted'||state.trip.driver_id!==driver||
+      state.trip.status!==before[params._event])
+      return {error:{code:'P1771'}};
+     state.g210Events.set(params._key,{event:params._event,trip:params._trip});
+     state.trip={...state.trip,status:after[params._event],
+      revision:state.trip.revision+1};
+     return {data:params._key,error:null};
+    }
     if(name==='mobility_stage_auto_demo_transition'){
      const next={arriving:'accepted',in_progress:'arriving',completed:'in_progress',cancelled:'searching'};
      if(params._trip_id!==ride||state.trip.status!==next[params._next]||
@@ -466,6 +485,93 @@ test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigne
   assert.equal(m.state.rpcs.length,before);
  });
 });
+test('G210 original G73 AUTO accepted through G205 advances G177 same trip on HTTP, Client and Admin QA',async()=>{
+ // In-memory RPC contracts check all four HTTP participants; never
+ // label this as real G38 municipality/KYC/GPS or physical completion.
+ const m=mockSupabase();m.state.g84Enabled=true;m.state.adminRole='admin';
+ const driverTrust=g80Trust(),runtime=await prepare(m,{
+  driverKycTrust:driverTrust.trust,adminF1Trust:trust()
+ });
+ const stages=[
+  ['arrive','arriving',3,'assigned'],
+  ['pickup','in_progress',4,'arriving'],
+  ['complete','completed',5,'in_progress']
+ ];
+ const keys=[
+  '21000000-0000-4210-8210-000000000001',
+  '21000000-0000-4210-8210-000000000002',
+  '21000000-0000-4210-8210-000000000003'
+ ];
+ await http(runtime,async base=>{
+  const booked=await req(base,'/v1/staging/rider/auto/book','rider','POST',{
+   requestKey,quoteId:fareQuote,accepted:true
+  });
+  assert.equal(booked.status,201,JSON.stringify(booked.body));
+  assert.equal(booked.body.tripId,ride);
+  const accepted=await req(base,acceptPath,'driver','POST',{offerId:offer,requestKey});
+  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+  assert.equal(m.state.trip.status,'accepted');
+  assert.equal(m.state.trip.revision,2);
+  assert.equal((await req(base,'/v1/staging/driver/trips/current','driver'))
+   .body.activeTrip.tripId,ride);
+  const sqlAfterAccept=m.state.rpcs.filter(r=>r.name==='mobility_stage_g205_accept_original_auto_qa');
+  assert.equal(sqlAfterAccept.length,1);
+  const beforeInvalid=m.state.rpcs.length;
+  const invalid=await req(base,transitionPath,'driver','POST',{
+   event:'cancel',eventKey:keys[0]
+  });
+  assert.equal(invalid.status,400,'invalid Driver transition cannot reach legacy SQL');
+  assert.equal(invalid.body.code,'G177_DRIVER_STEP_INVALID');
+  assert.equal(m.state.rpcs.length,beforeInvalid);
+  for(const [i,[event,status,revision]] of stages.entries()){
+   const command={event,eventKey:keys[i]};
+   const foreign=await req(base,transitionPath,'rider','POST',command);
+   assert.equal(foreign.status,401);
+   const response=await req(base,transitionPath,'driver','POST',command);
+   assert.equal(response.status,200,JSON.stringify(response.body));
+   assert.equal(response.body.tripId,ride);
+   assert.equal(response.body.event,event);
+   assert.equal(response.body.eventId,keys[i]);
+   assert.equal(response.body.serverPersisted,true);
+   assert.equal(m.state.trip.status,status);
+   assert.equal(m.state.trip.revision,revision);
+   const d=await req(base,'/v1/staging/driver/trips/'+ride+'/status','driver');
+   assert.equal(d.status,200,JSON.stringify(d.body));
+   assert.equal(d.body.tripId,ride);
+   assert.equal(d.body.revision,revision);
+   assert.equal(d.body.state,status);
+   const b=await req(base,statusPath,'rider');
+   assert.equal(b.status,200,JSON.stringify(b.body));
+   assert.equal(b.body.tripId,ride);
+   assert.equal(b.body.revision,revision);
+   const replay=await req(base,transitionPath,'driver','POST',command);
+   assert.equal(replay.status,200,'same transition key remains idempotent');
+   assert.equal(replay.body.eventId,keys[i]);
+   assert.equal(m.state.trip.revision,revision,'replay cannot duplicate lifecycle');
+  }
+  assert.equal((await req(base,'/v1/staging/driver/trips/current','driver'))
+   .body.activeTrip,null,'completed trip cannot be resumed as active');
+  assert.equal(m.state.g210Events.size,3);
+  m.state.adminReceipt={...adminF1Receipt(),revision:5,
+   status:'completed',assignmentPersisted:true,driverId:null};
+  m.state.autoTraceReceipt={...g144BaseTrace('AUTO_RIDE'),
+   status:'completed',revision:5,
+   assignment:{state:'COMPLETED_QA',legalGate:'EXTERNAL_NOT_CERTIFIED'},
+   events:keys.map((eventId,i)=>({eventId,serviceId:ride,
+    sequence:i+2,status:['arriving','in_progress','completed'][i],at:now-1000})),
+   ledger:null};
+  const adminView=await req(base,g144AutoPath,'stranger');
+  assert.equal(adminView.status,200,JSON.stringify(adminView.body));
+  assert.equal(adminView.body.serviceId,ride);
+  assert.equal(adminView.body.bookingRequestKey,requestKey);
+  assert.equal(adminView.body.revision,5);
+  assert.equal(adminView.body.status,'completed');
+  assert.equal(adminView.body.productionEnabled,false);
+  assert.equal(m.state.rpcs.filter(r=>r.name==='mobility_stage_g205_accept_original_auto_qa').length,1);
+  assert.equal(m.state.rpcs.filter(r=>r.name==='mobility_stage_g177_driver_auto_step_qa').length,6);
+ });
+});
+
 test('G176 denies legacy courier pickup/deliver/return and retains original sender read',async()=>{
  const m=mockSupabase(),runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  await http(runtime,async base=>{
