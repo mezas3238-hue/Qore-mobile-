@@ -70,7 +70,7 @@ function validated(d,kind,id,subject,t){
   ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)!==
     (d.assignment.legalGate==='EXTERNAL_NOT_CERTIFIED'))
   ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)&&(
-    kind!=='AUTO_RIDE'||
+    !['AUTO_RIDE','MOTO_RIDE'].includes(kind)||
     (d.assignment.state==='QA_ACCEPTED'&&
      !['assigned','arriving','in_progress'].includes(d.status))||
     (d.assignment.state==='QA_COMPLETED'&&d.status!=='completed')))
@@ -93,7 +93,7 @@ function validated(d,kind,id,subject,t){
   ids.add(event.eventId);last=event.sequence;at=event.at;
  }
  if(d.events[d.events.length-1].status!==d.status)return false;
- if(kind==='AUTO_RIDE'&&
+ if(['AUTO_RIDE','MOTO_RIDE'].includes(kind)&&
   ['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)){
   const expected={assigned:2,arriving:3,in_progress:4,completed:5}[d.status];
   const timeline=['searching','assigned','arriving','in_progress','completed'];
