@@ -58,10 +58,22 @@ function validated(d,kind,id,subject,t){
   ||!safeInt(d.observedAt)||d.observedAt>t||t-d.observedAt>30000
   ||!safeInt(d.expiresAt)||d.expiresAt<=t||d.expiresAt>t+60000
   ||d.serverPersisted!==true||!exact(d.assignment,ASSIGN)
-  ||!['NOT_ASSIGNABLE','UNASSIGNED','ASSIGNED','CLOSED'].includes(d.assignment.state)
-  ||!['G38_BLOCKED','G71_BLOCKED','UNVERIFIED','CLEARED'].includes(d.assignment.legalGate)
-  ||(d.assignment.legalGate!=='CLEARED'&&d.assignment.state!=='NOT_ASSIGNABLE')
+  ||!['NOT_ASSIGNABLE','UNASSIGNED','ASSIGNED','CLOSED',
+   'QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)
+  ||!['G38_BLOCKED','G71_BLOCKED','UNVERIFIED','CLEARED',
+   'EXTERNAL_NOT_CERTIFIED'].includes(d.assignment.legalGate)
+  ||(d.assignment.legalGate!=='CLEARED'&&d.assignment.state!=='NOT_ASSIGNABLE'
+   &&!['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state))
   ||(d.assignment.state==='ASSIGNED'&&d.assignment.legalGate!=='CLEARED')
+  // A source-attested QA assignment is never a legal permit, a payment,
+  // or an assignment for MOTO/courier/commerce.
+  ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)!==
+    (d.assignment.legalGate==='EXTERNAL_NOT_CERTIFIED'))
+  ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)&&(
+    kind!=='AUTO_RIDE'||
+    (d.assignment.state==='QA_ACCEPTED'&&
+     !['assigned','arriving','in_progress'].includes(d.status))||
+    (d.assignment.state==='QA_COMPLETED'&&d.status!=='completed')))
   ||!Array.isArray(d.events)||d.events.length<1||d.events.length>40
   ||(kind==='COMMERCE'&&(
     !['requested','confirmed','preparing','ready','cancelled'].includes(d.status)
@@ -81,6 +93,15 @@ function validated(d,kind,id,subject,t){
   ids.add(event.eventId);last=event.sequence;at=event.at;
  }
  if(d.events[d.events.length-1].status!==d.status)return false;
+ if(kind==='AUTO_RIDE'&&
+  ['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)){
+  const expected={assigned:2,arriving:3,in_progress:4,completed:5}[d.status];
+  const timeline=['searching','assigned','arriving','in_progress','completed'];
+  if(!expected||d.revision!==expected||d.events.length!==expected||
+   d.events.some((event,index)=>event.sequence!==index+1||
+    event.status!==timeline[index]))return false;
+ }
+
  if(kind==='COMMERCE'&&d.events.some((e,i)=>
   e.sequence!==i+1||
   e.status!==(d.status==='cancelled'&&i===d.revision-1
