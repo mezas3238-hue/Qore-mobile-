@@ -2046,7 +2046,9 @@ test('G177 verified original Driver SQL steps preserve ordered AUTO trip and ide
    assert.equal(res.body.event,event);
    assert.equal(res.body.serverPersisted,true);
    assert.equal(res.body.commercialRidesEnabled,false);
-   assert.equal(res.body.productionEnabled,false);
+   assert.deepEqual(Object.keys(res.body).sort(),
+    ['mode','commercialRidesEnabled','tripId','event','eventId','serverPersisted'].sort(),
+    'G177 must preserve the exact native G65 lifecycle receipt');
    assert.equal(m.state.trip.status,status);
    const repeat=await req(base,transitionPath,'driver','POST',{event,eventKey});
    assert.equal(repeat.status,200);
