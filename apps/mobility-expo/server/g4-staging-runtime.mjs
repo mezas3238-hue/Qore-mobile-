@@ -60,6 +60,8 @@ import {createDriverKycReadinessGateway} from './g20-driver-kyc-readiness-gatewa
 import {createDriverKycExpiryStatusQa} from './driver-kyc-expiry-status-qa.mjs';
 import {createG65PrivateDriverTripStatusQa} from './g65-driver-trip-status-qa.mjs';
 import {createG65DriverTripStatusRepository} from './g65-driver-trip-status-repository.mjs';
+import {createG106PrivateDriverCurrentTripQa} from './g106-driver-current-trip-qa.mjs';
+import {createG106DriverCurrentTripRepository} from './g106-driver-current-trip-repository.mjs';
 import {createG64PrivateDriverDecisionReconcileQa} from './g64-driver-offer-reconcile-qa.mjs';
 import {createG66CourierCustodyRepository} from './g66-courier-custody-repository.mjs';
 import {createG66CourierCustodyStatusQa} from './g66-courier-custody-status-qa.mjs';
@@ -360,6 +362,7 @@ export async function prepareQoreG4StagingRuntime({
    },intervalMs:30000,maxJobs:5
   }):null;
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
+ const driverRecoveryPersistence=driverKycTrust===null?null:createG106DriverCurrentTripRepository({db:admin});
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
@@ -912,6 +915,25 @@ export async function prepareQoreG4StagingRuntime({
   allowRequest:({actorId})=>allowRequest({userId:actorId})
  });
 
+ // G106: app restart must recover only an original, server-assigned active
+ // AUTO trip. This independent Driver session/role cannot create assignment
+ // or loosen G38/G71 KYC; zero active rows are a valid empty result.
+ const driverCurrentTrip=driverKycTrust===null?null:createG106PrivateDriverCurrentTripQa({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,now,
+  verifyAccessToken:async token=>{
+   const u=await verified(token);
+   const a=await driverKycTrust.verifyDriverSession(token);
+   if(!a||u.id!==a.id||u.is_anonymous===true||a.is_anonymous!==false||
+      !(typeof u.email_confirmed_at==='string'||typeof u.phone_confirmed_at==='string'))
+    throw Error('G106 independent provider Driver identity mismatch');
+   return {id:a.id,sessionId:a.sessionId,tokenIatMs:a.tokenIatMs,
+    expiresAtMs:a.expiresAtMs,is_anonymous:a.is_anonymous};
+  },
+  verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p),
+  resolveExclusiveRole:id=>singleRole(admin,id),
+  loadCurrentAssignedTrip:p=>driverRecoveryPersistence.loadCurrentAssignedTrip(p),
+  allowRequest:({actorId})=>allowRequest({userId:actorId})
+ });
  // G64: immutable decision recovery requires owner-only SQL, distinct from
  // the Supabase service_role used by G4; no privileged RPC fallback exists.
  const driverDecisionRecovery=readDriverDecisionOwnerQa===null?null:
@@ -1031,7 +1053,8 @@ export async function prepareQoreG4StagingRuntime({
    driverDocumentHandler:guard(driverDocuments),
    driverEnrollmentHandler:guard(driverEnrollment),
    driverLicenseReadinessHandler:guard(driverKycReadiness),
-   ...(driverTripStatus===null?{}:{driverTripStatusHandler:guard(driverTripStatus)}),
+       ...(driverTripStatus===null?{}:{driverTripStatusHandler:guard(driverTripStatus)}),
+    ...(driverCurrentTrip===null?{}:{driverCurrentTripHandler:guard(driverCurrentTrip)}),
    ...(driverKycValidity===null?{}:{driverKycValidityHandler:guard(input=>{
     const bearer=typeof input?.headers?.authorization==='string'?
      /^Bearer ([A-Za-z0-9._~-]{20,7900})$/.exec(input.headers.authorization)?.[1]:null;
