@@ -5,9 +5,10 @@ import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
 import {createG197DriverPickupPreferencesHttp}
  from '../src/domain/g197-pickup-preferences-http.mjs';
 
-type Kind='RIDE'|'DELIVERY'|'MERCHANT_ORDER';
+type Kind='RIDE'|'MOTO_RIDE'|'DELIVERY'|'MERCHANT_ORDER';
 const SERVICES:{kind:Kind;label:string}[]=[
- {kind:'RIDE',label:'Recoger pasajeros'},
+ {kind:'RIDE',label:'Recoger pasajeros en AUTO'},
+ {kind:'MOTO_RIDE',label:'Recoger pasajeros en MOTO'},
  {kind:'DELIVERY',label:'Recoger envíos particulares'},
  {kind:'MERCHANT_ORDER',label:'Recoger pedidos de comercios'}
 ];
@@ -77,7 +78,7 @@ export default function DriverPickupDistance(){
    {SERVICES.map(item=><Action key={item.kind} secondary={kind!==item.kind}
     label={item.label+(kind===item.kind?' ✓':'')}
     onPress={()=>{setKind(item.kind);setDraft(saved[item.kind]?.maximumRoadMeters??5000);setNotice('');}}/>)}
-   <Text style={styles.small}>Se guarda una preferencia independiente para pasajeros, envíos y pedidos de comercios. El servicio MOTO pasajeros requiere su integración de despacho específica antes de aplicar esta política.</Text>
+   <Text style={styles.small}>Se guarda una preferencia independiente para pasajeros, envíos y pedidos de comercios. MOTO pasajeros aplica únicamente cuando el servidor comprueba la ruta por carretera y la habilitación municipal independiente.</Text>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Máximo de recogida</Text>
