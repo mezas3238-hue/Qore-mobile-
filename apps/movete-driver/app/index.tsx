@@ -4,6 +4,7 @@ import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
+import {useDriverMotoJourney} from '../src/DriverMotoJourneyProvider';
 import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
@@ -18,6 +19,7 @@ export default function DriverHome(){
  const [authMessage,setAuthMessage]=useState('');
  const [resuming,setResuming]=useState(false);
  const [resumeNotice,setResumeNotice]=useState('');
+ const [motoBookingKey,setMotoBookingKey]=useState('');
  const resumeLock=useRef(false);
  useEffect(()=>{
   let active=true;
@@ -29,7 +31,9 @@ export default function DriverHome(){
    }catch{if(active)setAuthenticated(false);}
   };
   void verify();
-  const unsubscribe=auth?.subscribe?.(()=>{void verify();});
+  const unsubscribe=auth?.subscribe?.(()=>{
+   setMotoBookingKey('');void verify();
+  });
   return ()=>{active=false;unsubscribe?.();};
  },[auth]);
  async function signIn(){
@@ -51,7 +55,7 @@ export default function DriverHome(){
  }
  async function signOut(){
   if(!auth||authBusy)return;
-  setAuthBusy(true);setPassword('');setAuthenticated(false);
+  setAuthBusy(true);setPassword('');setMotoBookingKey('');setAuthenticated(false);
   try{await auth.signOut();setAuthMessage('Sesión Driver cerrada.');}
   catch{setAuthMessage('Acceso oculto; no se confirmó revocación remota.');}
   finally{setAuthBusy(false);}
@@ -59,6 +63,7 @@ export default function DriverHome(){
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
  const currentTrip=useDriverCurrentTrip();
+ const moto=useDriverMotoJourney();
  const custody=useDriverCustody();
  const [resumingDelivery,setResumingDelivery]=useState(false);
  const [deliveryRecoveryMessage,setDeliveryRecoveryMessage]=useState('');
@@ -171,6 +176,23 @@ export default function DriverHome(){
    <Action label="Consultar mi asignación en el servidor" secondary
     disabled={!currentTrip.enabled||currentTrip.state.phase==='loading'}
     onPress={()=>{void currentTrip.refresh();}}/>
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>MOTO original · verificación de prueba</Text>
+   <Text style={styles.small}>Introducí exclusivamente el identificador de una reserva MOTO original ya autorizada por el backend. El código no demuestra asignación, no acepta una oferta y no evita los requisitos legales. PostgreSQL debe confirmar que sos su conductor.</Text>
+   <TextInput style={styles.field} value={motoBookingKey}
+    onChangeText={setMotoBookingKey} autoCapitalize="none"
+    autoCorrect={false} maxLength={36}
+    accessibilityLabel="Identificador de reserva MOTO original"
+    placeholder="UUID de reserva MOTO · solo QA"
+    editable={moto.enabled&&authenticated&&state.phase==='connected'}/>
+   <Action label="Verificar mi reserva MOTO en servidor" secondary
+    disabled={!moto.enabled||!authenticated||
+     state.phase!=='connected'||kyc.snapshot?.state!=='READY_QA'||
+     !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(motoBookingKey)}
+    onPress={()=>router.push({pathname:'/moto-viaje',
+     params:{bookingKey:motoBookingKey}})}/>
+   <Text style={styles.small}>Sin autorización municipal y evidencia real G71/G118 no existe aceptación comercial. La consulta no crea viajes ni envía operaciones automáticamente.</Text>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Recuperar mi envío asignado</Text>
