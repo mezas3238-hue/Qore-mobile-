@@ -49,6 +49,15 @@ jobs:
         run: |
           node --check src/domain/g192-receipt-key-journal.mjs
           node --test src/domain/g192-receipt-key-journal.test.mjs
+      - name: G198 Client lost-item private bounded HTTP contract
+        working-directory: apps/movete-cliente
+        run: |
+          node --check src/domain/g198-lost-items-http.mjs
+      - name: G197 Driver road pickup distance security regressions
+        working-directory: apps/movete-driver
+        run: |
+          node --check src/domain/g197-pickup-preferences-http.mjs
+          node --test src/domain/g197-pickup-preferences-http.test.mjs
       - name: Verify Driver application can typecheck in unified tree
         working-directory: apps/movete-driver
         run: |
