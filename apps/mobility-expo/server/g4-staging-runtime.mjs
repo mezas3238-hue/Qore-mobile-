@@ -1125,6 +1125,9 @@ export async function prepareQoreG4StagingRuntime({
     _delivery:p.deliveryId,_event_key:p.requestKey}),
    readSenderStatus:p=>readSql('mobility_stage_g187_sender_confirmation_status_qa',{
     _sender:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
+    _delivery:p.deliveryId}),
+   readRecipientStatus:p=>readSql('mobility_stage_g190_recipient_confirmation_status_qa',{
+    _recipient:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
     _delivery:p.deliveryId})
   });
  })();
