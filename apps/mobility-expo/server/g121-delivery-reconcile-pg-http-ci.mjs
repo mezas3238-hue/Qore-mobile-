@@ -204,9 +204,8 @@ async function main(){
      cReads++;assert.equal(opts.method,'GET');
      return fetch(url,opts);
     }
-   }),/not verified/);
-   assert(cReads===1||cReads===2,
-    'G66 permits one read-only retry after transport reset, never a POST');
+   }),/custody unavailable/);
+   assert.equal(cReads,1);
    assert.equal(psql("SELECT COUNT(*) FROM public.mobility_stage_deliveries "+
     "WHERE id='"+created.data.deliveryId+"' AND courier_id IS NOT NULL"),'0');
    console.log('G132 '+kind+' cross-app: B real G5 POST/G121 GET -> A original PostgreSQL deliveryId -> C real G66 refuses unassigned custody, exactly one durable row, no fake proof or delivery');
