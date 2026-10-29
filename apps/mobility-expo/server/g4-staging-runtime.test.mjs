@@ -205,7 +205,7 @@ function mockSupabase(){
     }
     if(name==='mobility_stage_g205_accept_original_auto_qa'){
      if(state.trip.status!=='searching'||params._driver!==driver||
-        params._offer!==offer||params._session!==driverSessionId||
+        params._offer!==offer||params._session!==vehicle||
         params._iat!==99000||state.offer.status!=='offered')
       return {error:{message:'Already decided'}};
      state.trip={...state.trip,status:'accepted',driver_id:driver,
@@ -369,7 +369,7 @@ test('real HTTP with independently revocable Driver IdP verifies server-derived 
   assert.deepEqual(m.state.rpcs,[{
    name:'mobility_stage_g205_accept_original_auto_qa',
    params:{_offer:offer,_driver:driver,_decision:requestKey,
-    _session:driverSessionId,_iat:99000}
+    _session:vehicle,_iat:99000}
   }]);
   // G1 profile table has no name/photo/rating: NEVER make up an identity.
   const after=await req(base,statusPath);
