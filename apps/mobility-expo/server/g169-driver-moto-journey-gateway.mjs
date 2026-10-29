@@ -71,7 +71,12 @@ export function createG169DriverMotoJourneyGateway({
   try{actor=await verifyAccessToken(token);}catch{return fail(401,'G169_UNVERIFIED_DRIVER');}
   if(!actor||!ID.test(actor.id??'')||!ID.test(actor.sessionId??'')||
    actor.is_anonymous!==false||!Number.isSafeInteger(actor.expiresAtMs)||
-   actor.expiresAtMs<=at)return fail(401,'G169_UNVERIFIED_DRIVER');
+   actor.expiresAtMs<=at||
+   // G213: a mutation needs independent provider token issuance time so
+   // PostgreSQL G42 can lock the same session through the SQL COMMIT.
+   (post&&(!Number.isSafeInteger(actor.tokenIatMs)||
+    actor.tokenIatMs<0||actor.tokenIatMs>at)))
+   return fail(401,'G169_UNVERIFIED_DRIVER');
   try{if(await verifySessionNotRevoked({userId:actor.id,
    sessionId:actor.sessionId,at})!==true)
     return fail(401,'G169_DRIVER_REVOKED');}
@@ -106,7 +111,8 @@ export function createG169DriverMotoJourneyGateway({
    return fail(409,'G169_STALE_OR_INVALID_MOTO_STEP');
   // A lost POST response is uncertain; only GET may recover. Never create
   // another command or replay a new key automatically.
-  try{await advanceMoto({driverId:actor.id,bookingKey:booking,
+  try{await advanceMoto({driverId:actor.id,sessionId:actor.sessionId,
+   tokenIatMs:actor.tokenIatMs,bookingKey:booking,
    expectedRevision:body.expectedRevision,nextState:body.nextState,
    commandKey:body.commandKey});}
   catch{return fail(503,'G169_COMMAND_UNKNOWN_READ_ORIGINAL_STATUS');}
