@@ -74,6 +74,7 @@ import {createG173MerchantVerifiedMutationGateway} from './g173-merchant-verifie
 import {createG45BuyerOrderReservationQa} from './g45-buyer-order-reservation-qa.mjs';
 import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs';
 import {createG175SovereignBuyerCommerceFence} from './g175-sovereign-buyer-commerce-fence.mjs';
+import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-custody-fence.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -1106,7 +1107,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
-   deliveryHandler:guard(deliveries),
+   deliveryHandler:guard(createG176VerifiedCourierCustodyFence({deliveryHandler:deliveries})),
    merchantHandler:guard(createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})),
    ...(buyerCommerce===null?{}:{commerceQaHandler:guard(buyerCommerce)}),
    financeHandler:guard(finance),
