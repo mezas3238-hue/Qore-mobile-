@@ -27,7 +27,9 @@ export default function DriverPickupDistance(){
   serverRoleVerified:yes(process.env.EXPO_PUBLIC_G197_DRIVER_ROLE_VERIFIED),
   roadEnforcementVerified:yes(process.env.EXPO_PUBLIC_G197_ROAD_ENFORCEMENT_VERIFIED),
   origin:process.env.EXPO_PUBLIC_QORE_STAGING_API_ORIGIN,
-  pinnedOrigin:process.env.EXPO_PUBLIC_QORE_STAGING_API_ORIGIN,
+  // A separately reviewed owner pin: using the same dynamic API origin as
+  // its own pin would not independently attest the destination host.
+  pinnedOrigin:process.env.EXPO_PUBLIC_QORE_STAGING_PINNED_ORIGIN,
   getSession:()=>auth?.getSession()??null
  }),[auth]);
  async function reload(){
