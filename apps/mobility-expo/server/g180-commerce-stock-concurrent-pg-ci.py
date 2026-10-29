@@ -8,6 +8,7 @@ Disposable GitHub CI database only. No remote DB access or deployment.
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 import json
 import os
 import time
@@ -119,11 +120,13 @@ def version_snapshot():
           WHERE branch_id=ANY(%s::uuid[])
         """,([branch(i) for i in range(BRANCH_COUNT)],)).fetchall())
 
-def reserve(i,versions):
+def reserve(i,versions,barriers=None):
     # One physical connection per competing request. All SQL commits are real.
     br=origin_branch_for_buyer(i)
     t=time.perf_counter()
     with db() as c:
+        if barriers is not None:
+            barriers[br].wait(timeout=12)
         try:
             receipt=q(c,"""
               SELECT public.mobility_stage_g45_reserve_order_qa(
@@ -188,8 +191,15 @@ def main():
     setup()
     versions=version_snapshot()
     started=time.perf_counter()
+    # 250 independent branch orders first, followed by 50 true two-session
+    # synchronized races on the last available item. The paired submissions
+    # avoid ThreadPool deadlocks and prevent a sequential 'race' from passing.
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
-        results=list(ex.map(lambda i:reserve(i,versions),range(BUYER_COUNT)))
+        solo=list(ex.map(lambda i:reserve(i,versions),range(250)))
+        barriers={i:Barrier(2) for i in range(250,300)}
+        pairs=[i for br in range(250,300) for i in (br,300+br-250)]
+        raced=list(ex.map(lambda i:reserve(i,versions,barriers),pairs))
+    results=solo+raced
     reserve_secs=round(time.perf_counter()-started,3)
     accepted=[x for x in results if x["outcome"]=="accepted"]
     denied=[x for x in results if x["outcome"]=="denied"]
@@ -269,6 +279,7 @@ def main():
          "independentBranches":BRANCH_COUNT,
          "concurrentPostgresClients":WORKERS,
          "simultaneousLastUnitCompetitions":RACE_BRANCHES,
+         "simultaneousRaceBarrier":"PAIRED_PG_SESSIONS",
          "accepted":totals["accepted"],
          "rejectedWithoutOverselling":totals["denied"],
          "vehicles":dict(modes),
