@@ -37,6 +37,10 @@ const enabled=env.VITE_G156_MERCHANT_PORTAL_ENABLED==='true'&&
  env.VITE_G156_PROVIDER_REVOCATION_VERIFIED==='true'&&
  origin!==null&&origin===backendOrigin(env.VITE_G156_MERCHANT_PINNED_ORIGIN)&&
  configuration.ok===true;
+const ratingEnabled=enabled&&
+ ['VITE_G155_OWNER_APPROVED','VITE_G155_BACKEND_CONTRACT_VERIFIED',
+  'VITE_G155_ORIGINAL_COMPLETION_VERIFIED','VITE_G155_EXTERNAL_RUNTIME_VERIFIED',
+  'VITE_G155_PROVIDER_REVOCATION_VERIFIED'].every(k=>env[k]==='true');
 const sdk=enabled&&configuration.ok===true?
  createClient(configuration.url,configuration.publishableKey,{
   auth:{persistSession:false,autoRefreshToken:false,
@@ -73,6 +77,9 @@ function MerchantApp(){
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState('');
  const pending=useRef<Map<string,string>>(new Map());
+ const reviewKeys=useRef<Map<string,{stars:number;key:string}>>(new Map());
+ const [reviewStars,setReviewStars]=useState<Record<string,number>>({});
+ const [reviewed,setReviewed]=useState<string[]>([]);
  const locked=useRef(false);
  const amount=useMemo(()=>new Intl.NumberFormat('es-PY'),[]);
  async function bearer(subject:string){
@@ -170,9 +177,60 @@ function MerchantApp(){
   }catch(e){setMessage(e instanceof Error?e.message:'Resultado desconocido. Reintentar con la misma clave.');}
   finally{locked.current=false;setBusy(false);}
  }
+ async function rateClient(order:Order){
+  if(!ratingEnabled||!identity||!origin||order.status!=='delivered'||
+   !UUID.test(order.orderId)||busy||locked.current||reviewed.includes(order.orderId))
+   return;
+  const selected=reviewStars[order.orderId]??5;
+  if(!Number.isSafeInteger(selected)||selected<1||selected>5)return;
+  locked.current=true;setBusy(true);setMessage('');
+  let saved=reviewKeys.current.get(order.orderId);
+  if(!saved){saved={stars:selected,key:crypto.randomUUID()};
+   reviewKeys.current.set(order.orderId,saved);}
+  try{
+   const token=await bearer(identity.subject);
+   const controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),8000);
+   try{
+    const response=await fetch(origin+'/v1/staging/reputation/ratings',{
+     method:'POST',credentials:'omit',redirect:'error',cache:'no-store',
+     referrerPolicy:'no-referrer',signal:controller.signal,
+     headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',
+      Accept:'application/json'},
+     body:JSON.stringify({requestKey:saved.key,serviceKind:'COMMERCE',
+      serviceId:order.orderId,ratedKind:'CLIENT',stars:saved.stars,incidentCode:null})
+    });
+    if(response.status===401||response.status===403)throw Error('Sesión no autorizada');
+    if(response.status===409)throw Error('Pedido no verificable o ya calificado');
+    if(response.status!==201||!response.ok||response.redirected)
+     throw Error('No hay confirmación. Reintentar solo con la misma clave');
+    const length=Number(response.headers.get('content-length')??0);
+    if(length>4096||!response.headers.get('content-type')?.startsWith('application/json'))
+     throw Error('Recibo no verificable');
+    const body=await response.text();
+    if(body.length>4096||controller.signal.aborted)throw Error('Recibo no verificable');
+    const receipt:unknown=JSON.parse(body);
+    if(!receipt||typeof receipt!=='object'||Array.isArray(receipt))
+     throw Error('Recibo mal formado');
+    const r=receipt as Record<string,unknown>;
+    if(Object.keys(r).length!==11||!UUID.test(String(r.ratingId))||
+     r.serviceKind!=='COMMERCE'||r.serviceId!==order.orderId||
+     r.ratedKind!=='CLIENT'||r.stars!==saved.stars||r.requestKey!==saved.key||
+     r.serverPersisted!==true||r.qaOnly!==true||r.productionEnabled!==false||
+     r.dispatchPriorityChanged!==false||r.automatedSuspension!==false)
+     throw Error('Recibo G155 no verificado');
+    await bearer(identity.subject);
+    reviewKeys.current.delete(order.orderId);
+    setReviewed(prev=>[...prev,order.orderId]);
+    setMessage('Calificación verificada del cliente. No aplica sanciones automáticas.');
+   }finally{clearTimeout(timeout);}
+  }catch(e){setMessage(e instanceof Error?e.message:'Resultado desconocido. Conservar clave.');}
+  finally{locked.current=false;setBusy(false);}
+ }
  async function logout(){
   if(sdk)await sdk.auth.signOut();
-  pending.current.clear();setIdentity(null);setOrders([]);setPassword('');
+  pending.current.clear();reviewKeys.current.clear();setReviewStars({});setReviewed([]);
+  setIdentity(null);setOrders([]);setPassword('');
   setMessage('Sesión cerrada.');
  }
  return <main style={{maxWidth:960,margin:'0 auto',padding:'28px 20px'}}>
@@ -194,7 +252,8 @@ function MerchantApp(){
   </form>:<section>
    <div style={{display:'flex',flexWrap:'wrap',gap:12,alignItems:'center'}}>
     <label>Comercio <select value={merchantId} onChange={e=>{
-     setMerchantId(e.target.value);setOrders([]);pending.current.clear();}}>
+     setMerchantId(e.target.value);setOrders([]);pending.current.clear();
+     reviewKeys.current.clear();setReviewStars({});setReviewed([]);}}>
      {identity.merchantIds.map(id=><option key={id} value={id}>{id}</option>)}
     </select></label>
     <button disabled={busy} onClick={()=>void load()}>Actualizar pedidos</button>
@@ -209,6 +268,19 @@ function MerchantApp(){
       {o.lineCount} líneas · {o.vehicleKind}</p>
      <p>Sucursal: {o.branchId} · Revisión: {o.revision}</p>
      <p>Envío: {o.deliveryId??'Aún no vinculado'}</p>
+     {o.status==='delivered'&&<div style={{marginTop:14}}>
+      <strong>Calificar al cliente de este pedido</strong>
+      {!ratingEnabled?<p>Calificaciones bloqueadas hasta autorización y certificación STAGING G155.</p>:
+       reviewed.includes(o.orderId)?<p>Valoración verificada.</p>:<>
+       <p>La entrega debe estar validada por el servidor. Nunca se suspende automáticamente a un cliente.</p>
+       <label>Estrellas <select disabled={busy||reviewKeys.current.has(o.orderId)}
+        value={reviewKeys.current.get(o.orderId)?.stars??reviewStars[o.orderId]??5}
+        onChange={e=>setReviewStars(v=>({...v,[o.orderId]:Number(e.target.value)}))}>
+        {[1,2,3,4,5].map(n=><option key={n} value={n}>{n} ★</option>)}
+       </select></label>
+       <button disabled={busy} onClick={()=>void rateClient(o)}>Enviar calificación verificada</button>
+       </>}
+     </div>}
      {transitions[o.status]&&<button disabled={busy} onClick={()=>
       void transition(o,transitions[o.status]!.event)}>
       {transitions[o.status]!.label}</button>}
