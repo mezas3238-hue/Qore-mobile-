@@ -62,13 +62,13 @@ def setup():
         guard(c)
         # Real Auth rows, app roles, G42 provider grants, and a server-reviewed
         # synthetic G6 merchant. Never spoof participant legal credentials.
-        c.executemany("INSERT INTO auth.users(id) VALUES(%s)",
+        c.cursor().executemany("INSERT INTO auth.users(id) VALUES(%s)",
           [(u(i),) for i in (1,2)]+[(buyer(i),) for i in range(BUYER_COUNT)])
-        c.executemany("""
+        c.cursor().executemany("""
           INSERT INTO public.user_roles(user_id,role)
           VALUES (%s,'passenger'::public.app_role) ON CONFLICT DO NOTHING
         """,[(buyer(i),) for i in range(BUYER_COUNT)])
-        c.executemany("""
+        c.cursor().executemany("""
           INSERT INTO public.mobility_stage_g42_provider_session_grants(
             user_id,session_id,provider_confirmed_at,token_allowed_from,
             valid_until,evidence_kind)
@@ -77,7 +77,7 @@ def setup():
             clock_timestamp()+interval '1 hour',
             'QA_SYNTHETIC_PROVIDER_SESSION_ONLY')
         """,[(buyer(i),session(i)) for i in range(BUYER_COUNT)])
-        c.executemany("""
+        c.cursor().executemany("""
           INSERT INTO public.mobility_stage_g31_zone_coverage(
             zone_id,municipality,service_kind,coverage_status)
           VALUES(%s,'Asuncion',%s,'ACTIVE')
@@ -89,20 +89,20 @@ def setup():
           VALUES(%s,%s,%s,'SUPERMARKET','QA_COMMERCE_LOAD',
            'approved',%s,clock_timestamp())
         """,(SHOP,u(7),OWNER,REVIEWER))
-        c.executemany("""
+        c.cursor().executemany("""
           INSERT INTO public.mobility_stage_merchant_branches(
            id,merchant_id,branch_tag,pickup_tag,
            preparation_minutes,active,accepting_orders)
           VALUES(%s,%s,%s,'QA_PICKUP',10,true,true)
         """,[(branch(i),SHOP,"LOAD_"+word(i)) for i in range(BRANCH_COUNT)])
-        c.executemany("""
+        c.cursor().executemany("""
           INSERT INTO public.mobility_stage_g44_branch_geography(
             branch_id,zone_id,service_kind)
           VALUES(%s,%s,%s)
         """,[(branch(i),ZONE_AUTO if i%2==0 else ZONE_MOTO,
                "AUTO_DELIVERY" if i%2==0 else "MOTO_DELIVERY")
                for i in range(BRANCH_COUNT)])
-        c.executemany("""
+        c.cursor().executemany("""
           INSERT INTO public.mobility_stage_catalog_items(
            id,branch_id,sku,item_tag,item_class,
            unit_price_pyg,unit_grams,stock_units)
