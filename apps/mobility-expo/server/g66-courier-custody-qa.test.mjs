@@ -84,8 +84,8 @@ test('G66 proof gate allows pickup without proof, deliver only with registry ver
  const x=fixture();
  assert.equal((await x.transition(post())).status,200);
  assert.equal(x.calls.verified.length,0);
- assert.deepEqual(x.calls.transition,[{actorId:driver,
-  deliveryId:delivery,event:'pickup',eventKey}]);
+ assert.deepEqual(x.calls.transition,[{actorId:driver,sessionId:session,
+  tokenIatMs:at-5000,deliveryId:delivery,event:'pickup',eventKey}]);
  const delivered=await x.transition(post('deliver',{
   event:'deliver',eventKey,proofRef:proof
  }));
@@ -94,8 +94,8 @@ test('G66 proof gate allows pickup without proof, deliver only with registry ver
  assert.equal(delivered.body.retrySafe,false);
  assert.deepEqual(x.calls.verified,[{actorId:driver,
   deliveryId:delivery,proofRef:proof,action:'deliver'}]);
- assert.deepEqual(x.calls.transition[1],{actorId:driver,
-  deliveryId:delivery,event:'deliver',eventKey,proofRef:proof});
+ assert.deepEqual(x.calls.transition[1],{actorId:driver,sessionId:session,
+  tokenIatMs:at-5000,deliveryId:delivery,event:'deliver',eventKey,proofRef:proof});
  const rejected=createG66CourierCustodyTransitionQa({
   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
   now:()=>at,verifyAccessToken:async()=>auth,
