@@ -22,7 +22,7 @@ const bind=()=>({subject:sender,kind:'bind',deliveryId:original,
 const confirm=()=>({subject:recipient,kind:'confirm',deliveryId:original,
  requestKey:recipientKey});
 const senderProof=()=>({mode:'STAGING_DEMO_ONLY',deliveryId:original,
- ownerId:sender,recipientBound:true,paymentAuthorized:false,
+ ownerId:sender,recipientBound:true,bindingKey:key,paymentAuthorized:false,
  qaOnly:true,productionEnabled:false});
 const recipientProof=()=>({mode:'STAGING_DEMO_ONLY',deliveryId:original,
  recipientConfirmed:true,confirmationId:recipientKey,
@@ -82,6 +82,8 @@ test('G192 sender release needs independently verified original delivery read',a
   ...senderProof(),ownerId:recipient}}),/G192_VERIFIED_SERVER_GET_REQUIRED/);
  await assert.rejects(j.clearVerified({...args,verifiedServerReceipt:{
   ...senderProof(),recipientBound:false}}),/G192_VERIFIED_SERVER_GET_REQUIRED/);
+ await assert.rejects(j.clearVerified({...args,verifiedServerReceipt:{
+  ...senderProof(),bindingKey:recipientKey}}),/G192_VERIFIED_SERVER_GET_REQUIRED/);
  assert.equal(await j.clearVerified({...args,verifiedServerReceipt:senderProof()}),true);
  assert.equal(await j.read(sender,'bind'),null);
 });
