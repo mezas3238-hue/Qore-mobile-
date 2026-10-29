@@ -97,6 +97,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G197_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G199_*'
+      - 'apps/mobility-expo/server/g199-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G198_*'
       - 'apps/mobility-expo/server/g197-*'
       - 'apps/mobility-expo/server/g198-*'
@@ -914,6 +916,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_POSTGRES_CI_ONLY.sql
       - name: G118 assert private booking, unmintable municipal gate and durable MOTO Driver state
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G199 install MOTO passenger pickup road distance preference and original G118 offer guard
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G199_MOTO_PASSENGER_PICKUP_ROAD_ENFORCEMENT_POSTGRES_CI_ONLY.sql
+      - name: G199 verify real PostgreSQL MOTO road cap, legal fence separation and revoked Driver
+        run: python3 apps/mobility-expo/server/g199-moto-pickup-distance-pg-ci.py
       - name: G169 install Driver-owned original MOTO read without Passenger PII
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G169_DRIVER_MOTO_OWNER_READ_POSTGRES_CI_ONLY.sql
       - name: G119 authenticated Rider MOTO HTTP status across real PostgreSQL lifecycle
