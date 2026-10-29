@@ -66,6 +66,7 @@ import {createG66CourierCustodyTransitionQa} from './g66-courier-custody-transit
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mjs';
 import {createG156MerchantInboxGateway} from './g156-merchant-inbox-gateway.mjs';
+import {createG158AdminFraudQaGateway} from './g158-admin-fraud-qa-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -710,6 +711,30 @@ export async function prepareQoreG4StagingRuntime({
   verifyBackofficeMfa:p=>adminF1Trust.verifyBackofficeMfa(p),
   allowRequest,now
  };
+ // G158 verified allegations are read-only until a separately authorized
+ // human investigation. G27 and provider AAL2 must both grant access.
+ const adminFraud=verifiedAdminTrust===null?null:createG158AdminFraudQaGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  ...verifiedAdminTrust,
+  authorizePermission:async({userId,scope})=>{
+   if(!UUID.test(userId)||scope!=='admin.incidents.read')
+    throw Error('G158 private scope required');
+   const {data,error}=await admin.rpc('mobility_stage_g27_backoffice_has_scope',{
+    _user:userId,_scope:scope
+   });
+   if(error||typeof data!=='boolean')throw Error('G158 role scope unavailable');
+   return data;
+  },
+  loadFraudReviewQueue:async({actorId,limit})=>{
+   if(!UUID.test(actorId)||limit!==50)throw Error('G158 bounded Admin request required');
+   const {data,error}=await admin.rpc('mobility_stage_g157_admin_review_queue_qa',{
+    _admin:actorId,_limit:limit
+   });
+   if(error||!data||typeof data!=='object'||Array.isArray(data))
+    throw Error('G158 original G157 SQL unavailable');
+   return data;
+  }
+ });
  const adminF1=verifiedAdminTrust===null?null:createG75AdminF1AuditGateway({
   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
   projectRef:ref,...verifiedAdminTrust,
@@ -960,7 +985,8 @@ export async function prepareQoreG4StagingRuntime({
    ...(driverDecisionRecovery===null?{}:{driverDecisionRecoveryHandler:guard(driverDecisionRecovery)}),
    tripCommandHandler:guard(commands),
    f1AutoHandler:guard(f1Auto),motoHandler:guard(f1Moto),
-   ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
+       ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
+    ...(adminFraud===null?{}:{adminFraudHandler:guard(adminFraud)}),
    ...(adminAutoTrace===null?{}:{adminServiceTraceHandler:guard(adminAutoTrace)}),
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
