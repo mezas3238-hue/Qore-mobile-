@@ -87,6 +87,8 @@ jobs:
           node --test apps/mobility-expo/server/g198-lost-items-gateway.test.mjs
           node --check apps/mobility-expo/server/g200-moto-lost-items-gateway.mjs
           node --test apps/mobility-expo/server/g200-moto-lost-items-gateway.test.mjs
+          node --check apps/mobility-expo/server/g201-five-journey-runtime-bridges.mjs
+          node --test apps/mobility-expo/server/g201-five-journey-runtime-bridges.test.mjs
           echo "The G4 PostgreSQL workflow validates real same-tree HTTP + PG persistence."
       - name: Do not misrepresent compilation as production GO
         run: |
