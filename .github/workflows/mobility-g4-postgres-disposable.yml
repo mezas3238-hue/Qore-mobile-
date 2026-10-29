@@ -106,6 +106,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G199_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G200_*'
       - 'apps/mobility-expo/server/g200-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G212_*'
+      - 'apps/mobility-expo/server/g212-*'
       - 'apps/mobility-expo/server/g202-*'
       - 'apps/mobility-expo/server/g201-*'
       - 'apps/mobility-expo/server/g199-*'
@@ -980,6 +982,10 @@ jobs:
         run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs
       - name: G202 audit five original Cliente -> Driver or Comercio -> Admin sources in ONE PostgreSQL16
         run: node apps/mobility-expo/server/g202-five-original-service-journeys-pg-ci.mjs
+      - name: G212 install original AUTO MOTO COMMERCE courier G42 G10 G122 custody RPC
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G212_ORIGINAL_G42_COURIER_CUSTODY_POSTGRES_CI_ONLY.sql
+      - name: G212 verify original G5 G10 G122 courier pickup, replay, role, revocation and denied direct app execution
+        run: python3 apps/mobility-expo/server/g212-courier-g42-atomic-pg-ci.py
       - name: G202 publish verified five-service evidence and missing commercial gates
         uses: actions/upload-artifact@v4
         with:
