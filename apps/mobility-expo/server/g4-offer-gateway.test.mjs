@@ -244,3 +244,42 @@ test('G179 expires a Driver session between SQL completion and private receipt',
  assert.equal(committed,1);
  assert.doesNotMatch(JSON.stringify(result),new RegExp(event));
 });
+
+test('G205 accepts only source-attested G42 session for a new G73 booked AUTO offer',async()=>{
+ const sessionId='20500000-0000-4205-8205-000000000020';
+ const attested={...confirmed,sessionId,tokenIatMs:90000,expiresAtMs:200000};
+ const guard={
+  requireFreshSession:true,requireOriginalBookingAcceptance:true,
+  verifyAccessToken:async()=>attested,
+  verifySessionNotRevoked:async()=>true
+ };
+ const {gateway,observed}=fixture(guard);
+ const result=await gateway(req('POST',acceptPath,{offerId:offer,requestKey}));
+ assert.equal(result.status,200);
+ assert.equal(result.body.eventId,event);
+ assert.deepEqual(observed.accept,{
+  _offer_id:offer,_driver_id:driver,_decision_key:requestKey,
+  _session:sessionId,_iat:90000
+ });
+ // Declining remains the original idempotent private offer command;
+ // a lifecycle transaction is required for acceptance, not decline.
+ const decline=await gateway(req('POST',declinePath,{offerId:offer,requestKey}));
+ assert.equal(decline.status,200);
+ assert.deepEqual(observed.decline,{
+  _offer_id:offer,_driver_id:driver,_decision_key:requestKey
+ });
+ for(const bad of [
+  {...attested,tokenIatMs:undefined},
+  {...attested,tokenIatMs:100001},
+  {...attested,sessionId:'unverified'},
+ ]){
+  let writes=0;
+  const rejected=fixture({...guard,verifyAccessToken:async()=>bad,
+   acceptOffer:async()=>{writes++;return event}});
+  assert.equal((await rejected.gateway(req('POST',acceptPath,{offerId:offer,requestKey}))).status,401);
+  assert.equal(writes,0,'invalid G42 attestation cannot invoke SQL');
+ }
+ assert.throws(()=>fixture({
+  requireOriginalBookingAcceptance:true,requireFreshSession:false
+ }),/G205/);
+});
