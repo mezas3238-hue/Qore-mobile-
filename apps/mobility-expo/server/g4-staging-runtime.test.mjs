@@ -556,9 +556,14 @@ test('G210 original G73 AUTO accepted through G205 advances G177 same trip on HT
    status:'completed',assignmentPersisted:true,driverId:null};
   m.state.autoTraceReceipt={...g144BaseTrace('AUTO_RIDE'),
    status:'completed',revision:5,
-   assignment:{state:'COMPLETED_QA',legalGate:'EXTERNAL_NOT_CERTIFIED'},
-   events:keys.map((eventId,i)=>({eventId,serviceId:ride,
-    sequence:i+2,status:['arriving','in_progress','completed'][i],at:now-1000})),
+   assignment:{state:'QA_COMPLETED',legalGate:'EXTERNAL_NOT_CERTIFIED'},
+   events:[
+    {eventId:ride,serviceId:ride,sequence:1,status:'searching',at:now-5000},
+    {eventId:requestKey,serviceId:ride,sequence:2,status:'assigned',at:now-4000},
+    ...keys.map((eventId,i)=>({eventId,serviceId:ride,
+     sequence:i+3,status:['arriving','in_progress','completed'][i],
+     at:now-3000+i*1000}))
+   ],
    ledger:null};
   const adminView=await req(base,g144AutoPath,'stranger');
   assert.equal(adminView.status,200,JSON.stringify(adminView.body));
