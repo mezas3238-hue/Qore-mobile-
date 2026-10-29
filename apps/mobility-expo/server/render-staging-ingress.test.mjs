@@ -232,11 +232,12 @@ test('G193 bounded Render ingress refuses a streaming 64KB G4 response before bu
   assert(!JSON.stringify(dto).includes(token));
  }finally{await new Promise(done=>server.close(done));}
 });
-test('G193 max 64 upstream operations, reject excess; no leaked active slot after completion',async()=>{
+test('G194 configurable 64-read test budget rejects overload and frees slots',async()=>{
  const pending=[];
  let signalCount=0;
  const server=createRenderStagingIngress({
   loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,now:()=>100000,
+  maxConcurrentReads:64,
   request:async(_url,opts)=>new Promise(resolve=>{
    signalCount++;pending.push({resolve,signal:opts.signal});
   })
@@ -266,6 +267,77 @@ test('G193 max 64 upstream operations, reject excess; no leaked active slot afte
   pending.forEach(({resolve})=>resolve(new Response('{"error":"shutdown"}',{status:503})));
   await new Promise(done=>server.close(done));
  }
+});
+
+test('G194 removes the 64-total ceiling: 80 GETs and 32 POSTs overlap without rejection',async()=>{
+ const pending=[];
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  request:async(_url,opts)=>new Promise(resolve=>{
+   pending.push({resolve,method:opts.method});
+  })
+ });
+ const remote=await listening(server);
+ const unique=i=>'Bearer '+'g194_unique_credential_'.padEnd(30,'x')+String(i);
+ try{
+  const reads=Array.from({length:80},(_,i)=>doReq(remote,
+   '/v1/staging/rider/history',{authorization:unique(i)}));
+  const until=Date.now()+10000;
+  while(pending.length<80&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(pending.length,80,'GET lane admits more than old total 64');
+  const posts=Array.from({length:32},(_,i)=>doReq(remote,
+   '/v1/staging/rider/auto/prequote',{method:'POST',
+    authorization:unique(100+i),headers:{'content-type':'application/json'},
+    body:JSON.stringify({originalRequestKey:'g194-qa-only-'+i})}));
+  while(pending.length<112&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(pending.length,112,'writes not starved by active reads');
+  assert.equal(pending.filter(x=>x.method==='POST').length,32);
+  pending.forEach(x=>x.resolve(new Response('{"qaOnly":true}',{status:200})));
+  for(const response of await Promise.all([...reads,...posts])){
+   assert.equal(response.status,200);
+   assert.equal((await response.json()).qaOnly,true);
+  }
+ }finally{
+  pending.forEach(x=>x.resolve(new Response('{"qaOnly":true}',{status:503})));
+  await new Promise(done=>server.close(done));
+ }
+});
+test('G194 identity capacity serves known owners while full; new users allowed after expiry',async()=>{
+ let clock=100000;
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  maxIdentityBuckets:3,now:()=>clock,
+  request:async()=>new Response('{"qaOnly":true}',{status:200})
+ });
+ const remote=await listening(server);
+ const key=i=>'Bearer '+'auth_scope_'.padEnd(30,'q')+i;
+ try{
+  for(let i=0;i<3;i++)
+   assert.equal((await doReq(remote,'/v1/staging/rider/history',
+    {authorization:key(i)})).status,200);
+  const fourth=await doReq(remote,'/v1/staging/rider/history',
+   {authorization:key(3)});
+  assert.equal(fourth.status,503);
+  assert.equal(fourth.headers.get('retry-after'),'1');
+  assert.equal((await doReq(remote,'/v1/staging/rider/history',
+   {authorization:key(0)})).status,200,
+   'full identity map must NOT lock out already admitted owner');
+  clock+=60001;
+  assert.equal((await doReq(remote,'/v1/staging/rider/history',
+   {authorization:key(3)})).status,200,
+   'expired identities are evicted at the insertion-order head');
+ }finally{await new Promise(done=>server.close(done));}
+});
+test('G194 rejects dangerous per-instance budgets rather than promising unlimited capacity',()=>{
+ const original={loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host};
+ for(const override of [
+  {maxConcurrentReads:0},{maxConcurrentReads:2049},
+  {maxConcurrentWrites:0},{maxConcurrentWrites:1025},
+  {maxIdentityBuckets:0},{maxIdentityBuckets:65537},
+  {maxConcurrentReads:'unlimited'},{maxConcurrentWrites:Infinity}
+ ])assert.throws(()=>createRenderStagingIngress({...original,...override}));
 });
 
 test('G193 Render Blueprint pins approved GitHub integration, STAGING only, zero auto deployments',()=>{
