@@ -43,7 +43,7 @@ with db() as c:
  'QA_SYNTHETIC_PROVIDER_SESSION_ONLY')""",(who,sid))
  opened=c.execute(OPEN,(P,S,AT,ride[0])).fetchone()[0]
  case=opened['caseId']
- assert opened['tripId']==ride[0]
+ assert opened['tripId']==str(ride[0])
  assert c.execute(OPEN,(P,S,AT,ride[0])).fetchone()[0]['caseId']==case
  denied(c,'P2003',OPEN,D,T,AT,ride[0])
  inbox=c.execute(INBOX,(D,T,AT)).fetchone()[0]
