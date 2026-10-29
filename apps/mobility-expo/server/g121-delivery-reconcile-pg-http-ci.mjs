@@ -204,7 +204,7 @@ async function main(){
      cReads++;assert.equal(opts.method,'GET');
      return fetch(url,opts);
     }
-   }),/not verified/);
+   }),/custody unavailable/);
    assert.equal(cReads,1);
    assert.equal(psql("SELECT COUNT(*) FROM public.mobility_stage_deliveries "+
     "WHERE id='"+created.data.deliveryId+"' AND courier_id IS NOT NULL"),'0');
