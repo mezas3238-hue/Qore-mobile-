@@ -91,6 +91,13 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G126_*'
       - 'apps/mobility-expo/server/g125-*'
       - 'apps/mobility-expo/server/g124-*'
+      - 'apps/mobility-expo/server/g66-*'
+      - 'apps/mobility-expo/server/g67-*'
+      - 'apps/mobility-expo/server/g187-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/movete-cliente/src/domain/g187-recipient-http-gateway*'
+      - 'apps/movete-cliente/app/confirmacion-entrega.tsx'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
   pull_request:
     paths:
