@@ -71,6 +71,12 @@ jobs:
           npm run typecheck
           node --test src/domain/driver-document-upload.test.mjs src/domain/driver-document-recovery.test.mjs
           node --test src/domain/driver-bounded-qa-get.test.mjs src/domain/driver-documents.test.mjs src/domain/driver-license-readiness.test.mjs
+      - name: G204 native MOTO current recovery and original G169 journey contracts
+        working-directory: apps/movete-driver
+        run: |
+          node --test src/domain/driver-moto-journey.test.mjs src/domain/driver-moto-current-resume.test.mjs
+          node --check src/domain/driver-moto-journey-http.mjs
+          node --check src/domain/driver-moto-current-resume.mjs
       - name: Verify Owner Admin web bundles from the same code revision
         working-directory: apps/movete-admin
         run: |
