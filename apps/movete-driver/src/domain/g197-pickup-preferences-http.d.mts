@@ -1,4 +1,4 @@
-export type G197Service='RIDE'|'DELIVERY'|'MERCHANT_ORDER';
+export type G197Service='RIDE'|'MOTO_RIDE'|'DELIVERY'|'MERCHANT_ORDER';
 export type G197Preference={serviceKind:G197Service;maximumRoadMeters:number;revision:number};
 export type G197Response={ok:boolean;code?:string;data?:{
  preferences?:G197Preference[];driverId:string;serviceKind?:G197Service;
