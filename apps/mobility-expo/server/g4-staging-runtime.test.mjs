@@ -203,9 +203,10 @@ function mockSupabase(){
      if(params._passenger_id!==passenger)return {error:{message:'Wrong passenger'}};
      return {data:ride,error:null};
     }
-    if(name==='mobility_stage_auto_demo_accept_offer'){
-     if(state.trip.status!=='searching'||params._driver_id!==driver||
-        params._offer_id!==offer||state.offer.status!=='offered')
+    if(name==='mobility_stage_g205_accept_original_auto_qa'){
+     if(state.trip.status!=='searching'||params._driver!==driver||
+        params._offer!==offer||params._session!==driverSessionId||
+        params._iat!==99000||state.offer.status!=='offered')
       return {error:{message:'Already decided'}};
      state.trip={...state.trip,status:'accepted',driver_id:driver,
       vehicle_id:vehicle,revision:2};
@@ -366,8 +367,9 @@ test('real HTTP with independently revocable Driver IdP verifies server-derived 
   assert.equal(accepted.status,200);
   assert.equal(accepted.body.passengerEventDelivered,false);
   assert.deepEqual(m.state.rpcs,[{
-   name:'mobility_stage_auto_demo_accept_offer',
-   params:{_offer_id:offer,_driver_id:driver,_decision_key:requestKey}
+   name:'mobility_stage_g205_accept_original_auto_qa',
+   params:{_offer:offer,_driver:driver,_decision:requestKey,
+    _session:driverSessionId,_iat:99000}
   }]);
   // G1 profile table has no name/photo/rating: NEVER make up an identity.
   const after=await req(base,statusPath);
@@ -396,7 +398,7 @@ test('G180 unprovisioned revocable Driver IdP blocks all private offer/inbox/acc
   assert.equal((await req(base,acceptPath,'driver','POST',
    {offerId:offer,requestKey})).status,401);
   assert.equal(m.state.rpcs.filter(x=>
-   x.name==='mobility_stage_auto_demo_accept_offer'||
+   x.name==='mobility_stage_g205_accept_original_auto_qa'||
    x.name==='mobility_stage_g16_driver_private_inbox_qa').length,0);
   assert.equal(m.state.trip.status,'searching');
  });
@@ -456,7 +458,7 @@ test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigne
    {event:'arrive',eventKey});
   assert.equal(arriving.status,401,'No independently revocable Driver IdP');
   assert.equal(m.state.trip.status,'searching');
-  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_accept_offer'),false);
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_g205_accept_original_auto_qa'),false);
   assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_transition'),false);
   const before=m.state.rpcs.length;
   assert.equal((await req(base,transitionPath,'rider','POST',
