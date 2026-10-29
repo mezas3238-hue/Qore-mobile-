@@ -54,6 +54,40 @@ export async function readDriverMotoJourney({
   return checked(result,bookingKey);
  }catch{throw Error('G188 original Driver MOTO status unavailable');}
 }
+/**
+ * G189 crash recovery. The backend selects the ONLY active MOTO for the
+ * authenticated Driver. The phone sends no booking key, offer or role.
+ * A null activeBooking is authoritative; never reuse a remembered trip.
+ */
+export async function readCurrentDriverMoto({
+ apiOrigin,approvedStagingHost=null,allowedByOwner=false,
+ accessToken,request=fetch,timeoutMs=8000
+}={}){
+ if(!TOKEN.test(accessToken??'')||typeof request!=='function')
+  throw Error('G189 verified Driver session required');
+ const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,
+  allowedByOwner});
+ let payload;
+ try{
+  payload=await readG178BoundedDriverLifecycleJson({
+   request,url:origin+'/v1/staging/driver/moto/current',timeoutMs,
+   options:{method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
+    referrerPolicy:'no-referrer',
+    headers:{authorization:'Bearer '+accessToken,accept:'application/json'}}
+  });
+ }catch{throw Error('G189 private current MOTO unavailable');}
+ if(!exact(payload,['mode','qaOnly','productionEnabled','activeBooking'])||
+  payload.mode!=='STAGING_DEMO_ONLY'||payload.qaOnly!==true||
+  payload.productionEnabled!==false)
+  throw Error('G189 invalid current MOTO response');
+ if(payload.activeBooking===null)return null;
+ const booking=payload.activeBooking;
+ const row=checked(booking,booking?.bookingKey);
+ if(row.status==='completed')
+  throw Error('G189 terminal MOTO is not an active assignment');
+ return row;
+}
+
 export async function advanceDriverMotoJourney({
  apiOrigin,approvedStagingHost=null,allowedByOwner=false,
  accessToken,bookingKey,expectedRevision,nextState,commandKey,
