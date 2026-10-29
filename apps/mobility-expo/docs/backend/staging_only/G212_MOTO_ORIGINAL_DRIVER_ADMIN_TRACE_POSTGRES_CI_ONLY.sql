@@ -126,7 +126,7 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
           WHEN 'completed' THEN 5 ELSE 0 END
        AND s.events_valid IS TRUE
        AND (s.status='completed')=(s.completed_at IS NOT NULL)
-       AND (s.event_count=0 OR (s.events->>-1) IS NOT NULL)))
+       AND s.events_valid IS TRUE))
  LIMIT 1
 $fn$;
 REVOKE ALL ON FUNCTION public.mobility_stage_g142_moto_trace_qa(uuid,uuid)
