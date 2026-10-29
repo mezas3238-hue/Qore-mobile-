@@ -23,6 +23,14 @@ services:
         value: "false"
       - key: QORE_RENDER_NO_COMMERCIAL_TRIPS
         value: "true"
+      # Safe per-replica budgets, NOT fleet throughput or autoscaling.
+      # CPU/DB capacity and horizontal scale must be benchmarked separately.
+      - key: QORE_EDGE_MAX_READS
+        value: "256"
+      - key: QORE_EDGE_MAX_WRITES
+        value: "128"
+      - key: QORE_EDGE_MAX_IDENTITIES
+        value: "32768"
       - key: QORE_RENDER_STAGING_APPROVED
         sync: false
       - key: QORE_RENDER_HOSTNAME
