@@ -474,9 +474,14 @@ export async function prepareQoreG4StagingRuntime({
    return data;
   }
  });
- const guardedDriverAuth=driverKycTrust===null?{}:{
+ // G180: no private Driver offer/decision/inbox can fall back to bare
+ // Supabase getUser. Until an independently revocable IdP is provisioned,
+ // the private Driver endpoints are intentionally unavailable (fail closed).
+ // This does not mint an eight-document G71 dossier or bypass G38 SQL.
+ const guardedDriverAuth={
   verifyAccessToken:verifiedDriverOfferSession,requireFreshSession:true,
-  verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p)
+  verifySessionNotRevoked:p=>driverKycTrust===null?
+   Promise.resolve(false):driverKycTrust.verifySessionNotRevoked(p)
  };
  const limit=createStagingRateLimiter({
   now,windowMs:60_000,maxEntries:1024,draftLimit:30,adminLimit:30
