@@ -3,7 +3,7 @@ export type G200Response={ok:boolean;code?:string;retrySafe?:false;
  expiresAtMs:number;messages?:Array<{messageId:string;senderRole:'passenger'|'driver';body:string;createdAtMs:number}>};
  qaOnly?:true;productionEnabled?:false};
 export type G200Scope={tripId:string;expectedSubject:string;
- expectedPrivateViewRevision:number;caseId?:string;requestKey?:string;body?:string};
+ expectedPrivateViewRevision:number;caseId?:string;requestKey?:string;body?:string;block?:boolean};
 export declare function createG200PassengerMotoLostItemsHttp(options?:{
  enabled?:boolean;ownerApproved?:boolean;providerVerified?:boolean;
  g200PostgresVerified?:boolean;origin?:string;pinnedOrigin?:string;
@@ -15,5 +15,6 @@ export declare function createG200PassengerMotoLostItemsHttp(options?:{
  open:(scope:G200Scope)=>Promise<G200Response>;
  read:(scope:G200Scope)=>Promise<G200Response>;
  send:(scope:G200Scope)=>Promise<G200Response>;
+ close:(scope:G200Scope)=>Promise<G200Response>;
  productionEnabled:false;
 }>;
