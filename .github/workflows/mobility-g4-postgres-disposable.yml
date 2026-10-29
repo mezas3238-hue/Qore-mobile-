@@ -56,6 +56,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G205_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G212_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G213_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G214_*'
+      - 'apps/mobility-expo/server/g201-*'
       - 'apps/mobility-expo/server/g169-*'
       - 'apps/mobility-expo/server/g142-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G173_*'
@@ -168,6 +170,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G205_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G212_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G213_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G214_*'
+      - 'apps/mobility-expo/server/g201-*'
       - 'apps/mobility-expo/server/g169-*'
       - 'apps/mobility-expo/server/g142-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G173_*'
@@ -948,6 +952,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G200_POST_MOTO_LOST_ITEMS_CHAT_POSTGRES_CI_ONLY.sql
       - name: G200 real PostgreSQL MOTO recovery privacy, no personal contact, blocked/revoked cases
         run: python3 apps/mobility-expo/server/g200-moto-lost-item-postride-pg-ci.py
+      - name: G214 install original AUTO and MOTO lost-case atomic verified closure
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G214_POST_RIDE_LOST_CASE_CLOSE_VERIFIED_POSTGRES_CI_ONLY.sql
+      - name: G214 test original G198 and G200 case closure, revocation and private grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G214_POST_RIDE_LOST_CASE_CLOSE_VERIFIED_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G169 install Driver-owned original MOTO read without Passenger PII
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G169_DRIVER_MOTO_OWNER_READ_POSTGRES_CI_ONLY.sql
       - name: G189 install owner-scoped unique active original Driver MOTO recovery (CI-only)
