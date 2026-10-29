@@ -350,15 +350,15 @@ test('boot rejects LIVE, old backend, unsafe env and public/foreign server role'
  ])await assert.rejects(prepare(m,options));
  assert.equal(m.state.rpcs.length,0);
 });
-test('real HTTP with Supabase-like adapters verifies role/JWT and uses server-derived driver ID',async()=>{
- const m=mockSupabase(),runtime=await prepare(m);
+test('real HTTP with independently revocable Driver IdP verifies server-derived actor',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  assert.equal(runtime.commercialRidesEnabled,false);
  assert.equal(runtime.server.listening,false);
  await http(runtime,async base=>{
   const searching=await req(base,statusPath);
   assert.equal(searching.status,200);
   assert.equal(searching.body.event.acceptedDriver,null);
-  assert.equal((await req(base,offerPath,'stranger')).status,403);
+  assert.equal((await req(base,offerPath,'stranger')).status,401);
   const open=await req(base,offerPath,'driver');
   assert.equal(open.status,200);
   assert.equal(open.body.expiresAtMs,now+20_000);
@@ -388,6 +388,19 @@ test('real HTTP with Supabase-like adapters verifies role/JWT and uses server-de
   assert.equal((await req(base,statusPath,'stranger')).status,403);
  });
 });
+test('G180 unprovisioned revocable Driver IdP blocks all private offer/inbox/accept routes',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,offerPath,'driver')).status,401);
+  assert.equal((await req(base,'/v1/staging/driver/inbox','driver')).status,401);
+  assert.equal((await req(base,acceptPath,'driver','POST',
+   {offerId:offer,requestKey})).status,401);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_auto_demo_accept_offer'||
+   x.name==='mobility_stage_g16_driver_private_inbox_qa').length,0);
+  assert.equal(m.state.trip.status,'searching');
+ });
+});
 test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigned trip',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
  await http(runtime,async base=>{
@@ -401,12 +414,13 @@ test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigne
    requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
   })).status,403);
   assert.equal((await req(base,acceptPath,'driver','POST',
-   {offerId:offer,requestKey})).status,200);
+   {offerId:offer,requestKey})).status,401);
   const eventKey='88888888-8888-4888-8888-888888888888';
   const arriving=await req(base,transitionPath,'driver','POST',
    {event:'arrive',eventKey});
   assert.equal(arriving.status,401,'No independently revocable Driver IdP');
-  assert.equal(m.state.trip.status,'accepted');
+  assert.equal(m.state.trip.status,'searching');
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_accept_offer'),false);
   assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_transition'),false);
   const before=m.state.rpcs.length;
   assert.equal((await req(base,transitionPath,'rider','POST',
@@ -508,7 +522,7 @@ test('turning public signup ON after start stops every request BEFORE Auth/SQL',
  });
 });
 test('private service key and internal SQL data never appear in HTTP response',async()=>{
- const m=mockSupabase(),runtime=await prepare(m);
+ const m=mockSupabase(),runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  await http(runtime,async base=>{
   for(const [path,actor] of [[statusPath,'rider'],[offerPath,'driver']]){
    const response=await req(base,path,actor);
@@ -520,7 +534,7 @@ test('private service key and internal SQL data never appear in HTTP response',a
 
 test('dual-role driver with admin privileges is denied private offers and acceptance',async()=>{
  const m=mockSupabase();m.state.dualRoleDriver=true;
- const runtime=await prepare(m);
+ const runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  await http(runtime,async base=>{
   assert.equal((await req(base,offerPath,'driver')).status,403);
   assert.equal((await req(base,acceptPath,'driver','POST',{offerId:offer,requestKey})).status,403);
@@ -1069,7 +1083,7 @@ test('G64 owner-only reader requires independently verified driver session',asyn
 
 test('G160 new G73 AUTO booking produces same-trip G112 private Driver offer once',async()=>{
  const m=mockSupabase();m.state.g84Enabled=true;
- const runtime=await prepare(m);
+ const runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  await http(runtime,async base=>{
   const request={requestKey,quoteId:fareQuote,accepted:true};
   const inboxBefore=await req(base,'/v1/staging/driver/inbox','driver');
@@ -1086,7 +1100,7 @@ test('G160 new G73 AUTO booking produces same-trip G112 private Driver offer onc
    serviceId:first.body.tripId,expiresAtMs:now+20000}]);
   assert.equal(inbox.body.pushDelivered,false);
   assert.equal(inbox.body.deviceReceived,false);
-  assert.equal((await req(base,'/v1/staging/driver/inbox','stranger')).status,403);
+  assert.equal((await req(base,'/v1/staging/driver/inbox','stranger')).status,401);
   const offerDetail=await req(base,offerPath,'driver');
   assert.equal(offerDetail.status,200);
   assert.equal(offerDetail.body.tripId,first.body.tripId);
