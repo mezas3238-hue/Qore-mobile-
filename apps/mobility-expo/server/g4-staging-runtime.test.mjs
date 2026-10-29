@@ -417,7 +417,7 @@ test('runtime closes unpriced AUTO request but preserves Driver trip transitions
   assert.equal(m.state.rpcs.length,before);
  });
 });
-test('runtime persists AUTO delivery custody and returns only participant status',async()=>{
+test('G176 denies legacy courier pickup/deliver/return and retains original sender read',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
  await http(runtime,async base=>{
   const created=await req(base,deliveryRequestPath,'rider','POST',{
@@ -434,15 +434,18 @@ test('runtime persists AUTO delivery custody and returns only participant status
   })).status,200);
   assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
    event:'pickup',eventKey:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  })).status,200);
+  })).status,409);
   assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
    event:'deliver',eventKey:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
    proofRef:deliveryProof,
-  })).status,200);
+  })).status,409);
+  assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
+   event:'return',eventKey:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  })).status,409);
   const status=await req(base,deliveryStatusPath,'rider');
   assert.equal(status.status,200);
-  assert.equal(status.body.delivery.status,'delivered');
-  assert.equal(status.body.delivery.proofRef,deliveryProof);
+  assert.equal(status.body.delivery.status,'accepted');
+  assert.equal(status.body.delivery.proofRef,null);
   assert.equal((await req(base,deliveryStatusPath,'stranger')).status,403);
   assert.doesNotMatch(JSON.stringify(status),/sb_secret|service_role/);
  });
