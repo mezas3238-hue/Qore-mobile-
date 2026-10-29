@@ -1,0 +1,33 @@
+name: QORE million-scale demand contract (planning only)
+on:
+  push:
+    branches:
+      - lab/qore-million-plus-scale-contract-20261028
+  pull_request:
+    branches:
+      - integration/qore-mobile-e2e-four-apps-20261027
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pure-model-not-load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate million-scale demand math (no external traffic)
+        run: |
+          node --check apps/mobility-expo/scripts/load/million-scale-contract.mjs
+          node apps/mobility-expo/scripts/load/million-scale-contract.mjs
+      - name: Preserve assumptions and capacity gates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-million-scale-demand-model
+          path: artifacts/qore-load-lab/million-scale-contract.json
+          retention-days: 30
