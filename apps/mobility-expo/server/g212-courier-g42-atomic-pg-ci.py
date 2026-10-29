@@ -46,12 +46,17 @@ with db() as con:
     JOIN public.user_roles r ON r.user_id=v.driver_id AND r.role='driver'
     WHERE v.vehicle_kind=%s AND v.review_status NOT IN ('rejected','suspended')
     AND v.driver_id<>%s
-    AND NOT EXISTS(SELECT 1 FROM public.mobility_stage_g36_driver_slots active
-       WHERE active.driver_id=v.driver_id)
-    ORDER BY v.id LIMIT 1
+    ORDER BY (
+      SELECT count(*) FROM public.mobility_stage_g36_driver_slots active
+      WHERE active.driver_id=v.driver_id),v.id LIMIT 1
    """,(kind,sender)).fetchone()
    assert vehicle is not None,kind+" G5 courier vehicle fixture missing"
    vid,driver=vehicle
+   # Earlier disposable G67/G109 tests can leave an occupied G36 slot.
+   # This test holds one transactional sandbox: free only this fixture slot
+   # and ROLLBACK restores the prior assignment without leaking a second job.
+   con.execute("DELETE FROM public.mobility_stage_g36_driver_slots WHERE driver_id=%s",
+      (driver,))
    sid=uid()
    at=int(time.time()*1000)
    con.execute("""INSERT INTO public.mobility_stage_g42_provider_session_grants(
