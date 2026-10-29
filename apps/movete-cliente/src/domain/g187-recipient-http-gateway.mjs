@@ -42,6 +42,9 @@ const READ=['mode','deliveryId','ownerId','deliveryState','revision',
  'courierProofCommitted','recipientBound','recipientConfirmed',
  'eligibleForSettlement','paymentAuthorized','qaOnly','productionEnabled'];
 const STATES=['requested','accepted','picked_up','delivered','disputed','returned','cancelled'];
+const RECOVER=['mode','deliveryId','recipientConfirmed','confirmationId',
+ 'deliveryState','revision','eligibleForSettlement','paymentAuthorized',
+ 'qaOnly','productionEnabled'];
 function validReceipt(r,operation,deliveryId,ownerId){
  if(!plain(r)||r.mode!=='STAGING_DEMO_ONLY'||r.qaOnly!==true
   ||r.productionEnabled!==false||r.deliveryId!==deliveryId)return false;
@@ -50,11 +53,22 @@ function validReceipt(r,operation,deliveryId,ownerId){
  if(operation==='confirm')return exact(r,CONFIRM)
   &&norm(r.confirmationId)!==null&&r.serverPersisted===true
   &&r.recipientConfirmed===true&&r.paymentAuthorized===false;
+ if(operation==='recover')return exact(r,RECOVER)
+  &&typeof r.recipientConfirmed==='boolean'
+  &&(r.confirmationId===null||norm(r.confirmationId)!==null)
+  &&r.recipientConfirmed===(r.confirmationId!==null)
+  &&STATES.includes(r.deliveryState)&&Number.isSafeInteger(r.revision)
+  &&r.revision>=1&&typeof r.eligibleForSettlement==='boolean'
+  &&(!r.eligibleForSettlement||
+    (r.recipientConfirmed&&r.deliveryState==='delivered'))
+  &&r.paymentAuthorized===false;
  return exact(r,READ)&&r.ownerId===ownerId&&STATES.includes(r.deliveryState)
   &&Number.isSafeInteger(r.revision)&&r.revision>=1
   &&['courierProofCommitted','recipientBound','recipientConfirmed','eligibleForSettlement']
     .every(k=>typeof r[k]==='boolean')
-  &&r.eligibleForSettlement===r.recipientConfirmed
+  &&(!r.eligibleForSettlement||
+    (r.recipientConfirmed&&r.deliveryState==='delivered'))
+  &&(!r.recipientConfirmed||(r.courierProofCommitted&&r.recipientBound))
   &&r.paymentAuthorized===false;
 }
 export function createG187ClientHttpGateway({
@@ -72,7 +86,7 @@ export function createG187ClientHttpGateway({
  function cancelPending(){epoch++;controller?.abort();controller=null;}
  async function perform(operation,scope={}){
   if(!ready)return fail('G187_EXTERNAL_AUTHORITY_NOT_CERTIFIED');
-  if(!['bind','confirm','read'].includes(operation)||!plain(scope)
+  if(!['bind','confirm','read','recover'].includes(operation)||!plain(scope)
    ||!norm(scope.deliveryId)||!norm(scope.expectedSubject)
    ||!int(scope.expectedPrivateViewRevision)
    ||(operation!=='read'&&!norm(scope.requestKey))
@@ -96,8 +110,9 @@ export function createG187ClientHttpGateway({
    const deliveryId=norm(scope.deliveryId);
    const route=operation==='bind'?'sender/deliveries/'+deliveryId+'/recipient-bind':
     operation==='confirm'?'recipient/deliveries/'+deliveryId+'/confirm':
+    operation==='recover'?'recipient/deliveries/'+deliveryId+'/confirmation':
     'sender/deliveries/'+deliveryId+'/recipient-confirmation';
-   const method=operation==='read'?'GET':'POST';
+   const method=operation==='read'||operation==='recover'?'GET':'POST';
    const body=operation==='bind'?{
     recipientId:norm(scope.recipientId),requestKey:norm(scope.requestKey)}:
     operation==='confirm'?{requestKey:norm(scope.requestKey)}:undefined;
@@ -152,5 +167,6 @@ export function createG187ClientHttpGateway({
   bindRecipient:scope=>perform('bind',scope),
   confirmReceived:scope=>perform('confirm',scope),
   readSenderStatus:scope=>perform('read',scope),
+  readRecipientConfirmation:scope=>perform('recover',scope),
   cancelPending,productionEnabled:false,commercialEnabled:false});
 }
