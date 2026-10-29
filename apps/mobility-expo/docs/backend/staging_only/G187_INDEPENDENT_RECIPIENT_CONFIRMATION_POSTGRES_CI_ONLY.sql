@@ -158,6 +158,9 @@ BEGIN
   'deliveryState',d.status::text,'revision',d.revision,
   'courierProofCommitted',d.proof_ref IS NOT NULL,
   'recipientBound',b.delivery_id IS NOT NULL,
+  -- Sender-only proof of the EXACT immutable request key; not a recipient
+  -- address, phone, provider credential, dispatch or payment authority.
+  'bindingKey',CASE WHEN b.delivery_id IS NOT NULL THEN b.binding_key ELSE NULL END,
   'recipientConfirmed',recipient_ok,
   'eligibleForSettlement',(recipient_ok AND d.status='delivered'),
   'paymentAuthorized',false,'qaOnly',true,'productionEnabled',false);
