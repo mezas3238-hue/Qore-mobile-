@@ -1433,3 +1433,91 @@ test('G155 mismatched provider cannot claim successful rating in original runtim
   assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g155_submit_rating_qa').length,0);
  });
 });
+
+const g156InboxPath='/v1/staging/merchant/'+vehicle+'/orders/inbox';
+function merchantStaffTrust(){
+ return {
+  verifyMerchantSession:async token=>{
+   if(token!==jwt.stranger)throw Error('Independent merchant session missing');
+   return {id:stranger,sessionId:offer,tokenIatMs:now-1000,
+    expiresAtMs:now+60000,is_anonymous:false};
+  },
+  verifySessionNotRevoked:async()=>true
+ };
+}
+test('G156 main runtime never exposes merchant inbox without independent staff IdP',async()=>{
+ const mock=mockSupabase(),runtime=await prepare(mock);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g156InboxPath,'stranger')).status,503);
+  assert.equal(mock.state.rpcs.filter(x=>x.name==='mobility_stage_g156_merchant_inbox_qa').length,0);
+ });
+ for(const trust of [{}, {...merchantStaffTrust(),browserRole:true},
+  {...merchantStaffTrust(),verifySessionNotRevoked:null}]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,{merchantStaffTrust:trust}));
+  assert.equal(m.state.clients.length,0);
+ }
+});
+test('G156 native G4 HTTP returns only original merchant order scope from G42 SQL',async()=>{
+ const m=mockSupabase(),old=m.createClient;
+ let active=true,denied=false;
+ m.createClient=(url,key)=>{
+  const sdk=old(url,key);
+  if(key===serviceKey){
+   const former=sdk.rpc;
+   sdk.rpc=async(name,params)=>{
+    if(name!=='mobility_stage_g156_merchant_inbox_qa')return former(name,params);
+    m.state.rpcs.push({name,params});
+    if(denied||params._actor!==stranger||params._merchant!==vehicle)
+     return {data:null,error:{code:'P1561'}};
+    return {data:{merchantId:vehicle,limit:20,
+     serverPersisted:true,qaOnly:true,productionEnabled:false,orders:[{
+      orderId:ride,branchId:offer,status:'ready',revision:5,
+      vehicleKind:'MOTO',subtotalPyg:25000,deliveryId,
+      lineCount:1,itemUnits:2,createdAt:'2026-10-28T12:00:00.000Z'
+     }]},error:null};
+   };
+  }
+  return sdk;
+ };
+ const trust={...merchantStaffTrust(),
+  verifySessionNotRevoked:async({userId,sessionId})=>
+   active&&userId===stranger&&sessionId===offer};
+ const runtime=await prepare(m,{merchantStaffTrust:trust});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g156InboxPath,'rider')).status,401);
+  const good=await req(base,g156InboxPath,'stranger');
+  assert.equal(good.status,200,JSON.stringify(good.body));
+  assert.equal(good.body.merchantId,vehicle);
+  assert.equal(good.body.orders.length,1);
+  assert.equal(good.body.orders[0].orderId,ride);
+  assert.equal(good.body.orders[0].status,'ready');
+  assert.equal(good.body.liveCommerceEnabled,false);
+  assert.equal(JSON.stringify(good.body).includes(passenger),false);
+  let sql=m.state.rpcs.filter(x=>x.name==='mobility_stage_g156_merchant_inbox_qa');
+  assert.deepEqual(sql,[{name:'mobility_stage_g156_merchant_inbox_qa',
+   params:{_actor:stranger,_merchant:vehicle,_session:offer,_iat:now-1000}}]);
+  assert.equal((await req(base,
+   '/v1/staging/merchant/'+ride+'/orders/inbox','stranger')).status,403);
+  denied=true;
+  assert.equal((await req(base,g156InboxPath,'stranger')).status,403);
+  active=false;
+  assert.equal((await req(base,g156InboxPath,'stranger')).status,401);
+  sql=m.state.rpcs.filter(x=>x.name==='mobility_stage_g156_merchant_inbox_qa');
+  assert.equal(sql.length,3);
+ });
+});
+test('G156 IdP identity mismatch blocks all original merchant SQL reads',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m,{merchantStaffTrust:{
+  ...merchantStaffTrust(),
+  verifyMerchantSession:async()=>({
+   id:passenger,sessionId:offer,tokenIatMs:now-1000,
+   expiresAtMs:now+60000,is_anonymous:false
+  })
+ }});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g156InboxPath,'stranger')).status,401);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g156_merchant_inbox_qa').length,0);
+ });
+});
