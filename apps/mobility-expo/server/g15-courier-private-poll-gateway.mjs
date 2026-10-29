@@ -16,12 +16,15 @@ function bearer(headers){
 const verified=user=>plain(user)&&uuid(user.id)&&user.is_anonymous!==true&&
  (typeof user.email_confirmed_at==='string'||typeof user.phone_confirmed_at==='string');
 export function createCourierPrivatePollGateway({
- projectRef,verifyAccessToken,authorizeCourier,allowRequest,listForCourier,now=Date.now
+ projectRef,verifyAccessToken,authorizeCourier,allowRequest,listForCourier,now=Date.now,
+ requireFreshSession=false,verifySessionNotRevoked
 }={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizeCourier,allowRequest,listForCourier,now]
   .every(x=>typeof x==='function'))
   throw Error('Trusted G15 courier polling dependencies required');
+ if(requireFreshSession===true&&typeof verifySessionNotRevoked!=='function')
+  throw Error('G183 independently revocable courier session required');
  return async({method,path,headers,body}={})=>{
   if(method!=='GET'||path!==PATH)return resp(404,{error:'Not found'});
   if(body!==undefined&&body!==null)
@@ -33,6 +36,19 @@ export function createCourierPrivatePollGateway({
    return resp(401,{error:'Courier session invalid'});
   }
   if(!verified(user))return resp(401,{error:'Confirmed courier required'});
+  const fresh=async at=>{
+   if(!uuid(user.sessionId)||!Number.isSafeInteger(user.expiresAtMs)||
+      !Number.isSafeInteger(at)||at<0||user.expiresAtMs<=at)
+    return 'expired';
+   try{return await verifySessionNotRevoked({
+    userId:user.id,sessionId:user.sessionId,at})===true?'valid':'revoked';}
+   catch{return 'unavailable';}
+  };
+  if(requireFreshSession===true){
+   const result=await fresh(now());
+   if(result!=='valid')return resp(result==='unavailable'?503:401,
+    {error:'Verified courier session required'});
+  }
   try{
    if(await authorizeCourier(user.id)!==true)
     return resp(403,{error:'Courier role required'});
@@ -56,6 +72,16 @@ export function createCourierPrivatePollGateway({
      throw Error('Invalid or expired private offer in poll');
     seen.add(x.offerId);
     offers.push({offerId:x.offerId,deliveryId:x.deliveryId,expiresAtMs:x.expiresAtMs});
+   }
+   // Do not leak another Driver's private offer IDs when a revocation lands
+   // during the original PostgreSQL read.
+   if(requireFreshSession===true){
+    const finished=now();
+    if(!Number.isSafeInteger(finished)||finished<at)
+     return resp(401,{error:'Courier session expired during polling'});
+    const result=await fresh(finished);
+    if(result!=='valid')return resp(result==='unavailable'?503:401,
+     {error:'Courier session invalid during private polling'});
    }
    return resp(200,{mode:'STAGING_DEMO_ONLY',liveDeliveriesEnabled:false,
     offers,deviceReceived:false,pushDelivered:false,suggestedPollIntervalMs:5000});
