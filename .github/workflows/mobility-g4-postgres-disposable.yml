@@ -770,6 +770,14 @@ jobs:
         run: node apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs
       - name: G173 1,000 concurrent original AUTO bookings, 24 PG16 workers, query plan and SIGKILL rollback
         run: python3 apps/mobility-expo/server/g172-g113-dispatch-multiprocess-pg-ci.py
+      - name: Preserve G173 original PostgreSQL load metrics even when the gate fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g173-real-pg16-bookings
+          path: artifacts/qore-load-lab/g173-pg16-results.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: G100 assert MOTO passenger 12-10-2%, cancel reversal, actor privacy and separation from AUTO/DELIVERY
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G100_MOTO_PASSENGER_QUOTE_BOOK_CANCEL_ASSERT_POSTGRES_CI_ONLY.sql
