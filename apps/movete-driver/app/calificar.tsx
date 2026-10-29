@@ -42,8 +42,8 @@ export default function CalificarClienteDriver(){
    getSession:()=>getNativeDriverAuth()?.getSession()??Promise.resolve(null)
   });
  },[]);
- const [serviceKind,setServiceKind]=useState<Kind>(
-  kinds.includes(params.serviceKind as Kind)?params.serviceKind as Kind:'AUTO_RIDE');
+ const [serviceKind,setServiceKind]=useState<Kind|null>(
+  kinds.includes(params.serviceKind as Kind)?params.serviceKind as Kind:null);
  const [serviceId,setServiceId]=useState(
   typeof params.serviceId==='string'&&ID.test(params.serviceId)?params.serviceId:'');
  const [stars,setStars]=useState(5);
@@ -54,7 +54,7 @@ export default function CalificarClienteDriver(){
  const key=useRef<{signature:string;requestKey:string}|null>(null);
  const changed=()=>{key.current=null;setNotice('');};
  async function submit(){
-  if(sending.current||!rating.isConfigured()||!ID.test(serviceId)){
+  if(sending.current||!rating.isConfigured()||!ID.test(serviceId)||!serviceKind){
    setNotice('La calificación requiere un servicio finalizado y STAGING autorizado.');
    return;
   }
@@ -82,7 +82,7 @@ export default function CalificarClienteDriver(){
    Calificaciones deshabilitadas hasta que Auth, PostgreSQL y STAGING externo estén aprobados. No se enviará ninguna valoración.
   </Text></Panel>}
   <Panel>
-   <Text style={styles.heading}>Tipo de servicio</Text>
+   <Text style={styles.heading}>Tipo de servicio (elegí AUTO o MOTO)</Text>
    {kinds.map(kind=><Action key={kind} label={titles[kind]}
     secondary={serviceKind!==kind} onPress={()=>{setServiceKind(kind);changed();}}/>)}
    <Text style={styles.small}>ID del servicio original completado</Text>
@@ -100,7 +100,7 @@ export default function CalificarClienteDriver(){
     secondary={incident!==item.id} onPress={()=>{setIncident(item.id);changed();}}/>)}
    <Text style={styles.small}>Las estrellas no prueban estafas ni modifican el despacho. Toda denuncia requiere evidencia, revisión humana y derecho de apelación.</Text>
    <Action label={working?'Enviando…':'Calificar al cliente'}
-    disabled={working||!rating.isConfigured()||!ID.test(serviceId)}
+    disabled={working||!rating.isConfigured()||!ID.test(serviceId)||!serviceKind}
     onPress={()=>{void submit();}}/>
    {notice!==''&&<Text accessibilityRole="alert" style={styles.text}>{notice}</Text>}
   </Panel>

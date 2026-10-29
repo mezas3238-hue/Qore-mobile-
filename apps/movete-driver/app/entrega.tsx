@@ -68,7 +68,7 @@ export default function DriverDelivery(){
    {enabled&&same&&state.phase==='terminal'&&state.status==='delivered'&&
      <Action label="Calificar al cliente de esta entrega" secondary
       onPress={()=>router.push({pathname:'/calificar',
-       params:{serviceId:deliveryId??'',serviceKind:'DELIVERY_AUTO'}})}/>}
+       params:{serviceId:deliveryId??''}})}/>}
     {enabled&&deliveryId&&<Action
     label={state.uncertain?'Consultar resultado sin reenviar':'Actualizar custodia'}
     secondary disabled={['loading','submitting'].includes(state.phase)}
