@@ -2001,3 +2001,120 @@ test('G176 keeps sender G5 cancellation, original status and G121-style recovery
   assert.equal(actualWrites[0].params._action,'cancel');
  });
 });
+
+test('G177 verified original Driver SQL steps preserve ordered AUTO trip and idempotent receipts',async()=>{
+ const m=mockSupabase(),original=m.createClient;
+ // Pre-G38 accepted QA fixture, NOT evidence of a newly legal G73 dispatch.
+ m.state.trip={...m.state.trip,driver_id:driver,vehicle_id:vehicle,
+  status:'accepted',revision:2};
+ const committed=new Map();const calls=[];
+ m.createClient=(url,key)=>{
+  const sdk=original(url,key);
+  if(key===serviceKey){
+   const former=sdk.rpc;
+   sdk.rpc=async(name,args)=>{
+    if(name!=='mobility_stage_g177_driver_auto_step_qa')return former(name,args);
+    calls.push(args);
+    if(args._driver!==driver||args._trip!==ride||args._session!==vehicle||
+       args._iat!==now-1000)return {data:null,error:{code:'P1771'}};
+    const previous=committed.get(args._key);
+    if(previous)return previous.event===args._event?
+     {data:previous.id,error:null}:{data:null,error:{code:'P1771'}};
+    const steps={arrive:['accepted','arriving',offer],
+     pickup:['arriving','in_progress',deliveryId],
+     complete:['in_progress','completed',fareQuote]};
+    const [expected,next,id]=steps[args._event]??[];
+    if(!id||m.state.trip.status!==expected)
+     return {data:null,error:{code:'P1771'}};
+    m.state.trip={...m.state.trip,status:next,revision:m.state.trip.revision+1};
+    committed.set(args._key,{event:args._event,id});
+    return {data:id,error:null};
+   };
+  }
+  return sdk;
+ };
+ let active=true;
+ const trust=g80Trust({verifySessionNotRevoked:async()=>active});
+ const runtime=await prepare(m,{driverKycTrust:trust.trust});
+ await http(runtime,async base=>{
+  const steps=[['arrive',requestKey,'arriving'],
+   ['pickup',deliveryProof,'in_progress'],
+   ['complete',fareQuote,'completed']];
+  for(const [event,eventKey,status] of steps){
+   const res=await req(base,transitionPath,'driver','POST',{event,eventKey});
+   assert.equal(res.status,200,JSON.stringify(res.body));
+   assert.equal(res.body.event,event);
+   assert.equal(res.body.serverPersisted,true);
+   assert.equal(res.body.commercialRidesEnabled,false);
+   assert.equal(res.body.productionEnabled,false);
+   assert.equal(m.state.trip.status,status);
+   const repeat=await req(base,transitionPath,'driver','POST',{event,eventKey});
+   assert.equal(repeat.status,200);
+   assert.equal(repeat.body.eventId,res.body.eventId);
+  }
+  assert.equal(committed.size,3);
+  assert.equal(m.state.trip.revision,5);
+  active=false;
+  assert.equal((await req(base,transitionPath,'driver','POST',{
+   event:'complete',eventKey:fareQuote})).status,401);
+  assert.equal(calls.length,6,'Revocation cannot invoke original G177 SQL');
+ });
+});
+test('G177 driver provider mismatch or revoked session refuses all AUTO transitions',async()=>{
+ for(const variant of ['foreign','revoked','missingRole']){
+  const m=mockSupabase();m.state.trip={...m.state.trip,driver_id:driver,
+   vehicle_id:vehicle,status:'accepted',revision:2};
+  let sqlCalls=0;
+  const prior=m.createClient;
+  m.createClient=(url,key)=>{
+   const sdk=prior(url,key);
+   if(key===serviceKey){
+    const before=sdk.rpc;
+    sdk.rpc=async(name,args)=>{
+     if(name==='mobility_stage_g177_driver_auto_step_qa'){
+      sqlCalls++;return {data:offer,error:null};
+     }
+     return before(name,args);
+    };
+   }
+   return sdk;
+  };
+  const options=variant==='foreign'?{
+   verifyDriverSession:async()=>({id:stranger,sessionId:vehicle,
+    tokenIatMs:now-1000,expiresAtMs:now+60000,is_anonymous:false})
+  }:variant==='revoked'?{verifySessionNotRevoked:async()=>false}:{};
+  if(variant==='missingRole')m.state.dualRoleDriver=true;
+  const runtime=await prepare(m,{driverKycTrust:g80Trust(options).trust});
+  await http(runtime,async base=>{
+   const result=await req(base,transitionPath,'driver','POST',{
+    event:'arrive',eventKey:requestKey
+   });
+   assert.equal(result.status,variant==='missingRole'?403:401);
+   assert.equal(sqlCalls,0);
+  });
+ }
+});
+test('G177 denied SQL cannot be presented as an acknowledged Driver arrival',async()=>{
+ const m=mockSupabase(),previous=m.createClient;
+ m.state.trip={...m.state.trip,driver_id:driver,
+  vehicle_id:vehicle,status:'accepted',revision:2};
+ m.createClient=(url,key)=>{
+  const sdk=previous(url,key);
+  if(key===serviceKey){
+   const before=sdk.rpc;
+   sdk.rpc=async(name,args)=>name==='mobility_stage_g177_driver_auto_step_qa'?
+    {data:null,error:{code:'P1771'}}:before(name,args);
+  }
+  return sdk;
+ };
+ const runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
+ await http(runtime,async base=>{
+  const denied=await req(base,transitionPath,'driver','POST',{
+   event:'arrive',eventKey:requestKey
+  });
+  assert.equal(denied.status,409,JSON.stringify(denied.body));
+  assert.equal(denied.body.retrySafe,false);
+  assert.equal(denied.body.serverPersisted,undefined);
+  assert.equal(m.state.trip.status,'accepted');
+ });
+});
