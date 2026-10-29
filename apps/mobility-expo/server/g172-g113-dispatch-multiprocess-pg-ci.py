@@ -220,5 +220,5 @@ with psycopg.connect(autocommit=True) as admin:
       "verdict":"PG16_MULTIPROCESS_RECOVERY_PASS"}
     out=Path("artifacts/qore-load-lab/g173-pg16-results.json")
     out.parent.mkdir(parents=True,exist_ok=True)
-    out.write_text(json.dumps(metrics,indent=2,sort_keys=True)+"\\n",encoding="utf-8")
+    out.write_text(json.dumps(metrics,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     print(json.dumps(metrics,sort_keys=True))
