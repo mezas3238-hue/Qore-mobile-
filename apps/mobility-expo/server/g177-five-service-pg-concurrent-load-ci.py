@@ -122,7 +122,7 @@ with psycopg.connect(autocommit=True) as admin:
     preexisting = query(admin, """
       SELECT pg_catalog.jsonb_build_object(
        'auto', (SELECT count(*) FROM public.mobility_stage_g85_auto_dispatch_jobs
-               WHERE booking_key::text LIKE '17200000-%'),
+               WHERE left(booking_key::text,9)='17200000-'),
        'commerce', (SELECT count(*) FROM public.mobility_stage_g45_order_receipts),
        'moto', (SELECT count(*) FROM public.mobility_stage_g100_moto_trips),
        'cargo', (SELECT count(*) FROM public.mobility_stage_deliveries))
@@ -197,7 +197,7 @@ with psycopg.connect(autocommit=True) as admin:
     # other-service operations; never silently consume another user's job.
     assert query(admin, """
        SELECT count(*) FROM public.mobility_stage_g85_auto_dispatch_jobs
-       WHERE booking_key::text LIKE '17200000-%'
+       WHERE left(booking_key::text,9)='17200000-'
          AND status IN ('PENDING','WAITING','OFFERED','CLOSED','EXHAUSTED')
     """)>=1001
     quote_replay=None
