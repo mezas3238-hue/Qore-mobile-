@@ -2,6 +2,7 @@ import React,{useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createClient} from '@supabase/supabase-js';
 import {verifyWebAdminConfig} from './web-admin-config.mjs';
+import {boundedMerchantJson} from './merchant-bounded-json.mjs';
 import './styles.css';
 
 /** Independent merchant staff portal. No Admin/Owner login or role escalation. */
@@ -70,49 +71,6 @@ const safeOrders=(raw:unknown,merchantId:string):Order[]=>{
 };
 // Keep merchant screens bounded during slow, malicious or broken responses.
 // AbortController on the caller cancels a stalled reader; no unbounded text().
-async function boundedMerchantJson(
- response:Response,maxBytes:number,signal:AbortSignal
-):Promise<unknown>{
- const declared=response.headers.get('content-length');
- if(declared!==null&&(!/^[0-9]+$/.test(declared)||Number(declared)>maxBytes))
-  throw Error('Respuesta demasiado extensa');
- // Some fetch bridges ignore AbortController after response headers.
- // Race each body read explicitly against the already active 8s deadline.
- async function readOrAbort<T>(operation:Promise<T>):Promise<T>{
-  if(signal.aborted)throw Error('Tiempo de lectura agotado');
-  let listener=()=>{};
-  const aborted=new Promise<never>((_,reject)=>{
-   listener=()=>reject(Error('Tiempo de lectura agotado'));
-   signal.addEventListener('abort',listener,{once:true});
-  });
-  try{return await Promise.race([operation,aborted]);}
-  finally{signal.removeEventListener('abort',listener);}
- }
- const reader=response.body?.getReader();
- if(!reader){
-  const body=await readOrAbort(response.text());
-  if(new TextEncoder().encode(body).byteLength>maxBytes)
-   throw Error('Respuesta demasiado extensa');
-  return JSON.parse(body);
- }
- const decoder=new TextDecoder();let result='',bytes=0,finished=false;
- try{
-  while(true){
-   const chunk=await readOrAbort(reader.read());
-   if(chunk.done){finished=true;break;}
-   bytes+=chunk.value.byteLength;
-   if(bytes>maxBytes)throw Error('Respuesta demasiado extensa');
-   result+=decoder.decode(chunk.value,{stream:true});
-  }
-  result+=decoder.decode();
-  return JSON.parse(result);
- }finally{
-  // A buggy reader.cancel() can hang indefinitely. Never await cleanup.
-  if(!finished){
-   try{void reader.cancel().catch(()=>{});}catch{/* already closed */}
-  }
- }
-}
 function MerchantApp(){
  const [email,setEmail]=useState('');
  const [password,setPassword]=useState('');
