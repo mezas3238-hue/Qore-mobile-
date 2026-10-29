@@ -75,6 +75,7 @@ import {createG45BuyerOrderReservationQa} from './g45-buyer-order-reservation-qa
 import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs';
 import {createG175SovereignBuyerCommerceFence} from './g175-sovereign-buyer-commerce-fence.mjs';
 import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-custody-fence.mjs';
+import {createG177VerifiedAutoDriverStepGateway} from './g177-verified-auto-driver-step-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -589,6 +590,30 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ // G177: legacy G4 Driver step lacked independent provider revocation.
+ // Every original assigned G3 AUTO advancement now locks G42 in SQL.
+ const verifiedDriverSteps=createG177VerifiedAutoDriverStepGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+  legacyGateway:commands,
+  verifyAccessToken:async token=>{
+   const x=await verifiedDriverOfferSession(token);
+   return {id:x.id,sessionId:x.sessionId,tokenIatMs:x.tokenIatMs,
+    expiresAtMs:x.expiresAtMs,is_anonymous:x.is_anonymous};
+  },
+  verifySessionNotRevoked:x=>driverKycTrust===null?
+   Promise.resolve(false):driverKycTrust.verifySessionNotRevoked(x),
+  resolveExclusiveRole:id=>singleRole(admin,id),
+  allowRequest:({actorId})=>allowRequest({userId:actorId}),
+  commitStep:async x=>{
+   const {data,error}=await admin.rpc('mobility_stage_g177_driver_auto_step_qa',{
+    _driver:x.actorId,_session:x.sessionId,_iat:x.tokenIatMs,
+    _trip:x.tripId,_event:x.event,_key:x.eventKey
+   });
+   if(error||typeof data!=='string'||!UUID.test(data))
+    throw Error('G177 original G3/G42 Driver step rejected');
+   return data;
+  }
+ });
  const deliveries=createQoreDeliveryCommandGateway({
   projectRef:ref,verifyAccessToken:verified,
   resolveRole:id=>singleRole(admin,id),allowRequest,
@@ -1098,7 +1123,7 @@ export async function prepareQoreG4StagingRuntime({
    riderHandler:guard(rider),riderHistoryHandler:guard(riderHistory),
    offerHandler:guard(driver),
    ...(driverDecisionRecovery===null?{}:{driverDecisionRecoveryHandler:guard(driverDecisionRecovery)}),
-   tripCommandHandler:guard(commands),
+   tripCommandHandler:guard(verifiedDriverSteps),
    f1AutoHandler:guard(f1Auto),motoHandler:guard(f1Moto),
    ...(driverMotoJourney===null?{}:{driverMotoJourneyHandler:guard(driverMotoJourney)}),
        ...(adminF1===null?{}:{adminF1AuditHandler:guard(adminF1)}),
