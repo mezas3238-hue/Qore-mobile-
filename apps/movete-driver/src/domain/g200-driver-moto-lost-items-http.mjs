@@ -2,7 +2,7 @@
  * only cases returned from backend identity-scoped inbox are selectable.
  * SQL additionally verifies Driver is original trip assignee and stationary.
  */
-import {readBoundedResponseText} from '../../../movete-cliente/src/domain/bounded-http-response.mjs';
+import {readG178BoundedDriverLifecycleJson} from './g178-bounded-driver-lifecycle-json.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(x,k)=>obj(x)&&Object.keys(x).length===k.length&&k.every(f=>Object.hasOwn(x,f));
@@ -87,10 +87,17 @@ export function createG200DriverMotoLostItemsHttp({
    const type=response.headers?.get?.('content-type');
    if(!/^application\/json(?:\s*;|$)/i.test(type??''))
     return fail('G200_DRIVER_BAD_CONTENT_TYPE');
-   const dataText=await readBoundedResponseText(response,{limit:16384,
-    signal:controller.signal,timedOut:()=>controller.signal.aborted||now()>=deadline});
-   if(!dataText.ok)return fail('G200_DRIVER_UNKNOWN_OUTCOME');
-   let dto;try{dto=JSON.parse(dataText.text);}catch{return fail('G200_DRIVER_BAD_RECEIPT');}
+   // Driver-owned 16KiB streaming JSON guard; never import Cliente internals.
+   // Preserve the original deadline and never retry a possibly committed POST.
+   let dto;
+   try{
+    dto=await readG178BoundedDriverLifecycleJson({
+     request:async()=>response,url:host+path,options:{method:'GET'},
+     timeoutMs:Math.max(100,deadline-now()),maxBytes:16384
+    });
+   }catch{return fail('G200_DRIVER_UNKNOWN_OUTCOME');}
+   if(controller.signal.aborted||now()>=deadline)
+    return fail('G200_DRIVER_UNKNOWN_OUTCOME');
    if(!validResponse(dto,op,before,caseId,requestKey))
     return fail('G200_DRIVER_BAD_RECEIPT');
    const final=await getSession();
