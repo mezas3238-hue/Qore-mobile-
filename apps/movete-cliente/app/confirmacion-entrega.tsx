@@ -32,6 +32,7 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
  const [verifiedSenderRead,setVerifiedSenderRead]=useState<null|Record<string,unknown>>(null);
  const [verifiedRecipientRead,setVerifiedRecipientRead]=useState<null|Record<string,unknown>>(null);
  const [boundHistoryId,setBoundHistoryId]=useState<string|null>(null);
+ const [protectedSenderDeliveryId,setProtectedSenderDeliveryId]=useState<string|null>(null);
  const [confirmedHistoryId,setConfirmedHistoryId]=useState<string|null>(null);
  const [recipientId,setRecipientId]=useState('');
  const [incomingDelivery,setIncomingDelivery]=useState('');
@@ -74,6 +75,7 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
     if(!active)return;
     if(binding){
      senderAttempt.current=binding.requestKey;
+     setProtectedSenderDeliveryId(binding.deliveryId);
      setRecipientId(binding.recipientId??'');
      setSenderMessage('Vinculación anterior pendiente de comprobación. Usá la consulta privada, no otra solicitud.');
     }
@@ -91,7 +93,8 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
  },[journal,authenticated,subject]);
  const ready=authenticated&&subject!==null&&gateway.isConfigured();
  const mutationReady=ready&&journalReady&&!journalError&&journal!==null;
- const original=originalDelivery&&UUID.test(originalDelivery)?trimUuid(originalDelivery):null;
+ const original=protectedSenderDeliveryId??
+  (originalDelivery&&UUID.test(originalDelivery)?trimUuid(originalDelivery):null);
  const incoming=trimUuid(incomingDelivery);
  const recipient=trimUuid(recipientId);
  const scope=(deliveryId:string)=>({
@@ -197,6 +200,7 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
    if(!stillOwns())return;
    if(kind==='bind'){
     senderAttempt.current=null;setVerifiedSenderRead(null);
+    setProtectedSenderDeliveryId(null);
     setSenderMessage('Comprobante original verificado y archivado localmente.');
    }else{
     receiverAttempt.current=null;setVerifiedRecipientRead(null);
@@ -229,6 +233,8 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
    <Text accessibilityRole="header" style={styles.heading}>Soy remitente · vincular destinatario</Text>
    <Text style={styles.small}>Solo podés vincular un destinatario diferente usando el identificador original de un envío registrado en esta sesión.</Text>
    <Text style={styles.text}>Envío propio: {original??'Sin envío original verificado'}</Text>
+   {protectedSenderDeliveryId&&protectedSenderDeliveryId!==originalDelivery&&
+    <Text style={styles.small}>Se restauró el identificador del envío anterior desde el almacenamiento cifrado. Primero verificá y archivá esa vinculación para volver al envío actual.</Text>}
    <TextInput value={recipientId} onChangeText={setRecipientId}
     editable={ready&&!busy&&senderAttempt.current===null}
     style={styles.field} accessibilityLabel="Identificador del destinatario"
