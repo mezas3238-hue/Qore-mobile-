@@ -1976,3 +1976,32 @@ test('G175 preserves G174 original G45 reserve and G144 recovery with independen
   assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g144_recover_order_qa').length,1);
  });
 });
+
+test('G176 keeps sender G5 cancellation, original status and G121-style recovery intact',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const created=await req(base,deliveryRequestPath,'rider','POST',{
+   requestKey,vehicleKind:'MOTO',category:'PARCEL',grams:2000,
+   lengthCm:20,widthCm:15,heightCm:10,pickupTag:'SHOP_A',
+   deliveryTag:'CUSTOMER_A',restrictedItemDeclared:false
+  });
+  assert.equal(created.status,201,JSON.stringify(created.body));
+  const cancel=await req(base,deliveryTransitionPath,'rider','POST',{
+   event:'cancel',eventKey:fareQuote
+  });
+  assert.equal(cancel.status,200,JSON.stringify(cancel.body));
+  assert.equal(cancel.body.event,'cancel');
+  const saved=await req(base,deliveryStatusPath,'rider');
+  assert.equal(saved.status,200);
+  assert.equal(saved.body.delivery.status,'cancelled');
+  assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
+   event:'pickup',eventKey:offer
+  })).status,409);
+  assert.equal((await req(base,deliveryTransitionPath,'driver','POST',{
+   event:'deliver',eventKey:offer,proofRef:deliveryProof
+  })).status,409);
+  const actualWrites=m.state.rpcs.filter(x=>x.name==='mobility_stage_delivery_transition');
+  assert.equal(actualWrites.length,1,'Only the authenticated sender cancel can reach G5 SQL');
+  assert.equal(actualWrites[0].params._action,'cancel');
+ });
+});
