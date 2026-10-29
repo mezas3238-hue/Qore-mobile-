@@ -79,6 +79,17 @@ export function createG66CourierCustodyStatusQa({
    if(!proofVerified&&['delivered','disputed','returned'].includes(row.status))
     return fail(503,'G66_PROOF_UNVERIFIED');
   }
+  // G185: reading the assigned SQL row and verifying the independent
+  // proof take time. If this session loses authority meanwhile, do not
+  // disclose its delivery state in the response. No sender PII is ever read.
+  const finished=now();
+  if(!Number.isSafeInteger(finished)||finished<at||
+   finished>=user.expiresAtMs)return fail(401,'G185_COURIER_SESSION_EXPIRED');
+  try{
+   if(await verifySessionNotRevoked({
+    userId:user.id,sessionId:user.sessionId,at:finished})!==true)
+    return fail(401,'G185_COURIER_SESSION_REVOKED');
+  }catch{return fail(503,'G185_COURIER_REVOCATION_UNAVAILABLE');}
   return Object.freeze({status:200,body:Object.freeze({
    mode:'STAGING_DEMO_ONLY',deliveryId:row.deliveryId,
    state:row.status,revision:row.revision,nextEvent:STAGES[row.status],
