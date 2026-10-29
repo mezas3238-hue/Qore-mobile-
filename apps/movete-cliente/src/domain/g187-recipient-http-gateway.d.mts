@@ -22,6 +22,7 @@ export declare function createG187ClientHttpGateway(options?:{
  bindRecipient:(scope:G187NativeScope)=>Promise<G187NativeResult>;
  confirmReceived:(scope:G187NativeScope)=>Promise<G187NativeResult>;
  readSenderStatus:(scope:G187NativeScope)=>Promise<G187NativeResult>;
+ readRecipientConfirmation:(scope:G187NativeScope)=>Promise<G187NativeResult>;
  cancelPending:()=>void;
  productionEnabled:false;commercialEnabled:false;
 }>;
