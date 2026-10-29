@@ -401,6 +401,39 @@ test('G180 unprovisioned revocable Driver IdP blocks all private offer/inbox/acc
   assert.equal(m.state.trip.status,'searching');
  });
 });
+test('G184 unified HTTP denies legacy trip/cancel paths on exact G73 booking without changing SQL',async()=>{
+ const m=mockSupabase();m.state.g84Enabled=true;
+ const runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
+ await http(runtime,async base=>{
+  const booked=await req(base,'/v1/staging/rider/auto/book','rider','POST',{
+   requestKey,quoteId:fareQuote,accepted:true
+  });
+  assert.equal(booked.status,201,JSON.stringify(booked.body));
+  assert.equal(booked.body.tripId,ride);
+  const state=m.state.trip.status;
+  const calls=m.state.rpcs.length;
+  const badPaths=[
+   [requestPath,{requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'}],
+   ['/v1/staging/rider/trips/'+ride+'/cancel',{requestKey}],
+   [transitionPath,{event:'cancel',eventKey:requestKey}]
+  ];
+  for(const [path,body] of badPaths){
+   const denied=await req(base,path,'rider','POST',body);
+   assert.equal(denied.status,409,JSON.stringify(denied.body));
+   assert.equal(denied.body.code,'G184_USE_ORIGINAL_G73_G95_AUTO_BOOKING');
+   assert.equal(denied.body.retryLegacyRequest,false);
+   assert.equal(denied.body.financialReconciliationRequired,true);
+   assert.equal(m.state.rpcs.length,calls,'legacy path cannot execute any SQL RPC');
+   assert.equal(m.state.trip.status,state);
+   assert(!JSON.stringify(denied).includes(fareQuote));
+  }
+  const stillBooked=await req(base,'/v1/staging/rider/auto/bookings/'+requestKey,'rider');
+  assert.equal(stillBooked.status,200);
+  assert.equal(stillBooked.body.tripId,ride);
+  assert.equal(stillBooked.body.serverPersisted,true);
+  assert.equal(m.state.trip.status,'searching');
+ });
+});
 test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigned trip',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
  await http(runtime,async base=>{
