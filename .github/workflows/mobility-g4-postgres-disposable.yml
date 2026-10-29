@@ -52,6 +52,7 @@ on:
       - 'apps/mobility-expo/server/g173-*'
       - 'apps/mobility-expo/server/g177-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G177_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G205_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G173_*'
       - 'apps/movete-cliente/src/domain/g155-*'
       - 'apps/movete-cliente/app/calificar.tsx'
@@ -158,6 +159,7 @@ on:
       - 'apps/mobility-expo/server/g173-*'
       - 'apps/mobility-expo/server/g177-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G177_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G205_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G173_*'
       - 'apps/movete-cliente/src/domain/g155-*'
       - 'apps/movete-cliente/app/calificar.tsx'
@@ -883,6 +885,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G177_AUTO_DRIVER_G42_TRANSACTION_STEP_POSTGRES_CI_ONLY.sql
       - name: G177 deny public SQL privilege and unauthenticated replay of original completed G109 AUTO trip
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G177_AUTO_DRIVER_G42_TRANSACTION_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G205 install atomic new G73 AUTO booked-offer acceptance with G42/G38/G71
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G205_ORIGINAL_G73_AUTO_DRIVER_ACCEPTANCE_POSTGRES_CI_ONLY.sql
+      - name: G205 prove no mobile SQL grants and forged Driver cannot commit acceptance
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G205_ORIGINAL_G73_AUTO_DRIVER_ACCEPTANCE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G132 original B Client G5/G121 and C Driver G66 over A PostgreSQL16 (same SHA)
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G123 install SQL private delivery offer/accept price fence AFTER G121/G122 receipts
