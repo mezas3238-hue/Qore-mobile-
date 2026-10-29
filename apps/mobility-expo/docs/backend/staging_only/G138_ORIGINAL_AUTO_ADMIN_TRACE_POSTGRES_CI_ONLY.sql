@@ -1,6 +1,7 @@
 -- G138 first authoritative Admin AUTO service trace. Disposable PostgreSQL16 ONLY.
 -- One original G73 booked trip, immutable G3 status/events and G93 ledger.
--- No simulation of legal Driver acceptance, paid settlement or other services.
+-- Accepted G73 rides are traced only with their existing G4 acceptance event.
+-- No new legal proof, paid settlement, GPS or synthetic Driver is minted.
 DO $guard$ BEGIN
  IF pg_catalog.current_database()<>'qore_disposable_chain'
  OR pg_catalog.current_setting('application_name')<>'qore_ci_disposable_chain'
@@ -16,15 +17,35 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
   SELECT pg_catalog.floor(extract(epoch FROM
    pg_catalog.clock_timestamp())*1000)::bigint ms
  ), allowed AS MATERIALIZED (
-  SELECT t.id,t.request_key,t.status::text status,t.revision,t.created_at,
+  SELECT t.id,t.request_key,
+   CASE WHEN t.status='accepted' THEN 'assigned' ELSE t.status::text END status,
+   t.status::text sql_status,t.driver_id,t.revision,t.created_at,
    q.id quote_id,q.booking_key,t.passenger_id
   FROM public.mobility_stage_auto_demo_trips t
   JOIN public.mobility_stage_g72_auto_prequotes q
    ON q.trip_id=t.id AND q.booking_key=t.request_key
-   AND q.passenger_id=t.passenger_id AND q.route_id IS NOT NULL
-  WHERE t.id=_trip AND t.driver_id IS NULL
-   AND t.status IN ('searching','cancelled')
+   AND q.passenger_id=t.passenger_id
+  JOIN public.mobility_stage_g73_auto_routes r
+   ON r.id=q.route_id AND r.passenger_id=t.passenger_id
+   AND r.service=t.service AND r.origin_tag=t.origin_tag
+   AND r.destination_tag=t.destination_tag
+  WHERE t.id=_trip
    AND public.mobility_stage_g27_backoffice_role_of(_admin)='admin'
+   AND (
+    (t.driver_id IS NULL AND t.status IN ('searching','cancelled'))
+    OR
+    (t.driver_id IS NOT NULL AND t.vehicle_id IS NOT NULL
+     AND t.status IN ('accepted','arriving','in_progress','completed')
+     AND EXISTS (
+      SELECT 1 FROM public.mobility_stage_auto_demo_offers o
+      JOIN public.mobility_stage_auto_demo_events e
+       ON e.id=o.decision_event_id AND e.trip_id=t.id
+       AND e.actor_id=t.driver_id AND e.next_status='accepted'
+      WHERE o.trip_id=t.id AND o.driver_id=t.driver_id
+       AND o.vehicle_id=t.vehicle_id AND o.status='accepted'
+       AND o.decision_key IS NOT NULL
+     ))
+   )
  ), actual AS (
   SELECT a.*,
    (SELECT pg_catalog.count(*) FROM public.mobility_stage_auto_demo_events e
@@ -61,7 +82,12 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
   'observedAt',s.ms,'expiresAt',s.ms+30000,
   'serverPersisted',true,'productionEnabled',false,
   'assignment',pg_catalog.jsonb_build_object(
-    'state','NOT_ASSIGNABLE','legalGate','G38_BLOCKED'),
+    'state',CASE WHEN a.sql_status='completed' THEN 'QA_COMPLETED'
+       WHEN a.sql_status IN ('accepted','arriving','in_progress')
+         THEN 'QA_ACCEPTED'
+       ELSE 'NOT_ASSIGNABLE' END,
+    'legalGate',CASE WHEN a.driver_id IS NOT NULL
+      THEN 'EXTERNAL_NOT_CERTIFIED' ELSE 'G38_BLOCKED' END),
   'events',pg_catalog.jsonb_build_array(
     pg_catalog.jsonb_build_object(
      'eventId',a.id,'serviceId',a.id,'sequence',1,
@@ -82,8 +108,12 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $fn$
  CROSS JOIN stamp s
  WHERE a.revision=a.n_events+1
   AND (a.revision=1 OR a.max_event_revision=a.revision)
-  AND (a.status='searching' AND a.revision=1
-   OR a.status='cancelled' AND a.revision>=2)
+  AND (a.sql_status='searching' AND a.revision=1
+   OR a.sql_status='cancelled' AND a.revision>=2
+   OR a.sql_status='accepted' AND a.revision=2
+   OR a.sql_status='arriving' AND a.revision=3
+   OR a.sql_status='in_progress' AND a.revision=4
+   OR a.sql_status='completed' AND a.revision=5)
   AND (l.quote_id IS NULL OR
    l.n_entries=4 AND l.delta=0 AND
    l.customer_pays_gs+l.subsidy_gs=l.original_fare_gs AND
