@@ -64,6 +64,7 @@ import {createG66CourierCustodyRepository} from './g66-courier-custody-repositor
 import {createG66CourierCustodyStatusQa} from './g66-courier-custody-status-qa.mjs';
 import {createG66CourierCustodyTransitionQa} from './g66-courier-custody-transition-qa.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
+import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -178,7 +179,7 @@ export async function prepareQoreG4StagingRuntime({
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
- g66ProofTrust=null,
+ ratingTrust=null,g66ProofTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -287,6 +288,11 @@ export async function prepareQoreG4StagingRuntime({
      ['verifyDriverSession','verifySessionNotRevoked',
       'resolveActiveVehicle','queryOwnerValidity']
       .every(k=>typeof driverKycTrust[k]==='function')))||
+   !(ratingTrust===null||(
+     Object.getPrototypeOf(ratingTrust)===Object.prototype&&
+     Object.keys(ratingTrust).length===2&&
+     typeof ratingTrust.verifyRatingSession==='function'&&
+     typeof ratingTrust.verifySessionNotRevoked==='function'))||
    !(adminF1Trust===null||(Object.getPrototypeOf(adminF1Trust)===Object.prototype
     &&Object.keys(adminF1Trust).length===3
     &&['verifyAdminSession','verifySessionNotRevoked','verifyBackofficeMfa']
@@ -387,6 +393,37 @@ export async function prepareQoreG4StagingRuntime({
     {email_confirmed_at:provider.email_confirmed_at}:
     {phone_confirmed_at:provider.phone_confirmed_at})};
  };
+ // G155: no session from token claims or merely Supabase getUser.
+ // The independently attested IdP is rechecked against provider identity;
+ // G42 and original service participation are checked by SQL.
+ const ratings=ratingTrust===null?null:createG155VerifiedRatingGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+  verifyAccessToken:async token=>{
+   const u=await verified(token);
+   const a=await ratingTrust.verifyRatingSession(token);
+   if(!a||typeof a!=='object'||Array.isArray(a)||
+    Object.getPrototypeOf(a)!==Object.prototype||
+    Object.keys(a).length!==5||
+    !['id','sessionId','tokenIatMs','expiresAtMs','is_anonymous'].every(k=>Object.hasOwn(a,k))||
+    a.id!==u.id||a.is_anonymous!==false||u.is_anonymous===true||
+    !(typeof u.email_confirmed_at==='string'||typeof u.phone_confirmed_at==='string'))
+    throw Error('G155 independent identity mismatch');
+   return a;
+  },
+  verifySessionNotRevoked:x=>ratingTrust.verifySessionNotRevoked(x),
+  allowRequest:({userId})=>allowRequest({userId}),
+  submitRating:async x=>{
+   const {data,error}=await admin.rpc('mobility_stage_g155_submit_rating_qa',{
+    _reviewer:x.reviewerId,_session:x.sessionId,_iat_ms:x.tokenIatMs,
+    _request_key:x.requestKey,_service_kind:x.serviceKind,
+    _service_id:x.serviceId,_rated_kind:x.ratedKind,
+    _stars:x.stars,_incident_code:x.incidentCode
+   });
+   if(error||!data||typeof data!=='object'||Array.isArray(data))
+    throw Error('G155 original SQL denied');
+   return data;
+  }
+ });
  const guardedDriverAuth=driverKycTrust===null?{}:{
   verifyAccessToken:verifiedDriverOfferSession,requireFreshSession:true,
   verifySessionNotRevoked:p=>driverKycTrust.verifySessionNotRevoked(p)
@@ -900,6 +937,7 @@ export async function prepareQoreG4StagingRuntime({
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
    deliveryOfferHandler:guard(deliveryOffers),
+    ...(ratings===null?{}:{ratingHandler:guard(ratings)}),
    ...(courierCustody===null?{}:{courierCustodyHandler:guard(courierCustody)}),
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
