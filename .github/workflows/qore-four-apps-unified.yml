@@ -58,6 +58,7 @@ jobs:
         run: |
           node --check src/domain/g197-pickup-preferences-http.mjs
           node --test src/domain/g197-pickup-preferences-http.test.mjs
+          node --check src/domain/g198-driver-lost-items-http.mjs
       - name: Verify Driver application can typecheck in unified tree
         working-directory: apps/movete-driver
         run: |
@@ -78,6 +79,10 @@ jobs:
           node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
           node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.mjs
           node --test apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
+          node --check apps/mobility-expo/server/g197-driver-pickup-gateway.mjs
+          node --check apps/mobility-expo/server/g198-lost-items-gateway.mjs
+          node --test apps/mobility-expo/server/g197-driver-pickup-gateway.test.mjs
+          node --test apps/mobility-expo/server/g198-lost-items-gateway.test.mjs
           echo "The G4 PostgreSQL workflow validates real same-tree HTTP + PG persistence."
       - name: Do not misrepresent compilation as production GO
         run: |
