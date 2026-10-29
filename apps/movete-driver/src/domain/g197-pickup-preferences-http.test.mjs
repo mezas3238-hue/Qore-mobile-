@@ -51,7 +51,7 @@ test('G197 rejects forged radius, unknown service, fake reply and rotated JWT',a
  const api=createG197DriverPickupPreferencesHttp(options({
   request:async()=>{sent++;return result(saved())}
  }));
- assert.equal((await api.update('MOTO_RIDE',2000,0)).ok,false);
+ assert.equal((await api.update('INVALID_RIDE',2000,0)).ok,false);
  assert.equal((await api.update('RIDE',3333,0)).ok,false);
  assert.equal(sent,0);
  const foreign=createG197DriverPickupPreferencesHttp(options({
