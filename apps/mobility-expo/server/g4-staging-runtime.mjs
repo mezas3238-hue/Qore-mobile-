@@ -1110,8 +1110,9 @@ export async function prepareQoreG4StagingRuntime({
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,now,
   listForDriver:params=>driverInboxPersistence.listForDriver(params),
  });
+ // G183: original G15 private courier polling cannot fall back to bare getUser.
  const courierPoll=createCourierPrivatePollGateway({
-  projectRef:ref,verifyAccessToken:verified,
+  projectRef:ref,verifyAccessToken:verified,...guardedDriverAuth,
   authorizeCourier:id=>roleHas(admin,id,'driver'),allowRequest,now,
   listForCourier:params=>privatePollPersistence.listForCourier(params),
  });
