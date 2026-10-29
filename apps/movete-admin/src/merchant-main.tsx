@@ -68,6 +68,31 @@ const safeOrders=(raw:unknown,merchantId:string):Order[]=>{
  }
  return result;
 };
+// Keep merchant screens bounded during slow, malicious or broken responses.
+// AbortController on the caller cancels a stalled reader; no unbounded text().
+async function boundedMerchantJson(response:Response,maxBytes:number):Promise<unknown>{
+ const declared=response.headers.get('content-length');
+ if(declared!==null&&(!/^[0-9]+$/.test(declared)||Number(declared)>maxBytes))
+  throw Error('Respuesta demasiado extensa');
+ const reader=response.body?.getReader();
+ if(!reader){
+  const text=await response.text();
+  if(text.length>maxBytes)throw Error('Respuesta demasiado extensa');
+  return JSON.parse(text);
+ }
+ const decoder=new TextDecoder();let result='',bytes=0;
+ try{
+  while(true){
+   const chunk=await reader.read();
+   if(chunk.done)break;
+   bytes+=chunk.value.byteLength;
+   if(bytes>maxBytes)throw Error('Respuesta demasiado extensa');
+   result+=decoder.decode(chunk.value,{stream:true});
+  }
+  result+=decoder.decode();
+  return JSON.parse(result);
+ }finally{try{await reader.cancel();}catch{/* reader may be closed */}}
+}
 function MerchantApp(){
  const [email,setEmail]=useState('');
  const [password,setPassword]=useState('');
@@ -134,11 +159,7 @@ function MerchantApp(){
      referrerPolicy:'no-referrer',signal:controller.signal
     });
     if(!response.ok||response.redirected)throw Error('Bandeja no autorizada o no disponible');
-    const size=Number(response.headers.get('content-length')??0);
-    if(size>32768)throw Error('Respuesta demasiado extensa');
-    const text=await response.text();
-    if(text.length>32768)throw Error('Respuesta no verificable');
-    const validated=safeOrders(JSON.parse(text),id);
+    const validated=safeOrders(await boundedMerchantJson(response,32768),id);
     await bearer(identity.subject);
     setOrders(validated);
     setMessage(validated.length===0?'No hay pedidos registrados en esta bandeja.':
@@ -166,7 +187,7 @@ function MerchantApp(){
      signal:controller.signal
     });
     if(!r.ok||r.redirected)throw Error('Cambio no confirmado; consultá el pedido antes de reintentar.');
-    const data=await r.json();
+    const data=await boundedMerchantJson(r,4096) as Record<string,unknown>;
     if(data.orderId!==order.orderId||data.event!==event||
      !UUID.test(data.eventId??'')||data.serverPersisted!==true||
      data.liveCommerceEnabled!==false)throw Error('Recibo no verificable');
@@ -204,12 +225,10 @@ function MerchantApp(){
     if(response.status===409)throw Error('Pedido no verificable o ya calificado');
     if(response.status!==201||!response.ok||response.redirected)
      throw Error('No hay confirmación. Reintentar solo con la misma clave');
-    const length=Number(response.headers.get('content-length')??0);
-    if(length>4096||!response.headers.get('content-type')?.startsWith('application/json'))
+    if(!response.headers.get('content-type')?.startsWith('application/json'))
      throw Error('Recibo no verificable');
-    const body=await response.text();
-    if(body.length>4096||controller.signal.aborted)throw Error('Recibo no verificable');
-    const receipt:unknown=JSON.parse(body);
+    const receipt:unknown=await boundedMerchantJson(response,4096);
+    if(controller.signal.aborted)throw Error('Recibo no verificable');
     if(!receipt||typeof receipt!=='object'||Array.isArray(receipt))
      throw Error('Recibo mal formado');
     const r=receipt as Record<string,unknown>;
