@@ -16,3 +16,5 @@ export declare function advanceDriverMotoJourney(
  expectedRevision:number;nextState:'arriving'|'in_progress'|'completed';
  commandKey:string;
  }):Promise<DriverMotoJourney>;
+
+export declare function readCurrentDriverMoto(options:Omit<DriverMotoHttpScope,'bookingKey'>):Promise<DriverMotoJourney|null>;
