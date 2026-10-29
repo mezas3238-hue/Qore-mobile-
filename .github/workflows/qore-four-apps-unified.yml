@@ -6,6 +6,9 @@ on:
   push:
     branches:
       - integration/qore-mobile-e2e-four-apps-20261027
+  pull_request:
+    branches:
+      - integration/qore-mobile-e2e-four-apps-20261027
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,11 +47,9 @@ jobs:
         run: |
           node --check src/domain/g187-recipient-http-gateway.mjs
           node --test src/domain/g187-recipient-http-gateway.test.mjs
-      - name: G192 encrypted native write-ahead receipt journal survives Android relaunch safely
-        working-directory: apps/movete-cliente
-        run: |
           node --check src/domain/g192-receipt-key-journal.mjs
           node --test src/domain/g192-receipt-key-journal.test.mjs
+          node --test src/domain/f1-auto-ride-continuation.test.mjs
       - name: Verify Driver application can typecheck in unified tree
         working-directory: apps/movete-driver
         run: |
@@ -56,12 +57,14 @@ jobs:
           npm run typecheck
           node --test src/domain/driver-document-upload.test.mjs src/domain/driver-document-recovery.test.mjs
           node --test src/domain/driver-bounded-qa-get.test.mjs src/domain/driver-documents.test.mjs src/domain/driver-license-readiness.test.mjs
+          node --test src/domain/driver-moto-journey.test.mjs src/domain/driver-moto-current-resume.test.mjs
       - name: Verify Owner Admin web bundles from the same code revision
         working-directory: apps/movete-admin
         run: |
           npm install --no-audit --no-fund --ignore-scripts
           npm run check
           npm run build
+          node --test src/release-certification.test.mjs
           test -f dist/index.html
       - name: Backend HTTP/SQL modules checked without external secrets
         run: |

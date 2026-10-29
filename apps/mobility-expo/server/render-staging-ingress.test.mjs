@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer,request as nativeHttpRequest} from 'node:http';
 import {once} from 'node:events';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createRenderStagingIngress} from './render-staging-ingress.mjs';
 
@@ -156,9 +157,7 @@ test('Render ingress fail-closed on untrusted, non-JSON and oversized upstream r
  ]){
   const server=createRenderStagingIngress({
    loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
-   request:async()=>({
-    status:answer.status,redirected:false,text:async()=>answer.text
-   })
+   request:async()=>new Response(answer.text,{status:answer.status})
   });
   const remote=await listening(server);
   try{
@@ -202,7 +201,7 @@ test('G26 second-page history cursor reaches private G4 without query or token l
 test('Render ingress imposes bounded request rate independent of phone retries',async()=>{
  const server=createRenderStagingIngress({
   loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,now:()=>100000,
-  request:async()=>({status:200,redirected:false,text:async()=>'{"ok":true}'})
+  request:async()=>new Response('{"ok":true}',{status:200})
  });
  const remote=await listening(server);
  try{
@@ -213,6 +212,72 @@ test('Render ingress imposes bounded request rate independent of phone retries',
   }
   assert.equal((await doReq(remote,'/v1/staging/rider/history')).status,429);
  }finally{await new Promise(done=>server.close(done));}
+});
+test('G193 bounded Render ingress refuses a streaming 64KB G4 response before buffering it',async()=>{
+ let canceled=false;
+ const oversized=new ReadableStream({
+  pull(controller){controller.enqueue(new Uint8Array(65536));},
+  cancel(){canceled=true;}
+ });
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  request:async()=>({status:200,redirected:false,body:oversized})
+ });
+ const remote=await listening(server);
+ try{
+  const response=await doReq(remote,'/v1/staging/rider/history');
+  assert.equal(response.status,503);
+  assert.equal(canceled,true,'oversized upstream must be cancelled');
+  const dto=await response.json();
+  assert(!JSON.stringify(dto).includes(token));
+ }finally{await new Promise(done=>server.close(done));}
+});
+test('G193 max 64 upstream operations, reject excess; no leaked active slot after completion',async()=>{
+ const pending=[];
+ let signalCount=0;
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,now:()=>100000,
+  request:async(_url,opts)=>new Promise(resolve=>{
+   signalCount++;pending.push({resolve,signal:opts.signal});
+  })
+ });
+ const remote=await listening(server);
+ try{
+  const requests=Array.from({length:64},()=>doReq(remote,'/v1/staging/rider/history'));
+  const until=Date.now()+5000;
+  while(signalCount<64&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(signalCount,64,'all slots have reached upstream');
+  const overloaded=await doReq(remote,'/v1/staging/rider/history');
+  assert.equal(overloaded.status,503);
+  assert.equal(signalCount,64,'overload is rejected before G4');
+  pending.forEach(({resolve})=>resolve(new Response('{"ok":true}',{status:200})));
+  for(const response of await Promise.all(requests)){
+   assert.equal(response.status,200);
+   assert.deepEqual(await response.json(),{ok:true});
+  }
+  const final=doReq(remote,'/v1/staging/rider/history');
+  while(signalCount<65&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(signalCount,65,'released slots are reusable');
+  pending[64].resolve(new Response('{"ok":true}',{status:200}));
+  assert.equal((await final).status,200);
+ }finally{
+  pending.forEach(({resolve})=>resolve(new Response('{"error":"shutdown"}',{status:503})));
+  await new Promise(done=>server.close(done));
+ }
+});
+
+test('G193 Render Blueprint pins approved GitHub integration, STAGING only, zero auto deployments',()=>{
+ const manifest=readFileSync(new URL('../../../render.yaml',import.meta.url),'utf8');
+ assert.match(manifest,/branch: integration\/qore-mobile-e2e-four-apps-20261027/);
+ assert.match(manifest,/autoDeployTrigger: off/);
+ assert.match(manifest,/QORE_RENDER_NO_COMMERCIAL_TRIPS\s*\n\s*value: "true"/);
+ assert.match(manifest,/LIVE_TRIPS_ENABLED\s*\n\s*value: "false"/);
+ assert.match(manifest,/QORE_RENDER_STAGING_APPROVED\s*\n\s*sync: false/);
+ assert.match(manifest,/QORE_STAGING_SERVICE_ROLE_KEY\s*\n\s*sync: false/);
+ assert(!manifest.includes('password:'));
+ assert(!manifest.includes('value: "true"\n      - key: LIVE_TRIPS_ENABLED'));
 });
 const runner=fileURLToPath(new URL('./run-g4-render-staging.mjs',import.meta.url));
 const spawn=vars=>spawnSync(process.execPath,[runner],{

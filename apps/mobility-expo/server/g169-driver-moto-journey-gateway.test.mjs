@@ -66,3 +66,61 @@ test('G169 ambiguous original SQL command cannot be called again automatically',
  assert.equal(x.calls(),1);
  assert.equal((await x.request('GET')).body.tripState,'accepted');
 });
+
+test('G189 current MOTO recovery is read-only and locked to revocable Driver identity',async()=>{
+ const row={mode:'STAGING_DEMO_ONLY',qaOnly:true,productionEnabled:false,
+  serviceKind:'MOTO_RIDE',driverId:driver,bookingKey:booking,
+  tripId:trip,tripState:'accepted',tripRevision:2,serverPersisted:true};
+ let actor=driver,role='driver',revoked=false,reads=0;
+ const gateway=createG169DriverMotoJourneyGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  now:()=>10000000,
+  verifyAccessToken:async()=>({id:actor,sessionId:id(6),
+   is_anonymous:false,expiresAtMs:11000000}),
+  verifySessionNotRevoked:async()=>!revoked,
+  resolveExclusiveRole:async()=>role,allowRequest:()=>true,
+  readMoto:async()=>{throw Error('G189 cannot guess any booking key');},
+  advanceMoto:async()=>{throw Error('G189 cannot send driver mutations');},
+  readCurrentMoto:async({driverId})=>{
+   reads++;return driverId===driver?row:null;
+  }
+ });
+ const req=()=>gateway({method:'GET',path:'/v1/staging/driver/moto/current',
+  headers:{authorization:'Bearer '+'z'.repeat(24)}});
+ const ok=await req();
+ assert.equal(ok.status,200);
+ assert.equal(ok.body.activeBooking.bookingKey,booking);
+ assert.equal(ok.body.activeBooking.tripId,trip);
+ assert.equal(ok.body.activeBooking.nextState,'arriving');
+ assert(!JSON.stringify(ok.body).includes('passengerId'));
+ actor=foreign;
+ assert.equal((await req()).body.activeBooking,null);
+ actor=driver;revoked=true;
+ assert.equal((await req()).status,401);
+ role='passenger';revoked=false;
+ assert.equal((await req()).status,403);
+ assert.equal(reads,2);
+});
+test('G189 malformed, completed or ambiguous MOTO owner RPC fails closed',async()=>{
+ const row={mode:'STAGING_DEMO_ONLY',qaOnly:true,productionEnabled:false,
+  serviceKind:'MOTO_RIDE',driverId:driver,bookingKey:booking,
+  tripId:trip,tripState:'accepted',tripRevision:2,serverPersisted:true};
+ for(const returned of [[row],{...row,driverId:foreign},
+  {...row,tripState:'completed',tripRevision:5},
+  {...row,passengerPhone:'private'},undefined]){
+  const gateway=createG169DriverMotoJourneyGateway({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+   now:()=>10000000,
+   verifyAccessToken:async()=>({id:driver,sessionId:id(6),
+    is_anonymous:false,expiresAtMs:11000000}),
+   verifySessionNotRevoked:async()=>true,
+   resolveExclusiveRole:async()=> 'driver',allowRequest:()=>true,
+   readMoto:async()=>null,advanceMoto:async()=>{},
+   readCurrentMoto:async()=>returned
+  });
+  const result=await gateway({method:'GET',
+   path:'/v1/staging/driver/moto/current',
+   headers:{authorization:'Bearer '+'z'.repeat(24)}});
+  assert.equal(result.status,503,'No active assignment may be inferred');
+ }
+});
