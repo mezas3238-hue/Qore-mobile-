@@ -75,6 +75,6 @@ export function createG177VerifiedAutoDriverStepGateway({
   }catch{return deny(503,'G177_REVOCATION_UNAVAILABLE');}
   return {status:200,body:{mode:'STAGING_DEMO_ONLY',
    commercialRidesEnabled:false,tripId,event:body.event,eventId,
-   serverPersisted:true,qaOnly:true,productionEnabled:false,retrySafe:false}};
+   serverPersisted:true}};
  };
 }
