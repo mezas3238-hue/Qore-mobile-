@@ -239,6 +239,8 @@ on:
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g187-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/movete-cliente/src/domain/g187-recipient-http-gateway*'
+      - 'apps/movete-cliente/app/confirmacion-entrega.tsx'
       - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
       - 'apps/mobility-expo/server/g56-*'
@@ -274,6 +276,8 @@ on:
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g187-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/movete-cliente/src/domain/g187-recipient-http-gateway*'
+      - 'apps/movete-cliente/app/confirmacion-entrega.tsx'
       - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
       - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
 permissions:
@@ -682,6 +686,8 @@ jobs:
         run: python3 apps/mobility-expo/server/g67-delivery-proof-atomic-race-ci.py
       - name: G187 install independently authenticated recipient confirmation for original G5 delivery
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G187_INDEPENDENT_RECIPIENT_CONFIRMATION_POSTGRES_CI_ONLY.sql
+      # G190 verifies immutable ACK history after a dispute and independent
+      # recipient GET recovery. No fake READY, no payment capture, no LIVE.
       - name: G187 two-session recipient receipt after original G67 proof, separate from PSP settlement
         run: |
           python3 -m py_compile apps/mobility-expo/server/g187-independent-recipient-pg-ci.py
