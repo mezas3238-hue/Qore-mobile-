@@ -101,7 +101,7 @@ test('G188 Driver MOTO steps require fresh GET then one POST then fresh GET',asy
   assert.equal(current.phase,i===3?'terminal':'active');
  }
  await f.controller.advance();
- assert.deepEqual(f.counts(),{reads:10,writes:3});
+ assert.deepEqual(f.counts(),{reads:7,writes:3});
 });
 test('G188 lost ACK keeps MOTO blocked until authenticated original GET proves revision',async()=>{
  const f=fixture({ambiguous:true});
@@ -116,11 +116,12 @@ test('G188 lost ACK keeps MOTO blocked until authenticated original GET proves r
  assert.equal(confirmed.uncertain,false);
  assert.equal(f.counts().writes,1);
 });
-test('G188 stale read or logout prevents second MOTO POST',async()=>{
+test('G188 stale GET after a commit never replays MOTO POST; logout clears trip',async()=>{
  const f=fixture({stale:true});
  await f.controller.open(booking);
- assert.equal((await f.controller.advance()).phase,'active');
- assert.equal((await f.controller.advance()).phase,'unverified');
+ assert.equal((await f.controller.advance()).phase,'uncertain');
+ assert.equal((await f.controller.refresh()).phase,'uncertain');
+ await f.controller.advance();
  assert.equal(f.counts().writes,1);
  f.controller.clear();
  assert.equal(f.controller.current().tripId,null);
