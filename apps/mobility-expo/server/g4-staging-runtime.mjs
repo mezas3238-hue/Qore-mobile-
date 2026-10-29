@@ -70,6 +70,7 @@ import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-
 import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mjs';
 import {createG156MerchantInboxGateway} from './g156-merchant-inbox-gateway.mjs';
 import {createG158AdminFraudQaGateway} from './g158-admin-fraud-qa-gateway.mjs';
+import {createG173MerchantVerifiedMutationGateway} from './g173-merchant-verified-mutation-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -594,6 +595,38 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ // G173: legacy merchant writes cannot fall through when the independent
+ // staff revocation authority is unavailable. SQL G42 locks the session.
+ const merchantMutations=createG173MerchantVerifiedMutationGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+  legacyGateway:merchants,
+  verifyAccessToken:async token=>{
+   if(merchantStaffTrust===null)throw Error('G173 merchant identity authority missing');
+   const user=await verified(token);
+   const actor=await merchantStaffTrust.verifyMerchantSession(token);
+   if(!actor||typeof actor!=='object'||Array.isArray(actor)||
+    Object.getPrototypeOf(actor)!==Object.prototype||Object.keys(actor).length!==5||
+    !['id','sessionId','tokenIatMs','expiresAtMs','is_anonymous'].every(k=>Object.hasOwn(actor,k))||
+    actor.id!==user.id||actor.is_anonymous!==false||user.is_anonymous===true||
+    !(typeof user.email_confirmed_at==='string'||typeof user.phone_confirmed_at==='string'))
+    throw Error('G173 independent merchant identity mismatch');
+   return actor;
+  },
+  verifySessionNotRevoked:x=>merchantStaffTrust===null?
+   Promise.resolve(false):merchantStaffTrust.verifySessionNotRevoked(x),
+  allowRequest:({userId})=>allowRequest({userId}),
+  runMutation:async x=>{
+   const name=x.kind==='transition'?'mobility_stage_g173_merchant_transition_qa':
+    'mobility_stage_g173_merchant_attach_qa';
+   const params={_actor:x.actorId,_session:x.sessionId,_iat:x.tokenIatMs,
+    _order:x.orderId,_request:x.kind==='transition'?x.eventKey:x.requestKey,
+    ...(x.kind==='transition'?{_action:x.event}:{_delivery:x.deliveryId})};
+   const {data,error}=await admin.rpc(name,params);
+   if(error||typeof data!=='string'||!UUID.test(data))
+    throw Error('G173 G42 fenced original SQL mutation denied');
+   return data;
+  }
+ });
  // G125: Generic route/pricing adapters may NEVER mint cargo quotes.
  // Explicit Owner approval and an independent evidence provider are required.
  const cargoPricing=cargoRoadRoutingApproved===true?
@@ -1040,7 +1073,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
    deliveryHandler:guard(deliveries),
-   merchantHandler:guard(merchants),
+   merchantHandler:guard(merchantMutations),
    financeHandler:guard(finance),
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
