@@ -15,5 +15,6 @@ export declare function createG200DriverMotoLostItemsHttp(options?:{
  inbox:()=>Promise<G200DriverResult>;
  read:(caseId:string)=>Promise<G200DriverResult>;
  send:(caseId:string,requestKey:string,body:string)=>Promise<G200DriverResult>;
+ close:(caseId:string,block:boolean)=>Promise<G200DriverResult>;
  productionEnabled:false;
 }>;
