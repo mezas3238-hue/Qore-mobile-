@@ -121,7 +121,7 @@ try{
   commandKey:'16900000-0000-4169-8169-000000000008'
  }),/UNKNOWN/);
  assert.equal(steps,0,'Native Driver cannot advance a completed original MOTO booking');
- assert.equal(reads,5,'Native C hits the real scoped G169 SQL GET twice and denied POST once');
+ assert.equal(reads,4,'Native C reads original SQL once and stale POST is read-only at G169');
  console.log('G188 CROSS-APP PASS: Driver native G169 HTTP contract reads same durable original completed PostgreSQL MOTO trip and fails closed on foreign or stale commands.');
  console.log('G169 PASS: original G119 MOTO SQL booking -> G169 own Driver GET -> same completed trip/revision; foreign/rejected/terminal transition denied, no legal acceptance fabricated, no PII/PSP/GPS/LIVE.');
 }finally{await new Promise(resolve=>server.close(resolve));}
