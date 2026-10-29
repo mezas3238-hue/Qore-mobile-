@@ -11,6 +11,7 @@ export default function DriverLayout(){
    <Stack.Screen name="index" options={{title:'Movete Fácil Driver'}}/>
    <Stack.Screen name="documentos" options={{title:'Mis documentos'}}/>
    <Stack.Screen name="ofertas" options={{title:'Ofertas para mí'}}/>
+   <Stack.Screen name="distancia-recogida" options={{title:'Distancia de recogida'}}/>
    <Stack.Screen name="viaje" options={{title:'Viaje asignado'}}/>
    <Stack.Screen name="calificar" options={{title:'Calificar al cliente'}}/>
    <Stack.Screen name="entrega" options={{title:'Custodia de entrega'}}/>
