@@ -7,8 +7,8 @@ import {createDriverMotoJourneyController}
 const id=n=>'18800000-0000-4188-8188-'+String(n).padStart(12,'0');
 const booking=id(1),trip=id(2),owner=id(3),key=id(4);
 const bearer='g188-private-driver-token-1234567890';
-const origin='https://g188-driver-moto.example';
-const scope={apiOrigin:origin,approvedStagingHost:'g188-driver-moto.example',
+const origin='https://g188-driver-moto-staging.example';
+const scope={apiOrigin:origin,approvedStagingHost:'g188-driver-moto-staging.example',
  allowedByOwner:true,accessToken:bearer,bookingKey:booking};
 const states=['accepted','arriving','in_progress','completed'];
 const next=['arriving','in_progress','completed',null];
