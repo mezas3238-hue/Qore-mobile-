@@ -73,7 +73,8 @@ export function createG66CourierCustodyTransitionQa({
   let receipt;
   try{
    receipt=await transitionDelivery(Object.freeze({
-    actorId:user.id,deliveryId:found[1].toLowerCase(),
+    actorId:user.id,sessionId:user.sessionId,tokenIatMs:user.tokenIatMs,
+    deliveryId:found[1].toLowerCase(),
     event:body.event,eventKey:body.eventKey,
     ...(deliver?{proofRef:body.proofRef}:{})
    }));
