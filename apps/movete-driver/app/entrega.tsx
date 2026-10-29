@@ -65,7 +65,11 @@ export default function DriverDelivery(){
     disabled={proofRequired}
     onPress={()=>{void advance();}}/>}
    {active&&proofRequired&&<Text style={styles.text}>Antes de marcar entregado hace falta una prueba registrada y verificada por un servicio independiente del backend. No se puede generar un comprobante ficticio desde el teléfono.</Text>}
-   {enabled&&deliveryId&&<Action
+   {enabled&&same&&state.phase==='terminal'&&state.status==='delivered'&&
+     <Action label="Calificar al cliente de esta entrega" secondary
+      onPress={()=>router.push({pathname:'/calificar',
+       params:{serviceId:deliveryId??'',serviceKind:'DELIVERY_AUTO'}})}/>}
+    {enabled&&deliveryId&&<Action
     label={state.uncertain?'Consultar resultado sin reenviar':'Actualizar custodia'}
     secondary disabled={['loading','submitting'].includes(state.phase)}
     onPress={()=>{void (state.phase==='ready'?open(deliveryId):refresh());}}/>}

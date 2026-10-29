@@ -71,7 +71,11 @@ export default function DriverTripScreen(){
    {canAct&&state.nextEvent&&<Action
     label={labels[state.nextEvent]??'Registrar siguiente evento'}
     onPress={()=>{void advance();}}/>}
-   {enabled&&tripId&&<Action
+   {enabled&&loaded&&state.phase==='terminal'&&state.status==='completed'&&
+     <Action label="Calificar al cliente de este viaje" secondary
+      onPress={()=>router.push({pathname:'/calificar',
+       params:{serviceId:tripId??'',serviceKind:'AUTO_RIDE'}})}/>}
+    {enabled&&tripId&&<Action
     label={state.uncertain?'Consultar estado sin repetir la acción':'Actualizar estado del viaje'}
     secondary disabled={state.phase==='submitting'||state.phase==='loading'}
     onPress={()=>{void (state.phase==='ready'?open(tripId):refresh());}}/>}
