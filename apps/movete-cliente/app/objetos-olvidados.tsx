@@ -23,6 +23,7 @@ function PrivateLostItems({client,subject,privacy}:{
  const [caseId,setCaseId]=useState<string|null>(null);
  const [messages,setMessages]=useState<Array<{messageId:string;senderRole:'passenger'|'driver';body:string;createdAtMs:number}>>([]);
  const [canSend,setCanSend]=useState(false);
+ const [uncertainSend,setUncertainSend]=useState(false);
  const [draft,setDraft]=useState('');
  const [notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false);
@@ -41,7 +42,7 @@ function PrivateLostItems({client,subject,privacy}:{
   }
  }),[auth,client]);
  useEffect(()=>{setCaseId(null);setMessages([]);setNotice('');setDraft('');
-  attempted.current=false;},[tripId]);
+  attempted.current=false;setUncertainSend(false);},[tripId]);
  const owned=Boolean(tripId&&subject&&client.snapshot().authenticated
   &&client.snapshot().account?.subject===subject
   &&client.snapshot().privateViewRevision===privacy
@@ -81,13 +82,14 @@ function PrivateLostItems({client,subject,privacy}:{
   }finally{lock.current=false;setBusy(false);}
  }
  async function send(){
-  if(lock.current||!configured||!caseId||!canSend)return;
+  if(lock.current||!configured||!caseId||!canSend||uncertainSend)return;
   const body=draft.trim();
   if(!body||body.length>500)return;
   lock.current=true;setBusy(true);setNotice('');
   try{
    const r=await gateway.send({...scope,caseId,requestKey:Crypto.randomUUID(),body});
    if(!r.ok){
+    setUncertainSend(true);
     setNotice('Resultado de mensaje incierto. No se generará automáticamente otra clave ni se repetirá el POST.');
     return;
    }
@@ -124,10 +126,10 @@ function PrivateLostItems({client,subject,privacy}:{
     <Text style={styles.text}>{m.body}</Text>
    </View>)}
    <TextInput style={[styles.field,{minHeight:80,textAlignVertical:'top'}]}
-    multiline maxLength={500} value={draft} editable={canSend&&!busy}
+    multiline maxLength={500} value={draft} editable={canSend&&!busy&&!uncertainSend}
     onChangeText={setDraft} placeholder="Describí brevemente el objeto olvidado"
     accessibilityLabel="Mensaje privado al conductor sobre objeto perdido"/>
-   <Action label="Enviar mensaje al conductor" disabled={!canSend||busy||!draft.trim()}
+   <Action label="Enviar mensaje al conductor" disabled={!canSend||busy||uncertainSend||!draft.trim()}
     onPress={()=>{void send();}}/>
    <Text style={styles.small}>El conductor solo puede responder cuando esté detenido y autenticado. Nunca se comparte información personal de contacto.</Text>
   </Panel>}
