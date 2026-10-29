@@ -21,8 +21,8 @@ const mode=process.argv.length===2&&process.argv[1].endsWith('load-lab-v1.mjs')?
  process.argv[2].slice(2):null;
 if(!mode)throw Error('Only --smoke or --stress are accepted. No external URL support.');
 const steps=mode==='stress'?
- [{requests:500,concurrency:25},{requests:2000,concurrency:80},
-  {requests:3000,concurrency:120}]:
+ ([{requests:500,concurrency:25},{requests:2000,concurrency:80},
+  {requests:3000,concurrency:120},{requests:10000,concurrency:200}]):
  [{requests:300,concurrency:20},{requests:1200,concurrency:60}];
 const noop=async()=>({status:404,body:{error:'Not found'}});
 const backend=createQoreRadarLoopbackTransport({
@@ -34,7 +34,8 @@ const backend=createQoreRadarLoopbackTransport({
    productionEnabled:false,offers:[]}
  })
 });
-const agent=new Agent({keepAlive:true,maxSockets:150,maxFreeSockets:50});
+// Concurrency=200 must mean 200 possible sockets, not an Agent queue capped at 150.
+const agent=new Agent({keepAlive:true,maxSockets:256,maxFreeSockets:80});
 const percentile=(values,p)=>{
  if(!values.length)return null;
  const s=[...values].sort((a,b)=>a-b);

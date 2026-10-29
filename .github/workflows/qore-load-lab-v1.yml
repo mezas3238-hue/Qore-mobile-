@@ -13,7 +13,7 @@ permissions:
   contents: read
 jobs:
   isolated-http-stress:
-    name: 5,500 synthetic requests via real ingress and G4 router
+    name: 15,500 synthetic requests via real ingress and G4 router
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -26,7 +26,7 @@ jobs:
       - name: Assert no external destination, accounts or secrets
         run: |
           node --check apps/mobility-expo/scripts/load/load-lab-v1.mjs
-      - name: Run isolated stress staircase (500 + 2,000 + 3,000)
+      - name: Run isolated stress staircase (500 + 2,000 + 3,000 + 10,000)
         run: node apps/mobility-expo/scripts/load/load-lab-v1.mjs --stress
       - name: Preserve metrics even if overload causes test failure
         if: always()

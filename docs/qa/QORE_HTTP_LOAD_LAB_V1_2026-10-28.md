@@ -12,8 +12,11 @@ Node 22+ from the repository root:
     node apps/mobility-expo/scripts/load/load-lab-v1.mjs --smoke
     node apps/mobility-expo/scripts/load/load-lab-v1.mjs --stress
 
-The stress run sends **5,500 total GET requests** in increasing
-stages of 500 / 2,000 / 3,000 (25 / 80 / 120 concurrent workers).
+The extended stress run sends **15,500 total GET requests** in increasing
+stages of 500 / 2,000 / 3,000 / 10,000 (25 / 80 / 120 / 200 concurrent
+workers). These are cumulative distinct identities within one minute,
+**not 15,500 concurrent active users**. The prior 5,500-request baseline
+is preserved in the first three stages.
 Every request has a distinct synthetic identity, so the current
 per-identity limiter cannot hide multi-user capacity saturation.
 A separate 92-request same-identity probe verifies the 90/minute limiter.
@@ -25,10 +28,21 @@ Outputs:
 
 The lab marks the step FAIL on 429/503/timeout/bad responses or p95 > 1500ms.
 These are **local transport thresholds only**, not UX or production targets.
-In particular, the current render-staging-ingress.mjs has an in-memory
-requests.size >= 4096 guard, so stress can expose a 503 saturation point.
-Changing the limit blindly is **not** a fix: a distributed limiter, queues,
-backpressure and resource sizing must be designed and tested.
+In particular, the original render-staging-ingress.mjs had a full identity-map scan on each
+request and a 4,096-identity ceiling: GitHub run 40803709892 returned 1,405
+HTTP 503 responses in stage 3. The fixed-window accounting now prunes only
+expired oldest buckets (amortized O(1)), permits up to 16,384 distinct
+active tokens per 60 seconds with bounded memory, and returns explicit 429
+when that QA ceiling is reached without evicting still-active identities.
+Ingress also reserves separate in-flight budgets for 256 reads and 64 POSTs;
+when exhausted, 503 is an intentional immediate overload response **before**
+G4/SQL, not successful request processing. Existing identities retain their
+per-token 90/minute quota. The 5,500-request rerun 40804248568 passed
+all 5,500 with HTTP 200 and p95 under 56 ms at the worst stage.
+
+These numbers are per local process. **No distributed limiter, shared queue,
+Autoscaling, connection pool or real PostgreSQL load is certified**. Merely
+raising an in-memory limit would not make Render/Supabase horizontally safe.
 
 ## Scope of evidence
 
