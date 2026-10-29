@@ -51,7 +51,10 @@ def create_service(n):
     passenger = uid(1000+n)
     request_key = uid(20000+n)
     start = time.perf_counter()
-    with psycopg.connect(autocommit=True, connect_timeout=4) as conn:
+    # Bounded per-session admission: no hanging transaction can monopolize
+    # a runner connection indefinitely during connection/lock saturation.
+    with psycopg.connect(autocommit=True, connect_timeout=4,
+                         options="-c statement_timeout=8000 -c lock_timeout=2500") as conn:
         require_sql_guard(conn)
         conn.execute("INSERT INTO auth.users(id) VALUES(%s)", (passenger,))
         if group == 0:
@@ -161,6 +164,18 @@ with psycopg.connect(autocommit=True) as admin:
       WHERE t.id=ANY(%s::uuid[])
     """,(moto_ids,))
     assert entries==(300*4+60*4),entries
+    # Every original MOTO UUID must still belong to the exact original
+    # synthetic passenger and immutable booking request key.
+    moto_identity=admin.execute("""
+      SELECT id::text,passenger_id::text,booking_key::text
+      FROM public.mobility_stage_g100_moto_trips
+      WHERE id=ANY(%s::uuid[])
+    """,(moto_ids,)).fetchall()
+    actual_moto={a:(b,c) for a,b,c in moto_identity}
+    for i in range(300):
+        trip=originals[i][1]
+        assert actual_moto.get(trip)==(uid(1000+i),uid(80000+i)), (
+            'G177 MOTO original owner/request mutated', i,trip)
     for kind, ids in (("AUTO",auto_ids),("MOTO",cargo_moto_ids)):
         counts=admin.execute("""
          SELECT requested_vehicle_kind::text,status,count(*)
@@ -173,6 +188,18 @@ with psycopg.connect(autocommit=True) as admin:
           SELECT count(*) FROM public.mobility_stage_deliveries
           WHERE id=ANY(%s::uuid[]) AND courier_id IS NOT NULL
         """,(ids,))==0,"No courier can be forged under load"
+        source_rows=admin.execute("""
+          SELECT id::text,sender_id::text,request_key::text
+          FROM public.mobility_stage_deliveries
+          WHERE id=ANY(%s::uuid[])
+        """,(ids,)).fetchall()
+        verified={a:(b,c) for a,b,c in source_rows}
+        offset=300 if kind=="AUTO" else 600
+        for index in range(offset,offset+300):
+            delivery=originals[index][1]
+            assert verified.get(delivery)==(
+                uid(1000+index),uid(20000+index)),(
+                'G177 G5 owner/request changed',kind,index,delivery)
 
     # Source provenance/merchant stock truth for an original G139 Client
     # order. This is read-only: original B->A->G45->G6->D writes are tested
