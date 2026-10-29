@@ -198,6 +198,8 @@ export default function DriverHome(){
   <Panel>
    <Text style={styles.heading}>Viajes y envíos</Text>
    <Text style={styles.text}>Aquí aparecerán solamente ofertas dirigidas a tu identidad verificada por el backend.</Text>
+   <Action label="Configurar distancia máxima de recogida" secondary
+    onPress={()=>router.push('/distancia-recogida')}/>
    <Action label="Consultar mis ofertas" secondary onPress={()=>router.push('/ofertas')}/>
   </Panel>
   <Panel>
