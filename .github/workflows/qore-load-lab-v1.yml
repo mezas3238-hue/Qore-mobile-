@@ -55,6 +55,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: qore-isolated-http-load-v1
-          path: artifacts/qore-load-lab/results.json
+          path: |
+            artifacts/qore-load-lab/results.json
+            artifacts/qore-load-lab/g178-redis-results.json
           if-no-files-found: warn
           retention-days: 14
