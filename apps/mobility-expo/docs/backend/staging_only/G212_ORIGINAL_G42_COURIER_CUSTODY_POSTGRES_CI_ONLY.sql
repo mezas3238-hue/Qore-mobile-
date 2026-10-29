@@ -49,6 +49,12 @@ BEGIN
  OR d.sender_id=_driver OR d.requested_vehicle_kind NOT IN ('AUTO','MOTO')
  THEN RAISE EXCEPTION 'G212 original delivery assignment mismatch'
  USING ERRCODE='P2124'; END IF;
+ IF NOT EXISTS (
+  SELECT 1 FROM public.mobility_vehicles v WHERE v.id=d.vehicle_id
+   AND v.driver_id=_driver AND v.vehicle_kind=d.requested_vehicle_kind
+   AND v.review_status NOT IN ('rejected','suspended')
+ ) THEN RAISE EXCEPTION 'G212 original vehicle/category mismatch'
+ USING ERRCODE='P2124'; END IF;
  -- A bare assigned G5 fixture is NOT an accepted original G10 offer.
  IF NOT EXISTS (
   SELECT 1 FROM public.mobility_stage_delivery_offers o
