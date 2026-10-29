@@ -34,6 +34,8 @@ export default function ClientHome(){
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Envíos y comercios</Text>
    <Action secondary label="ENVÍOS · Auto o moto de carga" onPress={()=>router.push('/envios')}/>
+   <Action secondary label="Confirmación independiente de entrega"
+    onPress={()=>router.push('/confirmacion-entrega')}/>
    <Action secondary label="COMERCIOS · Supermercados, farmacias y restaurantes" onPress={()=>router.push('/comercios')}/>
    <Action secondary label="Cotizaciones en Gs" onPress={()=>router.push('/cotizacion')}/>
   </Panel>
