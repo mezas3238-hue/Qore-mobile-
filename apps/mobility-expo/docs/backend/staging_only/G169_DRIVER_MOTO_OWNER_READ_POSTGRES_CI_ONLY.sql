@@ -1,5 +1,12 @@
 -- G169: Driver-private projection of an already LEGALLY accepted G118
 -- MOTO_RIDE original booking. CI disposable only, never a dispatch authority.
+DO $guard$ BEGIN
+ IF pg_catalog.current_database()<>'qore_disposable_chain'
+ OR pg_catalog.current_setting('application_name',true)<>'qore_ci_disposable_chain'
+ OR pg_catalog.to_regclass('public.mobility_stage_g100_moto_trips') IS NULL
+ 
+ THEN RAISE EXCEPTION 'G169 only permitted on disposable PostgreSQL MOTO chain'; END IF;
+END $guard$;
 BEGIN;
 CREATE FUNCTION public.mobility_stage_g169_driver_moto_status_qa(
  _driver uuid,_booking uuid)
