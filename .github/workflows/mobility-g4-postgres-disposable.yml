@@ -368,6 +368,8 @@ jobs:
           node --test apps/mobility-expo/server/g4-staging-runtime.test.mjs
           node --test apps/mobility-expo/server/g143-courier-custody-http-routing.test.mjs
           node --test apps/mobility-expo/server/g66-courier-custody-qa.test.mjs
+          node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.mjs
+          node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
           node --test apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
           node --test apps/movete-driver/src/domain/driver-custody-controller.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
