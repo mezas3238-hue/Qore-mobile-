@@ -17,6 +17,7 @@ export default function DriverLayout(){
    <Stack.Screen name="entrega" options={{title:'Custodia de entrega'}}/>
    <Stack.Screen name="mensajes" options={{title:"Mensajes privados"}}/>
    <Stack.Screen name="objetos-olvidados" options={{title:"Objetos olvidados"}}/>
+   <Stack.Screen name="objetos-olvidados-moto" options={{title:"Objetos olvidados en MOTO"}}/>
    <Stack.Screen name="ganancias" options={{title:'Ganancias'}}/>
   </Stack>
  </DriverApplicationProviders>;
