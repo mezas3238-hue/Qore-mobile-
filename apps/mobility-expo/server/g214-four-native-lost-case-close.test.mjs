@@ -31,8 +31,9 @@ function mock(){
  return {request,requests};
 }
 function client(kind,request){
+ const stableExpiresAt=Date.now()+120000;
  const getSession=async()=>({role:'passenger',subject,token,
-  expiresAt:Date.now()+120000,privateViewRevision:4});
+  expiresAt:stableExpiresAt,privateViewRevision:4});
  const common={enabled:true,ownerApproved:true,providerVerified:true,
   origin,pinnedOrigin:origin,getSession,request};
  return kind==='AUTO'?
