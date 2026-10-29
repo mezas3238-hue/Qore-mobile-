@@ -125,6 +125,11 @@ export default function ClientHistory(){
       hint="Consulta privada de solo lectura; no crea viajes ni asigna conductor."
       onPress={()=>{void resumeOwnRide(item.serviceId,item.revision);}}/>}
     {item.kind==='RIDE'&&item.status==='completed'&&view.authenticated&&
+     <Action secondary label="Olvidé un objeto · contactar al conductor"
+      hint="Abrir un expediente privado para este viaje completo, sujeto a identidad y autorización vigentes."
+      onPress={()=>router.push({pathname:'/objetos-olvidados',
+       params:{tripId:item.serviceId}})}/>}
+    {item.kind==='RIDE'&&item.status==='completed'&&view.authenticated&&
      <Action secondary label="Calificar al conductor de este viaje"
       onPress={()=>router.push({pathname:'/calificar',
        params:{serviceId:item.serviceId,serviceKind:'AUTO_RIDE'}})}/>}
