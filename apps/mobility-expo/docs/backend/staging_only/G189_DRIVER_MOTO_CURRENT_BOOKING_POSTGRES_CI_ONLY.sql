@@ -12,7 +12,7 @@ BEGIN
  OR pg_catalog.current_setting('application_name')<>'qore_ci_disposable_chain'
  OR _driver IS NULL
  THEN RAISE EXCEPTION 'G189 forbidden context' USING ERRCODE='P1891'; END IF;
- SELECT pg_catalog.count(*),pg_catalog.min(booking_key) INTO n,b
+ SELECT pg_catalog.count(*),(pg_catalog.array_agg(booking_key))[1] INTO n,b
  FROM (SELECT booking_key FROM public.mobility_stage_g100_moto_trips
   WHERE driver_id=_driver AND status IN('accepted','arriving','in_progress')
   LIMIT 2) active;
