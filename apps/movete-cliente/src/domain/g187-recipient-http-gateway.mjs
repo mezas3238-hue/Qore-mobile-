@@ -39,7 +39,7 @@ const BIND=['mode','deliveryId','bindingPersisted','recipientConfirmed',
 const CONFIRM=['mode','deliveryId','confirmationId','recipientConfirmed',
  'serverPersisted','qaOnly','productionEnabled','paymentAuthorized'];
 const READ=['mode','deliveryId','ownerId','deliveryState','revision',
- 'courierProofCommitted','recipientBound','recipientConfirmed',
+ 'courierProofCommitted','recipientBound','bindingKey','recipientConfirmed',
  'eligibleForSettlement','paymentAuthorized','qaOnly','productionEnabled'];
 const STATES=['requested','accepted','picked_up','delivered','disputed','returned','cancelled'];
 const RECOVER=['mode','deliveryId','recipientConfirmed','confirmationId',
@@ -66,6 +66,8 @@ function validReceipt(r,operation,deliveryId,ownerId){
   &&Number.isSafeInteger(r.revision)&&r.revision>=1
   &&['courierProofCommitted','recipientBound','recipientConfirmed','eligibleForSettlement']
     .every(k=>typeof r[k]==='boolean')
+  &&(r.bindingKey===null||norm(r.bindingKey)!==null)
+  &&r.recipientBound===(r.bindingKey!==null)
   &&(!r.eligibleForSettlement||
     (r.recipientConfirmed&&r.deliveryState==='delivered'))
   &&(!r.recipientConfirmed||(r.courierProofCommitted&&r.recipientBound))
