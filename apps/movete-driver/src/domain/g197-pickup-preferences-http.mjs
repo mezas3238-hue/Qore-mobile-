@@ -17,7 +17,7 @@ function pinned(url){
   const u=new URL(url);
   return u.protocol==='https:'&&u.origin===url&&u.pathname==='/'&&
    !u.username&&!u.password&&!u.port&&!u.hash&&!u.search&&
-   /^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\\.onrender\\.com$/.test(u.hostname)
+   /^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/.test(u.hostname)
    ?u.origin:null;
  }catch{return null;}
 }
@@ -81,10 +81,10 @@ export function createG197DriverPickupPreferencesHttp({
    if(!validateSession(after)||!same(before,after))
     return fail('G197_SESSION_CHANGED');
    if(res.status!==200||res.ok!==true)return fail('G197_SERVER_DENIED');
-   if(!/^application\\/json(?:\\s*;|$)/i.test(res.headers?.get?.('content-type')??''))
+   if(!/^application\/json(?:\s*;|$)/i.test(res.headers?.get?.('content-type')??''))
     return fail('G197_INVALID_RECEIPT');
    const size=res.headers?.get?.('content-length');
-   if(size!=null&&(!/^\\d+$/.test(size)||Number(size)>4096))
+   if(size!=null&&(!/^\d+$/.test(size)||Number(size)>4096))
     return fail('G197_INVALID_RECEIPT');
    const loaded=await readBoundedResponseText(res,{limit:4096,signal:ctrl.signal,
     timedOut:()=>ctrl.signal.aborted||now()>=deadline});
