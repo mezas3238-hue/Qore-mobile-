@@ -33,7 +33,7 @@ function PrivateLostItems({client,subject,privacy}:{
   enabled:yes(process.env.EXPO_PUBLIC_G200_MOTO_OWNER_APPROVED),
   ownerApproved:yes(process.env.EXPO_PUBLIC_G200_MOTO_OWNER_APPROVED),
   providerVerified:yes(process.env.EXPO_PUBLIC_G200_MOTO_IDENTITY_VERIFIED),
-  g198PostgresVerified:yes(process.env.EXPO_PUBLIC_G200_MOTO_ORIGINAL_SQL_VERIFIED),
+  g200PostgresVerified:yes(process.env.EXPO_PUBLIC_G200_MOTO_ORIGINAL_SQL_VERIFIED),
   origin:process.env.EXPO_PUBLIC_F1_STAGING_ORIGIN,
   pinnedOrigin:process.env.EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN,
   getSession:async()=>{
