@@ -96,6 +96,12 @@ on:
       - 'apps/mobility-expo/server/g187-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G197_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G198_*'
+      - 'apps/mobility-expo/server/g197-*'
+      - 'apps/mobility-expo/server/g198-*'
+      - 'apps/movete-driver/src/domain/g197-*'
+      - 'apps/movete-cliente/src/domain/g198-*'
       - 'apps/movete-cliente/src/domain/g187-recipient-http-gateway*'
       - 'apps/movete-cliente/app/confirmacion-entrega.tsx'
       - '.github/workflows/mobility-g4-postgres-disposable.yml'
@@ -629,6 +635,12 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G55_SERVER_ISSUED_READ_MARKERS_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G55 two PostgreSQL delegated tickets race same server-issued marker and revoked-session fence
         run: python3 apps/mobility-expo/server/g55-private-read-markers-concurrency-ci.py
+      - name: G198 install independently authorized post-trip lost-item correspondence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G198_POST_RIDE_LOST_ITEMS_CHAT_POSTGRES_CI_ONLY.sql
+      - name: G198 original Passenger ↔ Driver recovery of belongings, revocation, no phones, no PSP
+        run: |
+          python3 -m py_compile apps/mobility-expo/server/g198-lost-item-postride-pg-ci.py
+          python3 apps/mobility-expo/server/g198-lost-item-postride-pg-ci.py
       - name: G56 install isolated Driver-only scoped chat capabilities (NOLOGIN)
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G56_DRIVER_SCOPED_CHAT_POSTGRES_CI_ONLY.sql
       - name: "G56 delegated Driver open/send/history: role isolation, assignment, replay and session revocation"
@@ -752,6 +764,12 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G81_F1_BOOKING_TO_PRIVATE_DRIVER_OFFER_POSTGRES_CI_ONLY.sql
       - name: G82 install DB-side first eligible AUTO candidate without client driver ID
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G82_F1_PRIVATE_AUTO_CANDIDATE_POSTGRES_CI_ONLY.sql
+      - name: G197 install Driver maximum actual-road pickup distance with G4/G10 transactional offer fences
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G197_DRIVER_PICKUP_ROAD_DISTANCE_POSTGRES_CI_ONLY.sql
+      - name: G197 PostgreSQL real pickup settings, per-service cap, provider-proof and actor revocation
+        run: |
+          python3 -m py_compile apps/mobility-expo/server/g197-pickup-road-distance-pg-ci.py
+          python3 apps/mobility-expo/server/g197-pickup-road-distance-pg-ci.py
       - name: G85 install durable server-only dispatch recovery queue after committed G73 booking
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G85_F1_DURABLE_AUTO_DISPATCH_OUTBOX_POSTGRES_CI_ONLY.sql
       - name: G87 enable durable recovery of expired or declined G85 private offers (disposable only)
