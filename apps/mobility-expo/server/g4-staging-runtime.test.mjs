@@ -1800,3 +1800,115 @@ test('G173 mid-mutation revocation cannot return successful merchant receipt',as
   assert.equal(r.body.serverPersisted,undefined);
  });
 });
+
+const g174Reserve='/v1/staging/buyer/orders/qa/reserve';
+const g174Cancel='/v1/staging/buyer/orders/qa/cancel';
+const g174Recover='/v1/staging/buyer/orders/qa/requests/'+requestKey;
+function buyerCommerceTrust(){
+ return {
+  verifyBuyerSession:async token=>{
+   if(token!==jwt.rider)throw Error('Independent Buyer identity denied');
+   return {id:passenger,sessionId:vehicle,tokenIatMs:now-1000,
+    expiresAtMs:now+60000,is_anonymous:false};
+  },
+  verifySessionNotRevoked:async()=>true
+ };
+}
+const g174Receipt=()=>({
+ receiptId:offer,orderId:ride,requestKey,branchId:vehicle,catalogVersion:1,
+ subtotalPyg:12000,receiptStatus:'QA_RESERVED_NO_PAYMENT',
+ orderEnabled:false,productionEnabled:false
+});
+test('G174 Client original G45 commerce remains unavailable without separate Buyer provider authority',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g174Reserve,'rider','POST',{})).status,503);
+  assert.equal((await req(base,g174Recover,'rider')).status,503);
+  assert(!m.state.rpcs.some(x=>x.name.startsWith('mobility_stage_g45_')));
+ });
+ for(const invalid of [{}, {...buyerCommerceTrust(),browserCanApprove:true},
+  {...buyerCommerceTrust(),verifySessionNotRevoked:null}]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,{buyerCommerceTrust:invalid}));
+  assert.equal(m.state.clients.length,0);
+ }
+});
+test('G174 original G45 Buyer reserve/cancel/recovery connects A+B through same G4 HTTP runtime',async()=>{
+ const m=mockSupabase(),old=m.createClient;
+ let active=true;
+ m.createClient=(url,key)=>{
+  const client=old(url,key);
+  if(key===serviceKey){
+   const previous=client.rpc;
+   client.rpc=async(name,params)=>{
+    if(['mobility_stage_g45_reserve_order_qa',
+      'mobility_stage_g144_recover_order_qa',
+      'mobility_stage_g45_cancel_order_qa'].includes(name)){
+     m.state.rpcs.push({name,params});
+     if(name==='mobility_stage_g45_reserve_order_qa')
+      return {data:g174Receipt(),error:null};
+     if(name==='mobility_stage_g144_recover_order_qa')
+      return {data:{...g174Receipt(),status:'requested',
+       revision:1,deliveryId:null},error:null};
+     return {data:{
+      orderId:ride,receiptId:offer,eventId:deliveryId,
+      receiptStatus:'QA_CANCELLED_STOCK_RESTORED',
+      refundStatus:'NO_PSP_NO_FINANCIAL_REFUND',
+      orderEnabled:false,productionEnabled:false},error:null};
+    }
+    return previous(name,params);
+   };
+  }
+  return client;
+ };
+ const runtime=await prepare(m,{buyerCommerceTrust:{
+  ...buyerCommerceTrust(),verifySessionNotRevoked:async()=>active
+ }});
+ const payload={requestKey,branchId:vehicle,catalogVersion:1,
+  vehicleKind:'MOTO',items:[{itemId:deliveryId,quantity:2}]};
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g174Reserve,'driver','POST',payload)).status,401);
+  const booked=await req(base,g174Reserve,'rider','POST',payload);
+  assert.equal(booked.status,201,JSON.stringify(booked.body));
+  assert.deepEqual(booked.body,g174Receipt());
+  const recovered=await req(base,g174Recover,'rider');
+  assert.equal(recovered.status,200,JSON.stringify(recovered.body));
+  assert.equal(recovered.body.orderId,ride);
+  assert.equal(recovered.body.deliveryId,null);
+  const canceled=await req(base,g174Cancel,'rider','POST',{
+   orderId:ride,cancelKey:fareQuote
+  });
+  assert.equal(canceled.status,200,JSON.stringify(canceled.body));
+  assert.equal(canceled.body.refundStatus,'NO_PSP_NO_FINANCIAL_REFUND');
+  const original=m.state.rpcs.filter(x=>x.name.startsWith('mobility_stage_g45_')||
+   x.name==='mobility_stage_g144_recover_order_qa');
+  assert.equal(original.length,3);
+  assert.deepEqual(original[0],{
+   name:'mobility_stage_g45_reserve_order_qa',
+   params:{_buyer:passenger,_session:vehicle,_iat_ms:now-1000,
+    _request_key:requestKey,_branch:vehicle,_catalog_version:1,
+    _vehicle_kind:'MOTO',_items:[{itemId:deliveryId,quantity:2}]}
+  });
+  active=false;
+  assert.equal((await req(base,g174Recover,'rider')).status,401);
+  assert.equal(original.length,3);
+  assert.equal(m.state.rpcs.filter(x=>x.name.startsWith('mobility_stage_g45_')||
+   x.name==='mobility_stage_g144_recover_order_qa').length,3);
+ });
+});
+test('G174 mismatched original Buyer IdP never reaches G45 stock SQL',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m,{buyerCommerceTrust:{
+  ...buyerCommerceTrust(),verifyBuyerSession:async()=>({
+   id:stranger,sessionId:vehicle,tokenIatMs:now-1000,
+   expiresAtMs:now+60000,is_anonymous:false
+  })
+ }});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g174Reserve,'rider','POST',{
+   requestKey,branchId:vehicle,catalogVersion:1,
+   vehicleKind:'AUTO',items:[{itemId:deliveryId,quantity:1}]
+  })).status,401);
+  assert(!m.state.rpcs.some(x=>x.name.startsWith('mobility_stage_g45_')));
+ });
+});
