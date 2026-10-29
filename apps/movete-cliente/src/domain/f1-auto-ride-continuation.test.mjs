@@ -150,3 +150,99 @@ test('F1 unmount while awaiting status never navigates',async()=>{
  assert.equal((await flight).code,'AUTO_CONTINUATION_CLOSED');
  assert.equal(navigations,0);
 });
+
+test('F1 deferred AUTO status requires fresh foreground GET before opening tracking',async()=>{
+ let foreground=true,finish,verified=0,foregroundReads=0,opened=[];
+ const pending=new Promise(resolve=>{finish=resolve;});
+ let snap=make();
+ const ctl=createF1AutoRideContinuation({
+  readSnapshot:()=>snap,isForeground:()=>foreground,
+  verifyRide:async()=>{
+   verified++;await pending;
+   snap={...snap,tracking:{subscriptionActive:true,tripId:trip,revision:2}};
+   return {ok:true,tripId:trip};
+  },
+  reverifyTracking:async()=>{foregroundReads++;return {ok:true};},
+  onVerified:id=>opened.push(id)
+ });
+ const first=ctl.tryResume();
+ foreground=false;finish();
+ assert.equal((await first).deferredNavigation,true);
+ assert.deepEqual(opened,[]);
+ foreground=true;
+ const continued=await ctl.tryResume();
+ assert.equal(continued.ok,true);
+ assert.equal(continued.tripId,trip);
+ assert.deepEqual(opened,[trip]);
+ assert.equal(verified,1);
+ assert.equal(foregroundReads,1);
+ assert.equal((await ctl.tryResume()).ok,false);
+ assert.deepEqual(opened,[trip]);
+});
+
+test('F1 deferred AUTO GET rejects a changed passenger privacy epoch',async()=>{
+ let foreground=true,finish,reads=0,opened=0,snap=make();
+ const pending=new Promise(resolve=>{finish=resolve;});
+ const ctl=createF1AutoRideContinuation({
+  readSnapshot:()=>snap,isForeground:()=>foreground,
+  verifyRide:async()=>{
+   await pending;
+   snap={...snap,tracking:{subscriptionActive:true,tripId:trip,revision:2}};
+   return {ok:true,tripId:trip};
+  },
+  reverifyTracking:async()=>{reads++;return {ok:true};},
+  onVerified:()=>opened++
+ });
+ const first=ctl.tryResume();foreground=false;finish();
+ assert.equal((await first).deferredNavigation,true);
+ foreground=true;snap={...snap,privateViewRevision:6};
+ assert.equal((await ctl.tryResume()).code,'AUTO_CONTINUATION_SCOPE_CHANGED');
+ assert.equal(reads,0);
+ assert.equal(opened,0);
+});
+
+test('F1 deferred AUTO GET after 503 has bounded retry and no second original verification',async()=>{
+ let foreground=true,finish,clock=100000,reads=0,verified=0,opened=0,snap=make();
+ const pending=new Promise(resolve=>{finish=resolve;});
+ const ctl=createF1AutoRideContinuation({
+  readSnapshot:()=>snap,isForeground:()=>foreground,now:()=>clock,
+  verifyRide:async()=>{
+   verified++;await pending;
+   snap={...snap,tracking:{subscriptionActive:true,tripId:trip,revision:2}};
+   return {ok:true,tripId:trip};
+  },
+  reverifyTracking:async()=>{reads++;return reads===1?{ok:false}:{ok:true};},
+  onVerified:()=>opened++
+ });
+ const first=ctl.tryResume();foreground=false;finish();
+ assert.equal((await first).deferredNavigation,true);
+ foreground=true;
+ assert.equal((await ctl.tryResume()).code,'AUTO_STATUS_NOT_VERIFIED');
+ assert.equal((await ctl.tryResume()).code,'AUTO_CONTINUATION_RETRY_COOLDOWN');
+ assert.equal(reads,1);assert.equal(opened,0);
+ clock+=5000;
+ assert.equal((await ctl.tryResume()).ok,true);
+ assert.equal(reads,2);assert.equal(verified,1);assert.equal(opened,1);
+});
+
+test('F1 deferred AUTO GET cannot navigate if permission changes during fresh read',async()=>{
+ let foreground=true,finish,snap=make(),opened=0;
+ const pending=new Promise(resolve=>{finish=resolve;});
+ const ctl=createF1AutoRideContinuation({
+  readSnapshot:()=>snap,isForeground:()=>foreground,
+  verifyRide:async()=>{
+   await pending;
+   snap={...snap,tracking:{subscriptionActive:true,tripId:trip,revision:2}};
+   return {ok:true,tripId:trip};
+  },
+  reverifyTracking:async()=>{
+   snap={...snap,account:{...snap.account,subject:foreign}};
+   return {ok:true};
+  },onVerified:()=>opened++
+ });
+ const first=ctl.tryResume();foreground=false;finish();
+ assert.equal((await first).deferredNavigation,true);
+ foreground=true;
+ assert.equal((await ctl.tryResume()).code,'AUTO_CONTINUATION_SCOPE_CHANGED');
+ assert.equal(opened,0);
+});
