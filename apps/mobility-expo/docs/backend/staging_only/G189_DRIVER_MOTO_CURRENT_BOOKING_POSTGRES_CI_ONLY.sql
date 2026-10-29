@@ -2,6 +2,13 @@
 -- No incoming offer, fake municipality permit, assignment, GPS or money.
 -- CI/disposable ONLY; the only caller is trusted service_role AFTER
 -- independent revocable IdP + exclusive Driver role verification.
+DO $guard$ BEGIN
+ IF pg_catalog.current_database()<>'qore_disposable_chain'
+ OR pg_catalog.current_setting('application_name',true)<>'qore_ci_disposable_chain'
+ OR pg_catalog.to_regclass('public.mobility_stage_g100_moto_trips') IS NULL
+ OR pg_catalog.to_regprocedure('public.mobility_stage_g169_driver_moto_status_qa(uuid,uuid)') IS NULL
+ THEN RAISE EXCEPTION 'G189 only permitted on disposable PostgreSQL MOTO chain'; END IF;
+END $guard$;
 BEGIN;
 CREATE FUNCTION public.mobility_stage_g189_driver_moto_current_qa(_driver uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
