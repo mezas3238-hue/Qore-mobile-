@@ -20,9 +20,26 @@ if(!Number.isInteger(port)||port<1024||port>65535)
 const hostname=process.env.QORE_RENDER_HOSTNAME;
 const adminOrigin=process.env.QORE_ADMIN_BROWSER_ORIGIN||null;
 if(!hostname)throw Error('Render STAGING pinned hostname required');
+// Per-replica budgets are operator-tunable only after real capacity tests.
+// Reject unlimited, nonnumeric, or out-of-range values before any Auth/PG.
+function boundedEnv(name,defaultValue,max){
+ const raw=process.env[name];
+ if(raw===undefined)return defaultValue;
+ if(!/^[1-9][0-9]{0,4}$/.test(raw))throw Error('Invalid STAGING admission budget '+name);
+ const value=Number(raw);
+ if(!Number.isSafeInteger(value)||value>max)
+  throw Error('Unsafe STAGING admission budget '+name);
+ return value;
+}
+const admission={
+ maxConcurrentReads:boundedEnv('QORE_EDGE_MAX_READS',256,2048),
+ maxConcurrentWrites:boundedEnv('QORE_EDGE_MAX_WRITES',128,1024),
+ maxIdentityBuckets:boundedEnv('QORE_EDGE_MAX_IDENTITIES',32768,65536)
+};
 // Validate host/origin BEFORE initializing any privileged clients.
 createRenderStagingIngress({
- loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,adminOrigin
+ loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,adminOrigin,
+ ...admission
 });
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
@@ -38,7 +55,8 @@ const runtime=await prepareQoreG4StagingRuntime({
 });
 const localOrigin=await listenQoreRadarLoopback(runtime.server);
 const ingress=createRenderStagingIngress({
- loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin
+ loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin,
+ ...admission
 });
 const shutdown=()=>{
  ingress.close();

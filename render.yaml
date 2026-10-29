@@ -1,5 +1,7 @@
 # Movete Fácil — Render STAGING only. This draft never deploys by itself.
 # Owner must approve creation, confirm any charges and set secrets in Render.
+# This references the GitHub integration branch only AFTER an Owner-approved merge.
+# Free instance is for noncommercial smoke; NOT certified for >1M users.
 # This Blueprint does NOT provision PostgreSQL: Supabase STAGING is required.
 previews:
   generation: off
@@ -9,7 +11,7 @@ services:
     runtime: node
     plan: free
     rootDir: apps/mobility-expo
-    branch: feature/mobility-monorepo-isolated-20261016
+    branch: integration/qore-mobile-e2e-four-apps-20261027
     buildCommand: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
     startCommand: node server/run-g4-render-staging.mjs
     autoDeployTrigger: off
@@ -21,6 +23,14 @@ services:
         value: "false"
       - key: QORE_RENDER_NO_COMMERCIAL_TRIPS
         value: "true"
+      # Safe per-replica budgets, NOT fleet throughput or autoscaling.
+      # CPU/DB capacity and horizontal scale must be benchmarked separately.
+      - key: QORE_EDGE_MAX_READS
+        value: "256"
+      - key: QORE_EDGE_MAX_WRITES
+        value: "128"
+      - key: QORE_EDGE_MAX_IDENTITIES
+        value: "32768"
       - key: QORE_RENDER_STAGING_APPROVED
         sync: false
       - key: QORE_RENDER_HOSTNAME

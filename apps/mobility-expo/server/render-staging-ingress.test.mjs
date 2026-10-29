@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer,request as nativeHttpRequest} from 'node:http';
 import {once} from 'node:events';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createRenderStagingIngress} from './render-staging-ingress.mjs';
 
@@ -156,9 +157,7 @@ test('Render ingress fail-closed on untrusted, non-JSON and oversized upstream r
  ]){
   const server=createRenderStagingIngress({
    loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
-   request:async()=>({
-    status:answer.status,redirected:false,text:async()=>answer.text
-   })
+   request:async()=>new Response(answer.text,{status:answer.status})
   });
   const remote=await listening(server);
   try{
@@ -202,7 +201,7 @@ test('G26 second-page history cursor reaches private G4 without query or token l
 test('Render ingress imposes bounded request rate independent of phone retries',async()=>{
  const server=createRenderStagingIngress({
   loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,now:()=>100000,
-  request:async()=>({status:200,redirected:false,text:async()=>'{"ok":true}'})
+  request:async()=>new Response('{"ok":true}',{status:200})
  });
  const remote=await listening(server);
  try{
@@ -213,6 +212,144 @@ test('Render ingress imposes bounded request rate independent of phone retries',
   }
   assert.equal((await doReq(remote,'/v1/staging/rider/history')).status,429);
  }finally{await new Promise(done=>server.close(done));}
+});
+test('G193 bounded Render ingress refuses a streaming 64KB G4 response before buffering it',async()=>{
+ let canceled=false;
+ const oversized=new ReadableStream({
+  pull(controller){controller.enqueue(new Uint8Array(65536));},
+  cancel(){canceled=true;}
+ });
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  request:async()=>({status:200,redirected:false,body:oversized})
+ });
+ const remote=await listening(server);
+ try{
+  const response=await doReq(remote,'/v1/staging/rider/history');
+  assert.equal(response.status,503);
+  assert.equal(canceled,true,'oversized upstream must be cancelled');
+  const dto=await response.json();
+  assert(!JSON.stringify(dto).includes(token));
+ }finally{await new Promise(done=>server.close(done));}
+});
+test('G194 configurable 64-read test budget rejects overload and frees slots',async()=>{
+ const pending=[];
+ let signalCount=0;
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,now:()=>100000,
+  maxConcurrentReads:64,
+  request:async(_url,opts)=>new Promise(resolve=>{
+   signalCount++;pending.push({resolve,signal:opts.signal});
+  })
+ });
+ const remote=await listening(server);
+ try{
+  const requests=Array.from({length:64},()=>doReq(remote,'/v1/staging/rider/history'));
+  const until=Date.now()+5000;
+  while(signalCount<64&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(signalCount,64,'all slots have reached upstream');
+  const overloaded=await doReq(remote,'/v1/staging/rider/history');
+  assert.equal(overloaded.status,503);
+  assert.equal(signalCount,64,'overload is rejected before G4');
+  pending.forEach(({resolve})=>resolve(new Response('{"ok":true}',{status:200})));
+  for(const response of await Promise.all(requests)){
+   assert.equal(response.status,200);
+   assert.deepEqual(await response.json(),{ok:true});
+  }
+  const final=doReq(remote,'/v1/staging/rider/history');
+  while(signalCount<65&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(signalCount,65,'released slots are reusable');
+  pending[64].resolve(new Response('{"ok":true}',{status:200}));
+  assert.equal((await final).status,200);
+ }finally{
+  pending.forEach(({resolve})=>resolve(new Response('{"error":"shutdown"}',{status:503})));
+  await new Promise(done=>server.close(done));
+ }
+});
+
+test('G194 removes the 64-total ceiling: 80 GETs and 32 POSTs overlap without rejection',async()=>{
+ const pending=[];
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  request:async(_url,opts)=>new Promise(resolve=>{
+   pending.push({resolve,method:opts.method});
+  })
+ });
+ const remote=await listening(server);
+ const unique=i=>'Bearer '+'g194_unique_credential_'.padEnd(30,'x')+String(i);
+ try{
+  const reads=Array.from({length:80},(_,i)=>doReq(remote,
+   '/v1/staging/rider/history',{authorization:unique(i)}));
+  const until=Date.now()+10000;
+  while(pending.length<80&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(pending.length,80,'GET lane admits more than old total 64');
+  const posts=Array.from({length:32},(_,i)=>doReq(remote,
+   '/v1/staging/rider/auto/prequote',{method:'POST',
+    authorization:unique(100+i),headers:{'content-type':'application/json'},
+    body:JSON.stringify({originalRequestKey:'g194-qa-only-'+i})}));
+  while(pending.length<112&&Date.now()<until)
+   await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(pending.length,112,'writes not starved by active reads');
+  assert.equal(pending.filter(x=>x.method==='POST').length,32);
+  pending.forEach(x=>x.resolve(new Response('{"qaOnly":true}',{status:200})));
+  for(const response of await Promise.all([...reads,...posts])){
+   assert.equal(response.status,200);
+   assert.equal((await response.json()).qaOnly,true);
+  }
+ }finally{
+  pending.forEach(x=>x.resolve(new Response('{"qaOnly":true}',{status:503})));
+  await new Promise(done=>server.close(done));
+ }
+});
+test('G194 identity capacity serves known owners while full; new users allowed after expiry',async()=>{
+ let clock=100000;
+ const server=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  maxIdentityBuckets:3,now:()=>clock,
+  request:async()=>new Response('{"qaOnly":true}',{status:200})
+ });
+ const remote=await listening(server);
+ const key=i=>'Bearer '+'auth_scope_'.padEnd(30,'q')+i;
+ try{
+  for(let i=0;i<3;i++)
+   assert.equal((await doReq(remote,'/v1/staging/rider/history',
+    {authorization:key(i)})).status,200);
+  const fourth=await doReq(remote,'/v1/staging/rider/history',
+   {authorization:key(3)});
+  assert.equal(fourth.status,503);
+  assert.equal(fourth.headers.get('retry-after'),'1');
+  assert.equal((await doReq(remote,'/v1/staging/rider/history',
+   {authorization:key(0)})).status,200,
+   'full identity map must NOT lock out already admitted owner');
+  clock+=60001;
+  assert.equal((await doReq(remote,'/v1/staging/rider/history',
+   {authorization:key(3)})).status,200,
+   'expired identities are evicted at the insertion-order head');
+ }finally{await new Promise(done=>server.close(done));}
+});
+test('G194 rejects dangerous per-instance budgets rather than promising unlimited capacity',()=>{
+ const original={loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host};
+ for(const override of [
+  {maxConcurrentReads:0},{maxConcurrentReads:2049},
+  {maxConcurrentWrites:0},{maxConcurrentWrites:1025},
+  {maxIdentityBuckets:0},{maxIdentityBuckets:65537},
+  {maxConcurrentReads:'unlimited'},{maxConcurrentWrites:Infinity}
+ ])assert.throws(()=>createRenderStagingIngress({...original,...override}));
+});
+
+test('G193 Render Blueprint pins approved GitHub integration, STAGING only, zero auto deployments',()=>{
+ const manifest=readFileSync(new URL('../../../render.yaml',import.meta.url),'utf8');
+ assert.match(manifest,/branch: integration\/qore-mobile-e2e-four-apps-20261027/);
+ assert.match(manifest,/autoDeployTrigger: off/);
+ assert.match(manifest,/QORE_RENDER_NO_COMMERCIAL_TRIPS\s*\n\s*value: "true"/);
+ assert.match(manifest,/LIVE_TRIPS_ENABLED\s*\n\s*value: "false"/);
+ assert.match(manifest,/QORE_RENDER_STAGING_APPROVED\s*\n\s*sync: false/);
+ assert.match(manifest,/QORE_STAGING_SERVICE_ROLE_KEY\s*\n\s*sync: false/);
+ assert(!manifest.includes('password:'));
+ assert(!manifest.includes('value: "true"\n      - key: LIVE_TRIPS_ENABLED'));
 });
 const runner=fileURLToPath(new URL('./run-g4-render-staging.mjs',import.meta.url));
 const spawn=vars=>spawnSync(process.execPath,[runner],{
@@ -229,6 +366,26 @@ test('Render runner refuses unapproved staging and commercial flags before any s
   assert.notEqual(res.status,0);
   assert.match(res.stderr,/explicit non-commercial owner authorization/);
   assert.doesNotMatch(res.stdout,/started|secret|token/);
+ }
+});
+test('G194 Render runner blocks unlimited and malformed concurrency env before privileged clients',()=>{
+ const approved={
+  QORE_RENDER_STAGING_APPROVED:'true',QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',QORE_RENDER_NO_COMMERCIAL_TRIPS:'true',
+  PORT:'10000',QORE_RENDER_HOSTNAME:host
+ };
+ for(const override of [
+  {QORE_EDGE_MAX_READS:'0'},
+  {QORE_EDGE_MAX_READS:'2049'},
+  {QORE_EDGE_MAX_WRITES:'1025'},
+  {QORE_EDGE_MAX_IDENTITIES:'65537'},
+  {QORE_EDGE_MAX_READS:'unlimited'},
+  {QORE_EDGE_MAX_WRITES:'1.5'}
+ ]){
+  const result=spawn({...approved,...override});
+  assert.notEqual(result.status,0);
+  assert.match(result.stderr,/STAGING admission budget/);
+  assert.doesNotMatch(result.stdout,/transport started|secret|token/);
  }
 });
 test('Render runner with explicitly allowed STAGING still fails closed on missing IdP/PG secrets',()=>{
