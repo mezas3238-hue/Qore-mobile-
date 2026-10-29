@@ -60,10 +60,8 @@ with db() as c:
   (driver_id,assignment_kind,assignment_id) VALUES (%s,'DELIVERY',%s)""",D,delivery)
 with db() as c:
  denied(c,'P9004',RECOVER,OTHER,OS,AT,delivery)
- pending=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
- assert pending['recipientConfirmed'] is False
- assert pending['confirmationId'] is None
- assert pending['eligibleForSettlement'] is False
+ # Unbound recipient is deliberately invisible, even with a real IdP.
+ denied(c,'P9004',RECOVER,R,RS,AT,delivery)
  before=sql(c,READ,S,SS,AT,delivery).fetchone()[0]
  assert before['recipientConfirmed'] is False
  assert before['recipientBound'] is False
@@ -72,6 +70,10 @@ with db() as c:
  bindkey=new()
  bound=sql(c,BIND,S,SS,AT,delivery,R,bindkey).fetchone()[0]
  assert bound['bindingPersisted'] is True
+ pending=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
+ assert pending['recipientConfirmed'] is False
+ assert pending['confirmationId'] is None
+ assert pending['eligibleForSettlement'] is False
  assert sql(c,BIND,S,SS,AT,delivery,R,bindkey).fetchone()[0]==bound
  denied(c,'P8704',BIND,S,SS,AT,delivery,OTHER,new())
  denied(c,'P8701',BIND,S,SS,AT,delivery,S,new())
