@@ -39,6 +39,10 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G155_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G156_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G157_*'
+      - 'apps/mobility-expo/server/g158-*'
+      - 'apps/movete-admin/src/g158-*'
+      - 'apps/movete-admin/src/G158FraudReportsPanel.tsx'
+      - 'apps/movete-admin/src/main.tsx'
       - 'apps/mobility-expo/server/g156-*'
       - 'apps/movete-cliente/src/domain/g155-*'
       - 'apps/movete-cliente/app/calificar.tsx'
@@ -110,6 +114,10 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G155_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G156_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G157_*'
+      - 'apps/mobility-expo/server/g158-*'
+      - 'apps/movete-admin/src/g158-*'
+      - 'apps/movete-admin/src/G158FraudReportsPanel.tsx'
+      - 'apps/movete-admin/src/main.tsx'
       - 'apps/mobility-expo/server/g156-*'
       - 'apps/movete-cliente/src/domain/g155-*'
       - 'apps/movete-cliente/app/calificar.tsx'
@@ -833,5 +841,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G157_VERIFIED_FRAUD_SIGNAL_TRIAGE_POSTGRES_CI_ONLY.sql
       - name: G157 verify real G67 delivery report -> Admin evidence triage, privacy and no automated penalty
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G157_VERIFIED_FRAUD_SIGNAL_TRIAGE_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G158 original G155/G157 alert -> independent Admin AAL2 HTTP -> D web client
+        run: node apps/mobility-expo/server/g158-admin-fraud-pg-http-ci.mjs
       - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
         run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs

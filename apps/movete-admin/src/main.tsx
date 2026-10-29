@@ -5,6 +5,7 @@ import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
 import {AdminAuthPanel} from './AdminAuthPanel';
 import {OwnerCommissionEditor} from './OwnerCommissionEditor';
 import {OwnerCargoRateEditor} from './OwnerCargoRateEditor';
+import {G158FraudReportsPanel} from './G158FraudReportsPanel';
 import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
@@ -756,6 +757,9 @@ function App(){
     contractReady={adminState.merchantCaseContractReady}
     allowed={adminState.account?.role==='admin'&&adminState.account.mfaVerified===true}/>
    <GlobalTriagePanel client={client} state={adminState}/>
+   <G158FraudReportsPanel
+    authorized={adminState.account?.role==='admin'&&adminState.account.mfaVerified===true}
+    subject={adminState.account?.role==='admin'?adminState.account.subject:null}/>
    <IncidentReadOnly incidents={adminState.incidents} allowed={adminState.account?.role==='admin'}/>
   </>:page==='zonas'?<ZoneReadOnly zones={adminState.zones} allowed={adminState.account?.role==='admin'}/>:page==='kyc'?(adminState.account?.role==='owner'?<Panel className="detail"><h2>Revisión de documentos</h2><p>Esta sesión es de propietario, no de revisor KYC. La lectura y las decisiones requieren permisos administrativos separados y certificados por el servidor.</p><div className="empty-chip">Acceso no autorizado para rol owner</div></Panel>:adminState.authenticated&&adminState.kyc?<AuthorizedQueue items={adminState.kyc.items}/>:<KycTraining/>):<Panel className="detail">
        <h2>Sección no disponible</h2>
