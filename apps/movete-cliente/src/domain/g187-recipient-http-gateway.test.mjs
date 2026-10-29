@@ -145,3 +145,43 @@ test('G188 refuses huge response, redirect, expired session and invalid recipien
  assert.equal((await expired.confirmReceived(scope(recipient))).code,'G187_SESSION_CHANGED');
  assert.equal((await large.confirmReceived({...scope(recipient),requestKey:'bad'})).code,'G187_INVALID_SCOPE');
 });
+
+test('G190 recipient can reconcile lost ACK by bounded GET without second POST; dispute never settles',async()=>{
+ const calls=[];
+ const gateway=createG187ClientHttpGateway(options({
+  getSession:async()=>session(recipient),
+  fetchImpl:async(url,opts)=>{
+   calls.push({url,opts});
+   return response({mode:'STAGING_DEMO_ONLY',deliveryId:delivery,
+    recipientConfirmed:true,confirmationId:key,deliveryState:'disputed',
+    revision:5,eligibleForSettlement:false,paymentAuthorized:false,
+    qaOnly:true,productionEnabled:false});
+  }
+ }));
+ const recovered=await gateway.readRecipientConfirmation(scope(recipient));
+ assert.equal(recovered.ok,true);
+ assert.equal(recovered.data.confirmationId,key);
+ assert.equal(recovered.data.recipientConfirmed,true);
+ assert.equal(recovered.data.eligibleForSettlement,false);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].opts.method,'GET');
+ assert.equal(calls[0].opts.body,undefined);
+ assert.equal(calls[0].url,host+'/v1/staging/recipient/deliveries/'+delivery+'/confirmation');
+ const missing=createG187ClientHttpGateway(options({
+  getSession:async()=>session(recipient),
+  fetchImpl:async()=>response({mode:'STAGING_DEMO_ONLY',deliveryId:delivery,
+   recipientConfirmed:false,confirmationId:null,deliveryState:'picked_up',
+   revision:3,eligibleForSettlement:false,paymentAuthorized:false,
+   qaOnly:true,productionEnabled:false})
+ }));
+ const pending=await missing.readRecipientConfirmation(scope(recipient));
+ assert.equal(pending.ok,true);assert.equal(pending.data.confirmationId,null);
+ const forged=createG187ClientHttpGateway(options({
+  getSession:async()=>session(recipient),
+  fetchImpl:async()=>response({mode:'STAGING_DEMO_ONLY',deliveryId:delivery,
+   recipientConfirmed:true,confirmationId:key,deliveryState:'disputed',
+   revision:5,eligibleForSettlement:true,paymentAuthorized:false,
+   qaOnly:true,productionEnabled:false})
+ }));
+ assert.equal((await forged.readRecipientConfirmation(scope(recipient))).ok,false);
+});
