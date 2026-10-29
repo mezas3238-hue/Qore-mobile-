@@ -98,6 +98,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G197_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G199_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G200_*'
+      - 'apps/mobility-expo/server/g200-*'
       - 'apps/mobility-expo/server/g199-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G198_*'
       - 'apps/mobility-expo/server/g197-*'
@@ -920,6 +922,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G199_MOTO_PASSENGER_PICKUP_ROAD_ENFORCEMENT_POSTGRES_CI_ONLY.sql
       - name: G199 verify real PostgreSQL MOTO road cap, legal fence separation and revoked Driver
         run: python3 apps/mobility-expo/server/g199-moto-pickup-distance-pg-ci.py
+      - name: G200 install original completed MOTO Passenger Driver lost-object correspondence
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G200_POST_MOTO_LOST_ITEMS_CHAT_POSTGRES_CI_ONLY.sql
+      - name: G200 real PostgreSQL MOTO recovery privacy, no personal contact, blocked/revoked cases
+        run: python3 apps/mobility-expo/server/g200-moto-lost-item-postride-pg-ci.py
       - name: G169 install Driver-owned original MOTO read without Passenger PII
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G169_DRIVER_MOTO_OWNER_READ_POSTGRES_CI_ONLY.sql
       - name: G119 authenticated Rider MOTO HTTP status across real PostgreSQL lifecycle
