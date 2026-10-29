@@ -100,6 +100,15 @@ try{
  assert.equal((await post(token,'ready','17300000-0000-4173-8173-000000000099')).status,409,
   'Current merchant state cannot be advanced twice');
  assert.equal(count(),before);
+ // Staff suspension is immediately effective even for a previously
+ // committed immutable requestKey. G173 locks the source membership row.
+ const merchant=sql("SELECT merchant_id FROM public.mobility_stage_merchant_orders WHERE id="+qs(source.order));
+ sql("UPDATE public.mobility_stage_merchant_staff SET active=false "+
+  "WHERE user_id="+qs(seller)+" AND merchant_id="+qs(merchant));
+ assert.equal((await post(token)).status,409,'Former staff cannot replay original event');
+ assert.equal(count(),before);
+ sql("UPDATE public.mobility_stage_merchant_staff SET active=true "+
+  "WHERE user_id="+qs(seller)+" AND merchant_id="+qs(merchant));
  sql("UPDATE public.mobility_stage_g42_provider_session_grants "+
  "SET revoked_at=clock_timestamp(),revision=revision+1 "+
  "WHERE user_id="+qs(seller)+" AND session_id="+qs(session));
