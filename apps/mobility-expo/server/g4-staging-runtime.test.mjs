@@ -28,7 +28,7 @@ function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
    adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
    g77RegisteredRoute:null,
-   g84Enabled:false,g84DispatchAttempts:0,g89TripReadError:false,
+   g84Enabled:false,g84DispatchAttempts:0,g113BatchCalls:0,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -137,6 +137,12 @@ function mockSupabase(){
     }
     if(state.g84Enabled&&name==='mobility_stage_poll_courier_delivery_offers'){
      return {data:[],error:null};
+    }
+    if(name==='mobility_stage_g113_run_due_auto_batch_qa'){
+     assert.deepEqual(params,{_limit:5});
+     state.g113BatchCalls++;
+     return {data:{mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+      processed:0,waiting:0,offered:0,closed:0,exhausted:0},error:null};
     }
     if(name==='mobility_stage_g90_passenger_dispatch_status_qa'){
      return {data:params._passenger_id===passenger&&params._booking_key===requestKey?
@@ -1273,4 +1279,39 @@ test('G145 cargo trace rejects unconfigured, unpriced, revoked, forged and cross
    if(status!==404)assert(!m.state.rpcs.some(x=>x.name.includes('g145')));
   });
  }
+});
+
+
+test('G162 periodic AUTO dispatch is off by default and cannot start with unsafe flag',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m);
+ assert.equal(runtime.qaAutoDispatchRetry,null);
+ assert.equal(m.state.g113BatchCalls,0);
+ const invalid=mockSupabase();
+ await assert.rejects(()=>prepare(invalid,{autoDispatchRetryQa:'true'}));
+ assert.equal(invalid.state.clients.length,0);
+});
+
+test('G162 opted-in G113 bounded retry uses PostgreSQL and stops on Auth gate failure',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m,{autoDispatchRetryQa:true});
+ const worker=runtime.qaAutoDispatchRetry;
+ assert.equal(worker.snapshot().running,false);
+ assert.equal(worker.snapshot().maxJobs,5);
+ assert.equal(worker.snapshot().intervalMs,30000);
+ assert.equal(m.state.g113BatchCalls,0);
+ assert.equal(worker.start(),true);
+ for(let i=0;i<30&&worker.snapshot().busy;i++)await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(worker.snapshot().busy,false);
+ assert.equal(m.state.g113BatchCalls,1);
+ assert.equal((await worker.tick()).ok,true);
+ assert.equal(m.state.g113BatchCalls,2);
+ m.state.policy=false;
+ const denied=await worker.tick();
+ assert.equal(denied.ok,false);
+ assert.equal(denied.reason,'SQL_UNAVAILABLE');
+ assert.equal(m.state.g113BatchCalls,2,'reopened signup must block future due-job SQL');
+ worker.stop();
+ assert.equal(worker.snapshot().running,false);
+ assert.equal((await worker.tick()).reason,'NOT_RUNNING');
 });

@@ -29,6 +29,8 @@ import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
 import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
 import {createG112ScopedAutoDispatchRepository} from './g112-scoped-auto-dispatch-repository.mjs';
+import {createG113AutoDispatchRetryWorker,createG113AutoDispatchBatchRepository}
+ from './g113-auto-dispatch-retry-worker.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -177,6 +179,7 @@ export async function prepareQoreG4StagingRuntime({
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  g66ProofTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
+ autoDispatchRetryQa=false,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
@@ -287,7 +290,7 @@ export async function prepareQoreG4StagingRuntime({
     &&Object.keys(adminF1Trust).length===3
     &&['verifyAdminSession','verifySessionNotRevoked','verifyBackofficeMfa']
       .every(k=>typeof adminF1Trust[k]==='function')))||
-   typeof now!=='function')
+   typeof now!=='function'||typeof autoDispatchRetryQa!=='boolean')
   throw Error('G4 server-only secret separation and adapters required');
  // Validate billing authorization, key, HMAC and provider authorities BEFORE
  // even constructing Supabase Auth/SQL clients, never after side effects.
@@ -328,6 +331,19 @@ export async function prepareQoreG4StagingRuntime({
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
  const f1MotoPersistence=createG101MotoPassengerRepository(admin);
  const scopedAutoDispatch=createG112ScopedAutoDispatchRepository(admin);
+ // G162: optional server-only G113 due retry. No scheduler is created by
+ // default. An explicitly opted-in isolated QA operator calls start/stop.
+ // Each batch verifies that STAGING Auth signup remains disabled before SQL.
+ // PostgreSQL G113 owns due times, KYC/offer fences and cancellation; this
+ // runtime never manufactures Driver credentials, offers or vehicle slots.
+ const qaAutoDispatchRetry=autoDispatchRetryQa?
+  createG113AutoDispatchRetryWorker({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+   runDueBatch:async ({limit})=>{
+    await inspect();
+    return createG113AutoDispatchBatchRepository(admin).runDueBatch({limit});
+   },intervalMs:30000,maxJobs:5
+  }):null;
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
@@ -867,6 +883,7 @@ export async function prepareQoreG4StagingRuntime({
  return {
   projectRef:ref,
   commercialRidesEnabled:false,
+  qaAutoDispatchRetry,
   /** A server object, NOT a listener. Even this object cannot bind publicly. */
   server:createQoreRadarLoopbackTransport({
    riderHandler:guard(rider),riderHistoryHandler:guard(riderHistory),
