@@ -75,6 +75,47 @@ test('D G38/G71 blocks any assigned driver and rejects fraudulent paid ledger',a
   driverPayoutGs:17000,reconciliationStatus:'RECONCILED'};
  assert.equal((await configured(async()=>response(e)).read('COMMERCE',id)).ok,false);
 });
+test('G211 Admin reads original AUTO QA arrival, pickup and completion without legal or PSP claim',async()=>{
+ const phases=['searching','assigned','arriving','in_progress','completed'];
+ const build=status=>{
+  const position=phases.indexOf(status);
+  const d=row('AUTO_RIDE');
+  d.status=status;d.revision=position+1;
+  d.assignment={state:status==='completed'?'QA_COMPLETED':'QA_ACCEPTED',
+   legalGate:'EXTERNAL_NOT_CERTIFIED'};
+  d.events=phases.slice(0,position+1).map((phase,index)=>({
+   eventId:uuid(30+index),serviceId:id,sequence:index+1,status:phase,
+   at:at-5000+index*1000
+  }));
+  return d;
+ };
+ for(const status of ['assigned','arriving','in_progress','completed']){
+  const dto=build(status);
+  const found=await configured(async()=>response(dto)).read('AUTO_RIDE',id);
+  assert.equal(found.ok,true,status+': '+JSON.stringify(found));
+  assert.equal(found.data.serviceId,id);
+  assert.equal(found.data.revision,dto.revision);
+  assert.equal(found.data.assignment.legalGate,'EXTERNAL_NOT_CERTIFIED');
+  assert.equal(found.data.ledger?.reconciliationStatus,'PENDING');
+ }
+ const forged=[
+  d=>d.assignment.legalGate='CLEARED',
+  d=>d.assignment.state='ASSIGNED',
+  d=>d.events[1].status='completed',
+  d=>d.events[2].sequence=9,
+  d=>d.revision=22,
+  d=>d.events[3].eventId=d.events[1].eventId
+ ];
+ for(const change of forged){
+  const dto=build('completed');change(dto);
+  assert.equal((await configured(async()=>response(dto)).read('AUTO_RIDE',id))
+   .code,'INVALID_TRACE_RECEIPT');
+ }
+ const moto={...build('completed'),serviceKind:'MOTO_RIDE'};
+ assert.equal((await configured(async()=>response(moto)).read('MOTO_RIDE',id))
+  .code,'INVALID_TRACE_RECEIPT');
+});
+
 test('D rejects role downgrade during HTTP, does not leak private session',async()=>{
  let who=session;
  const got=await configured(async()=>{who={...session,role:'owner'};
