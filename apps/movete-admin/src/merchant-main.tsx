@@ -70,28 +70,48 @@ const safeOrders=(raw:unknown,merchantId:string):Order[]=>{
 };
 // Keep merchant screens bounded during slow, malicious or broken responses.
 // AbortController on the caller cancels a stalled reader; no unbounded text().
-async function boundedMerchantJson(response:Response,maxBytes:number):Promise<unknown>{
+async function boundedMerchantJson(
+ response:Response,maxBytes:number,signal:AbortSignal
+):Promise<unknown>{
  const declared=response.headers.get('content-length');
  if(declared!==null&&(!/^[0-9]+$/.test(declared)||Number(declared)>maxBytes))
   throw Error('Respuesta demasiado extensa');
+ // Some fetch bridges ignore AbortController after response headers.
+ // Race each body read explicitly against the already active 8s deadline.
+ async function readOrAbort<T>(operation:Promise<T>):Promise<T>{
+  if(signal.aborted)throw Error('Tiempo de lectura agotado');
+  let listener=()=>{};
+  const aborted=new Promise<never>((_,reject)=>{
+   listener=()=>reject(Error('Tiempo de lectura agotado'));
+   signal.addEventListener('abort',listener,{once:true});
+  });
+  try{return await Promise.race([operation,aborted]);}
+  finally{signal.removeEventListener('abort',listener);}
+ }
  const reader=response.body?.getReader();
  if(!reader){
-  const text=await response.text();
-  if(text.length>maxBytes)throw Error('Respuesta demasiado extensa');
-  return JSON.parse(text);
+  const body=await readOrAbort(response.text());
+  if(new TextEncoder().encode(body).byteLength>maxBytes)
+   throw Error('Respuesta demasiado extensa');
+  return JSON.parse(body);
  }
- const decoder=new TextDecoder();let result='',bytes=0;
+ const decoder=new TextDecoder();let result='',bytes=0,finished=false;
  try{
   while(true){
-   const chunk=await reader.read();
-   if(chunk.done)break;
+   const chunk=await readOrAbort(reader.read());
+   if(chunk.done){finished=true;break;}
    bytes+=chunk.value.byteLength;
    if(bytes>maxBytes)throw Error('Respuesta demasiado extensa');
    result+=decoder.decode(chunk.value,{stream:true});
   }
   result+=decoder.decode();
   return JSON.parse(result);
- }finally{try{await reader.cancel();}catch{/* reader may be closed */}}
+ }finally{
+  // A buggy reader.cancel() can hang indefinitely. Never await cleanup.
+  if(!finished){
+   try{void reader.cancel().catch(()=>{});}catch{/* already closed */}
+  }
+ }
 }
 function MerchantApp(){
  const [email,setEmail]=useState('');
@@ -159,7 +179,7 @@ function MerchantApp(){
      referrerPolicy:'no-referrer',signal:controller.signal
     });
     if(!response.ok||response.redirected)throw Error('Bandeja no autorizada o no disponible');
-    const validated=safeOrders(await boundedMerchantJson(response,32768),id);
+    const validated=safeOrders(await boundedMerchantJson(response,32768,controller.signal),id);
     await bearer(identity.subject);
     setOrders(validated);
     setMessage(validated.length===0?'No hay pedidos registrados en esta bandeja.':
@@ -187,7 +207,7 @@ function MerchantApp(){
      signal:controller.signal
     });
     if(!r.ok||r.redirected)throw Error('Cambio no confirmado; consultá el pedido antes de reintentar.');
-    const data=await boundedMerchantJson(r,4096) as Record<string,unknown>;
+    const data=await boundedMerchantJson(r,4096,controller.signal) as Record<string,unknown>;
     if(data.orderId!==order.orderId||data.event!==event||
      (typeof data.eventId!=='string'||!UUID.test(data.eventId))||
       data.serverPersisted!==true||
@@ -228,7 +248,7 @@ function MerchantApp(){
      throw Error('No hay confirmación. Reintentar solo con la misma clave');
     if(!response.headers.get('content-type')?.startsWith('application/json'))
      throw Error('Recibo no verificable');
-    const receipt:unknown=await boundedMerchantJson(response,4096);
+    const receipt:unknown=await boundedMerchantJson(response,4096,controller.signal);
     if(controller.signal.aborted)throw Error('Recibo no verificable');
     if(!receipt||typeof receipt!=='object'||Array.isArray(receipt))
      throw Error('Recibo mal formado');
