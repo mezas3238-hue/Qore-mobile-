@@ -31,6 +31,7 @@ def denied(c,code,q,*v):
 BIND="""SELECT public.mobility_stage_g187_bind_recipient_qa(%s,%s,%s,%s,%s,%s)"""
 CONFIRM="""SELECT public.mobility_stage_g187_confirm_received_qa(%s,%s,%s,%s,%s)"""
 READ="""SELECT public.mobility_stage_g187_sender_confirmation_status_qa(%s,%s,%s,%s)"""
+RECOVER="""SELECT public.mobility_stage_g190_recipient_confirmation_status_qa(%s,%s,%s,%s)"""
 with db() as c:
  for uid in (S,R,OTHER):
   sql(c,"INSERT INTO auth.users(id) VALUES (%s) ON CONFLICT DO NOTHING",uid)
@@ -58,6 +59,11 @@ with db() as c:
  sql(c,"""INSERT INTO public.mobility_stage_g36_driver_slots
   (driver_id,assignment_kind,assignment_id) VALUES (%s,'DELIVERY',%s)""",D,delivery)
 with db() as c:
+ denied(c,'P9004',RECOVER,OTHER,OS,AT,delivery)
+ pending=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
+ assert pending['recipientConfirmed'] is False
+ assert pending['confirmationId'] is None
+ assert pending['eligibleForSettlement'] is False
  before=sql(c,READ,S,SS,AT,delivery).fetchone()[0]
  assert before['recipientConfirmed'] is False
  assert before['recipientBound'] is False
@@ -110,6 +116,24 @@ with db() as c:
  assert final['eligibleForSettlement'] is True
  assert final['paymentAuthorized'] is False
  assert final['revision']==4
+ recovered=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
+ assert recovered['recipientConfirmed'] is True
+ assert recovered['confirmationId']==uuid.UUID(key)
+ assert recovered['eligibleForSettlement'] is True
+ assert recovered['paymentAuthorized'] is False
+ denied(c,'P9004',RECOVER,S,SS,AT,delivery)
+ denied(c,'P9004',RECOVER,OTHER,OS,AT,delivery)
+ # Dispute does not erase the recipient's immutable ACK, but stops settlement.
+ disputed=sql(c,"SELECT public.mobility_stage_delivery_transition(%s,%s,'dispute',%s,NULL)",delivery,S,new()).fetchone()[0]
+ assert disputed is not None
+ after_dispute=sql(c,READ,S,SS,AT,delivery).fetchone()[0]
+ assert after_dispute['deliveryState']=='disputed'
+ assert after_dispute['recipientConfirmed'] is True
+ assert after_dispute['eligibleForSettlement'] is False
+ recipient_history=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
+ assert recipient_history['recipientConfirmed'] is True
+ assert recipient_history['confirmationId']==uuid.UUID(key)
+ assert recipient_history['eligibleForSettlement'] is False
  denied(c,'P8704',READ,OTHER,OS,AT,delivery)
  assert sql(c,"SELECT count(*) FROM public.mobility_stage_g187_recipient_confirmations WHERE delivery_id=%s",delivery).fetchone()[0]==1
  # Revocation forbids a replay or future writes, despite persisted confirmation.
@@ -117,8 +141,10 @@ with db() as c:
   SET revoked_at=clock_timestamp(),revision=revision+1
   WHERE user_id=%s AND session_id=%s""",R,RS)
  denied(c,'P8702',CONFIRM,R,RS,AT,delivery,key)
+ denied(c,'P9002',RECOVER,R,RS,AT,delivery)
  for role in ('anon','authenticated','mobility_g48_gateway_ci'):
   sql(c,'SET LOCAL ROLE '+role)
   denied(c,'42501',CONFIRM,R,RS,AT,delivery,key)
+  denied(c,'42501',RECOVER,R,RS,AT,delivery)
   sql(c,'RESET ROLE')
-print('G187 PASS: one original G5 ID -> G67 proof -> distinct recipient G42 ACK, two-session race, private sender status, no PSP')
+print('G190 PASS: original G5/G67 custody, G187 distinct recipient ACK, read-only revocation and private recovery, immutable dispute record, no PSP')
