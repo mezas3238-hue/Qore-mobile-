@@ -145,7 +145,11 @@ BEGIN
  USING ERRCODE='P8704'; END IF;
  SELECT * INTO b FROM public.mobility_stage_g187_recipient_confirmations
  WHERE delivery_id=_delivery;
- recipient_ok:=b.confirmation_key IS NOT NULL AND d.status='delivered'
+ -- Confirmation history is immutable: a sender's later dispute or return
+ -- NEVER erases the recipient's original receipt; settlement eligibility is
+ -- independently denied once the delivery is disputed/returned.
+ recipient_ok:=b.confirmation_key IS NOT NULL
+ AND d.status IN ('delivered','disputed','returned')
  AND d.proof_ref IS NOT NULL
  AND public.mobility_stage_g67_proof_verified_owner_qa(
   d.id,d.courier_id,d.proof_ref);
@@ -155,9 +159,58 @@ BEGIN
   'courierProofCommitted',d.proof_ref IS NOT NULL,
   'recipientBound',b.delivery_id IS NOT NULL,
   'recipientConfirmed',recipient_ok,
-  'eligibleForSettlement',recipient_ok,
+  'eligibleForSettlement',(recipient_ok AND d.status='delivered'),
   'paymentAuthorized',false,'qaOnly',true,'productionEnabled',false);
 END $f$;
+-- G190: authenticated recipient READ-ONLY recovery of a potentially
+-- committed G187 ACK, never a new POST, PIN, dispatcher instruction or PSP.
+-- It also records historical confirmation even after a sender dispute.
+CREATE FUNCTION public.mobility_stage_g190_recipient_confirmation_status_qa(
+ _recipient uuid,_session uuid,_iat_ms bigint,_delivery uuid
+) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
+DECLARE d public.mobility_stage_deliveries%ROWTYPE;
+ b public.mobility_stage_g187_recipient_confirmations%ROWTYPE;
+ committed boolean:=false;
+BEGIN
+ IF _recipient IS NULL OR _session IS NULL OR _delivery IS NULL OR _iat_ms IS NULL
+ OR _iat_ms NOT BETWEEN 0 AND 9999999999999
+ THEN RAISE EXCEPTION 'G190 invalid recipient recovery scope'
+ USING ERRCODE='P9001'; END IF;
+ IF NOT public.mobility_stage_g42_lock_session(_recipient,_session,_iat_ms)
+ THEN RAISE EXCEPTION 'G190 session revoked' USING ERRCODE='P9002'; END IF;
+ IF (SELECT count(*) FROM public.user_roles WHERE user_id=_recipient)<>1
+ OR NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_recipient
+  AND role='passenger'::public.app_role)
+ THEN RAISE EXCEPTION 'G190 exclusive recipient Passenger required'
+ USING ERRCODE='P9003'; END IF;
+ -- FOR SHARE serializes with G5 and G187 writes. The private recipient
+ -- binding is checked in the SAME SQL statement to avoid foreign UUID reads.
+ SELECT * INTO d FROM public.mobility_stage_deliveries
+ WHERE id=_delivery FOR SHARE;
+ SELECT * INTO b FROM public.mobility_stage_g187_recipient_confirmations
+ WHERE delivery_id=_delivery AND recipient_id=_recipient
+  AND sender_id=d.sender_id FOR SHARE;
+ IF NOT FOUND OR _recipient=d.sender_id
+ OR _recipient IS NOT DISTINCT FROM d.courier_id
+ THEN RAISE EXCEPTION 'G190 foreign or unbound recipient denied'
+ USING ERRCODE='P9004'; END IF;
+ committed:=b.confirmation_key IS NOT NULL
+  AND d.status IN ('delivered','disputed','returned')
+  AND d.proof_ref IS NOT NULL
+  AND public.mobility_stage_g67_proof_verified_owner_qa(
+   d.id,d.courier_id,d.proof_ref);
+ RETURN pg_catalog.jsonb_build_object(
+  'mode','STAGING_DEMO_ONLY','deliveryId',d.id,
+  'recipientConfirmed',committed,
+  'confirmationId',CASE WHEN committed THEN b.confirmation_key ELSE NULL END,
+  'deliveryState',d.status::text,'revision',d.revision,
+  'eligibleForSettlement',(committed AND d.status='delivered'),
+  'paymentAuthorized',false,'qaOnly',true,'productionEnabled',false);
+END $f$;
+REVOKE ALL ON FUNCTION public.mobility_stage_g190_recipient_confirmation_status_qa(
+ uuid,uuid,bigint,uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.mobility_stage_g190_recipient_confirmation_status_qa(
+ uuid,uuid,bigint,uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.mobility_stage_g187_bind_recipient_qa(
  uuid,uuid,bigint,uuid,uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION public.mobility_stage_g187_confirm_received_qa(
