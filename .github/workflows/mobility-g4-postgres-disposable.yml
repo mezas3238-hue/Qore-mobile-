@@ -768,7 +768,7 @@ jobs:
         run: node apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
       - name: G113 real PostgreSQL automatic retry, backoff, idempotent cancellation and worker shutdown
         run: node apps/mobility-expo/server/g113-auto-dispatch-retry-pg-ci.mjs
-      - name: G172 240 new original AUTO bookings 12 PG16 worker connections plus SIGKILL rollback
+      - name: G173 1,000 concurrent original AUTO bookings, 24 PG16 workers, query plan and SIGKILL rollback
         run: python3 apps/mobility-expo/server/g172-g113-dispatch-multiprocess-pg-ci.py
 
       - name: G100 assert MOTO passenger 12-10-2%, cancel reversal, actor privacy and separation from AUTO/DELIVERY
