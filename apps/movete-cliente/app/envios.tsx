@@ -29,7 +29,10 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
  const [vehicleKind,setVehicleKind]=useState<Kind>('MOTO');
  const [validated,setValidated]=useState(false);
  const [result,setResult]=useState('');
+ const [priceBusy,setPriceBusy]=useState(false);
  const lock=useRef(false);
+ const priceLock=useRef(false);
+ const price=view.deliveryPriceConsent;
  const mutation=view.mutation;
  const ui=projectDeliveryDraftUi({
   phase:mutation.phase,operation:mutation.operation,
@@ -102,6 +105,65 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
     :'El resultado de registro de prueba es incierto o fue rechazado. No vuelvas a enviar: consultá G121.');
   }catch{setResult('Resultado de registro incierto; consultá G121, nunca repitas el POST.');}
   finally{lock.current=false;}
+ }
+ // G161: price review only for the ORIGINAL G121-verified deliveryId.
+ // G122/G126 own the persistent quote key and ACK-loss recovery. Nothing in
+ // this UI authorizes a courier, real PSP capture or live geocoding.
+ async function quoteRegisteredDelivery(){
+  const registered=view.deliveryRegistration,owner=view.account?.subject;
+  if(priceLock.current||!price.canQuote||!registered.deliveryId||
+   !owner||!view.authenticated)return;
+  const revision=view.privateViewRevision,deliveryId=registered.deliveryId;
+  priceLock.current=true;setPriceBusy(true);setResult('');
+  try{
+   // Exactly one fresh key per explicit quote action; G122 persists it
+   // before POST and blocks a second key when the ACK is uncertain.
+   const answer=await client.quoteRecoveredDelivery(Crypto.randomUUID());
+   const latest=client.snapshot();
+   if(latest.privateViewRevision!==revision||latest.account?.subject!==owner
+    ||latest.deliveryRegistration.deliveryId!==deliveryId)return;
+   setResult(answer.ok?
+    'Precio recibido de PostgreSQL QA. Revisá el total antes de confirmar. No hay repartidor ni cobro.':
+    'La cotización fue rechazada o su resultado es incierto. No se reenviará; utilizá recuperación original cuando esté habilitada.');
+  }catch{
+   setResult('No se pudo verificar la cotización. La clave original permanece protegida; no repitas el envío.');
+  }finally{priceLock.current=false;setPriceBusy(false);}
+ }
+ async function recoverRegisteredQuote(){
+  const registered=view.deliveryRegistration,owner=view.account?.subject;
+  if(priceLock.current||!price.canRecoverQuote||!registered.deliveryId||!owner)return;
+  const revision=view.privateViewRevision,deliveryId=registered.deliveryId;
+  priceLock.current=true;setPriceBusy(true);setResult('');
+  try{
+   const answer=await client.recoverOriginalDeliveryQuote();
+   const latest=client.snapshot();
+   if(latest.privateViewRevision!==revision||latest.account?.subject!==owner
+    ||latest.deliveryRegistration.deliveryId!==deliveryId)return;
+   setResult(answer.ok?
+    'Cotización original recuperada y verificada en el servidor. Revisá el total.':
+    'No se pudo recuperar la cotización original. No generamos otra solicitud.');
+  }catch{setResult('Recuperación no verificada; no se envió otra cotización.');}
+  finally{priceLock.current=false;setPriceBusy(false);}
+ }
+ async function confirmRegisteredQuote(){
+  const registered=view.deliveryRegistration,owner=view.account?.subject,quoted=price.quote;
+  if(priceLock.current||!price.canConfirm||!quoted||!registered.deliveryId||
+   !owner||quoted.expiresAt<=Date.now()+1000)return;
+  const revision=view.privateViewRevision,deliveryId=registered.deliveryId;
+  priceLock.current=true;setPriceBusy(true);setResult('');
+  try{
+   const answer=await client.confirmRecoveredDeliveryQuote({
+    confirmationKey:Crypto.randomUUID(),acceptedTotalGs:quoted.amountGs,
+    acceptedFareVersion:quoted.fareVersion
+   });
+   const latest=client.snapshot();
+   if(latest.privateViewRevision!==revision||latest.account?.subject!==owner
+    ||latest.deliveryRegistration.deliveryId!==deliveryId)return;
+   setResult(answer.ok?
+    'Precio aceptado con comprobante QA. No se ha despachado repartidor ni autorizado un pago.':
+    'Confirmación incierta o rechazada. Consultá el comprobante original; no repitas la aceptación.');
+  }catch{setResult('No se verificó el consentimiento en el servidor. No repitas el POST.');}
+  finally{priceLock.current=false;setPriceBusy(false);}
  }
  function discard(){
   if(!myDraft||!mutation.requestKey||lock.current)return;
@@ -213,10 +275,37 @@ function PrivateDeliveryForm({client,view}:{client:ClientExperience;view:ClientS
    <Text style={styles.small}>No compartiremos automáticamente tu teléfono, y un borrador de envío no habilita comunicación con ningún repartidor.</Text>
   </Panel>
   <Panel>
-   <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Confirmación y precio</Text>
-   <Action label="Cotizar y solicitar repartidor — pendiente del servidor"
-    disabled hint="Se habilitará con cotización y contrato de envíos certificados" onPress={()=>{}}/>
-   <Text style={styles.small}>Se requiere cotización válida en Gs., permisos, confirmación expresa del cliente y backend de envíos certificado. No hay pagos, despachos ni rutas GPS activadas.</Text>
+   <Text accessibilityRole="header" style={styles.heading}>Paso 4 · Precio y consentimiento</Text>
+   <Text style={styles.small}>Primero registrá el envío y verificá su identificador G121. El precio G122 en guaraníes se lee del servidor; confirmar precio no asigna repartidor ni cobra.</Text>
+   {view.deliveryRegistration.deliveryId&&
+    <Text style={styles.text}>Envío original: {view.deliveryRegistration.deliveryId.slice(0,8)} · {view.deliveryRegistration.vehicleKind==='MOTO'?'Moto carga':'Auto carga'}</Text>}
+   {!price.contractReady&&<Text accessibilityRole="alert" style={styles.small}>
+    El contrato seguro G122 no está habilitado para esta sesión o servidor. No se puede cotizar.
+   </Text>}
+   {price.contractReady&&<Action label={priceBusy?'Consultando…':'Consultar tarifa de este envío (QA)'}
+    busy={priceBusy} disabled={priceBusy||!price.canQuote}
+    hint="Una solicitud G122 para el deliveryId original. No solicita repartidor."
+    onPress={()=>{void quoteRegisteredDelivery();}}/>}
+   {price.canRecoverQuote&&<Action label="Recuperar cotización original G126" secondary
+    busy={priceBusy} disabled={priceBusy}
+    hint="Solo se consulta la clave protegida tras una respuesta incierta; nunca crea un segundo precio."
+    onPress={()=>{void recoverRegisteredQuote();}}/>}
+   {price.quote&&<View>
+    <Text accessibilityRole="header" style={styles.heading}>
+     Total confirmado por el servidor: {price.quote.amountGs.toLocaleString('es-PY')} Gs.
+    </Text>
+    <Text style={styles.small}>Versión de tarifa: {price.quote.fareVersion}. Vehículo de carga: {price.vehicleKind}. Vence: {new Date(price.quote.expiresAt).toLocaleString('es-PY')}.</Text>
+    {price.canConfirm&&<Action label="Acepto expresamente este total de prueba"
+     busy={priceBusy} disabled={priceBusy||price.quote.expiresAt<=Date.now()+1000}
+     hint="G122 confirma solo precio y consentimiento QA; sin cobro ni despacho."
+     onPress={()=>{void confirmRegisteredQuote();}}/>}
+   </View>}
+   {price.phase==='confirmed_qa'&&price.consentId&&
+    <Text accessibilityLiveRegion="polite" style={styles.text}>Consentimiento registrado en QA. Repartidor y pago todavía pendientes de integración y autorización.</Text>}
+   {price.unknown&&<Text accessibilityRole="alert" style={styles.small}>
+    Resultado de precio o aceptación incierto: no repetir POST ni cambiar de clave. Recuperá el original si el contrato lo permite.
+   </Text>}
+   <Text style={styles.small}>El botón de solicitar repartidor comercial permanece inhabilitado hasta cobertura, permiso legal del courier y cadena de pago certificados. No hay GPS, cobros ni entregas habilitados por esta pantalla.</Text>
   </Panel>
  </ScrollView>;
 }
