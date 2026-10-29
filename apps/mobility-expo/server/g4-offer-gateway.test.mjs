@@ -181,3 +181,66 @@ test('G134 guarded G4 prevents revoked Driver from reading or accepting any priv
  }}).gateway(req('GET',readPath))).status,503);
  assert.throws(()=>fixture({...guard,verifySessionNotRevoked:undefined}));
 });
+
+
+test('G179 mid-request revocation hides private offer and never confirms a committed acceptance',async()=>{
+ const sessionId='88888888-8888-4888-8888-888888888888';
+ const actor={...confirmed,sessionId,expiresAtMs:200000};
+ const base={
+  requireFreshSession:true,
+  verifyAccessToken:async()=>actor
+ };
+ let checks=0,reads=0;
+ const read=fixture({...base,
+  verifySessionNotRevoked:async()=>++checks===1,
+  loadOfferForDriver:async()=>{reads++;return data}
+ });
+ const denied=await read.gateway(req('GET',readPath));
+ assert.equal(denied.status,401);
+ assert.equal(reads,1);
+ assert.equal(checks,2);
+ assert.doesNotMatch(JSON.stringify(denied),/PANTEON|SHOPPING|33333333/);
+
+ checks=0;
+ let committed=0;
+ const post=fixture({...base,
+  verifySessionNotRevoked:async()=>++checks===1,
+  acceptOffer:async()=>{committed++;return event}
+ });
+ const uncertain=await post.gateway(req('POST',acceptPath,{offerId:offer,requestKey}));
+ assert.equal(uncertain.status,503);
+ assert.equal(uncertain.body.retrySafe,false);
+ assert.equal(committed,1,'the original SQL mutation is never repeated');
+ assert.equal(checks,2);
+ assert.doesNotMatch(JSON.stringify(uncertain),new RegExp(event));
+ assert.doesNotMatch(JSON.stringify(uncertain),/outcome.*accepted/);
+
+ checks=0;
+ const outage=fixture({...base,
+  verifySessionNotRevoked:async()=>{if(++checks===2)throw Error('private outage');return true;},
+  acceptOffer:async()=>{committed++;return event}
+ });
+ const unavailable=await outage.gateway(req('POST',declinePath,{offerId:offer,requestKey}));
+ assert.equal(unavailable.status,503);
+ assert.equal(unavailable.body.retrySafe,false);
+ assert.equal(checks,2);
+ assert.equal(committed,1,'a decline does not accidentally accept');
+ assert.doesNotMatch(JSON.stringify(unavailable),/private outage/);
+});
+
+test('G179 expires a Driver session between SQL completion and private receipt',async()=>{
+ const sessionId='88888888-8888-4888-8888-888888888888';
+ let tick=0,committed=0;
+ const {gateway}=fixture({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>({...confirmed,sessionId,expiresAtMs:100002}),
+  verifySessionNotRevoked:async()=>true,
+  now:()=>100000+(tick++*3),
+  acceptOffer:async()=>{committed++;return event}
+ });
+ const result=await gateway(req('POST',acceptPath,{offerId:offer,requestKey}));
+ assert.equal(result.status,503);
+ assert.equal(result.body.retrySafe,false);
+ assert.equal(committed,1);
+ assert.doesNotMatch(JSON.stringify(result),new RegExp(event));
+});
