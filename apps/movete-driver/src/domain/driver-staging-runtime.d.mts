@@ -7,6 +7,7 @@ import type {DriverWorkspaceControllerOptions}
 import type {DriverOfferActionsAdapters}
  from './driver-offer-actions.mjs';
 import type {DriverTripAdapters} from './driver-trip-lifecycle.mjs';
+import type {DriverMotoAdapters} from './driver-moto-journey.mjs';
 import type {DriverDocumentUploadAdapters}
  from './driver-document-upload.mjs';
 import type {DriverKycExpirySnapshot}
@@ -42,6 +43,7 @@ export type DriverStagingRuntime=Readonly<{
  offerActions:DriverOfferActionsAdapters;
  currentTripReader:DriverCurrentTripReader;
  tripActions:DriverTripAdapters;
+ motoActions:DriverMotoAdapters;
  custodyActions:DriverCustodyAdapters;
  kycValidityAdapter:Readonly<{readStatus:(x:{accessToken:string})=>Promise<DriverKycExpirySnapshot>}>|null;
  documentUploads:DriverDocumentUploadAdapters|null;
