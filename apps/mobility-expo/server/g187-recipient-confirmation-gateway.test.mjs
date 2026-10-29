@@ -90,7 +90,7 @@ test('G187 strips untrusted/extra fields and denies malformed identities and mix
  const f=fixture({
   readSenderStatus:async()=>({...receipt(sender),recipientPhone:'hidden'})
  });
- assert.equal((await f.gateway(req('GET',path('sender')+'/recipient-confirmation')).status,503);
+ assert.equal((await f.gateway(req('GET',path('sender')+'/recipient-confirmation'))).status,503);
  for(const bad of [
   req('POST',path('recipient')+'/confirm',{requestKey:'bad'}),
   req('POST',path('sender')+'/recipient-bind',{recipientId:sender,requestKey:key,extra:1}),
