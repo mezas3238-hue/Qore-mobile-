@@ -3,7 +3,7 @@
  * Native Client never calculates, signs or trusts a GPS circle. Staging only,
  * pinned HTTPS, independently verified exclusive Driver Auth.
  */
-import {readBoundedResponseText} from './driver-bounded-qa-get.mjs';
+import {readBoundedResponseText} from '../../../movete-cliente/src/domain/bounded-http-response.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const KINDS=['RIDE','DELIVERY','MERCHANT_ORDER'];
 const BANDS=[1000,2000,3000,5000,8000,10000,15000,20000,30000,50000];
