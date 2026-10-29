@@ -444,9 +444,11 @@ test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigne
   assert.equal(created.body.code,'G184_USE_ORIGINAL_G73_G95_AUTO_BOOKING');
   assert.equal(created.body.retryLegacyRequest,false);
   assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_request'),false);
-  assert.equal((await req(base,requestPath,'driver','POST',{
+  const legacyDriver=await req(base,requestPath,'driver','POST',{
    requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
-  })).status,403);
+  });
+  assert.equal(legacyDriver.status,409);
+  assert.equal(legacyDriver.body.code,'G184_USE_ORIGINAL_G73_G95_AUTO_BOOKING');
   assert.equal((await req(base,acceptPath,'driver','POST',
    {offerId:offer,requestKey})).status,401);
   const eventKey='88888888-8888-4888-8888-888888888888';
