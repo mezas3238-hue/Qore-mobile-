@@ -168,6 +168,9 @@ function mockSupabase(){
     }
     if(name==='mobility_stage_g27_backoffice_role_of')
      return {data:params._user===stranger?state.adminRole:null,error:null};
+    if(name==='mobility_stage_g27_backoffice_has_scope')
+     return {data:params._user===stranger&&state.adminRole==='admin'&&
+      params._scope==='admin.incidents.read',error:null};
     if(name==='mobility_stage_g75_admin_f1_receipt')
      return {data:params._admin_id===stranger&&params._trip_id===ride?
       state.adminReceipt:null,error:null};
