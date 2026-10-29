@@ -71,6 +71,8 @@ import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mj
 import {createG156MerchantInboxGateway} from './g156-merchant-inbox-gateway.mjs';
 import {createG158AdminFraudQaGateway} from './g158-admin-fraud-qa-gateway.mjs';
 import {createG173MerchantVerifiedMutationGateway} from './g173-merchant-verified-mutation-gateway.mjs';
+import {createG45BuyerOrderReservationQa} from './g45-buyer-order-reservation-qa.mjs';
+import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -185,7 +187,7 @@ export async function prepareQoreG4StagingRuntime({
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
- ratingTrust=null,merchantStaffTrust=null,g66ProofTrust=null,
+ ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -294,6 +296,11 @@ export async function prepareQoreG4StagingRuntime({
      ['verifyDriverSession','verifySessionNotRevoked',
       'resolveActiveVehicle','queryOwnerValidity']
       .every(k=>typeof driverKycTrust[k]==='function')))||
+   !(buyerCommerceTrust===null||(
+     Object.getPrototypeOf(buyerCommerceTrust)===Object.prototype&&
+     Object.keys(buyerCommerceTrust).length===2&&
+     typeof buyerCommerceTrust.verifyBuyerSession==='function'&&
+     typeof buyerCommerceTrust.verifySessionNotRevoked==='function'))||
    !(merchantStaffTrust===null||(
      Object.getPrototypeOf(merchantStaffTrust)===Object.prototype&&
      Object.keys(merchantStaffTrust).length===2&&
@@ -475,6 +482,32 @@ export async function prepareQoreG4StagingRuntime({
  // operations to a safe, shared per-user allowance; this intentionally
  // prevents exhaustive high-rate polling on the local QA loopback.
  const allowRequest=({userId})=>limit({userId,operation:'draft'});
+ // G174 binds the ORIGINAL G45 stock/pricing and G144 receipt chain to
+ // the same QA HTTP runtime used by Client B, not a separate CI server.
+ // Only an independently attested, revocable Buyer IdP may expose it.
+ const buyerCommerce=buyerCommerceTrust===null?null:createG139CommerceQaHttpBridge({
+  environment:'isolated_staging',liveEnabled:false,
+  qa:createG45BuyerOrderReservationQa({
+   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+   projectRef:ref,now,
+   verifyAccessToken:async token=>{
+    const u=await verified(token);
+    const a=await buyerCommerceTrust.verifyBuyerSession(token);
+    if(!a||typeof a!=='object'||Array.isArray(a)||
+     Object.getPrototypeOf(a)!==Object.prototype||Object.keys(a).length!==5||
+     !['id','sessionId','tokenIatMs','expiresAtMs','is_anonymous'].every(k=>Object.hasOwn(a,k))||
+     u.id!==a.id||a.is_anonymous!==false||u.is_anonymous===true||
+     !(typeof u.email_confirmed_at==='string'||typeof u.phone_confirmed_at==='string'))
+     throw Error('G174 original Buyer provider session mismatch');
+    return {...a,...(typeof u.email_confirmed_at==='string'?{
+     email_confirmed_at:u.email_confirmed_at}:{phone_confirmed_at:u.phone_confirmed_at})};
+   },
+   verifySessionNotRevoked:x=>buyerCommerceTrust.verifySessionNotRevoked(x),
+   loadExclusiveRole:id=>singleRole(admin,id),
+   allowRequest:({userId})=>allowRequest({userId}),
+   rpc:(name,params)=>admin.rpc(name,params)
+  })
+ });
  const riderHistory=createQoreRiderHistoryGateway({
   projectRef:ref,verifyAccessToken:verified,cursorSecrets:historyCursorSecrets,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
@@ -1074,6 +1107,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
    deliveryHandler:guard(deliveries),
    merchantHandler:guard(merchantMutations),
+   ...(buyerCommerce===null?{}:{commerceQaHandler:guard(buyerCommerce)}),
    financeHandler:guard(finance),
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
