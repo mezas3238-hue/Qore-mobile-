@@ -87,7 +87,8 @@ export function createG192ReceiptKeyJournal({readSecure,writeSecure,
     verifiedServerReceipt.paymentAuthorized!==false||
     !(kind==='bind'?
       verifiedServerReceipt.ownerId===subject?.toLowerCase()&&
-       verifiedServerReceipt.recipientBound===true:
+       verifiedServerReceipt.recipientBound===true&&
+       verifiedServerReceipt.bindingKey===requestKey.toLowerCase():
       kind==='confirm'?
        verifiedServerReceipt.recipientConfirmed===true&&
        verifiedServerReceipt.confirmationId===requestKey.toLowerCase():false))
