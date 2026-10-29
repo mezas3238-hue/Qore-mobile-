@@ -328,3 +328,70 @@ test('G170 concurrent GET saturation cannot steal reserved POST capacity',async(
   await new Promise(resolve=>ingress.close(resolve));
  }
 });
+
+test('G175 readiness is not liveness: dependency failure produces 503 but process stays alive',async()=>{
+ let available=true,at=100000,probes=0;
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host,
+  now:()=>at,
+  readinessProbe:async()=>{probes++;if(!available)throw Error('secret database connection');return true;}
+ });
+ const base=await listening(ingress);
+ const check=()=>doReq(base,'/_qore/readiness',{authorization:null});
+ try{
+  const first=await check();
+  assert.equal(first.status,200);
+  assert.deepEqual(await first.json(),{
+   state:'STAGING_DEPENDENCIES_READY',
+   commercialRidesEnabled:false,productionCertified:false
+  });
+  available=false;
+  const cached=await check();
+  assert.equal(cached.status,200,'readiness has max 2s bounded cache');
+  assert.equal(probes,1);
+  at+=2001;
+  const denied=await check();
+  assert.equal(denied.status,503);
+  assert.equal((await denied.json()).state,'STAGING_DEPENDENCIES_UNAVAILABLE');
+  assert.equal(probes,2);
+  assert.equal((await doReq(base,'/_qore/liveness',{authorization:null})).status,200);
+  assert.equal((await doReq(base,'/_qore/readiness',{
+   authorization:null,headers:{'x-forwarded-proto':'http'}})).status,403);
+  assert.equal((await doReq(base,'/_qore/readiness',{
+   authorization:'Bearer '+'a'.repeat(24)})).status,403);
+ }finally{await new Promise(done=>ingress.close(done));}
+});
+test('G175 concurrent readiness probes singleflight dependencies and never expose secrets',async()=>{
+ let calls=0;
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host,
+  readinessProbe:async()=>{
+   calls++;
+   await new Promise(done=>setTimeout(done,45));
+   throw Error('DATABASE_PASSWORD_NEVER_EXPOSE');
+  }
+ });
+ const base=await listening(ingress);
+ try{
+  const responses=await Promise.all(Array.from({length:24},()=>
+   doReq(base,'/_qore/readiness',{authorization:null})));
+  assert(responses.every(r=>r.status===503));
+  assert.equal(calls,1,'overlapping health probes must not form connection storm');
+  assert(!JSON.stringify(await responses[0].json()).includes('DATABASE_PASSWORD'));
+ }finally{await new Promise(done=>ingress.close(done));}
+});
+test('G175 readiness refuses to claim dependent systems when callback absent or malformed',async()=>{
+ assert.throws(()=>createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host,
+  readinessProbe:{}
+ }));
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host
+ });
+ const base=await listening(ingress);
+ try{
+  const denied=await doReq(base,'/_qore/readiness',{authorization:null});
+  assert.equal(denied.status,503);
+  assert.equal((await denied.json()).state,'STAGING_DEPENDENCIES_NOT_CONFIGURED');
+ }finally{await new Promise(done=>ingress.close(done));}
+});
