@@ -1315,3 +1315,32 @@ test('G162 opted-in G113 bounded retry uses PostgreSQL and stops on Auth gate fa
  assert.equal(worker.snapshot().running,false);
  assert.equal((await worker.tick()).reason,'NOT_RUNNING');
 });
+
+test('G165 actual loopback QA lifecycle starts bounded due worker only on bind and stops on close',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m,{autoDispatchRetryQa:true});
+ assert.equal(runtime.qaAutoDispatchRetry.snapshot().running,false);
+ assert.equal(m.state.g113BatchCalls,0);
+ const base=await runtime.listenQa();
+ assert.match(base,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
+ assert.equal(runtime.qaAutoDispatchRetry.snapshot().running,true);
+ for(let i=0;i<40&&runtime.qaAutoDispatchRetry.snapshot().busy;i++)
+  await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(m.state.g113BatchCalls,1,'server bind launches persisted due work');
+ const status=await req(base,statusPath,'rider');
+ assert.equal(status.status,200);
+ await new Promise((resolve,reject)=>runtime.server.close(err=>err?reject(err):resolve()));
+ assert.equal(runtime.qaAutoDispatchRetry.snapshot().running,false);
+ const before=m.state.g113BatchCalls;
+ assert.equal((await runtime.qaAutoDispatchRetry.tick()).reason,'NOT_RUNNING');
+ assert.equal(m.state.g113BatchCalls,before);
+});
+test('G165 default loopback server never starts an auto retry process',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m);
+ const base=await runtime.listenQa();
+ assert.match(base,/^http:\/\/127\.0\.0\.1:[0-9]+$/);
+ assert.equal(runtime.qaAutoDispatchRetry,null);
+ assert.equal(m.state.g113BatchCalls,0);
+ await new Promise(resolve=>runtime.server.close(resolve));
+});

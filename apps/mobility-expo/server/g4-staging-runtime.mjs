@@ -12,6 +12,7 @@ import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreRiderHistoryGateway} from './g26-rider-history-gateway.mjs';
 import {createQoreOwnHistoryRepository} from './g26-rider-history-repository.mjs';
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
+import {listenG165IsolatedQaRuntime} from './g165-isolated-qa-server-lifecycle.mjs';
 import {createStagingRateLimiter} from './g2-staging-vehicle-gateway.mjs';
 import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-repository.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
@@ -880,12 +881,9 @@ export async function prepareQoreG4StagingRuntime({
   }
   return handler(input);
  };
- return {
-  projectRef:ref,
-  commercialRidesEnabled:false,
-  qaAutoDispatchRetry,
-  /** A server object, NOT a listener. Even this object cannot bind publicly. */
-  server:createQoreRadarLoopbackTransport({
+ // Build a single unbound QA server. G165 attaches the opt-in retry lifecycle
+ // only when listenQa() binds it to 127.0.0.1; no public deployment is made.
+ const qaServer=createQoreRadarLoopbackTransport({
    riderHandler:guard(rider),riderHistoryHandler:guard(riderHistory),
    offerHandler:guard(driver),
    ...(driverDecisionRecovery===null?{}:{driverDecisionRecoveryHandler:guard(driverDecisionRecovery)}),
@@ -914,6 +912,12 @@ export async function prepareQoreG4StagingRuntime({
      /^Bearer ([A-Za-z0-9._~-]{20,7900})$/.exec(input.headers.authorization)?.[1]:null;
     return driverKycValidity({bearer});
    })}),
-  }),
+  });
+ return {
+  projectRef:ref,commercialRidesEnabled:false,qaAutoDispatchRetry,
+  server:qaServer,
+  listenQa:({port=0}={})=>listenG165IsolatedQaRuntime({
+   server:qaServer,worker:qaAutoDispatchRetry,port
+  })
  };
 }
