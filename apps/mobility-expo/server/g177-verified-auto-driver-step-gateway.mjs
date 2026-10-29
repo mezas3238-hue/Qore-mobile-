@@ -29,6 +29,9 @@ export function createG177VerifiedAutoDriverStepGateway({
   // weaker legacy command handler, even for malformed methods/events.
   // Unknown routes still belong to the legacy cancellation fence.
   if(!found)return legacyGateway(input);
+  // G184 alone owns Passenger AUTO cancellation (G73/G95), which must
+  // retain its existing financial-reconciliation response and never mutate G3.
+  if(method==='POST'&&body?.event==='cancel')return legacyGateway(input);
   if(method!=='POST'||!EVENTS.has(body?.event))
    return deny(400,'G177_DRIVER_STEP_INVALID');
   const tripId=found[1].toLowerCase();
