@@ -441,7 +441,8 @@ test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigne
    requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
   });
   assert.equal(created.status,409);
-  assert.equal(created.body.error,'Trip command rejected by persistent state');
+  assert.equal(created.body.code,'G184_USE_ORIGINAL_G73_G95_AUTO_BOOKING');
+  assert.equal(created.body.retryLegacyRequest,false);
   assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_request'),false);
   assert.equal((await req(base,requestPath,'driver','POST',{
    requestKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'
