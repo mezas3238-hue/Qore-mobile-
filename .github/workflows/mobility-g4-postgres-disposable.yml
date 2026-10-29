@@ -885,6 +885,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G118_MOTO_RIDE_LIFECYCLE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G169 install Driver-owned original MOTO read without Passenger PII
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G169_DRIVER_MOTO_OWNER_READ_POSTGRES_CI_ONLY.sql
+      - name: G189 install unique active Driver MOTO recovery (disposable and owner-scoped)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G189_DRIVER_MOTO_CURRENT_BOOKING_POSTGRES_CI_ONLY.sql
       - name: G119 authenticated Rider MOTO HTTP status across real PostgreSQL lifecycle
         run: node apps/mobility-expo/server/g119-moto-status-pg-http-ci.mjs
       - name: G169 authenticated Driver MOTO HTTP owner read on original G119 completed PostgreSQL booking

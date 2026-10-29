@@ -4,6 +4,7 @@ import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
+import {useDriverMotoJourney} from '../src/DriverMotoJourneyProvider';
 import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
@@ -18,6 +19,9 @@ export default function DriverHome(){
  const [authMessage,setAuthMessage]=useState('');
  const [resuming,setResuming]=useState(false);
  const [resumeNotice,setResumeNotice]=useState('');
+ const [motoRecoveryMessage,setMotoRecoveryMessage]=useState('');
+ const [motoBusy,setMotoBusy]=useState(false);
+ const motoLock=useRef(false);
  const resumeLock=useRef(false);
  useEffect(()=>{
   let active=true;
@@ -29,7 +33,9 @@ export default function DriverHome(){
    }catch{if(active)setAuthenticated(false);}
   };
   void verify();
-  const unsubscribe=auth?.subscribe?.(()=>{void verify();});
+  const unsubscribe=auth?.subscribe?.(()=>{
+   setMotoRecoveryMessage('');void verify();
+  });
   return ()=>{active=false;unsubscribe?.();};
  },[auth]);
  async function signIn(){
@@ -51,7 +57,7 @@ export default function DriverHome(){
  }
  async function signOut(){
   if(!auth||authBusy)return;
-  setAuthBusy(true);setPassword('');setAuthenticated(false);
+  setAuthBusy(true);setPassword('');setMotoRecoveryMessage('');setAuthenticated(false);
   try{await auth.signOut();setAuthMessage('Sesión Driver cerrada.');}
   catch{setAuthMessage('Acceso oculto; no se confirmó revocación remota.');}
   finally{setAuthBusy(false);}
@@ -59,6 +65,7 @@ export default function DriverHome(){
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
  const currentTrip=useDriverCurrentTrip();
+ const moto=useDriverMotoJourney();
  const custody=useDriverCustody();
  const [resumingDelivery,setResumingDelivery]=useState(false);
  const [deliveryRecoveryMessage,setDeliveryRecoveryMessage]=useState('');
@@ -84,6 +91,23 @@ export default function DriverHome(){
   'offline':'Sin conexión confirmada — datos privados ocultos',
   'connected':'Sesión Driver de STAGING validada para consulta'
  };
+ async function resumeActiveMoto(){
+  if(motoLock.current||!moto.enabled||state.phase!=='connected'||
+   kyc.snapshot?.state!=='READY_QA'||kyc.snapshot.accountBlocked!==false)
+   return;
+  motoLock.current=true;setMotoBusy(true);setMotoRecoveryMessage('');
+  try{
+   const result=await moto.recoverCurrent();
+   if(result.ok&&result.bookingKey){
+    router.push({pathname:'/moto-viaje',
+     params:{bookingKey:result.bookingKey}});
+   }else setMotoRecoveryMessage(result.reason==='MOTO_NONE'
+    ?'El servidor no encontró un viaje MOTO activo para tu identidad.'
+    :'No se pudo verificar una asignación MOTO original y vigente. No se abrió ningún viaje.');
+  }catch{
+   setMotoRecoveryMessage('No se pudo verificar la asignación MOTO. Ninguna operación fue enviada.');
+  }finally{motoLock.current=false;setMotoBusy(false);}
+ }
  async function continueVerifiedTrip(){
   const old=currentTrip.state.trip;
   if(resumeLock.current||!currentTrip.enabled||!old||
@@ -171,6 +195,18 @@ export default function DriverHome(){
    <Action label="Consultar mi asignación en el servidor" secondary
     disabled={!currentTrip.enabled||currentTrip.state.phase==='loading'}
     onPress={()=>{void currentTrip.refresh();}}/>
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>Recuperar mi viaje MOTO activo</Text>
+   <Text style={styles.small}>Después de cerrar la aplicación, el backend busca solamente la reserva MOTO vigente asignada a tu identidad Driver. No hace falta copiar códigos del cliente ni guardar identificadores en el teléfono.</Text>
+   <Action label={motoBusy?'Verificando mi viaje MOTO…':'Recuperar mi viaje MOTO'} secondary
+    disabled={!moto.enabled||!authenticated||motoBusy||
+     state.phase!=='connected'||kyc.snapshot?.state!=='READY_QA'||
+     kyc.snapshot.accountBlocked!==false}
+    onPress={()=>{void resumeActiveMoto();}}/>
+   {motoRecoveryMessage!==''&&<Text accessibilityRole="alert" style={styles.small}>
+    {motoRecoveryMessage}</Text>}
+   <Text style={styles.small}>Solo STAGING. G71 y la habilitación municipal G118 continúan siendo requisitos externos; la recuperación nunca acepta ofertas ni asigna pasajeros.</Text>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Recuperar mi envío asignado</Text>
