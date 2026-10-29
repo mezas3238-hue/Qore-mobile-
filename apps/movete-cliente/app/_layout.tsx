@@ -11,6 +11,7 @@ export default function ClientLayout(){
    <Stack.Screen name="viaje" options={{title:'AUTO · Pasajeros'}}/>
    <Stack.Screen name="moto" options={{title:'MOTO · Pasajeros'}}/>
    <Stack.Screen name="envios" options={{title:'Pedir envío'}}/>
+   <Stack.Screen name="confirmacion-entrega" options={{title:'Confirmar recepción'}}/>
    <Stack.Screen name="seguimiento" options={{title:'Seguimiento'}}/>
    <Stack.Screen name="mensajes" options={{title:'Mensajes con conductor'}}/>
    <Stack.Screen name="conversaciones" options={{title:'Mis conversaciones'}}/>
