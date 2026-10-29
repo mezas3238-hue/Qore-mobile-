@@ -88,3 +88,54 @@ test('G106 refuses redirect and non-JSON response without leaking Driver token',
  })});
  assert.equal(absent,null);
 });
+
+test('G171 bounded streaming recovery parses a valid UTF-8 split without calling JSON parser',async()=>{
+ const content=new TextEncoder().encode(JSON.stringify(valid));
+ const halfway=Math.floor(content.length/2);
+ let reads=0;
+ const response={status:200,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':null},
+  body:{getReader:()=>({
+   read:async()=>{
+    reads++;
+    if(reads===1)return {done:false,value:content.slice(0,halfway)};
+    if(reads===2)return {done:false,value:content.slice(halfway)};
+    return {done:true};
+   },
+   cancel:async()=>{}
+  })},
+  json:()=>{throw Error('G171 should stream bounded bytes, not eagerly parse');}
+ };
+ const recovered=await read({...base,request:async()=>response,maxBytes:4096});
+ assert.deepEqual(recovered,{tripId:trip,status:'in_progress',revision:5});
+ assert.equal(reads,3);
+});
+test('G171 rejects stream exceeding byte cap BEFORE attempting JSON parse',async()=>{
+ let canceled=0,parses=0;
+ const huge=async()=>({
+  status:200,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':null},
+  body:{getReader:()=>({
+   read:async()=>({done:false,value:new Uint8Array(1024)}),
+   cancel:()=>{canceled++;return Promise.resolve();}
+  })},
+  json:async()=>{parses++;return valid;}
+ });
+ await assert.rejects(()=>read({...base,request:huge,maxBytes:512}),/unavailable/);
+ assert.equal(parses,0);
+ assert.equal(canceled,1);
+});
+test('G171 stalled stream reader cancels after deadline and never blocks Driver screen',async()=>{
+ let cancelCount=0;
+ const stalled=async()=>({
+  status:200,redirected:false,
+  headers:{get:()=>null},
+  body:{getReader:()=>({
+   read:()=>new Promise(()=>{}),
+   cancel:()=>{cancelCount++;return new Promise(()=>{});}
+  })},
+  json:async()=>valid
+ });
+ await assert.rejects(()=>read({...base,request:stalled,timeoutMs:120}),/unavailable/);
+ assert.equal(cancelCount,1,'Nonawaited stream cleanup cannot hang the app');
+});
