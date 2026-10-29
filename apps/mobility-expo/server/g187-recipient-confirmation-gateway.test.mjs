@@ -38,6 +38,11 @@ function fixture(overrides={}){
     confirmationId:key,recipientConfirmed:true,serverPersisted:true,
     qaOnly:true,productionEnabled:false,paymentAuthorized:false}},
   readSenderStatus:async x=>{calls.push(['read',x]);return receipt(actor)},
+  readRecipientStatus:async x=>{calls.push(['recover',x]);return {
+   mode:'STAGING_DEMO_ONLY',deliveryId:delivery,recipientConfirmed:true,
+   confirmationId:key,deliveryState:'delivered',revision:4,
+   eligibleForSettlement:true,paymentAuthorized:false,qaOnly:true,
+   productionEnabled:false}},
   ...overrides
  });
  return {gateway,calls,actor:x=>{actor=x},revoked:x=>{revoked=x},
@@ -83,6 +88,45 @@ test('G187 recipient confirms the SAME server delivery; expired, revoked and for
  assert.equal((await f.gateway(req('POST',path('recipient')+'/confirm',
   {requestKey:key}))).status,403);
  assert.equal(f.commits(),2);
+});
+test('G190 recipient GET preserves read-only ACK and freezes settlement on dispute',async()=>{
+ const f=fixture();
+ f.actor(recipient);
+ const accepted=await f.gateway(req('GET',path('recipient')+'/confirmation'));
+ assert.equal(accepted.status,200);
+ assert.equal(accepted.body.confirmationId,key);
+ assert.equal(accepted.body.paymentAuthorized,false);
+ assert.equal(f.commits(),0);
+ assert.equal(f.calls[0][0],'recover');
+ const dispute=fixture({readRecipientStatus:async()=>({
+  mode:'STAGING_DEMO_ONLY',deliveryId:delivery,confirmationId:key,
+  recipientConfirmed:true,deliveryState:'disputed',revision:5,
+  eligibleForSettlement:false,paymentAuthorized:false,qaOnly:true,
+  productionEnabled:false
+ })});
+ dispute.actor(recipient);
+ const result=await dispute.gateway(req('GET',path('recipient')+'/confirmation'));
+ assert.equal(result.status,200);
+ assert.equal(result.body.recipientConfirmed,true);
+ assert.equal(result.body.eligibleForSettlement,false);
+ const empty=fixture({readRecipientStatus:async()=>({
+  mode:'STAGING_DEMO_ONLY',deliveryId:delivery,confirmationId:null,
+  recipientConfirmed:false,deliveryState:'picked_up',revision:3,
+  eligibleForSettlement:false,paymentAuthorized:false,qaOnly:true,
+  productionEnabled:false
+ })});
+ empty.actor(recipient);
+ assert.equal((await empty.gateway(req('GET',path('recipient')+'/confirmation'))).status,200);
+ const wrong=fixture({readRecipientStatus:async()=>({
+  mode:'STAGING_DEMO_ONLY',deliveryId:delivery,confirmationId:key,
+  recipientConfirmed:true,deliveryState:'disputed',revision:5,
+  eligibleForSettlement:true,paymentAuthorized:false,qaOnly:true,
+  productionEnabled:false
+ })});
+ wrong.actor(recipient);
+ assert.equal((await wrong.gateway(req('GET',path('recipient')+'/confirmation'))).status,503);
+ f.revoked(true);
+ assert.equal((await f.gateway(req('GET',path('recipient')+'/confirmation'))).status,401);
 });
 test('G187 strips untrusted/extra fields and denies malformed identities and mixed routes',async()=>{
  const f=fixture({
@@ -130,6 +174,9 @@ test('G187 original G4 loopback routes all recipient events; unconfigured author
  assert.equal(confirmation.body.confirmationId,key);
  const own=await send('GET',path('sender')+'/recipient-confirmation',null,sender);
  assert.equal(own.status,200);
+ const recipientRead=await send('GET',path('recipient')+'/confirmation',null,recipient);
+ assert.equal(recipientRead.status,200);
+ assert.equal(recipientRead.body.confirmationId,key);
  assert.equal(own.body.recipientConfirmed,true);
  const forbidden=await send('POST',path('recipient')+'/confirm',
   {requestKey:key,actorId:recipient},recipient);
