@@ -34,6 +34,19 @@ def booking(conn,n):
     quote=scalar(conn,
         "SELECT public.mobility_stage_g73_quote(%s,%s,%s)",
         (passenger,route,quote_key))
+    # G93 was enabled earlier in the full-chain workflow. Never bypass
+    # Owner's active subsidy: disclose and freeze the original quote terms
+    # before G73 booking, exactly as G93 enforces in SQL.
+    active=scalar(conn,"""SELECT EXISTS(SELECT 1
+      FROM public.mobility_stage_g93_ride_campaigns
+      WHERE service_kind='AUTO_RIDE' AND active
+      AND begins_at<=clock_timestamp() AND ends_at>clock_timestamp())""")
+    if active:
+        terms=scalar(conn,
+          "SELECT public.mobility_stage_g93_preview_auto_qa(%s,%s)",
+          (passenger,quote))
+        assert terms["ownerId"]==str(passenger),terms
+        assert terms["subsidyBps"]==1000,terms
     trip=scalar(conn,
         "SELECT public.mobility_stage_g73_book(%s,%s,%s)",
         (passenger,quote,book_key))
