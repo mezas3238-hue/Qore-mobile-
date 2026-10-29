@@ -18,7 +18,7 @@ BEGIN
   PERFORM public.mobility_stage_g205_accept_original_auto_qa(
    '20500000-0000-4205-8205-000000000001'::uuid,
    '20500000-0000-4205-8205-000000000002'::uuid,
-   (pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint,
+   (EXTRACT(EPOCH FROM pg_catalog.clock_timestamp())*1000)::bigint,
    '20500000-0000-4205-8205-000000000003'::uuid,
    '20500000-0000-4205-8205-000000000004'::uuid);
  EXCEPTION WHEN SQLSTATE 'P2051' THEN denied:=true; END;
