@@ -44,6 +44,11 @@ jobs:
         run: |
           node --check src/domain/g187-recipient-http-gateway.mjs
           node --test src/domain/g187-recipient-http-gateway.test.mjs
+      - name: G192 encrypted native write-ahead receipt journal survives Android relaunch safely
+        working-directory: apps/movete-cliente
+        run: |
+          node --check src/domain/g192-receipt-key-journal.mjs
+          node --test src/domain/g192-receipt-key-journal.test.mjs
       - name: Verify Driver application can typecheck in unified tree
         working-directory: apps/movete-driver
         run: |
