@@ -4,7 +4,7 @@
  * Isolated QA only. Buyer paths remain delegated to the existing G6 handler.
  */
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
-const URI=/^\/v1\/staging\/merchant\/orders\/([0-9a-f-]{36})\/(transition|attach-delivery)$/;
+const URI=/^\/v1\/staging\/merchant\/orders\/([0-9a-f-]{36})\/(transition|attach-delivery)$/i;
 const TOKEN=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const ACTIONS=new Set(['confirm','start_preparing','ready','hand_to_courier']);
 const exact=(x,keys)=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
@@ -23,8 +23,13 @@ export function createG173MerchantVerifiedMutationGateway({
  return async input=>{
   const {method,path,headers={},body}=input??{};
   const m=typeof path==='string'?URI.exec(path):null;
-  if(!m)return legacyGateway(input);
-  const [_,orderId,kind]=m;
+  if(!m){
+   if(typeof path==='string'&&/^\/v1\/staging\/merchant\/orders\//i.test(path))
+    return deny(404,'G173_ROUTE_DENIED');
+   return legacyGateway(input);
+  }
+  const [_,orderId,kindRaw]=m;
+  const kind=kindRaw.toLowerCase();
   if(method!=='POST'||!UUID.test(orderId))return deny(404,'G173_ROUTE_DENIED');
   const transition=kind==='transition';
   const fields=transition?['event','eventKey']:['deliveryId','requestKey'];
