@@ -1,5 +1,7 @@
 import React,{createContext,useCallback,useContext,useEffect,useMemo,useState}
  from 'react';
+import {recoverOriginalDriverMoto} from './domain/driver-moto-current-resume.mjs';
+import type {DriverMotoJourney} from './domain/driver-moto-journey-http.mjs';
 import {createDriverMotoJourneyController}
  from './domain/driver-moto-journey.mjs';
 import type {DriverMotoAdapters,DriverMotoController,DriverMotoSnapshot}
@@ -7,6 +9,7 @@ import type {DriverMotoAdapters,DriverMotoController,DriverMotoSnapshot}
 import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 type Value=Readonly<{
  state:DriverMotoSnapshot;enabled:boolean;
+ recoverCurrent:()=>Promise<{ok:boolean;bookingKey?:string;reason?:string}>;
  open:(bookingKey:string)=>Promise<void>;
  refresh:()=>Promise<void>;advance:()=>Promise<void>;
 }>;
@@ -15,10 +18,11 @@ const OFF:DriverMotoSnapshot=Object.freeze({phase:'signed-out',
  uncertain:false,qaOnly:true,productionEnabled:false});
 const Context=createContext<Value|null>(null);
 export function DriverMotoJourneyProvider({
- children,authAdapter=null,qaAdapters=null
+ children,authAdapter=null,qaAdapters=null,currentReader=null
 }:{
  children:React.ReactNode;authAdapter?:DriverAuthSessionAdapter|null;
  qaAdapters?:DriverMotoAdapters|null;
+ currentReader?:Readonly<{readCurrent:(p:{accessToken:string})=>Promise<DriverMotoJourney|null>}>|null;
 }){
  const controller:DriverMotoController|null=useMemo(
   ()=>qaAdapters?createDriverMotoJourneyController(qaAdapters):null,
@@ -47,9 +51,19 @@ export function DriverMotoJourneyProvider({
  },[controller]);
  const refresh=useCallback(async()=>{await controller?.refresh();},[controller]);
  const advance=useCallback(async()=>{await controller?.advance();},[controller]);
+ const recoverCurrent=useCallback(async()=>{
+  if(!controller||!authAdapter||!currentReader)
+   return {ok:false,reason:'MOTO_NOT_CONFIGURED'};
+  return recoverOriginalDriverMoto({
+   getSession:()=>authAdapter.getSession(),
+   readCurrent:currentReader.readCurrent,
+   openOriginal:key=>controller.open(key)
+  });
+ },[controller,authAdapter,currentReader]);
  const context=useMemo<Value>(()=>({
-  state,enabled:!!controller&&!!authAdapter,open,refresh,advance
- }),[state,controller,authAdapter,open,refresh,advance]);
+  state,enabled:!!controller&&!!authAdapter,
+  open,refresh,advance,recoverCurrent
+ }),[state,controller,authAdapter,open,refresh,advance,recoverCurrent]);
  return <Context.Provider value={context}>{children}</Context.Provider>;
 }
 export function useDriverMotoJourney(){
