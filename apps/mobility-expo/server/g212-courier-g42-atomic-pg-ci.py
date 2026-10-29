@@ -85,6 +85,9 @@ with db() as con:
       request_key,delivery_id,actor_id,action,next_status,delivery_revision)
       VALUES(%s,%s,%s,'accept','accepted',2) RETURNING id""",
       (decision,did,driver)).fetchone()[0]
+   # An assigned G5 QA row without its original G10 accepted offer
+   # must never reach the pickup transition.
+   denied(con,"P2125",(driver,sid,at,did,"pickup",uid(),None))
    offer=uid()
    con.execute("""INSERT INTO public.mobility_stage_delivery_offers(
       id,request_key,delivery_id,courier_id,vehicle_id,status,ttl_seconds,
