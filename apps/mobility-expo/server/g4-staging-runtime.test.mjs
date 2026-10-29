@@ -1589,6 +1589,19 @@ test('G158 AAL2 failure and Owner role cannot see allegations or reach source SQ
   {trust:trust(),role:'owner',status:403}
  ]){
   const m=mockSupabase();m.state.adminRole=config.role;
+  // Model the independent G27 permission response so the MFA denial is
+  // evaluated instead of an unrelated absent-RPC error (HTTP 503).
+  const original=m.createClient;
+  m.createClient=(url,key)=>{
+   const sdk=original(url,key);
+   if(key===serviceKey){
+    const before=sdk.rpc;
+    sdk.rpc=(name,params)=>name==='mobility_stage_g27_backoffice_has_scope'
+     ?Promise.resolve({data:config.role==='admin',error:null})
+     :before(name,params);
+   }
+   return sdk;
+  };
   const runtime=await prepare(m,{adminF1Trust:config.trust});
   await http(runtime,async base=>{
    assert.equal((await req(base,g158Path,'stranger')).status,config.status);
