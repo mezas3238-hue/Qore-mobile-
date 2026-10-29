@@ -56,6 +56,10 @@ function scenario(){
   if(name.endsWith('_send_message_qa'))
    return {data:receipt({caseId:c,messageId:req,
     requestKey:params._request,serverPersisted:true}),error:null};
+  if(name==='mobility_stage_g214_close_g198_case_qa'||
+     name==='mobility_stage_g214_close_g200_case_qa')
+   return {data:receipt({caseId:params._case,
+    state:params._block?'BLOCKED':'CLOSED'}),error:null};
   throw Error('Unexpected or unsafe SQL call '+name);
  }};
  const gateways=createG201FiveJourneyRuntimeBridges({
@@ -140,6 +144,34 @@ test('G201 MOTO Driver inbox and message require independent stopped evidence',a
  assert.equal(sent.status,200);
  assert(s.sqlCalls.some(x=>x.name==='mobility_stage_g200_send_message_qa'
   &&x.params._actor===driver&&x.params._body===body.body));
+});
+test('G214 both original AUTO and MOTO private cases close with read-backed SQL proof',async()=>{
+ const s=scenario();
+ for(const [kind,prefix] of [
+  ['AUTO','g198'],['MOTO','g200']
+ ]){
+  const route=kind==='AUTO'
+   ?'/v1/staging/lost-items/'+c+'/close'
+   :'/v1/staging/moto/lost-items/'+c+'/close';
+  const block=kind==='MOTO';
+  const response=await (kind==='AUTO'?
+   s.gateways.lostItemsHandler:s.gateways.motoLostItemsHandler)(
+    s.p('POST',route,tokenPassenger,{block}));
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  assert.equal(response.body.caseId,c);
+  assert.equal(response.body.state,block?'BLOCKED':'CLOSED');
+  assert.equal(response.body.productionEnabled,false);
+  assert(s.sqlCalls.some(x=>x.name==='mobility_stage_g214_close_'+prefix+'_case_qa'
+   &&x.params._case===c&&x.params._actor===passenger
+   &&x.params._session===session&&x.params._block===block));
+ }
+ const count=s.sqlCalls.length;
+ s.revoke();
+ const denied=await s.gateways.motoLostItemsHandler(
+  s.p('POST','/v1/staging/moto/lost-items/'+c+'/close',
+   tokenPassenger,{block:false}));
+ assert.equal(denied.status,401);
+ assert.equal(s.sqlCalls.length,count);
 });
 test('G201 G4 loopback only mounts original PG-backed handlers when explicitly connected',async t=>{
  const s=scenario();
