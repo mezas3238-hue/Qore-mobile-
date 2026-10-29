@@ -14,3 +14,9 @@ export declare function verifyResumableDriverAutoTrip(args:{
  recoverCurrent:()=>Promise<DriverCurrentTrip|null>;
 }):Promise<Readonly<{ok:true;tripId:string}|{
  ok:false;reason:'UNVERIFIED_ASSIGNMENT'}>>;
+
+/** Resume after app restart without trusting a remembered offer/trip ID. */
+export declare function verifyFreshDriverAutoResume(args:{
+ recoverCurrent:()=>Promise<DriverCurrentTrip|null>;
+}):Promise<Readonly<{ok:true;tripId:string}|{
+ ok:false;reason:'UNVERIFIED_ASSIGNMENT'}>>;

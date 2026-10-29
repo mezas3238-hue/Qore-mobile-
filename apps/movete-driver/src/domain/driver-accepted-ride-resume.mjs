@@ -41,3 +41,22 @@ export async function verifyAcceptedDriverAutoResume({
   expectedTripId:decision.serviceId,recoverCurrent
  });
 }
+
+/**
+ * G163: the Driver can return after a crash/reinstall with NO local offer
+ * receipt or tripId. Only the independently verified, revocable G106 GET
+ * can identify the currently assigned AUTO ride. Caller must supply the
+ * authenticated G106 reader, never a cached inbox row or caller ID.
+ */
+export async function verifyFreshDriverAutoResume({recoverCurrent}={}){
+ if(typeof recoverCurrent!=='function')
+  return Object.freeze({ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
+ let current;
+ try{current=await recoverCurrent();}
+ catch{return Object.freeze({ok:false,reason:'UNVERIFIED_ASSIGNMENT'});}
+ if(!current||typeof current!=='object'||Array.isArray(current)||
+  !ID.test(current.tripId??'')||!STATES.has(current.status)||
+  !Number.isSafeInteger(current.revision)||current.revision<2)
+  return Object.freeze({ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
+ return Object.freeze({ok:true,tripId:current.tripId});
+}

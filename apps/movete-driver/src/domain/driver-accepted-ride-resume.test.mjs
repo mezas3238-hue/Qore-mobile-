@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {verifyAcceptedDriverAutoResume as verify,
- verifyResumableDriverAutoTrip as resume} from './driver-accepted-ride-resume.mjs';
+ verifyResumableDriverAutoTrip as resume,
+ verifyFreshDriverAutoResume as freshResume} from './driver-accepted-ride-resume.mjs';
 const id=n=>'10700000-0000-4107-8107-'+String(n).padStart(12,'0');
 const decision={offerId:id(1),serviceId:id(2),
  kind:'AUTO_RIDE',action:'accept',phase:'confirmed'};
@@ -88,4 +89,26 @@ test('G121C invalid ID, missing reader and revoked session fail closed',async()=
  assert.equal((await resume({expectedTripId:id(2),recoverCurrent:null})).ok,false);
  assert.equal((await resume({expectedTripId:id(2),
   recoverCurrent:async()=>{throw Error('revoked');}})).ok,false);
+});
+
+test('G163 resumed Driver obtains current trip strictly from authenticated G106 GET',async()=>{
+ let reads=0;
+ const answer=await freshResume({recoverCurrent:async()=>{
+  reads++;return {tripId:id(3),status:'in_progress',revision:5};
+ }});
+ assert.deepEqual(answer,{ok:true,tripId:id(3)});
+ assert.equal(reads,1);
+});
+test('G163 never navigates from missing, revoked, unassigned or terminal G106',async()=>{
+ for(const row of [null,{tripId:id(2),status:'searching',revision:1},
+  {...valid,status:'completed'},{...valid,status:'cancelled'},
+  {...valid,revision:1},{...valid,tripId:'untrusted'},
+  {...valid,revision:NaN},[valid]]){
+  const r=await freshResume({recoverCurrent:async()=>row});
+  assert.deepEqual(r,{ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
+ }
+ assert.deepEqual(await freshResume({recoverCurrent:async()=>{
+  throw Error('G106 revoked or network failed');
+ }}),{ok:false,reason:'UNVERIFIED_ASSIGNMENT'});
+ assert.equal((await freshResume({recoverCurrent:null})).ok,false);
 });

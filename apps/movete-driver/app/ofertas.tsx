@@ -6,7 +6,7 @@ import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useDriverOfferActions} from '../src/DriverOfferActionsProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
 import {useDriverCustody} from '../src/DriverCustodyProvider';
-import {verifyAcceptedDriverAutoResume} from '../src/domain/driver-accepted-ride-resume.mjs';
+import {verifyAcceptedDriverAutoResume,verifyFreshDriverAutoResume} from '../src/domain/driver-accepted-ride-resume.mjs';
 import {acceptAndRecoverDriverAuto} from '../src/domain/driver-auto-accept-flow.mjs';
 import type {DriverOfferDecisionStatus} from '../src/domain/driver-offer-actions.mjs';
 import {router,useFocusEffect} from 'expo-router';
@@ -66,6 +66,20 @@ export default function DriverOffers(){
     setResumeMessage('La decisión puede estar confirmada, pero no se verificó la asignación actual en el servidor. Consultá tu viaje antes de continuar; no se repetirá la aceptación.');
    else if(result.reason==='NOT_CONFIRMED')
     setResumeMessage('No se confirmó la aceptación. Consultá el comprobante de la oferta; no se enviará otra aceptación automáticamente.');
+  }finally{resumeLock.current=false;setResuming(false);}
+ }
+ async function continueOwnActiveAuto(){
+  // G163: after restart, no stored tripId, old offer, accepted receipt or
+  // persisted screen is trusted. G106 rechecks provider session and SQL owner.
+  if(resumeLock.current||!currentTrip.enabled||state.phase!=='connected')return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const verified=await verifyFreshDriverAutoResume({
+    recoverCurrent:currentTrip.refresh
+   });
+   if(verified.ok)router.push({pathname:'/viaje',
+    params:{tripId:verified.tripId}});
+   else setResumeMessage('No existe un viaje AUTO activo confirmado por el servidor para esta sesión, o no se pudo verificar. No se habilitan controles de viaje.');
   }finally{resumeLock.current=false;setResuming(false);}
  }
  async function continueAcceptedDelivery(decision:DriverOfferDecisionStatus){
@@ -220,6 +234,16 @@ export default function DriverOffers(){
   {resumeMessage!==''&&<Panel>
    <Text accessibilityRole="alert" style={styles.text}>{resumeMessage}</Text>
   </Panel>}
+
+  <Panel>
+   <Text style={styles.heading}>Recuperar mi viaje en curso</Text>
+   <Text style={styles.small}>Si la app se cerró después de aceptar, consultá directamente al servidor el único viaje AUTO asignado a tu identidad Driver. No necesitamos una oferta antigua ni un identificador guardado en el teléfono.</Text>
+   <Action label={resuming?'Verificando mi viaje…':'Verificar y continuar viaje activo'}
+    secondary disabled={resuming||!currentTrip.enabled||state.phase!=='connected'}
+    onPress={()=>{void continueOwnActiveAuto();}}/>
+   {currentTrip.state.phase==='offline'&&
+    <Text accessibilityRole="alert" style={styles.small}>No se verificó el servidor; las acciones de viaje están bloqueadas.</Text>}
+  </Panel>
   <Panel>
    <Text style={styles.heading}>Seguridad de las asignaciones</Text>
    <Text style={styles.text}>La revisión de licencia G20 se comprueba también al aceptar la oferta; las ofertas vencidas no pueden aceptarse y las motocicletas no están habilitadas para transportar pasajeros.</Text>
