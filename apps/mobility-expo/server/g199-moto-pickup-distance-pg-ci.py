@@ -10,7 +10,7 @@ assert os.environ.get('PGAPPNAME')=='qore_ci_disposable_chain'
 D='10900000-0000-4109-8109-000000000022'
 P='10900000-0000-4109-8109-000000000021'
 S='19900000-0000-4199-8199-000000000011'
-T='11800000-0000-4118-8118-000000000001'
+T='19900000-0000-4199-8199-000000000021'
 AT=int(time.time()*1000)
 def conn():return psycopg.connect(host='localhost',port=os.getenv('PGPORT','5432'),
  user=os.environ['PGUSER'],password=os.environ['PGPASSWORD'],
@@ -30,10 +30,24 @@ with conn() as c:
  VALUES(%s,%s,clock_timestamp()-interval '1 day',
  clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 hour',
  'QA_SYNTHETIC_PROVIDER_SESSION_ONLY')""",(D,S))
- moto=c.execute("""SELECT id FROM public.mobility_stage_g100_moto_trips
- WHERE passenger_id=%s AND status='completed' ORDER BY id LIMIT 1""",(T,)).fetchone()
- assert moto is not None, 'G118 original completed MOTO fixture absent'
- trip=moto[0]
+ # The original G118 assertion rolls back all its synthetic rows.
+ # Create a separate explicit OWNER-only, never-LIVE completed MOTO fixture;
+ # the G118 legal offer/accept RPC remains closed by municipal proof absence.
+ c.execute('INSERT INTO auth.users(id) VALUES (%s)',(T,))
+ quote=c.execute("""SELECT public.mobility_stage_g100_moto_quote_qa(
+  %s,%s,'CENTRO_FIXTURE','SHOPPING','MOTO_TEST_ZONE',5000,600)""",
+  (T,'19900000-0000-4199-8199-000000000041')).fetchone()[0]
+ booked=c.execute('SELECT public.mobility_stage_g100_moto_book_qa(%s,%s,%s)',
+  (T,quote['quoteId'],'19900000-0000-4199-8199-000000000042')).fetchone()[0]
+ trip=booked['tripId']
+ c.execute("""UPDATE public.mobility_stage_g100_moto_trips
+ SET status='completed',revision=5,driver_id=%s,vehicle_id=%s,
+ accepted_offer_id=%s,completed_at=clock_timestamp(),
+ updated_at=clock_timestamp() WHERE id=%s""",
+ (D,'19900000-0000-4199-8199-000000000043',
+ '19900000-0000-4199-8199-000000000044',trip))
+ assert c.execute("""SELECT status FROM public.mobility_stage_g100_moto_trips
+ WHERE id=%s AND driver_id=%s""",(trip,D)).fetchone()[0]=='completed'
  original=c.execute(SAVE,(D,S,AT,'MOTO_RIDE',3000,0)).fetchone()[0]
  assert original['serviceKind']=='MOTO_RIDE' and original['revision']==1
  settings=c.execute(READ,(D,S,AT)).fetchone()[0]
