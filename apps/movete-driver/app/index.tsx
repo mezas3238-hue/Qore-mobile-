@@ -206,6 +206,8 @@ export default function DriverHome(){
    <Text style={styles.heading}>Mensajes con clientes</Text>
    <Text style={styles.text}>La mensajería privada requiere asignación vigente y backend autenticado; permanece bloqueada.</Text>
    <Action label="Ver estado de mensajería" secondary onPress={()=>router.push('/mensajes')}/>
+   <Action label="Responder por objetos olvidados" secondary
+    onPress={()=>router.push('/objetos-olvidados')}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mis ingresos</Text>
