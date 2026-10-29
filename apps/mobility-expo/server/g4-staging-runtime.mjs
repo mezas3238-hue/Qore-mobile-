@@ -78,6 +78,8 @@ import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-cus
 import {createG177VerifiedAutoDriverStepGateway} from './g177-verified-auto-driver-step-gateway.mjs';
 import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-cancellation-fence.mjs';
 import {createG187RecipientConfirmationGateway} from './g187-recipient-confirmation-gateway.mjs';
+import {createG201FiveJourneyRuntimeBridges,validG201IndependentTrust}
+ from './g201-five-journey-runtime-bridges.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -193,7 +195,7 @@ export async function prepareQoreG4StagingRuntime({
  g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
- recipientTrust=null,
+ recipientTrust=null,journeyTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -289,6 +291,7 @@ export async function prepareQoreG4StagingRuntime({
      &&typeof g77RouteOptions.verifyRouteTolls==='function'
      &&typeof g77RouteOptions.request==='function'
      &&verifiedAutoRoute===null))||
+   !(journeyTrust===null||validG201IndependentTrust(journeyTrust))||
    !(recipientTrust===null||(
      Object.getPrototypeOf(recipientTrust)===Object.prototype&&
      Object.keys(recipientTrust).length===2&&
@@ -1131,6 +1134,17 @@ export async function prepareQoreG4StagingRuntime({
     _delivery:p.deliveryId})
   });
  })();
+ // G201: native Client/Driver G197, G198 and G200 now share this exact
+ // original PostgreSQL + Supabase Auth runtime; no parallel demo server.
+ // Defaults OFF. The independent provider must attest G42 session and
+ // vehicle stopped; SQL is the only source of truth for booking ownership.
+ const journeyBridges=journeyTrust===null?null:
+  createG201FiveJourneyRuntimeBridges({
+   independentTrust:journeyTrust,verifySupabaseUser:verified,
+   resolveExclusiveRole:id=>singleRole(admin,id),
+   allowRequest:({actorId})=>allowRequest({userId:actorId}),
+   admin,now
+  });
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -1201,6 +1215,11 @@ export async function prepareQoreG4StagingRuntime({
     ...(ratings===null?{}:{ratingHandler:guard(ratings)}),
    ...(courierCustody===null?{}:{courierCustodyHandler:guard(courierCustody)}),
    ...(recipientConfirmation===null?{}:{recipientConfirmationHandler:guard(recipientConfirmation)}),
+   ...(journeyBridges===null?{}:{
+    pickupPreferenceHandler:guard(journeyBridges.pickupPreferenceHandler),
+    lostItemsHandler:guard(journeyBridges.lostItemsHandler),
+    motoLostItemsHandler:guard(journeyBridges.motoLostItemsHandler)
+   }),
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
    driverDocumentHandler:guard(driverDocuments),
