@@ -189,7 +189,8 @@ function MerchantApp(){
     if(!r.ok||r.redirected)throw Error('Cambio no confirmado; consultá el pedido antes de reintentar.');
     const data=await boundedMerchantJson(r,4096) as Record<string,unknown>;
     if(data.orderId!==order.orderId||data.event!==event||
-     !UUID.test(data.eventId??'')||data.serverPersisted!==true||
+     (typeof data.eventId!=='string'||!UUID.test(data.eventId))||
+      data.serverPersisted!==true||
      data.liveCommerceEnabled!==false)throw Error('Recibo no verificable');
     await bearer(identity.subject);
     pending.current.delete(signature);
