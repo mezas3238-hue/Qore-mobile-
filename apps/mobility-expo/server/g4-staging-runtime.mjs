@@ -1158,6 +1158,15 @@ export async function prepareQoreG4StagingRuntime({
  return {
   projectRef:ref,commercialRidesEnabled:false,qaAutoDispatchRetry,
   server:qaServer,
+  async probeDependencies(){
+   await inspect();
+   // Real STAGING PostgreSQL: zero-row connectivity/permission check,
+   // never an expensive table count or synthetic trip completion.
+   const {error}=await admin.from(STAGE_TABLES[0])
+     .select('id',{head:true}).limit(0);
+   if(error)throw Error('G175 PostgreSQL unavailable');
+   return true;
+  },
   listenQa:({port=0}={})=>listenG165IsolatedQaRuntime({
    server:qaServer,worker:qaAutoDispatchRetry,port
   })

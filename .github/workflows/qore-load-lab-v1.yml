@@ -1,0 +1,62 @@
+name: QORE isolated HTTP load lab V1 (NO LIVE)
+on:
+  pull_request:
+    branches:
+      - integration/qore-mobile-e2e-four-apps-20261027
+    paths:
+      - '.github/workflows/qore-load-lab-v1.yml'
+      - 'apps/mobility-expo/scripts/load/**'
+      - 'apps/mobility-expo/server/render-staging-ingress.mjs'
+      - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-http-stress:
+    name: 15,500 synthetic requests via real ingress and G4 router
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert no external destination, accounts or secrets
+        run: |
+          node --check apps/mobility-expo/scripts/load/load-lab-v1.mjs
+      - name: Install isolated server-only Redis client (NO cloud)
+        run: npm install --prefix apps/mobility-expo/server --no-audit --no-fund --ignore-scripts
+      - name: G174 verify pinned private STAGING Redis TLS and ACL guardrails (no network)
+        run: node --test apps/mobility-expo/server/g171-redis-distributed-quota.test.mjs
+      - name: G171 real shared Redis quota, two independent ingress listeners, restart and loss
+        env:
+          QORE_LAB_G171_REDIS: 'true'
+        run: node apps/mobility-expo/scripts/load/g171-redis-multireplica-ci.mjs
+      - name: G171 two independent Node processes, force SIGKILL and restart with Redis state intact
+        env:
+          QORE_LAB_G171_REDIS: 'true'
+        run: node apps/mobility-expo/scripts/load/g171-redis-multiprocess-ci.mjs
+      - name: Run isolated stress staircase (500 + 2,000 + 3,000 + 10,000)
+        run: node apps/mobility-expo/scripts/load/load-lab-v1.mjs --stress
+      - name: Preserve metrics even if overload causes test failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-isolated-http-load-v1
+          path: |
+            artifacts/qore-load-lab/results.json
+            artifacts/qore-load-lab/g178-redis-results.json
+          if-no-files-found: warn
+          retention-days: 14

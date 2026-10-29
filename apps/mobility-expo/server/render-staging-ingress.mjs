@@ -14,6 +14,11 @@ const MAX_BODY=2048;
 const MAX_REPLY=32768;
 const LIMIT=90;
 const WINDOW_MS=60000;
+// Isolated single-instance staging budget for >10k distinct 60s identities.
+// It is NOT a shared cloud rate limiter or a production scale claim.
+const MAX_IDENTITY_BUCKETS=16384;
+const MAX_UPSTREAM_READS=256;
+const MAX_UPSTREAM_WRITES=64;
 const JSON_HEADERS=Object.freeze({
  'content-type':'application/json; charset=utf-8',
  'cache-control':'no-store, private, max-age=0',
@@ -48,7 +53,10 @@ function rawHeaderCount(req,name){
  return count;
 }
 export function createRenderStagingIngress({
- loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now
+ loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
+ maxIdentityBuckets=MAX_IDENTITY_BUCKETS,
+ maxUpstreamReads=MAX_UPSTREAM_READS,maxUpstreamWrites=MAX_UPSTREAM_WRITES,
+ distributedQuota=null,readinessProbe=null
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
@@ -57,9 +65,30 @@ export function createRenderStagingIngress({
     !HOST.test(expectedHost)||!validOrigin('https://'+expectedHost)||
     (adminOrigin!==null&&(!validOrigin(adminOrigin)||
       new URL(adminOrigin).hostname===expectedHost))||
-    typeof request!=='function'||typeof now!=='function')
+    typeof request!=='function'||typeof now!=='function'||
+    !Number.isSafeInteger(maxIdentityBuckets)||maxIdentityBuckets<1||
+    maxIdentityBuckets>65536||
+    !Number.isSafeInteger(maxUpstreamReads)||maxUpstreamReads<1||
+    maxUpstreamReads>2048||
+    !Number.isSafeInteger(maxUpstreamWrites)||maxUpstreamWrites<1||
+    maxUpstreamWrites>1024||
+    (distributedQuota!==null&&typeof distributedQuota.claim!=='function')||
+    (readinessProbe!==null&&typeof readinessProbe!=='function'))
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
+ // Original fixed-window deadlines are monotonic in insertion order;
+ // a request from an existing identity never extends or reorders its TTL.
+ // Evict expired prefixes in amortized O(1), not scan all users per GET.
  const requests=new Map();
+ let lastTime=0,inFlightReads=0,inFlightWrites=0;
+ // G175 singleflight readiness probes, cached for at most two seconds.
+ let readinessCached=null,readinessCheckedAt=-Infinity,readinessPending=null;
+ function pruneExpired(at){
+  while(requests.size>0){
+   const oldest=requests.entries().next().value;
+   if(oldest[1].until>at)break;
+   requests.delete(oldest[0]);
+  }
+ }
  const server=createServer(async(req,res)=>{
   // Transport-only liveness; not a DB, E2E, or commercial readiness claim.
   if(req.url==='/_qore/liveness'&&req.method==='GET'&&
@@ -67,6 +96,53 @@ export function createRenderStagingIngress({
     rawHeaderCount(req,'x-forwarded-proto')===1){
    json(res,200,{state:'PROCESS_UP_ONLY',commercialRidesEnabled:false});
    return;
+  }
+  // G175: a running process is NOT an Auth/PG/Redis-ready replica.
+  // No JWT, SQL errors or secrets exposed; a public probe cannot certify LIVE.
+  if(req.url==='/_qore/readiness'&&req.method==='GET'){
+   if(req.headers.host!==expectedHost||
+      req.headers['x-forwarded-proto']!=='https'||
+      rawHeaderCount(req,'x-forwarded-proto')!==1||
+      req.headers.cookie!==undefined||
+      req.headers.authorization!==undefined){
+    json(res,403,{state:'DENIED'});return;
+   }
+   if(readinessProbe===null){
+    json(res,503,{state:'STAGING_DEPENDENCIES_NOT_CONFIGURED',
+     commercialRidesEnabled:false,productionCertified:false});return;
+   }
+   const checkedAt=now();
+   if(!Number.isSafeInteger(checkedAt)||checkedAt<0){
+    json(res,503,{state:'STAGING_DEPENDENCIES_UNAVAILABLE',
+     commercialRidesEnabled:false,productionCertified:false});return;
+   }
+   if(readinessPending!==null){
+    await readinessPending;
+   }else if(readinessCached===null||checkedAt<readinessCheckedAt||
+      checkedAt-readinessCheckedAt>=2000){
+    readinessPending=(async()=>{
+     let timeout;
+     try{
+      const result=await Promise.race([
+       readinessProbe(),
+       new Promise((_,reject)=>{
+        timeout=setTimeout(()=>reject(Error('G175 dependency probe timed out')),1500);
+       })
+      ]);
+      readinessCached=result===true;
+     }catch{readinessCached=false;}
+     finally{
+      if(timeout!==undefined)clearTimeout(timeout);
+      readinessCheckedAt=checkedAt;
+     }
+    })();
+    try{await readinessPending;}finally{readinessPending=null;}
+   }
+   const available=readinessCached===true;
+   json(res,available?200:503,{
+    state:available?'STAGING_DEPENDENCIES_READY':'STAGING_DEPENDENCIES_UNAVAILABLE',
+    commercialRidesEnabled:false,productionCertified:false
+   });return;
   }
   if(req.headers.host!==expectedHost||
     req.headers['x-forwarded-proto']!=='https'||
@@ -117,23 +193,50 @@ export function createRenderStagingIngress({
    json(res,401,{error:'Verified bearer required'},cors);return;
   }
   const at=now();
-  if(!Number.isSafeInteger(at)||at<0){
+  if(!Number.isSafeInteger(at)||at<lastTime){
    json(res,503,{error:'Ingress clock unavailable'},cors);return;
   }
-  // Store only a one-way digest (never raw JWT). Bound memory and requests for
-  // a single STAGING instance. Distributed protection is a separate GO gate.
-  for(const [key,entry] of requests)
-   if(entry.until<=at)requests.delete(key);
-  if(requests.size>=4096){
-   json(res,503,{error:'STAGING capacity unavailable'},cors);return;
-  }
+  lastTime=at;
+  pruneExpired(at);
+  // G178: Redis (G171) is the authority for ALL per-token decisions when
+  // opted-in. Do not double-count 60s identities in each Node process:
+  // the old per-process 16,384 bucket cap would reject valid shared-quota
+  // users before Redis even sees them. No eviction/bypass of Redis quotas.
+  // In-process mode retains its bounded legacy behavior in disposable QA.
   const hash=createHash('sha256').update(req.headers.authorization).digest('hex');
-  const bucket=requests.get(hash);
-  if(bucket&&bucket.until>at&&bucket.count>=LIMIT){
-   json(res,429,{error:'STAGING rate limited'},cors);return;
+  if(distributedQuota===null){
+   const bucket=requests.get(hash);
+   if(bucket&&bucket.count>=LIMIT){
+    json(res,429,{error:'STAGING rate limited'},{
+     ...cors,'retry-after':String(Math.max(1,Math.ceil((bucket.until-at)/1000)))
+    });return;
+   }
+   if(!bucket&&requests.size>=maxIdentityBuckets){
+    json(res,429,{error:'STAGING identity capacity reached'},{
+     ...cors,'retry-after':'1'
+    });return;
+   }
+   requests.set(hash,{until:bucket?.until??at+WINDOW_MS,
+    count:(bucket?.count??0)+1});
+  }else{
+   let quota;
+   try{quota=await distributedQuota.claim({
+    credentialHash:hash,method:req.method
+   });}
+   catch{json(res,503,{error:'Shared STAGING quota unavailable',
+    retrySafe:false},cors);return;}
+   if(!quota||typeof quota.admitted!=='boolean'||
+      !Number.isSafeInteger(quota.retryAfterSeconds)||
+      quota.retryAfterSeconds<1||quota.retryAfterSeconds>60){
+    json(res,503,{error:'Shared STAGING quota untrusted',
+     retrySafe:false},cors);return;
+   }
+   if(!quota.admitted){
+    json(res,429,{error:'Shared STAGING rate limited'},{
+     ...cors,'retry-after':String(quota.retryAfterSeconds)
+    });return;
+   }
   }
-  requests.set(hash,{until:bucket?.until>at?bucket.until:at+WINDOW_MS,
-   count:bucket?.until>at?bucket.count+1:1});
   if(req.method==='GET'&&
      (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0')){
    json(res,400,{error:'GET body not allowed'},cors);return;
@@ -158,6 +261,16 @@ export function createRenderStagingIngress({
     JSON.parse(body);
    }catch{json(res,400,{error:'Invalid JSON'},cors);return;}
   }
+  // Do not allow high-frequency GET polling to monopolize mutation capacity.
+  // Reject a saturated POST before forwarding it; never buffer an unbounded
+  // queue or silently repeat a possibly committed mutation.
+  const write=req.method==='POST';
+  if(write?inFlightWrites>=maxUpstreamWrites:inFlightReads>=maxUpstreamReads){
+   json(res,503,{error:'STAGING upstream busy',retrySafe:false},{
+    ...cors,'retry-after':'1'
+   });return;
+  }
+  if(write)inFlightWrites++;else inFlightReads++;
   try{
    const upstream=await request(url.origin+req.url,{
     method:req.method,
@@ -187,6 +300,7 @@ export function createRenderStagingIngress({
    }
    json(res,upstream.status,parsed,cors);
   }catch{json(res,503,{error:'G4 unavailable'},cors);}
+  finally{if(write)inFlightWrites--;else inFlightReads--;}
  });
  server.requestTimeout=9000;
  server.headersTimeout=8000;

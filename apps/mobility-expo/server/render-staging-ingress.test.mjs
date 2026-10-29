@@ -239,3 +239,205 @@ test('Render runner with explicitly allowed STAGING still fails closed on missin
  assert.notEqual(result.status,0);
  assert.doesNotMatch(result.stdout,/transport started/);
 });
+
+test('G170 bounded identity capacity allows existing tokens without resetting their window',async()=>{
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  maxIdentityBuckets:2,now:()=>100000,
+  request:async()=>({status:200,redirected:false,text:async()=>'{\"ok\":true}'})
+ });
+ const base=await listening(ingress);
+ const ask=letter=>doReq(base,'/v1/staging/driver/inbox',{
+  authorization:'Bearer '+letter.repeat(28)
+ });
+ try{
+  assert.equal((await ask('a')).status,200);
+  assert.equal((await ask('b')).status,200);
+  const full=await ask('c');
+  assert.equal(full.status,429);
+  assert.equal(full.headers.get('retry-after'),'1');
+  for(let n=0;n<89;n++)assert.equal((await ask('a')).status,200);
+  assert.equal((await ask('a')).status,429,'no identity eviction/reset at cap');
+ }finally{await new Promise(resolve=>ingress.close(resolve));}
+});
+test('G170 FIFO expiry reclaims only elapsed identities, rejects clock rollback',async()=>{
+ let clock=100000;
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  maxIdentityBuckets:2,now:()=>clock,
+  request:async()=>({status:200,redirected:false,text:async()=>'{\"ok\":true}'})
+ });
+ const base=await listening(ingress);
+ const ask=letter=>doReq(base,'/v1/staging/driver/inbox',{
+  authorization:'Bearer '+letter.repeat(28)
+ });
+ try{
+  assert.equal((await ask('a')).status,200);
+  clock+=500;assert.equal((await ask('b')).status,200);
+  assert.equal((await ask('c')).status,429);
+  clock+=59900;
+  assert.equal((await ask('c')).status,200,'oldest expired after 60s');
+  assert.equal((await ask('b')).status,200,'newer bucket still active');
+  clock-=1000;
+  assert.equal((await ask('d')).status,503,'never reset quotas on reversed clock');
+ }finally{await new Promise(resolve=>ingress.close(resolve));}
+});
+test('G170 concurrent GET saturation cannot steal reserved POST capacity',async()=>{
+ const held=[];
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:10004',expectedHost:host,
+  maxUpstreamReads:2,maxUpstreamWrites:1,
+  request:()=>new Promise(resolve=>held.push(resolve))
+ });
+ const base=await listening(ingress);
+ const ask=(letter,method='GET')=>doReq(base,
+  method==='GET'?'/v1/staging/driver/inbox':'/v1/staging/rider/auto/book',{
+   authorization:'Bearer '+letter.repeat(28),method,
+   ...(method==='POST'?{headers:{'content-type':'application/json'},body:'{}'}:{})
+  });
+ async function until(count){
+  for(let n=0;n<200&&held.length<count;n++)
+   await new Promise(resolve=>setTimeout(resolve,1));
+  assert.equal(held.length,count,'expected pending mocked upstream');
+ }
+ const release=()=>{
+  for(const resolve of held.splice(0))
+   resolve({status:200,redirected:false,text:async()=>'{\"ok\":true}'});
+ };
+ try{
+  const a=ask('a'),b=ask('b');
+  await until(2);
+  const overloadGet=await ask('c');
+  assert.equal(overloadGet.status,503);
+  assert.equal(overloadGet.headers.get('retry-after'),'1');
+  assert.equal((await overloadGet.json()).retrySafe,false);
+  const mutation=ask('d','POST');
+  await until(3);
+  const overloadPost=await ask('e','POST');
+  assert.equal(overloadPost.status,503);
+  assert.equal(held.length,3,'overload must not reach G4');
+  release();
+  assert.deepEqual([(await a).status,(await b).status,(await mutation).status],
+   [200,200,200]);
+  const after=ask('f');
+  await until(1);
+  release();
+  assert.equal((await after).status,200,'in-flight slot released after reply');
+ }finally{
+  release();
+  await new Promise(resolve=>ingress.close(resolve));
+ }
+});
+
+test('G175 readiness is not liveness: dependency failure produces 503 but process stays alive',async()=>{
+ let available=true,at=100000,probes=0;
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host,
+  now:()=>at,
+  readinessProbe:async()=>{probes++;if(!available)throw Error('secret database connection');return true;}
+ });
+ const base=await listening(ingress);
+ const check=()=>doReq(base,'/_qore/readiness',{authorization:null});
+ try{
+  const first=await check();
+  assert.equal(first.status,200);
+  assert.deepEqual(await first.json(),{
+   state:'STAGING_DEPENDENCIES_READY',
+   commercialRidesEnabled:false,productionCertified:false
+  });
+  available=false;
+  const cached=await check();
+  assert.equal(cached.status,200,'readiness has max 2s bounded cache');
+  assert.equal(probes,1);
+  at+=2001;
+  const denied=await check();
+  assert.equal(denied.status,503);
+  assert.equal((await denied.json()).state,'STAGING_DEPENDENCIES_UNAVAILABLE');
+  assert.equal(probes,2);
+  assert.equal((await doReq(base,'/_qore/liveness',{authorization:null})).status,200);
+  assert.equal((await doReq(base,'/_qore/readiness',{
+   authorization:null,headers:{'x-forwarded-proto':'http'}})).status,403);
+  assert.equal((await doReq(base,'/_qore/readiness',{
+   authorization:'Bearer '+'a'.repeat(24)})).status,403);
+ }finally{await new Promise(done=>ingress.close(done));}
+});
+test('G175 concurrent readiness probes singleflight dependencies and never expose secrets',async()=>{
+ let calls=0;
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host,
+  readinessProbe:async()=>{
+   calls++;
+   await new Promise(done=>setTimeout(done,45));
+   throw Error('DATABASE_PASSWORD_NEVER_EXPOSE');
+  }
+ });
+ const base=await listening(ingress);
+ try{
+  const responses=await Promise.all(Array.from({length:24},()=>
+   doReq(base,'/_qore/readiness',{authorization:null})));
+  assert(responses.every(r=>r.status===503));
+  assert.equal(calls,1,'overlapping health probes must not form connection storm');
+  assert(!JSON.stringify(await responses[0].json()).includes('DATABASE_PASSWORD'));
+ }finally{await new Promise(done=>ingress.close(done));}
+});
+test('G175 readiness refuses to claim dependent systems when callback absent or malformed',async()=>{
+ assert.throws(()=>createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host,
+  readinessProbe:{}
+ }));
+ const ingress=createRenderStagingIngress({
+  loopbackOrigin:'http://127.0.0.1:18080',expectedHost:host
+ });
+ const base=await listening(ingress);
+ try{
+  const denied=await doReq(base,'/_qore/readiness',{authorization:null});
+  assert.equal(denied.status,503);
+  assert.equal((await denied.json()).state,'STAGING_DEPENDENCIES_NOT_CONFIGURED');
+ }finally{await new Promise(done=>ingress.close(done));}
+});
+
+test('G176 staging runner rejects a second replica without shared Redis before Auth clients',()=>{
+ const result=spawn({
+  QORE_RENDER_STAGING_APPROVED:'true',
+  QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',
+  QORE_RENDER_NO_COMMERCIAL_TRIPS:'true',
+  PORT:'10000',
+  QORE_RENDER_HOSTNAME:host,
+  QORE_STAGING_REPLICA_COUNT:'2',
+  QORE_G171_REDIS_QUOTA_ENABLED:'false'
+ });
+ assert.notEqual(result.status,0);
+ assert.match(result.stderr,/G176 multi-instance STAGING requires shared Redis quotas/);
+ assert.doesNotMatch(result.stdout,/started/);
+});
+test('G176 refuses unpinned redis config before Supabase initialization',()=>{
+ const result=spawn({
+  QORE_RENDER_STAGING_APPROVED:'true',
+  QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',
+  QORE_RENDER_NO_COMMERCIAL_TRIPS:'true',
+  PORT:'10000',QORE_RENDER_HOSTNAME:host,
+  QORE_STAGING_REPLICA_COUNT:'2',
+  QORE_G171_REDIS_QUOTA_ENABLED:'true',
+  QORE_G171_REDIS_URL:'redis://remote-unsecured:6379'
+ });
+ assert.notEqual(result.status,0);
+ assert.match(result.stderr,/G174 requires pinned private STAGING TLS Redis and ACL/);
+ assert.doesNotMatch(result.stdout,/started/);
+});
+
+test('G176 multi-host staging refuses loopback Redis even when enabled',()=>{
+ const result=spawn({
+  QORE_RENDER_STAGING_APPROVED:'true',
+  QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',
+  QORE_RENDER_NO_COMMERCIAL_TRIPS:'true',
+  PORT:'10000',QORE_RENDER_HOSTNAME:host,
+  QORE_STAGING_REPLICA_COUNT:'3',
+  QORE_G171_REDIS_QUOTA_ENABLED:'true',
+  QORE_G171_REDIS_URL:'redis://127.0.0.1:6379'
+ });
+ assert.notEqual(result.status,0);
+ assert.match(result.stderr,/G176 multiple hosts require shared pinned TLS Redis/);
+});
