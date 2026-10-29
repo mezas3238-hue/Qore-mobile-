@@ -95,7 +95,7 @@ export function createG187RecipientConfirmationGateway({
      UUID.test(receipt.confirmationId??'')&&receipt.recipientConfirmed===true&&
      receipt.serverPersisted===true&&receipt.paymentAuthorized===false:
     senderRead?exact(receipt,['mode','deliveryId','ownerId','deliveryState','revision',
-     'courierProofCommitted','recipientBound','recipientConfirmed',
+     'courierProofCommitted','recipientBound','bindingKey','recipientConfirmed',
      'eligibleForSettlement','paymentAuthorized','qaOnly','productionEnabled'])&&
     receipt.ownerId===actor.id&&
     ['requested','accepted','picked_up','delivered','disputed','returned','cancelled']
@@ -103,6 +103,8 @@ export function createG187RecipientConfirmationGateway({
     Number.isSafeInteger(receipt.revision)&&receipt.revision>=1&&
     ['courierProofCommitted','recipientBound','recipientConfirmed','eligibleForSettlement']
      .every(k=>typeof receipt[k]==='boolean')&&
+    (receipt.bindingKey===null||UUID.test(receipt.bindingKey))&&
+    receipt.recipientBound===(receipt.bindingKey!==null)&&
     (!receipt.eligibleForSettlement||(
       receipt.recipientConfirmed&&receipt.deliveryState==='delivered'))&&
     (!receipt.recipientConfirmed||(
