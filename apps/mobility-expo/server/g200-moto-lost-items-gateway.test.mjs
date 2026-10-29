@@ -18,7 +18,7 @@ const rq=(method,path,body)=>({method,path,
  headers:{authorization:'Bearer '+token},...(body===undefined?{}:{body})});
 function fixture(overrides={}){
  let role='passenger',id=passenger,revoked=false,stopped=true,sends=0;
- const gateway=createG200LostItemsGateway({
+ const gateway=createG200MotoLostItemsGateway({
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now:()=>at,
   verifyAccessToken:async()=>({id,sessionId,tokenIatMs:at-100,
    expiresAtMs:at+30000,is_anonymous:false}),
