@@ -12,7 +12,12 @@ const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com)$/;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const MAX_BODY=2048;
 const MAX_REPLY=32768;
-const MAX_IN_FLIGHT=64;
+// Per-replica admission budgets; never imply a global fleet cap.
+ // Read operations have a separate lane so long-running writes cannot
+ // starve trip-status recovery. Tune using measured CPU/PG connection limits.
+const DEFAULT_MAX_READS=256;
+const DEFAULT_MAX_WRITES=128;
+const DEFAULT_IDENTITY_BUCKETS=32768;
 const LIMIT=90;
 const WINDOW_MS=60000;
 const JSON_HEADERS=Object.freeze({
@@ -73,7 +78,10 @@ function rawHeaderCount(req,name){
  return count;
 }
 export function createRenderStagingIngress({
- loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now
+ loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
+ maxConcurrentReads=DEFAULT_MAX_READS,
+ maxConcurrentWrites=DEFAULT_MAX_WRITES,
+ maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
@@ -82,10 +90,25 @@ export function createRenderStagingIngress({
     !HOST.test(expectedHost)||!validOrigin('https://'+expectedHost)||
     (adminOrigin!==null&&(!validOrigin(adminOrigin)||
       new URL(adminOrigin).hostname===expectedHost))||
-    typeof request!=='function'||typeof now!=='function')
+    typeof request!=='function'||typeof now!=='function'||
+    !Number.isSafeInteger(maxConcurrentReads)||maxConcurrentReads<1||
+    maxConcurrentReads>2048||
+    !Number.isSafeInteger(maxConcurrentWrites)||maxConcurrentWrites<1||
+    maxConcurrentWrites>1024||
+    !Number.isSafeInteger(maxIdentityBuckets)||maxIdentityBuckets<1||
+    maxIdentityBuckets>65536)
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
+ // Fixed windows retain insertion order. Evict expired entries at the head
+ // in amortized O(1), not an O(number-of-users) sweep on every request.
  const requests=new Map();
- let inFlight=0;
+ let lastAt=0,readsInFlight=0,writesInFlight=0;
+ function pruneExpired(at){
+  while(requests.size){
+   const [key,item]=requests.entries().next().value;
+   if(item.until>at)break;
+   requests.delete(key);
+  }
+ }
  const server=createServer(async(req,res)=>{
   // Transport-only liveness; not a DB, E2E, or commercial readiness claim.
   if(req.url==='/_qore/liveness'&&req.method==='GET'&&
@@ -143,18 +166,20 @@ export function createRenderStagingIngress({
    json(res,401,{error:'Verified bearer required'},cors);return;
   }
   const at=now();
-  if(!Number.isSafeInteger(at)||at<0){
+  if(!Number.isSafeInteger(at)||at<lastAt){
    json(res,503,{error:'Ingress clock unavailable'},cors);return;
   }
-  // Store only a one-way digest (never raw JWT). Bound memory and requests for
-  // a single STAGING instance. Distributed protection is a separate GO gate.
-  for(const [key,entry] of requests)
-   if(entry.until<=at)requests.delete(key);
-  if(requests.size>=4096){
-   json(res,503,{error:'STAGING capacity unavailable'},cors);return;
-  }
+  // Only digests of credentials, never bearer tokens or PII, are stored.
+  // A full identity map must still serve known users; it rejects NEW users
+  // without discarding the existing admission state or breaking fairness.
+  lastAt=at;
+  pruneExpired(at);
   const hash=createHash('sha256').update(req.headers.authorization).digest('hex');
   const bucket=requests.get(hash);
+  if(!bucket&&requests.size>=maxIdentityBuckets){
+   json(res,503,{error:'STAGING identity budget unavailable'},
+    {...cors,'retry-after':'1'});return;
+  }
   if(bucket&&bucket.until>at&&bucket.count>=LIMIT){
    json(res,429,{error:'STAGING rate limited'},cors);return;
   }
@@ -184,11 +209,18 @@ export function createRenderStagingIngress({
     JSON.parse(body);
    }catch{json(res,400,{error:'Invalid JSON'},cors);return;}
   }
-  if(inFlight>=MAX_IN_FLIGHT){
-   json(res,503,{error:'STAGING ingress capacity exhausted'},cors);
-   return;
+  // Admission is intentionally before the upstream call: a rejected POST
+  // can NEVER create or duplicate a booking. Do not blindly replay a POST
+  // after a timeout: rely on original idempotency/reconciliation in G4/PG.
+  const readLane=req.method==='GET';
+  if(readLane?readsInFlight>=maxConcurrentReads:
+      writesInFlight>=maxConcurrentWrites){
+   json(res,503,{error:'STAGING upstream busy'},{
+    ...cors,'retry-after':'1'
+   });return;
   }
-  inFlight++;
+  if(readLane)readsInFlight++;
+  else writesInFlight++;
   try{
    const upstream=await request(url.origin+req.url,{
     method:req.method,
@@ -208,7 +240,10 @@ export function createRenderStagingIngress({
    const parsed=await boundedJsonReply(upstream);
    json(res,upstream.status,parsed,cors);
   }catch{json(res,503,{error:'G4 unavailable'},cors);}
-  finally{inFlight--;}
+  finally{
+   if(readLane)readsInFlight--;
+   else writesInFlight--;
+  }
  });
  server.requestTimeout=9000;
  server.headersTimeout=8000;
