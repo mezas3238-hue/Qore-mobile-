@@ -89,9 +89,13 @@ export function createG201FiveJourneyRuntimeBridges({
    driverInbox:p=>call('driver_inbox',{
     _driver:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs
    }),
-   // Closure must return an independently read-backed state; the existing
-   // G198/G200 Boolean SQL API does not. Refuse until audited response RPC.
-   closeCase:async()=>{throw Error('G201 terminal case write needs verified state receipt');}
+   // G214: the same SQL transaction checks original actor/session, updates
+   // the locked case and reads back CLOSED/BLOCKED. A standalone GET cannot
+   // read BLOCKED cases, so a Boolean SQL close would be unverifiable.
+   closeCase:p=>rpc('mobility_stage_g214_close_'+prefix+'_case_qa',{
+    _case:p.caseId,_actor:p.actorId,_session:p.sessionId,
+    _iat_ms:p.tokenIatMs,_block:p.block
+   })
   };
  };
  return Object.freeze({
