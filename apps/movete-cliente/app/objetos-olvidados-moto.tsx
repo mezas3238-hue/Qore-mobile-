@@ -99,6 +99,22 @@ function PrivateLostItems({client,subject,privacy}:{
    setNotice('Mensaje registrado. Actualizá la conversación para ver la respuesta del conductor.');
   }finally{lock.current=false;setBusy(false);}
  }
+ async function closeCase(block:boolean){
+  if(lock.current||!configured||!caseId||!canSend||uncertainSend)return;
+  lock.current=true;setBusy(true);setNotice('');
+  try{
+   const result=await gateway.close({...scope,caseId,block});
+   if(!result.ok||result.data?.state!==(block?'BLOCKED':'CLOSED')){
+    setUncertainSend(true);setCanSend(false);
+    setNotice('No se pudo confirmar el cierre. No repetiremos la solicitud; contactá a soporte.');
+    return;
+   }
+   if(!owned)return;
+   setCanSend(false);setDraft('');setUncertainSend(true);
+   setNotice(block?'Contacto bloqueado y registrado en el expediente original.':
+    'Expediente cerrado y registrado en el viaje original.');
+  }finally{lock.current=false;setBusy(false);}
+ }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
   contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
   keyboardDismissMode="on-drag">
@@ -133,6 +149,10 @@ function PrivateLostItems({client,subject,privacy}:{
     accessibilityLabel="Mensaje privado al motociclista sobre objeto perdido"/>
    <Action label="Enviar mensaje al motociclista" disabled={!canSend||busy||uncertainSend||!draft.trim()}
     onPress={()=>{void send();}}/>
+   {canSend&&!uncertainSend&&<Action label="Cerrar expediente: objeto recuperado"
+    secondary disabled={busy} onPress={()=>{void closeCase(false);}}/>}
+   {canSend&&!uncertainSend&&<Action label="Bloquear contacto de este expediente"
+    secondary disabled={busy} onPress={()=>{void closeCase(true);}}/>}
    <Text style={styles.small}>El conductor solo puede responder cuando esté detenido y autenticado. Nunca se comparte información personal de contacto.</Text>
   </Panel>}
  </ScrollView>;
