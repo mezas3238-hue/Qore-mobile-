@@ -815,13 +815,15 @@ export async function prepareQoreG4StagingRuntime({
    if(error)throw Error('G189 active MOTO ownership unavailable');
    return data;
   },
-  advanceMoto:async({driverId,bookingKey,expectedRevision,nextState,commandKey})=>{
-   const {data,error}=await admin.rpc('mobility_stage_g118_moto_driver_step_qa',{
-    _booking:bookingKey,_driver:driverId,_revision:expectedRevision,
+  advanceMoto:async({driverId,sessionId,tokenIatMs,bookingKey,expectedRevision,nextState,commandKey})=>{
+   // Atomic G42 session lock and same G118 booking inside a single SQL COMMIT.
+   const {data,error}=await admin.rpc('mobility_stage_g213_moto_driver_step_qa',{
+    _driver:driverId,_session:sessionId,_iat:tokenIatMs,
+    _booking:bookingKey,_revision:expectedRevision,
     _next:nextState,_command:commandKey
    });
    if(error||!data||data.serviceKind!=='MOTO_RIDE')
-    throw Error('G118 original Driver MOTO step unavailable');
+    throw Error('G213 original transactional Driver MOTO step unavailable');
    return data;
   }
  });
