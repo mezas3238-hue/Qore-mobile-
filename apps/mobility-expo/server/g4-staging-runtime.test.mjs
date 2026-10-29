@@ -1932,7 +1932,7 @@ test('G175 original Buyer commerce prevents legacy G6 unverified stock and trans
   assert.equal(update.status,409,JSON.stringify(update.body));
   assert.equal(update.body.code,'G175_USE_ORIGINAL_G45_G139_BUYER_ORDER');
   const upper=await req(base,legacyCreate.toUpperCase(),'rider','POST',oldBody);
-  assert.equal(upper.status,409);
+  assert.equal(upper.status,404,'Unrecognized uppercase legacy path must fail closed');
   assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_merchant_order_request'||
    x.name==='mobility_stage_merchant_order_transition'),false,
    'No original commerce inventory or Buyer state changes under G6 legacy authority');
