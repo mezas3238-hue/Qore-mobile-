@@ -55,7 +55,7 @@ with conn() as c:
  assert c.execute(CHECK,('MOTO_RIDE',trip,D)).fetchone()[0] is False
  denied(c,'P9701',SAVE,D,S,AT,'MOTO_RIDE',7000,1)
  denied(c,'P9704',SAVE,D,S,AT,'MOTO_RIDE',5000,0)
- denied(c,'P9703',SAVE,P,S,AT,'MOTO_RIDE',5000,0)
+ denied(c,'P9702',SAVE,P,S,AT,'MOTO_RIDE',5000,0) # forged driver session
  # Even the SQL owner cannot slip an unverified/out-of-range offer past
  # the PostgreSQL before-insert trigger, regardless of MOTO legal state.
  offered="""INSERT INTO public.mobility_stage_g118_moto_offers
