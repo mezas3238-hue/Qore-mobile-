@@ -12,6 +12,7 @@ import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs
 import {createClientExperience}
  from '../../movete-cliente/src/domain/client-experience.mjs';
 import {createG146AdminCommerceTraceGateway} from './g146-admin-commerce-trace-gateway.mjs';
+import {createG145AdminCargoTraceGateway} from './g145-admin-cargo-trace-gateway.mjs';
 import {createServiceTraceGateway}
  from '../../movete-admin/src/service-trace-gateway.mjs';
 import {createQoreDeliveryCommandGateway} from './g5-delivery-command-gateway.mjs';
@@ -194,12 +195,40 @@ const qaAdmin=createG146AdminCommerceTraceGateway({
    "public.mobility_stage_g146_commerce_trace_qa("+qs(actorId)+
    ","+qs(orderId)+"),'null'::jsonb)::text")
 });
+// G201: the same independent Admin must be able to follow the ORIGINAL
+// G150 merchant order into the exact G122 priced G5 delivery, using a
+// second AAL2-scoped HTTP read. Never derive a new delivery from order UI.
+const qaAdminCargo=createG145AdminCargoTraceGateway({
+ environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+ now:()=>Date.now(),
+ verifyAccessToken:async token=>{
+  if(token!==adminToken)throw Error('G201 untrusted Admin');
+  return {id:admin,sessionId:adminSession,expiresAtMs:Date.now()+60000,
+   is_anonymous:false};
+ },
+ verifySessionNotRevoked:async()=>true,
+ loadExclusiveBackofficeRole:async id=>
+  id===admin?sql("SET ROLE service_role; SELECT public.mobility_stage_g27_backoffice_role_of("+qs(admin)+")::text"):null,
+ verifyBackofficeMfa:async({userId,sessionId})=>({
+  verifiedByProvider:true,assuranceLevel:'aal2',userId,sessionId,
+  verifiedAtMs:Date.now()-1000,expiresAtMs:Date.now()+30000
+ }),
+ allowRequest:()=>true,
+ loadCargoTraceReceipt:async({actorId,deliveryId})=>{
+  if(actorId!==admin||!UUID.test(deliveryId))
+   throw Error('G201 original Admin cargo scope invalid');
+  return read("SET ROLE service_role; SELECT COALESCE("+
+   "public.mobility_stage_g145_delivery_trace_qa("+qs(actorId)+
+    ","+qs(deliveryId)+"),'null'::jsonb)::text");
+ }
+});
 const noop=async()=>({status:404,body:{error:'not enabled'}});
 const server=createQoreRadarLoopbackTransport({
  riderHandler:noop,offerHandler:noop,tripCommandHandler:noop,
  deliveryHandler:deliveries,merchantHandler:merchantOrders,
  financeHandler:noop,safetyHandler:noop,
- adminCommerceTraceHandler:qaAdmin,commerceQaHandler:buyerHttp,
+ adminCommerceTraceHandler:qaAdmin,adminCargoTraceHandler:qaAdminCargo,
+ commerceQaHandler:buyerHttp,
  merchantManagementHandler:noop,deliveryOfferHandler:noop
 });
 const base=await listenQoreRadarLoopback(server);
@@ -370,9 +399,30 @@ try{
  assert.equal(adminResult.data.events[4].status,'ready');
  assert.equal(adminResult.data.assignment.state,'NOT_ASSIGNABLE');
  assert.equal(adminResult.data.ledger,null);
+ // G201: ensure Admin D follows the linked order to the ACTUAL G5/G122
+ // delivery, preserving the same buyer, price consent and MOTO vehicle.
+ // This second read has its own Admin AAL2/role/source checks.
+ const cargoAdmin=await adminClient.read('DELIVERY_MOTO',deliveryId);
+ assert.equal(cargoAdmin.ok,true,JSON.stringify(cargoAdmin));
+ assert.equal(cargoAdmin.data.serviceId,deliveryId);
+ assert.equal(cargoAdmin.data.serviceKind,'DELIVERY_MOTO');
+ assert.equal(cargoAdmin.data.bookingRequestKey,deliveryKey);
+ assert.equal(cargoAdmin.data.quoteId,quoteId);
+ assert.equal(cargoAdmin.data.status,'requested');
+ assert.equal(cargoAdmin.data.revision,1);
+ assert.equal(cargoAdmin.data.ledger,null);
+ assert.equal(cargoAdmin.data.assignment.state,'NOT_ASSIGNABLE');
+ assert.equal(cargoAdmin.data.assignment.legalGate,'G38_BLOCKED');
+ assert.equal(sql("SELECT count(*) FROM public.mobility_stage_deliveries WHERE id="+
+  qs(deliveryId)),'1','no second delivery created by Admin read');
+ const otherKind=await adminClient.read('DELIVERY_AUTO',deliveryId);
+ assert.equal(otherKind.ok,false,'Admin cannot recast priced MOTO cargo as AUTO');
+ assert.equal(sql("SELECT count(*) FROM public.mobility_stage_merchant_order_events WHERE order_id="+
+  qs(original.id)),'4','Admin lookups cannot mutate original Merchant events');
  assert.equal(sql("SELECT status FROM public.mobility_stage_deliveries WHERE id="+qs(deliveryId)),'requested');
  assert.equal(sql("SELECT count(*) FROM public.mobility_stage_delivery_events WHERE delivery_id="+qs(deliveryId)),'0');
  console.log('G153 PASS: original reserved merchandise mass cannot exceed declared G5 cargo grams, even with G122 quote consent');
+ console.log('G201 CROSS-VERTICAL PASS: Buyer B original G139/G148 COMMERCE -> G150 price-consented G5 DELIVERY_MOTO -> Admin D separate AAL2 G146 COMMERCE + G145 DELIVERY_MOTO reads with EXACT same deliveryId and G122 quoteId; no new booking or legal dispatch.');
  console.log('G150 PASS: ORIGINAL G139 Buyer order -> G148 Merchant ready -> Buyer G5 delivery -> G7 server MOTO quote -> G122 immutable price consent -> G6 Merchant HTTP attach same orderId/deliveryId -> Buyer B original authenticated HTTP/G144 recovery AND Admin D AAL2 same link; no driver, PSP, LIVE or fake delivery.');
 } finally {
  await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
