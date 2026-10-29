@@ -1521,3 +1521,78 @@ test('G156 IdP identity mismatch blocks all original merchant SQL reads',async()
   assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g156_merchant_inbox_qa').length,0);
  });
 });
+
+const g158Path='/v1/staging/admin/fraud/verified-reports';
+test('G158 Admin fraud endpoint stays closed without trusted AAL2 and SQL',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g158Path,'stranger')).status,503);
+  assert.equal(m.state.rpcs.filter(x=>x.name.includes('g157_admin_review')).length,0);
+ });
+});
+test('G158 original G4 Admin HTTPS/IdP/AAL2/G27 SQL exposes only unsanctioned G157 claims',async()=>{
+ const m=mockSupabase(),previous=m.createClient;
+ m.state.adminRole='admin';
+ let allowed=true,revoke=false;
+ m.createClient=(url,key)=>{
+  const sdk=previous(url,key);
+  if(key===serviceKey){
+   const original=sdk.rpc;
+   sdk.rpc=async(name,params)=>{
+    if(name==='mobility_stage_g27_backoffice_has_scope'){
+     m.state.rpcs.push({name,params});
+     return {data:allowed&&params._user===stranger&&params._scope==='admin.incidents.read',error:null};
+    }
+    if(name==='mobility_stage_g157_admin_review_queue_qa'){
+     m.state.rpcs.push({name,params});
+     return {data:{qaOnly:true,productionEnabled:false,
+      automaticSuspension:false,dispatchPenaltyApplied:false,
+      findingEstablished:false,hasMore:false,items:[{
+       ratedKind:'COURIER',ratedId:driver,recentReports:1,
+       independentReporters:1,distinctServices:1,
+       reviewTier:'SINGLE_SOURCE_REVIEW',allegationOnly:true
+      }]},error:null};
+    }
+    return original(name,params);
+   };
+  }
+  return sdk;
+ };
+ const runtime=await prepare(m,{adminF1Trust:trust({
+  verifySessionNotRevoked:async()=>!revoke
+ })});
+ await http(runtime,async base=>{
+  assert.equal((await req(base,g158Path,'rider')).status,401);
+  const good=await req(base,g158Path,'stranger');
+  assert.equal(good.status,200,JSON.stringify(good.body));
+  assert.equal(good.body.viewerId,stranger);
+  assert.equal(good.body.items.length,1);
+  assert.equal(good.body.items[0].ratedId,driver);
+  assert.equal(good.body.findingEstablished,false);
+  assert.equal(good.body.automaticSuspension,false);
+  assert.equal(good.body.dispatchPenaltyApplied,false);
+  assert.doesNotMatch(JSON.stringify(good.body),/reporterId|SUSPECTED_FRAUD|sb_secret/);
+  const reads=m.state.rpcs.filter(x=>x.name==='mobility_stage_g157_admin_review_queue_qa');
+  assert.deepEqual(reads,[{name:'mobility_stage_g157_admin_review_queue_qa',
+   params:{_admin:stranger,_limit:50}}]);
+  allowed=false;
+  assert.equal((await req(base,g158Path,'stranger')).status,403);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g157_admin_review_queue_qa').length,1);
+  revoke=true;
+  assert.equal((await req(base,g158Path,'stranger')).status,401);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g157_admin_review_queue_qa').length,1);
+ });
+});
+test('G158 AAL2 failure and Owner role cannot see allegations or reach source SQL',async()=>{
+ for(const config of [
+  {trust:trust({verifyBackofficeMfa:async()=>({verifiedByProvider:false})}),role:'admin',status:403},
+  {trust:trust(),role:'owner',status:403}
+ ]){
+  const m=mockSupabase();m.state.adminRole=config.role;
+  const runtime=await prepare(m,{adminF1Trust:config.trust});
+  await http(runtime,async base=>{
+   assert.equal((await req(base,g158Path,'stranger')).status,config.status);
+   assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g157_admin_review_queue_qa').length,0);
+  });
+ }
+});
