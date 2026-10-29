@@ -25,11 +25,15 @@ export function createG177VerifiedAutoDriverStepGateway({
  return async input=>{
   const {method,path,headers={},body}=input??{};
   const found=typeof path==='string'?PATH.exec(path):null;
-  if(method!=='POST'||!found||!EVENTS.has(body?.event))
+  // G210: an unknown or malformed Driver step must NEVER fall through to
+  // the older G4 transition handler, which lacks G42 session revocation.
+  // Preserve only the explicit G184 legacy Passenger cancel denial path.
+  if(method!=='POST'||!found||body?.event==='cancel')
    return legacyGateway(input);
   const tripId=found[1].toLowerCase();
   if(!UUID.test(tripId)||!exact(body,['event','eventKey'])||
-     !UUID.test(body.eventKey))return deny(400,'G177_DRIVER_STEP_INVALID');
+     !EVENTS.has(body.event)||!UUID.test(body.eventKey))
+   return deny(400,'G177_DRIVER_STEP_INVALID');
   const match=typeof headers.authorization==='string'&&
    headers.Authorization===undefined&&headers.cookie===undefined?
    BEARER.exec(headers.authorization):null;

@@ -88,6 +88,8 @@ jobs:
         run: |
           node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
           node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
+          node --check apps/mobility-expo/server/g177-verified-auto-driver-step-gateway.mjs
+          node --test apps/mobility-expo/server/g177-verified-auto-driver-step-gateway.test.mjs
           node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.mjs
           node --test apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
           node --check apps/mobility-expo/server/g197-driver-pickup-gateway.mjs
