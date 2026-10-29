@@ -79,6 +79,9 @@ on:
       - 'apps/movete-cliente/src/domain/g5-g121-verified-delivery-booking-gateway.mjs'
       - 'apps/movete-cliente/src/domain/g121-delivery-registration-gateway.mjs'
       - 'apps/movete-driver/src/domain/driver-custody-http.mjs'
+      - 'apps/movete-driver/src/domain/driver-custody-http.d.mts'
+      - 'apps/movete-driver/src/domain/driver-custody-controller.test.mjs'
+      - 'apps/movete-driver/src/domain/g178-bounded-driver-lifecycle-json.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
@@ -163,6 +166,9 @@ on:
       - 'apps/movete-cliente/src/domain/g5-g121-verified-delivery-booking-gateway.mjs'
       - 'apps/movete-cliente/src/domain/g121-delivery-registration-gateway.mjs'
       - 'apps/movete-driver/src/domain/driver-custody-http.mjs'
+      - 'apps/movete-driver/src/domain/driver-custody-http.d.mts'
+      - 'apps/movete-driver/src/domain/driver-custody-controller.test.mjs'
+      - 'apps/movete-driver/src/domain/g178-bounded-driver-lifecycle-json.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G109_PRE_FENCE_SYNTHETIC_ACCEPTED_AUTO_FIXTURE_POSTGRES_CI_ONLY.sql'
       - 'apps/mobility-expo/docs/backend/staging_only/G93_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G116_*'
@@ -358,6 +364,7 @@ jobs:
           node --test apps/mobility-expo/server/g4-staging-runtime.test.mjs
           node --test apps/mobility-expo/server/g143-courier-custody-http-routing.test.mjs
           node --test apps/mobility-expo/server/g66-courier-custody-qa.test.mjs
+          node --test apps/movete-driver/src/domain/driver-custody-controller.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: Guard isolated local chain database
         run: |
