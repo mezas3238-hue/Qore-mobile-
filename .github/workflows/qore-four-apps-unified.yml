@@ -53,12 +53,14 @@ jobs:
         working-directory: apps/movete-cliente
         run: |
           node --check src/domain/g198-lost-items-http.mjs
+          node --check src/domain/g200-moto-lost-items-http.mjs
       - name: G197 Driver road pickup distance security regressions
         working-directory: apps/movete-driver
         run: |
           node --check src/domain/g197-pickup-preferences-http.mjs
           node --test src/domain/g197-pickup-preferences-http.test.mjs
           node --check src/domain/g198-driver-lost-items-http.mjs
+          node --check src/domain/g200-driver-moto-lost-items-http.mjs
       - name: Verify Driver application can typecheck in unified tree
         working-directory: apps/movete-driver
         run: |
@@ -83,6 +85,8 @@ jobs:
           node --check apps/mobility-expo/server/g198-lost-items-gateway.mjs
           node --test apps/mobility-expo/server/g197-driver-pickup-gateway.test.mjs
           node --test apps/mobility-expo/server/g198-lost-items-gateway.test.mjs
+          node --check apps/mobility-expo/server/g200-moto-lost-items-gateway.mjs
+          node --test apps/mobility-expo/server/g200-moto-lost-items-gateway.test.mjs
           echo "The G4 PostgreSQL workflow validates real same-tree HTTP + PG persistence."
       - name: Do not misrepresent compilation as production GO
         run: |
