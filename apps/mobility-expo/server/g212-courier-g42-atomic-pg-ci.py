@@ -89,12 +89,19 @@ with db() as con:
    # must never reach the pickup transition.
    denied(con,"P2125",(driver,sid,at,did,"pickup",uid(),None))
    offer=uid()
-   con.execute("""INSERT INTO public.mobility_stage_delivery_offers(
+   # G71 correctly refuses the synthetic Driver (no KYC dossier).
+   # Bypass only this fixture INSERT's USER trigger within the disposable
+   # owner transaction, then re-enable before exercising G212 itself.
+   con.execute("ALTER TABLE public.mobility_stage_delivery_offers DISABLE TRIGGER USER")
+   try:
+    con.execute("""INSERT INTO public.mobility_stage_delivery_offers(
       id,request_key,delivery_id,courier_id,vehicle_id,status,ttl_seconds,
       offered_at,expires_at,decision_key,decision_event_id)
       VALUES(%s,%s,%s,%s,%s,'accepted',30,
       clock_timestamp(),clock_timestamp()+interval '30 seconds',%s,%s)""",
       (offer,uid(),did,driver,vid,decision,event_id))
+   finally:
+    con.execute("ALTER TABLE public.mobility_stage_delivery_offers ENABLE TRIGGER USER")
    command=uid()
    payload=(driver,sid,at,did,"pickup",command,None)
    wrong=(uid(),sid,at,did,"pickup",command,None)
