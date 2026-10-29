@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readDriverMotoJourney,advanceDriverMotoJourney}
+import {readDriverMotoJourney,advanceDriverMotoJourney,readCurrentDriverMoto}
  from './driver-moto-journey-http.mjs';
 import {createDriverMotoJourneyController}
  from './driver-moto-journey.mjs';
@@ -140,4 +140,39 @@ test('G188 no identity, invalid booking or LIVE cannot send MOTO POST',async()=>
   readStatus:async()=>{},advanceState:async()=>{},
   makeRequestKey:()=>key,liveEnabled:true
  }));
+});
+
+test('G189 current native MOTO sends NO booking ID and reads only active owner state',async()=>{
+ const calls=[];
+ const request=async(url,opts)=>{
+  calls.push({url,opts});
+  return response({mode:'STAGING_DEMO_ONLY',qaOnly:true,
+   productionEnabled:false,activeBooking:body(1)});
+ };
+ const found=await readCurrentDriverMoto({...scope,request});
+ assert.deepEqual(found,dto(1));
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].url,origin+'/v1/staging/driver/moto/current');
+ assert.equal(calls[0].opts.method,'GET');
+ assert.equal(calls[0].opts.body,undefined);
+ assert.equal(calls[0].opts.headers.authorization,'Bearer '+bearer);
+});
+test('G189 native GET rejects fake, terminal and foreign current assignment',async()=>{
+ const base={mode:'STAGING_DEMO_ONLY',qaOnly:true,
+  productionEnabled:false,activeBooking:null};
+ const empty=await readCurrentDriverMoto({...scope,request:async()=>response(base)});
+ assert.equal(empty,null);
+ for(const payload of [
+  {...base,activeBooking:body(3)},
+  {...base,activeBooking:{...body(0),bookingKey:id(9),driverId:id(8)}},
+  {...base,activeBooking:{...body(0),serviceKind:'AUTO_RIDE'}},
+  {...base,activeBooking:[body(0)]},{...base,activeBooking:{...body(0),gpsVerified:true}},
+  {...base,activeBooking:body(0),ownerId:id(8)},
+  {...base,productionEnabled:true},
+  {...base,activeBooking:undefined}
+ ]){
+  await assert.rejects(readCurrentDriverMoto({
+   ...scope,request:async()=>response(payload)
+  }));
+ }
 });
