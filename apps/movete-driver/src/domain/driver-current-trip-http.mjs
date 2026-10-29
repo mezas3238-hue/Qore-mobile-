@@ -10,6 +10,38 @@ const ACTIVE=new Set(['accepted','arriving','in_progress']);
 const exact=(x,keys)=>x!==null&&typeof x==='object'&&!Array.isArray(x)
  &&Object.getPrototypeOf(x)===Object.prototype
  &&Object.keys(x).length===keys.length&&keys.every(k=>Object.hasOwn(x,k));
+/**
+ * A misleading or missing Content-Length must not allow a multi-megabyte
+ * recovery JSON to be parsed before the native app enforces maxBytes.
+ * Fetch implementations without a ReadableStream keep the legacy fallback;
+ * the deadline and post-parse bound still protect that compatibility path.
+ */
+async function readBoundedRecoveryJson(response,limit,within){
+ const reader=response?.body?.getReader?.();
+ if(!reader)return within(response.json());
+ const decoder=new TextDecoder('utf-8',{fatal:true});
+ let bytes=0,text='',finished=false;
+ try{
+  while(true){
+   const next=await within(reader.read());
+   if(next.done){finished=true;break;}
+   const chunk=next.value;
+   if(!chunk||!Number.isSafeInteger(chunk.byteLength)||chunk.byteLength<0)
+    throw Error('G106 invalid response chunk');
+   bytes+=chunk.byteLength;
+   if(bytes>limit)throw Error('G106 bounded response exceeded');
+   text+=decoder.decode(chunk,{stream:true});
+  }
+  text+=decoder.decode();
+  return JSON.parse(text);
+ }finally{
+  if(!finished){
+   // Do not await cancel: buggy streaming adapters can hang on cleanup.
+   try{Promise.resolve(reader.cancel()).catch(()=>{});}catch{}
+  }
+ }
+}
+
 export async function readDriverCurrentTrip({
  apiOrigin,approvedStagingHost=null,allowedByOwner=false,
  accessToken,request=fetch,timeoutMs=8000,maxBytes=4096
@@ -47,7 +79,7 @@ export async function readDriverCurrentTrip({
   const length=response.headers?.get?.('content-length');
   if(length!=null&&(!/^[0-9]+$/.test(length)||Number(length)>limit))
    throw Error('G106 invalid recovery response');
-  data=await within(response.json());
+  data=await readBoundedRecoveryJson(response,limit,within);
   // The transport may omit Content-Length. Reject a forged oversized JSON
   // before any private assignment reaches Driver state.
   const raw=JSON.stringify(data);
