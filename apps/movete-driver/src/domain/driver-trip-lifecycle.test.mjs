@@ -260,3 +260,82 @@ test('G65 unreadable or regressed foreground status fails closed; uncertain POST
  assert.equal((await ctl.refresh()).phase,'uncertain');
  assert.equal(ctl.current().nextEvent,null);
 });
+
+test('G178 Driver G65 GET deadline aborts stalled transport instead of hanging active screen',async()=>{
+ let count=0,signal;
+ const request=async(_,options)=>{
+  count++;signal=options.signal;return new Promise(()=>{});
+ };
+ await assert.rejects(()=>readPrivateDriverTripStatus({
+  ...scope,request,timeoutMs:120}),/unavailable/);
+ assert.equal(count,1);
+ assert.equal(signal.aborted,true);
+});
+test('G178 Driver G65 POST deadline never retries an uncertain original trip COMMIT',async()=>{
+ let count=0,signal;
+ const request=async(_,options)=>{
+  count++;signal=options.signal;return new Promise(()=>{});
+ };
+ await assert.rejects(()=>transitionPrivateDriverTrip({
+  ...scope,event:'arrive',eventKey:key,request,timeoutMs:120
+ }),/UNKNOWN_COMMIT; do not retry/);
+ assert.equal(count,1);
+ assert.equal(signal.aborted,true);
+});
+test('G178 Driver G65 refuses declared oversized JSON before reading private status',async()=>{
+ let parsed=0;
+ const request=async()=>({status:200,redirected:false,
+  headers:{get:k=>k==='content-length'?'250000':'application/json'},
+  json:async()=>{parsed++;return status();}
+ });
+ await assert.rejects(()=>readPrivateDriverTripStatus({...scope,request}),/unavailable/);
+ assert.equal(parsed,0);
+});
+test('G178 Driver G65 stream validates original G177 receipt before returning to native C',async()=>{
+ const receipt=command('arrive');
+ const bytes=new TextEncoder().encode(JSON.stringify(receipt));
+ let n=0;
+ const request=async()=>({status:200,redirected:false,
+  headers:{get:k=>k==='content-type'?'application/json':null},
+  body:{getReader:()=>({
+   read:async()=>++n===1?{done:false,value:bytes.slice(0,11)}:
+    n===2?{done:false,value:bytes.slice(11)}:{done:true},
+   cancel:async()=>{}
+  })},
+  json:()=>{throw Error('G178 must use bounded stream')}
+ });
+ const actual=await transitionPrivateDriverTrip({
+  ...scope,event:'arrive',eventKey:key,request
+ });
+ assert.equal(actual.receiptId,receipt);
+ assert.equal(actual.serverPersisted,true);
+ assert.equal(n,3);
+});
+test('G178 Driver G65 streamed oversized or stalled responses fail without awaiting cancel',async()=>{
+ let canceled=0;
+ const oversized=async()=>({status:200,redirected:false,
+  headers:{get:()=>null},
+  body:{getReader:()=>({
+   read:async()=>({done:false,value:new Uint8Array(8192)}),
+   cancel:()=>{canceled++;return new Promise(()=>{});}
+  })}
+ });
+ await assert.rejects(()=>transitionPrivateDriverTrip({
+  ...scope,event:'arrive',eventKey:key,request:oversized
+ }),/UNKNOWN_COMMIT; do not retry/);
+ assert.equal(canceled,1);
+ let aborted;
+ const stalled=async(_,options)=>{
+  aborted=options.signal;
+  return {status:200,redirected:false,headers:{get:()=>null},
+   body:{getReader:()=>({
+    read:()=>new Promise(()=>{}),
+    cancel:()=>{canceled++;return new Promise(()=>{});}
+   })}};
+ };
+ await assert.rejects(()=>transitionPrivateDriverTrip({
+  ...scope,event:'arrive',eventKey:key,request:stalled,timeoutMs:120
+ }),/UNKNOWN_COMMIT; do not retry/);
+ assert.equal(aborted.aborted,true);
+ assert.equal(canceled,2);
+});
