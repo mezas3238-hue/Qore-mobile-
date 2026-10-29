@@ -55,7 +55,8 @@ export function DriverApplicationProviders({
    qaAdapters={runtime?.tripActions??null}>
   <DriverMotoJourneyProvider
    authAdapter={identity}
-   qaAdapters={runtime?.motoActions??null}>
+   qaAdapters={runtime?.motoActions??null}
+   currentReader={runtime?.motoCurrentReader??null}>
   <DriverCustodyProvider
    authAdapter={identity}
    qaAdapters={runtime?.custodyActions??null}>
