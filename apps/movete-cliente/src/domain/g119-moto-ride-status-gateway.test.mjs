@@ -63,3 +63,54 @@ test('G119 defaults off and fails closed for nonpassenger',async()=>{
   assert.equal(f.calls(),0);
  }
 });
+
+test('G167 a hung MOTO HTTP request returns within deadline even if fetch ignores abort',async()=>{
+ let captured=null;
+ const gateway=createG119MotoStatusGateway({
+  enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin:'https://g119-ci.invalid',pinnedOrigin:'https://g119-ci.invalid',
+  getSession:async()=>({role:'passenger',subject:owner,token,expiresAt:clock+600000}),
+  now:()=>clock,timeoutMs:1000,
+  fetchImpl:async(_url,opts)=>{captured=opts.signal;return new Promise(()=>{});}
+ });
+ const started=Date.now();
+ const run=gateway.read({bookingKey:booking,expectedTripId:trip});
+ assert.equal((await gateway.read({bookingKey:booking,expectedTripId:trip})).code,'G119_READ_IN_FLIGHT');
+ const reply=await run;
+ assert.equal(reply.code,'G119_NETWORK_OR_TIMEOUT');
+ assert.equal(captured.aborted,true);
+ assert(Date.now()-started<3000);
+});
+test('G167 logout aborts stale MOTO read and prevents late status from surfacing',async()=>{
+ let finish;
+ const hold=new Promise(resolve=>finish=resolve);
+ let started;const invoked=new Promise(resolve=>started=resolve);
+ const gateway=createG119MotoStatusGateway({
+  enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin:'https://g119-ci.invalid',pinnedOrigin:'https://g119-ci.invalid',
+  getSession:async()=>({role:'passenger',subject:owner,token,expiresAt:clock+600000}),
+  now:()=>clock,
+  fetchImpl:async(_url,opt)=>{started(opt.signal);return hold;}
+ });
+ const pending=gateway.read({bookingKey:booking,expectedTripId:trip});
+ const signal=await invoked;
+ gateway.cancelPending();assert.equal(signal.aborted,true);
+ finish({status:200,ok:true,redirected:false,
+  headers:{get:()=> 'application/json'},text:async()=>JSON.stringify(value())});
+ const result=await pending;assert.equal(result.ok,false);
+ assert.equal(result.code,'STALE_SESSION_RESPONSE');
+});
+test('G167 rejects oversized MOTO state before reading body',async()=>{
+ let reads=0;
+ const gateway=createG119MotoStatusGateway({
+  enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+  origin:'https://g119-ci.invalid',pinnedOrigin:'https://g119-ci.invalid',
+  getSession:async()=>({role:'passenger',subject:owner,token,expiresAt:clock+600000}),
+  now:()=>clock,maxBytes:1024,
+  fetchImpl:async()=>({status:200,ok:true,redirected:false,
+   headers:{get:k=>k==='content-type'?'application/json':'50000'},
+   text:async()=>{reads++;return JSON.stringify(value());}})
+ });
+ const result=await gateway.read({bookingKey:booking,expectedTripId:trip});
+ assert.equal(result.code,'G119_UNTRUSTED_BODY');assert.equal(reads,0);
+});

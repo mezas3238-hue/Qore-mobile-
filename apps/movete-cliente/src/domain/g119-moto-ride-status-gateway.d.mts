@@ -13,6 +13,7 @@ export type G119Result={ok:boolean;code?:string;data?:G119MotoRideState;
 export declare function createG119MotoStatusGateway(args?:{
  enabled?:boolean;contractCertified?:boolean;stagingRuntimeVerified?:boolean;
  origin?:string;pinnedOrigin?:string;now?:()=>number;
+ timeoutMs?:number;maxBytes?:number;
  getSession?:()=>unknown|Promise<unknown>;
  fetchImpl?:(url:string,init:unknown)=>unknown|Promise<unknown>;
 }):{isConfigured:()=>boolean;
