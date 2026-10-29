@@ -17,11 +17,12 @@ const scope={tripId:trip,caseId,expectedSubject:actor,
 for(const [kind,factory,path] of factories){
  function setup({state='CLOSED',sessionChanged=false}={}){
   const calls=[];let n=0;
+  const sessionExpiresAt=Date.now()+60000;
   const getSession=async()=>{
    n++;
    return {role:'passenger',subject:actor,
     token:sessionChanged&&n>1?token+'_altered':token,
-    privateViewRevision:4,expiresAt:Date.now()+60000};
+    privateViewRevision:4,expiresAt:sessionExpiresAt};
   };
   const request=async(url,params)=>{
    calls.push({url,params});
