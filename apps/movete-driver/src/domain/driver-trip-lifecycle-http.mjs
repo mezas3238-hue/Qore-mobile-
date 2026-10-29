@@ -4,6 +4,7 @@
  * The original POST is never retried after uncertain outcome.
  */
 import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
+import {readG178BoundedDriverLifecycleJson} from './g178-bounded-driver-lifecycle-json.mjs';
 export const DRIVER_TRIP_LIFECYCLE_LIVE_ENABLED=false;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN=/^[A-Za-z0-9._~-]{20,7900}$/;
@@ -27,19 +28,16 @@ function setup({apiOrigin,approvedStagingHost,allowedByOwner,
 }
 export async function readPrivateDriverTripStatus({
  apiOrigin,approvedStagingHost=null,allowedByOwner=false,
- accessToken,tripId,request=fetch
+ accessToken,tripId,request=fetch,timeoutMs=8000
 }={}){
  const origin=setup({apiOrigin,approvedStagingHost,allowedByOwner,
   accessToken,tripId,request});
- let reply;
- try{reply=await request(origin+'/v1/staging/driver/trips/'+tripId+'/status',{
-  method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
-  headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
- });}catch{throw Error('G65 status unavailable');}
- if(reply?.status!==200||reply.redirected===true)
-  throw Error('G65 assigned trip unverified');
  let value;
- try{value=await reply.json();}catch{throw Error('G65 bad status response');}
+ try{value=await readG178BoundedDriverLifecycleJson({
+  request,url:origin+'/v1/staging/driver/trips/'+tripId+'/status',timeoutMs,
+  options:{method:'GET',cache:'no-store',credentials:'omit',redirect:'error',
+   headers:{authorization:'Bearer '+accessToken,accept:'application/json'}}
+ });}catch{throw Error('G65 status unavailable');}
  if(!exact(value,STATUS_KEYS)||value.mode!=='STAGING_DEMO_ONLY'||
   value.tripId!==tripId||!Object.hasOwn(NEXT,value.state)||
   !Number.isSafeInteger(value.revision)||value.revision<2||
@@ -54,26 +52,21 @@ export async function readPrivateDriverTripStatus({
 }
 export async function transitionPrivateDriverTrip({
  apiOrigin,approvedStagingHost=null,allowedByOwner=false,
- accessToken,tripId,event,eventKey,request=fetch
+ accessToken,tripId,event,eventKey,request=fetch,timeoutMs=8000
 }={}){
  const origin=setup({apiOrigin,approvedStagingHost,allowedByOwner,
   accessToken,tripId,request});
  if(typeof eventKey!=='string'||!UUID.test(eventKey)||
   !['arrive','pickup','complete'].includes(event))
   throw Error('G65 invalid private lifecycle event');
- let reply;
- try{reply=await request(origin+'/v1/staging/trips/'+tripId+'/transition',{
-  method:'POST',cache:'no-store',credentials:'omit',redirect:'error',
-  headers:{authorization:'Bearer '+accessToken,
-   accept:'application/json','content-type':'application/json'},
-  body:JSON.stringify({event,eventKey})
- });}catch{throw Error('G65 transition UNKNOWN_COMMIT; do not retry');}
- if(reply?.status!==200||reply.redirected===true)
-  throw Error('G65 transition not confirmed; do not retry');
  let value;
- try{value=await reply.json();}catch{
-  throw Error('G65 transition invalid receipt; do not retry');
- }
+ try{value=await readG178BoundedDriverLifecycleJson({
+  request,url:origin+'/v1/staging/trips/'+tripId+'/transition',timeoutMs,
+  options:{method:'POST',cache:'no-store',credentials:'omit',redirect:'error',
+   headers:{authorization:'Bearer '+accessToken,
+    accept:'application/json','content-type':'application/json'},
+   body:JSON.stringify({event,eventKey})}
+ });}catch{throw Error('G65 transition UNKNOWN_COMMIT; do not retry');}
  if(!exact(value,commandKeys)||value.mode!=='STAGING_DEMO_ONLY'||
   value.commercialRidesEnabled!==false||value.tripId!==tripId||
   value.event!==event||typeof value.eventId!=='string'||
