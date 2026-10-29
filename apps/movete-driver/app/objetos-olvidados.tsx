@@ -24,7 +24,9 @@ export default function DriverLostObjects(){
   postTripCertified:yes(process.env.EXPO_PUBLIC_G198_DRIVER_ORIGINAL_SQL_VERIFIED),
   verifiedStoppedProvider:yes(process.env.EXPO_PUBLIC_G198_DRIVER_MOTION_VERIFIED),
   origin:process.env.EXPO_PUBLIC_QORE_STAGING_API_ORIGIN,
-  pinnedOrigin:process.env.EXPO_PUBLIC_QORE_STAGING_API_ORIGIN,
+  // A separately reviewed owner pin: using the same dynamic API origin as
+  // its own pin would not independently attest the destination host.
+  pinnedOrigin:process.env.EXPO_PUBLIC_QORE_STAGING_PINNED_ORIGIN,
   getSession:()=>auth?.getSession()??null
  }),[auth]);
  async function reload(){
