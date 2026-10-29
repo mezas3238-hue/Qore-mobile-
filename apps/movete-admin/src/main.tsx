@@ -6,6 +6,7 @@ import {AdminAuthPanel} from './AdminAuthPanel';
 import {OwnerCommissionEditor} from './OwnerCommissionEditor';
 import {OwnerCargoRateEditor} from './OwnerCargoRateEditor';
 import {G158FraudReportsPanel} from './G158FraudReportsPanel';
+import {G214DeliveryHandoffPanel} from './G214DeliveryHandoffPanel';
 import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
 import {projectIncidentPageTriage} from './incident-page-triage.mjs';
@@ -775,7 +776,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='servicios'?<><ServiceTracePanel client={client} state={adminState}/><FiveFlowsReadOnly state={adminState}/></>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='servicios'?<><ServiceTracePanel client={client} state={adminState}/><G214DeliveryHandoffPanel authorized={adminState.account?.role==='admin'} subject={adminState.account?.role==='admin'?adminState.account.subject:null}/><FiveFlowsReadOnly state={adminState}/></>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}
