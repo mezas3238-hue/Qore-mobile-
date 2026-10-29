@@ -64,12 +64,13 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
   return latest.authenticated&&latest.privateViewRevision===privacyRevision
    &&latest.account?.subject===subject;
  }
- async function run(kind:'bind'|'confirm'|'status'){
+ async function run(kind:'bind'|'confirm'|'status'|'recover'){
   if(inFlight.current||!ready||!stillOwns())return;
   if(kind==='bind'&&(!original||!UUID.test(recipient)
    ||recipient===subject||senderAttempt.current!==null))return;
   if(kind==='confirm'&&(!UUID.test(incoming)||receiverAttempt.current!==null))return;
   if(kind==='status'&&!original)return;
+  if(kind==='recover'&&!UUID.test(incoming))return;
   const key=kind==='bind'?(senderAttempt.current=Crypto.randomUUID()):
    kind==='confirm'?(receiverAttempt.current=Crypto.randomUUID()):null;
   inFlight.current=true;setBusy(true);
@@ -82,7 +83,9 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
      requestKey:key!}):
     kind==='confirm'?
      await gateway.confirmReceived({...scope(incoming),requestKey:key!}):
-     await gateway.readSenderStatus(scope(original!));
+     kind==='recover'?
+      await gateway.readRecipientConfirmation(scope(incoming)):
+      await gateway.readSenderStatus(scope(original!));
    if(!stillOwns())return;
    if(!result.ok){
     const failed=kind==='confirm'?
@@ -90,7 +93,7 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
      kind==='bind'?
       'No pudimos verificar la vinculación. No generaremos otra clave: consultá al soporte antes de volver a intentarlo.':
       'El estado independiente no está disponible o tu sesión no tiene autorización.';
-    if(kind==='confirm')setRecipientMessage(failed);
+    if(kind==='confirm'||kind==='recover')setRecipientMessage(failed);
     else setSenderMessage(failed);
     return;
    }
@@ -98,6 +101,13 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
     setSenderMessage('Destinatario vinculado en la base original. Todavía no confirma recepción, no despacha ni cobra.');
    }else if(kind==='confirm'){
     setRecipientMessage('Recepción confirmada por el servidor en QA. No se ha autorizado ningún cobro ni liquidación.');
+   }else if(kind==='recover'){
+    const d=result.data;
+    setRecipientMessage(d.recipientConfirmed
+     ?d.eligibleForSettlement?
+      'La base confirmó tu recepción original. No se autorizó ningún pago.':
+      'Tu recepción original sigue registrada. Existe una incidencia, disputa o devolución: la liquidación continúa bloqueada.':
+      'No hay confirmación persistida. Este GET no envió una nueva aceptación; consultá soporte antes de intentar otra operación.');
    }else{
     const d=result.data;
     setStatus({state:d.deliveryState,bound:d.recipientBound,
@@ -106,8 +116,8 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
    }
   }catch{
    if(!stillOwns())return;
-   if(kind==='confirm')setRecipientMessage(
-    'Resultado incierto. No repitas la confirmación; el remitente debe consultar su comprobante.');
+   if(kind==='confirm'||kind==='recover')setRecipientMessage(
+    'Resultado incierto. No repitas la confirmación: usá la consulta privada o contactá soporte.');
    else setSenderMessage('Servidor no verificado; la operación no puede darse por realizada.');
   }finally{inFlight.current=false;setBusy(false);}
  }
@@ -164,6 +174,10 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
     disabled={!ready||!UUID.test(incoming)||busy||receiverAttempt.current!==null}
     hint="Acción irreversible: solo si recibiste el paquete. No autoriza cobro."
     onPress={()=>{void run('confirm');}}/>
+   <Action secondary label="Consultar mi confirmación original (sin reenviar)"
+    disabled={!ready||!UUID.test(incoming)||busy}
+    hint="Solo GET privado: permite recuperar una confirmación tras perder la respuesta sin repetir el POST."
+    onPress={()=>{void run('recover');}}/>
    {recipientMessage!==''&&<Text accessibilityLiveRegion="polite"
     style={[styles.small,{color:palette.primary}]}>{recipientMessage}</Text>}
    <Text style={styles.small}>Si hay una incidencia o el paquete no llegó, no confirmes. Contactá al soporte; la plataforma no debe liquidar sin resolución verificada.</Text>
