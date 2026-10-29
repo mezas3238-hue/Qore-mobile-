@@ -572,6 +572,31 @@ test('G210 original G73 AUTO accepted through G205 advances G177 same trip on HT
   assert.equal(adminView.body.revision,5);
   assert.equal(adminView.body.status,'completed');
   assert.equal(adminView.body.productionEnabled,false);
+  // Execute the actual D Admin HTTPS contract against A's same-trip
+  // loopback HTTP transport, not a separate fabricated Admin application.
+  const {createServiceTraceGateway}=await import(
+   '../../movete-admin/src/service-trace-gateway.mjs');
+  const dOrigin='https://g211-local-admin-transport.invalid';
+  const dClient=createServiceTraceGateway({
+   enabled:true,contractCertified:true,origin:dOrigin,pinnedOrigin:dOrigin,
+   now:()=>now,
+   getSession:async()=>({role:'admin',subject:stranger,mfaVerified:true,
+    authRevision:1,expiresAt:now+60000,token:jwt.stranger}),
+   fetchImpl:(url,options)=>{
+    const u=new URL(url);
+    assert.equal(u.origin,dOrigin);
+    return fetch(base+u.pathname,{...options,redirect:'error'});
+   }
+  });
+  const dReceipt=await dClient.read('AUTO_RIDE',ride);
+  assert.equal(dReceipt.ok,true,JSON.stringify(dReceipt));
+  assert.equal(dReceipt.data.serviceId,ride);
+  assert.equal(dReceipt.data.bookingRequestKey,requestKey);
+  assert.equal(dReceipt.data.status,'completed');
+  assert.equal(dReceipt.data.revision,5);
+  assert.equal(dReceipt.data.assignment.state,'QA_COMPLETED');
+  assert.equal(dReceipt.data.assignment.legalGate,'EXTERNAL_NOT_CERTIFIED');
+  assert.equal(dReceipt.data.productionEnabled,false);
   assert.equal(m.state.rpcs.filter(r=>r.name==='mobility_stage_g205_accept_original_auto_qa').length,1);
   assert.equal(m.state.rpcs.filter(r=>r.name==='mobility_stage_g177_driver_auto_step_qa').length,6);
  });
