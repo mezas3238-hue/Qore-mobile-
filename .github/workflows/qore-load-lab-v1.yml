@@ -42,6 +42,10 @@ jobs:
         env:
           QORE_LAB_G171_REDIS: 'true'
         run: node apps/mobility-expo/scripts/load/g171-redis-multireplica-ci.mjs
+      - name: G171 two independent Node processes, force SIGKILL and restart with Redis state intact
+        env:
+          QORE_LAB_G171_REDIS: 'true'
+        run: node apps/mobility-expo/scripts/load/g171-redis-multiprocess-ci.mjs
       - name: Run isolated stress staircase (500 + 2,000 + 3,000 + 10,000)
         run: node apps/mobility-expo/scripts/load/load-lab-v1.mjs --stress
       - name: Preserve metrics even if overload causes test failure
