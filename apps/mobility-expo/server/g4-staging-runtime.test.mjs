@@ -59,7 +59,22 @@ function mockSupabase(){
       return {
        eq(k,v){filter[k]=v;return this;},
        or(expression){filter.$or=expression;return this;},
+       in(k,values){filter[k]=values;return this;},
        async limit(n){
+        // G170: bounded G106 Driver-only original trip recovery query.
+        if(table==='mobility_stage_auto_demo_trips'&&n===2&&
+         filter.driver_id!==undefined){
+         state.g106RecoveryReads=(state.g106RecoveryReads??0)+1;
+         if(state.g89TripReadError)return {data:null,error:{code:'08006'}};
+         const t=state.trip;
+         const active=t.driver_id===filter.driver_id&&
+          Array.isArray(filter.status)&&filter.status.includes(t.status);
+         const rows=active?[{id:t.id,driver_id:t.driver_id,
+          status:t.status,revision:t.revision}]:[];
+         if(active&&state.g106DuplicateAssignment===true)
+          rows.push({...rows[0],id:deliveryId});
+         return {data:rows,error:null};
+        }
         if(table==='user_roles'){
          state.rolesLookups++;
          const roles=filter.user_id===passenger?['passenger']:
