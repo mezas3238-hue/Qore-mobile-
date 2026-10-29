@@ -13,6 +13,7 @@ export default function DriverLostObjects(){
  const [current,setCurrent]=useState<string|null>(null);
  const [messages,setMessages]=useState<Msg[]>([]);
  const [canSend,setCanSend]=useState(false);
+ const [uncertainSend,setUncertainSend]=useState(false);
  const [body,setBody]=useState('');
  const [feedback,setFeedback]=useState('');
  const [busy,setBusy]=useState(false);
@@ -50,13 +51,14 @@ export default function DriverLostObjects(){
   }finally{lock.current=false;setBusy(false);}
  }
  async function send(){
-  if(lock.current||!api.isConfigured()||!current||!canSend)return;
+  if(lock.current||!api.isConfigured()||!current||!canSend||uncertainSend)return;
   const message=body.trim();
   if(message.length<1||message.length>500)return;
   lock.current=true;setBusy(true);
   try{
    const res=await api.send(current,Crypto.randomUUID(),message);
    if(!res.ok){
+    setUncertainSend(true);
     setFeedback('Envío no verificado. No reenvíes el mensaje: consultá el historial original y soporte.');
     return;
    }
@@ -92,10 +94,10 @@ export default function DriverLostObjects(){
    </View>)}
    <TextInput multiline maxLength={500} value={body}
     onChangeText={setBody} style={[styles.field,{minHeight:80,textAlignVertical:'top'}]}
-    editable={canSend&&!busy}
+    editable={canSend&&!busy&&!uncertainSend}
     placeholder="Respondé sobre el objeto, sin teléfonos ni enlaces"
     accessibilityLabel="Respuesta privada al pasajero por objeto olvidado"/>
-   <Action label="Responder al pasajero" disabled={!canSend||busy||!body.trim()}
+   <Action label="Responder al pasajero" disabled={!canSend||busy||uncertainSend||!body.trim()}
     onPress={()=>{void send();}}/>
    <Action label="Actualizar este caso" secondary disabled={busy}
     onPress={()=>{void open(current);}}/>
