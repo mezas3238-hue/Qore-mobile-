@@ -40,6 +40,7 @@ import {createG75AdminF1Repository} from './g75-f1-admin-audit-repository.mjs';
 import {createG138AdminAutoTraceGateway} from './g138-admin-auto-trace-gateway.mjs';
 import {createG142AdminMotoTraceGateway} from './g142-admin-moto-trace-gateway.mjs';
 import {createG145AdminCargoTraceGateway} from './g145-admin-cargo-trace-gateway.mjs';
+import {createG214AdminDeliveryHandoffGateway} from './g214-admin-delivery-handoff-gateway.mjs';
 import {createG146AdminCommerceTraceGateway} from './g146-admin-commerce-trace-gateway.mjs';
 import {createSupabaseStagingSafetyRepository} from './g8-supabase-safety-repository.mjs';
 import {createQoreSafetyGateway} from './g8-safety-gateway.mjs';
@@ -934,6 +935,22 @@ export async function prepareQoreG4StagingRuntime({
    return data;
   }
  });
+ // G214: independent source-backed terminal G5/G67/G187 after courier
+ // and recipient. Retain G145's narrower unassigned-only contract.
+ const adminDeliveryHandoff=verifiedAdminTrust===null?null:
+  createG214AdminDeliveryHandoffGateway({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+   ...verifiedAdminTrust,
+   loadHandoffReceipt:async({actorId,deliveryId})=>{
+    if(!UUID.test(actorId)||!UUID.test(deliveryId))
+     throw Error('G214 original delivery scope required');
+    const {data,error}=await admin.rpc('mobility_stage_g214_admin_delivery_handoff_qa',{
+     _admin:actorId,_delivery:deliveryId
+    });
+    if(error)throw Error('G214 terminal handoff SQL unavailable');
+    return data;
+   }
+  });
  // G146: original G45 Buyer stock/order, read-only Admin provenance.
  // G45 is NOT a quote and no ledger/payment may be inferred from its receipt.
  const adminCommerceTrace=verifiedAdminTrust===null?null:createG146AdminCommerceTraceGateway({
@@ -1217,6 +1234,8 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminAutoTrace===null?{}:{adminServiceTraceHandler:guard(adminAutoTrace)}),
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
+   ...(adminDeliveryHandoff===null?{}:{
+    adminDeliveryHandoffHandler:guard(adminDeliveryHandoff)}),
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
    deliveryHandler:guard(createG176VerifiedCourierCustodyFence({deliveryHandler:deliveries})),
    merchantHandler:guard(createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})),
