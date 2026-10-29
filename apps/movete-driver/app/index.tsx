@@ -208,6 +208,8 @@ export default function DriverHome(){
    <Action label="Ver estado de mensajería" secondary onPress={()=>router.push('/mensajes')}/>
    <Action label="Responder por objetos olvidados" secondary
     onPress={()=>router.push('/objetos-olvidados')}/>
+   <Action label="Objetos olvidados en viaje MOTO" secondary
+    onPress={()=>router.push('/objetos-olvidados-moto')}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Mis ingresos</Text>
