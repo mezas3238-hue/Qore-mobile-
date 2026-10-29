@@ -518,7 +518,7 @@ test('G210 original G73 AUTO accepted through G205 advances G177 same trip on HT
   assert.equal(sqlAfterAccept.length,1);
   const beforeInvalid=m.state.rpcs.length;
   const invalid=await req(base,transitionPath,'driver','POST',{
-   event:'cancel',eventKey:keys[0]
+   event:'skip',eventKey:keys[0]
   });
   assert.equal(invalid.status,400,'invalid Driver transition cannot reach legacy SQL');
   assert.equal(invalid.body.code,'G177_DRIVER_STEP_INVALID');
