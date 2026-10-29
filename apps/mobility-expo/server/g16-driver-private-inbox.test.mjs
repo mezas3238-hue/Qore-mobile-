@@ -150,3 +150,43 @@ test('G134 guarded G16 inbox denies revoked or expired Driver sessions before pr
   requireFreshSession:true,verifySessionNotRevoked:null
  }));
 });
+
+test('G181 revocation, expiry and provider outage DURING original SQL inbox hide all offer IDs',async()=>{
+ const sessionId='77777777-7777-4777-8777-777777777777';
+ const actor={...auth,sessionId,expiresAtMs:now+60000};
+ let checks=0,reads=0;
+ const revoked=gateway({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>actor,
+  verifySessionNotRevoked:async()=>++checks===1,
+  listForDriver:async()=>{reads++;return {ok:true,liveEnabled:false,offers:[
+   {kind:'AUTO_RIDE',offerId:autoOffer,serviceId:trip,expiresAtMs:now+25000}
+  ]};}
+ });
+ const denied=await revoked.handler(request);
+ assert.equal(denied.status,401);
+ assert.equal(reads,1);assert.equal(checks,2);
+ assert.doesNotMatch(JSON.stringify(denied),new RegExp(autoOffer+'|'+trip));
+
+ checks=0;
+ const offline=gateway({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>actor,
+  verifySessionNotRevoked:async()=>{if(++checks===2)throw Error('secret provider');return true;}
+ });
+ const unavailable=await offline.handler(request);
+ assert.equal(unavailable.status,503);
+ assert.doesNotMatch(JSON.stringify(unavailable),/secret provider|offerId|tripId/);
+ assert.equal(checks,2);
+
+ let ticks=0;
+ const expired=gateway({
+  requireFreshSession:true,
+  verifyAccessToken:async()=>({...actor,expiresAtMs:now+1}),
+  verifySessionNotRevoked:async()=>true,
+  now:()=>now+ticks++*2
+ });
+ const result=await expired.handler(request);
+ assert.equal(result.status,401);
+ assert.doesNotMatch(JSON.stringify(result),new RegExp(autoOffer));
+});
