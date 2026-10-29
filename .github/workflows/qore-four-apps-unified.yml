@@ -90,6 +90,8 @@ jobs:
           node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
           node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.mjs
           node --test apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
+          node --check apps/mobility-expo/server/g214-admin-delivery-handoff-gateway.mjs
+          node --test apps/mobility-expo/server/g214-admin-delivery-handoff-gateway.test.mjs
           node --check apps/mobility-expo/server/g197-driver-pickup-gateway.mjs
           node --check apps/mobility-expo/server/g198-lost-items-gateway.mjs
           node --test apps/mobility-expo/server/g197-driver-pickup-gateway.test.mjs
