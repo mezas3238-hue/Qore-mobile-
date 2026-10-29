@@ -44,6 +44,7 @@ export type DriverStagingRuntime=Readonly<{
  currentTripReader:DriverCurrentTripReader;
  tripActions:DriverTripAdapters;
  motoActions:DriverMotoAdapters;
+ motoCurrentReader:Readonly<{readCurrent:(p:{accessToken:string})=>Promise<import('./driver-moto-journey-http.mjs').DriverMotoJourney|null>}>;
  custodyActions:DriverCustodyAdapters;
  kycValidityAdapter:Readonly<{readStatus:(x:{accessToken:string})=>Promise<DriverKycExpirySnapshot>}>|null;
  documentUploads:DriverDocumentUploadAdapters|null;
