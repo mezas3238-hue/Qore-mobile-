@@ -84,8 +84,32 @@ try:
     assert both_running,"G181 workloads were not overlapping processes"
     assert max_pg_connections>=12,(
       "G181 must measure concurrent real PG sessions",max_pg_connections)
+    # A third independent PG connection reconciles committed rows from both
+    # overlapping OS processes, rather than trusting only their JSON output.
+    # Keep original identities immutable; no state rewrites or fake offers.
+    with psycopg.connect(autocommit=True,connect_timeout=4) as audit:
+        audited=audit.execute("""
+          SELECT
+           (SELECT count(*) FROM public.mobility_stage_g100_moto_trips
+             WHERE left(passenger_id::text,9)='17700000-'),
+           (SELECT count(*) FROM public.mobility_stage_deliveries
+             WHERE left(sender_id::text,9)='17700000-'),
+           (SELECT count(*) FROM public.mobility_stage_merchant_orders
+             WHERE left(request_key::text,9)='18000000-'),
+           (SELECT count(*) FROM public.mobility_stage_g45_order_receipts
+             WHERE left(request_key::text,9)='18000000-'),
+           (SELECT count(*) FROM public.mobility_stage_g45_cancel_receipts
+             WHERE left(buyer_id::text,9)='18000000-')
+        """).fetchone()
+    assert audited==(300,600,300,300,60),(
+      "G181 cross-process committed original source rows mismatch",audited)
     result={
      "lab":"G181_FIVE_SERVICE_REAL_PG16_COTENANCY",
+     "independentPostRunDatabaseAudit":{
+       "motoRides":audited[0],"parcelDeliveries":audited[1],
+       "merchantOrders":audited[2],"merchantReceipts":audited[3],
+       "merchantCancelReceipts":audited[4]
+     },
      "sameDisposablePostgres":True,
      "independentOsWorkloadProcesses":2,
      "overlappedProcessExecution":both_running,
