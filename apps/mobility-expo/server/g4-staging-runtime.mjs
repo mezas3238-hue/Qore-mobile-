@@ -803,6 +803,13 @@ export async function prepareQoreG4StagingRuntime({
    if(error)throw Error('G169 original MOTO ownership unavailable');
    return data;
   },
+  readCurrentMoto:async({driverId})=>{
+   const {data,error}=await admin.rpc('mobility_stage_g189_driver_moto_current_qa',{
+    _driver:driverId
+   });
+   if(error)throw Error('G189 active MOTO ownership unavailable');
+   return data;
+  },
   advanceMoto:async({driverId,bookingKey,expectedRevision,nextState,commandKey})=>{
    const {data,error}=await admin.rpc('mobility_stage_g118_moto_driver_step_qa',{
     _booking:bookingKey,_driver:driverId,_revision:expectedRevision,
