@@ -45,7 +45,7 @@ const gateway=createG169DriverMotoJourneyGateway({
  verifyAccessToken:async token=>token===activeToken||token===otherToken?{
   id:token===activeToken?driver:passenger,
   sessionId:'16900000-0000-4169-8169-000000000006',
-  is_anonymous:false,expiresAtMs:now+600000
+  tokenIatMs:now-1000,is_anonymous:false,expiresAtMs:now+600000
  }:Promise.reject(Error('Untrusted token')),
  verifySessionNotRevoked:async()=>true,
  resolveExclusiveRole:async id=>id===driver?'driver':'passenger',
