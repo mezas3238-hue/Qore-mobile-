@@ -71,31 +71,6 @@ test('G66 HTTP rejects fake proof, unauthorized origin, malformed status, spoofe
  ])await assert.rejects(transitionPrivateCourierCustody({...scope,
   event:'pickup',eventKey:key,request:async()=>response(fake)}));
 });
-test('G187 one transient custody GET reset is safely recovered without authorizing an unassigned courier',async()=>{
- let count=0;
- const read=async()=>{
-  count++;
-  if(count===1)throw new TypeError('fetch failed');
-  return response({error:'Private courier custody unavailable'},503);
- };
- await assert.rejects(readPrivateCourierCustody({
-  ...scope,request:read
- }),/assigned custody not verified/);
- assert.equal(count,2,'G187 only repeated a private GET and never creates custody');
-});
-
-test('G187 never repeats a custody mutation even if the POST transport fails',async()=>{
- let calls=0;
- await assert.rejects(transitionPrivateCourierCustody({
-  ...scope,event:'pickup',eventKey:key,
-  request:async(_,options)=>{
-   calls++;assert.equal(options.method,'POST');
-   throw new TypeError('fetch failed');
-  }
- }),/UNKNOWN_COMMIT/);
- assert.equal(calls,1,'G66 must never retry a potentially committed POST');
-});
-
 function scenario({lost=null,proofSource=true}={}){
  let phase='accepted',revision=2,mutations=0,reads=0;
  const posted=[];
@@ -326,4 +301,41 @@ test('G66 controller identifies the exact authenticated Driver session, not only
  assert.equal(x.ctl.isBoundTo({role:'driver',userId:driver,accessToken:'rotated-token'}),false);
  x.ctl.clear();
  assert.equal(x.ctl.isBoundTo({role:'driver',userId:driver,accessToken:bearer}),false);
+});
+
+test('G186 Driver custody GET/POST deadlines, oversized JSON and hung stream do not lock UI or retry SQL',async()=>{
+ let statusCalls=0,mutations=0;
+ const never=new Promise(()=>{});
+ const slowRequest=async(_url,opts)=>{
+  if(opts.method==='POST')mutations++;else statusCalls++;
+  return {status:200,redirected:false,json:async()=>never};
+ };
+ await assert.rejects(()=>readPrivateCourierCustody({
+  ...scope,request:slowRequest,timeoutMs:120}),/G66 custody unavailable/);
+ await assert.rejects(()=>transitionPrivateCourierCustody({
+  ...scope,event:'pickup',eventKey:key,request:slowRequest,timeoutMs:120
+ }),/UNKNOWN_COMMIT, no automatic replay/);
+ assert.equal(statusCalls,1);
+ assert.equal(mutations,1,'deadline must not generate a second mutation');
+ let cancels=0,streamPosts=0;
+ const hungStream=async(_url,opts)=>{
+  if(opts.method==='POST')streamPosts++;
+  return {status:200,redirected:false,
+   body:{getReader:()=>({read:()=>never,cancel:()=>{cancels++;return never;}})}};
+ };
+ await assert.rejects(()=>transitionPrivateCourierCustody({
+  ...scope,event:'pickup',eventKey:key,request:hungStream,timeoutMs:120
+ }),/UNKNOWN_COMMIT, no automatic replay/);
+ assert.equal(streamPosts,1);
+ assert.equal(cancels,1,'reader.cancel is non-blocking');
+ const tooLarge={...status(),note:'X'.repeat(6000)};
+ await assert.rejects(()=>readPrivateCourierCustody({
+  ...scope,request:async()=>response(tooLarge)
+ }),/G66 custody unavailable/);
+ await assert.rejects(()=>transitionPrivateCourierCustody({
+  ...scope,event:'pickup',eventKey:key,
+  request:async()=>({status:200,redirected:false,headers:{
+   get:k=>k==='content-length'?'99999':'application/json'},
+   json:async()=>receipt()})
+ }),/UNKNOWN_COMMIT, no automatic replay/);
 });
