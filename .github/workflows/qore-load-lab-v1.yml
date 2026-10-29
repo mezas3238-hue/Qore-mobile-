@@ -38,6 +38,8 @@ jobs:
           node --check apps/mobility-expo/scripts/load/load-lab-v1.mjs
       - name: Install isolated server-only Redis client (NO cloud)
         run: npm install --prefix apps/mobility-expo/server --no-audit --no-fund --ignore-scripts
+      - name: G174 verify pinned private STAGING Redis TLS and ACL guardrails (no network)
+        run: node --test apps/mobility-expo/server/g171-redis-distributed-quota.test.mjs
       - name: G171 real shared Redis quota, two independent ingress listeners, restart and loss
         env:
           QORE_LAB_G171_REDIS: 'true'
