@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createG200MotoLostItemsGateway} from './g200-lost-items-gateway.mjs';
+import {createG200MotoLostItemsGateway} from './g200-moto-lost-items-gateway.mjs';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 const passenger='19800000-0000-4198-8198-000000000001';
