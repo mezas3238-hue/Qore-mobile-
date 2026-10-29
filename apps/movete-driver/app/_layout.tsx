@@ -13,6 +13,7 @@ export default function DriverLayout(){
    <Stack.Screen name="ofertas" options={{title:'Ofertas para mí'}}/>
    <Stack.Screen name="distancia-recogida" options={{title:'Distancia de recogida'}}/>
    <Stack.Screen name="viaje" options={{title:'Viaje asignado'}}/>
+   <Stack.Screen name="moto-viaje" options={{title:'Viaje MOTO original'}}/>
    <Stack.Screen name="calificar" options={{title:'Calificar al cliente'}}/>
    <Stack.Screen name="entrega" options={{title:'Custodia de entrega'}}/>
    <Stack.Screen name="mensajes" options={{title:"Mensajes privados"}}/>

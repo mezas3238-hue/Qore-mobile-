@@ -24,6 +24,7 @@ const f1AutoGetRoute=/^\/v1\/staging\/rider\/auto\/bookings\/[0-9a-f-]{36}(?:\/(
 // G101 MOTO passenger is a different ride kind from AUTO/DELIVERY.
 const f1MotoPostRoute=/^\/v1\/staging\/rider\/moto\/(?:quotes|book|bookings\/[0-9a-f-]{36}\/cancel)$/i;
 const f1MotoGetRoute=/^\/v1\/staging\/rider\/moto\/bookings\/[0-9a-f-]{36}(?:\/(?:cancellation|status))?$/i;
+const g189DriverMotoCurrent='/v1/staging/driver/moto/current';
 const g169DriverMotoGet=/^\/v1\/staging\/driver\/moto\/bookings\/[0-9a-f-]{36}\/status$/i;
 const g169DriverMotoPost=/^\/v1\/staging\/driver\/moto\/bookings\/[0-9a-f-]{36}\/advance$/i;
 const ownerCommissionRoute=/^\/v1\/staging\/owner\/commissions\/(AUTO_RIDE|MOTO_RIDE|DELIVERY_AUTO|DELIVERY_MOTO|COMMERCE)$/;
@@ -162,7 +163,8 @@ export function createQoreRadarLoopbackTransport({
   const f1AutoGet=req.method==='GET'&&f1AutoGetRoute.test(path);
   const motoPost=req.method==='POST'&&f1MotoPostRoute.test(path);
   const motoGet=req.method==='GET'&&f1MotoGetRoute.test(path);
-  const driverMotoGet=req.method==='GET'&&g169DriverMotoGet.test(path);
+  const driverMotoGet=req.method==='GET'&&
+   (g169DriverMotoGet.test(path)||path===g189DriverMotoCurrent);
   const driverMotoPost=req.method==='POST'&&g169DriverMotoPost.test(path);
   const adminF1AuditGet=req.method==='GET'&&adminF1AuditRoute.test(path);
   const adminServiceTraceGet=req.method==='GET'&&adminServiceTraceRoute.test(path);
