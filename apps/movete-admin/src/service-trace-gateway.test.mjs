@@ -112,8 +112,20 @@ test('G211 Admin reads original AUTO QA arrival, pickup and completion without l
    .code,'INVALID_TRACE_RECEIPT');
  }
  const moto={...build('completed'),serviceKind:'MOTO_RIDE'};
- assert.equal((await configured(async()=>response(moto)).read('MOTO_RIDE',id))
-  .code,'INVALID_TRACE_RECEIPT');
+ const motoResult=await configured(async()=>response(moto)).read('MOTO_RIDE',id);
+ assert.equal(motoResult.ok,true,'G212 MOTO source follows G211 lifecycle chronology');
+ assert.equal(motoResult.data.status,'completed');
+ assert.equal(motoResult.data.assignment.state,'QA_COMPLETED');
+ for(const mutate of [
+  x=>x.events[1].status='arriving',
+  x=>x.assignment.legalGate='CLEARED',
+  x=>x.events[4].eventId=x.events[3].eventId
+ ]){
+  const spoof={...build('completed'),serviceKind:'MOTO_RIDE'};
+  mutate(spoof);
+  assert.equal((await configured(async()=>response(spoof)).read('MOTO_RIDE',id))
+   .code,'INVALID_TRACE_RECEIPT');
+ }
 });
 
 test('D rejects role downgrade during HTTP, does not leak private session',async()=>{
