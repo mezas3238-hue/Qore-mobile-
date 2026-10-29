@@ -4,6 +4,7 @@ import {DriverWorkspaceProvider} from './DriverWorkspaceProvider';
 import {DriverMessagesProvider} from './DriverMessagesProvider';
 import {DriverOfferActionsProvider} from './DriverOfferActionsProvider';
 import {DriverTripProvider} from './DriverTripProvider';
+import {DriverMotoJourneyProvider} from './DriverMotoJourneyProvider';
 import {DriverKycExpiryProvider} from './DriverKycExpiryProvider';
 import {DriverDocumentUploadProvider} from './DriverDocumentUploadProvider';
 import {DriverCustodyProvider} from './DriverCustodyProvider';
@@ -52,6 +53,9 @@ export function DriverApplicationProviders({
   <DriverTripProvider
    authAdapter={identity}
    qaAdapters={runtime?.tripActions??null}>
+  <DriverMotoJourneyProvider
+   authAdapter={identity}
+   qaAdapters={runtime?.motoActions??null}>
   <DriverCustodyProvider
    authAdapter={identity}
    qaAdapters={runtime?.custodyActions??null}>
@@ -61,6 +65,7 @@ export function DriverApplicationProviders({
    {children}
   </DriverMessagesProvider>
   </DriverCustodyProvider>
+  </DriverMotoJourneyProvider>
   </DriverTripProvider>
   </DriverOfferActionsProvider>
  </DriverDocumentUploadProvider>
