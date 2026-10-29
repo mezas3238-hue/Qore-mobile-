@@ -1,0 +1,8 @@
+{
+  "name": "qore-mobile-staging-server-only",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "redis": "5.11.0"
+  }
+}
