@@ -18,8 +18,7 @@ CREATE FUNCTION public.mobility_stage_g214_admin_delivery_handoff_qa(
  _admin uuid,_delivery uuid
 ) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
  WITH stamp AS MATERIALIZED (
-  SELECT pg_catalog.floor(pg_catalog.extract(epoch FROM
-    pg_catalog.clock_timestamp())*1000)::bigint AS ms
+  SELECT pg_catalog.floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint AS ms
  ), original AS MATERIALIZED (
   SELECT d.*,c.quote_id
   FROM public.mobility_stage_deliveries d
