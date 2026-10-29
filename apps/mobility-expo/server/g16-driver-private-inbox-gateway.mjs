@@ -73,6 +73,19 @@ export function createDriverPrivateInboxGateway({
     offers.push({kind:row.kind,offerId:row.offerId,
      serviceId:row.serviceId,expiresAtMs:row.expiresAtMs});
    }
+   // G181: a session can be revoked while a two-RPC inbox read runs.
+   // Never disclose persisted private offer IDs after a stale authorization.
+   if(requireFreshSession===true){
+    const finished=now();
+    if(!Number.isSafeInteger(finished)||finished<at||
+       user.expiresAtMs<=finished)
+     return answer(401,{error:'Driver session expired during private read'});
+    try{
+     if(await verifySessionNotRevoked({userId:user.id,
+       sessionId:user.sessionId,at:finished})!==true)
+      return answer(401,{error:'Driver session revoked during private read'});
+    }catch{return answer(503,{error:'Driver session authority unavailable'});}
+   }
    return answer(200,{mode:'STAGING_DEMO_ONLY',liveTripsEnabled:false,
     liveDeliveriesEnabled:false,offers,pushDelivered:false,deviceReceived:false,
     suggestedPollIntervalMs:5000});
