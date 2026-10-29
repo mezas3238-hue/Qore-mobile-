@@ -40,6 +40,7 @@ export function createQoreOfferGateway({
  projectRef,verifyAccessToken,authorizeDriver,loadOfferForDriver,
  acceptOffer,declineOffer,allowRequest,now=Date.now,
  requireFreshSession=false,verifySessionNotRevoked,
+ requireOriginalBookingAcceptance=false,
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizeDriver,loadOfferForDriver,
@@ -47,6 +48,8 @@ export function createQoreOfferGateway({
   throw new Error('QORE server-only offer gateway adapters required');
  if(requireFreshSession===true&&typeof verifySessionNotRevoked!=='function')
   throw Error('G4 guarded Driver decisions require revocation authority');
+ if(requireOriginalBookingAcceptance===true&&requireFreshSession!==true)
+  throw Error('G205 original booked AUTO acceptance requires G42 revocable session');
  return async({method,path,headers,body})=>{
   const found=typeof path==='string'?read.exec(path):null;
   const action=typeof path==='string'&&path.startsWith(routePrefix)?
@@ -66,6 +69,10 @@ export function createQoreOfferGateway({
    if(!UUID.test(user.sessionId??'')||!Number.isSafeInteger(user.expiresAtMs)||
     !Number.isSafeInteger(at)||user.expiresAtMs<=at)
     return response(401,{error:'Driver session expired or incomplete'});
+   if(requireOriginalBookingAcceptance===true&&decision&&action==='accept'&&
+    (!Number.isSafeInteger(user.tokenIatMs)||user.tokenIatMs<0||
+      user.tokenIatMs>at||!UUID.test(user.sessionId)))
+    return response(401,{error:'Independent Driver session provenance required'});
    try{
     if(await verifySessionNotRevoked({userId:user.id,sessionId:user.sessionId,at})!==true)
      return response(401,{error:'Driver session revoked'});
@@ -118,7 +125,9 @@ export function createQoreOfferGateway({
   try{
    // Only server-side verified actor ID enters the service-role SQL RPC.
    const params={
-    _offer_id:body.offerId,_driver_id:user.id,_decision_key:body.requestKey
+    _offer_id:body.offerId,_driver_id:user.id,_decision_key:body.requestKey,
+    ...(requireOriginalBookingAcceptance===true&&action==='accept'?
+      {_session:user.sessionId,_iat:user.tokenIatMs}:{})
    };
    const result=await (action==='accept'?acceptOffer(params):declineOffer(params));
    if(typeof result!=='string'||!UUID.test(result))
