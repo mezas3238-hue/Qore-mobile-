@@ -4,6 +4,7 @@ import {prepareQoreG4StagingRuntime} from './g4-staging-runtime.mjs';
 import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {request as httpRequest} from 'node:http';
 import {reconcilePrivateDriverOffer} from '../../movete-driver/src/domain/driver-offer-decision.mjs';
+import {transitionPrivateDriverTrip} from '../../movete-driver/src/domain/driver-trip-lifecycle-http.mjs';
 
 const ref='staging1234567890abcd';
 const anonKey='sb_publishable_abcdefghijklmnopqrstuvwxyz';
@@ -2050,6 +2051,20 @@ test('G177 verified original Driver SQL steps preserve ordered AUTO trip and ide
     ['mode','commercialRidesEnabled','tripId','event','eventId','serverPersisted'].sort(),
     'G177 must preserve the exact native G65 lifecycle receipt');
    assert.equal(m.state.trip.status,status);
+   if(event==='arrive'){
+    // C's real native G65 HTTP codec consumes this exact A/G177 response,
+    // with the same original G3 receipt and no second state change.
+    const native=await transitionPrivateDriverTrip({
+     apiOrigin:'https://api-staging.movetefacil.example',
+     approvedStagingHost:'api-staging.movetefacil.example',
+     allowedByOwner:true,accessToken:jwt.driver,tripId:ride,
+     event,eventKey,request:(url,options)=>
+      fetch(base+new URL(url).pathname,options)
+    });
+    assert.equal(native.receiptId,res.body.eventId);
+    assert.equal(native.serverPersisted,true);
+    assert.equal(native.productionEnabled,false);
+   }
    const repeat=await req(base,transitionPath,'driver','POST',{event,eventKey});
    assert.equal(repeat.status,200);
    assert.equal(repeat.body.eventId,res.body.eventId);
@@ -2059,7 +2074,7 @@ test('G177 verified original Driver SQL steps preserve ordered AUTO trip and ide
   active=false;
   assert.equal((await req(base,transitionPath,'driver','POST',{
    event:'complete',eventKey:fareQuote})).status,401);
-  assert.equal(calls.length,6,'Revocation cannot invoke original G177 SQL');
+  assert.equal(calls.length,7,'Native C replay shares G3 receipt; revocation never invokes SQL');
  });
 });
 test('G177 driver provider mismatch or revoked session refuses all AUTO transitions',async()=>{
