@@ -14,6 +14,11 @@ const MAX_BODY=2048;
 const MAX_REPLY=32768;
 const LIMIT=90;
 const WINDOW_MS=60000;
+// Isolated single-instance staging budget for >10k distinct 60s identities.
+// It is NOT a shared cloud rate limiter or a production scale claim.
+const MAX_IDENTITY_BUCKETS=16384;
+const MAX_UPSTREAM_READS=256;
+const MAX_UPSTREAM_WRITES=64;
 const JSON_HEADERS=Object.freeze({
  'content-type':'application/json; charset=utf-8',
  'cache-control':'no-store, private, max-age=0',
@@ -48,7 +53,9 @@ function rawHeaderCount(req,name){
  return count;
 }
 export function createRenderStagingIngress({
- loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now
+ loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
+ maxIdentityBuckets=MAX_IDENTITY_BUCKETS,
+ maxUpstreamReads=MAX_UPSTREAM_READS,maxUpstreamWrites=MAX_UPSTREAM_WRITES
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
@@ -57,9 +64,26 @@ export function createRenderStagingIngress({
     !HOST.test(expectedHost)||!validOrigin('https://'+expectedHost)||
     (adminOrigin!==null&&(!validOrigin(adminOrigin)||
       new URL(adminOrigin).hostname===expectedHost))||
-    typeof request!=='function'||typeof now!=='function')
+    typeof request!=='function'||typeof now!=='function'||
+    !Number.isSafeInteger(maxIdentityBuckets)||maxIdentityBuckets<1||
+    maxIdentityBuckets>65536||
+    !Number.isSafeInteger(maxUpstreamReads)||maxUpstreamReads<1||
+    maxUpstreamReads>2048||
+    !Number.isSafeInteger(maxUpstreamWrites)||maxUpstreamWrites<1||
+    maxUpstreamWrites>1024)
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
+ // Original fixed-window deadlines are monotonic in insertion order;
+ // a request from an existing identity never extends or reorders its TTL.
+ // Evict expired prefixes in amortized O(1), not scan all users per GET.
  const requests=new Map();
+ let lastTime=0,inFlightReads=0,inFlightWrites=0;
+ function pruneExpired(at){
+  while(requests.size>0){
+   const oldest=requests.entries().next().value;
+   if(oldest[1].until>at)break;
+   requests.delete(oldest[0]);
+  }
+ }
  const server=createServer(async(req,res)=>{
   // Transport-only liveness; not a DB, E2E, or commercial readiness claim.
   if(req.url==='/_qore/liveness'&&req.method==='GET'&&
@@ -117,23 +141,27 @@ export function createRenderStagingIngress({
    json(res,401,{error:'Verified bearer required'},cors);return;
   }
   const at=now();
-  if(!Number.isSafeInteger(at)||at<0){
+  if(!Number.isSafeInteger(at)||at<lastTime){
    json(res,503,{error:'Ingress clock unavailable'},cors);return;
   }
-  // Store only a one-way digest (never raw JWT). Bound memory and requests for
-  // a single STAGING instance. Distributed protection is a separate GO gate.
-  for(const [key,entry] of requests)
-   if(entry.until<=at)requests.delete(key);
-  if(requests.size>=4096){
-   json(res,503,{error:'STAGING capacity unavailable'},cors);return;
-  }
+  lastTime=at;
+  pruneExpired(at);
+  // Store only a token digest. Existing identities remain enforceable even
+  // at capacity; silently evicting a live bucket would reset its 90/min cap.
   const hash=createHash('sha256').update(req.headers.authorization).digest('hex');
   const bucket=requests.get(hash);
-  if(bucket&&bucket.until>at&&bucket.count>=LIMIT){
-   json(res,429,{error:'STAGING rate limited'},cors);return;
+  if(bucket&&bucket.count>=LIMIT){
+   json(res,429,{error:'STAGING rate limited'},{
+    ...cors,'retry-after':String(Math.max(1,Math.ceil((bucket.until-at)/1000)))
+   });return;
   }
-  requests.set(hash,{until:bucket?.until>at?bucket.until:at+WINDOW_MS,
-   count:bucket?.until>at?bucket.count+1:1});
+  if(!bucket&&requests.size>=maxIdentityBuckets){
+   json(res,429,{error:'STAGING identity capacity reached'},{
+    ...cors,'retry-after':'1'
+   });return;
+  }
+  requests.set(hash,{until:bucket?.until??at+WINDOW_MS,
+   count:(bucket?.count??0)+1});
   if(req.method==='GET'&&
      (req.headers['content-length']!==undefined&&req.headers['content-length']!=='0')){
    json(res,400,{error:'GET body not allowed'},cors);return;
@@ -158,6 +186,16 @@ export function createRenderStagingIngress({
     JSON.parse(body);
    }catch{json(res,400,{error:'Invalid JSON'},cors);return;}
   }
+  // Do not allow high-frequency GET polling to monopolize mutation capacity.
+  // Reject a saturated POST before forwarding it; never buffer an unbounded
+  // queue or silently repeat a possibly committed mutation.
+  const write=req.method==='POST';
+  if(write?inFlightWrites>=maxUpstreamWrites:inFlightReads>=maxUpstreamReads){
+   json(res,503,{error:'STAGING upstream busy',retrySafe:false},{
+    ...cors,'retry-after':'1'
+   });return;
+  }
+  if(write)inFlightWrites++;else inFlightReads++;
   try{
    const upstream=await request(url.origin+req.url,{
     method:req.method,
@@ -187,6 +225,7 @@ export function createRenderStagingIngress({
    }
    json(res,upstream.status,parsed,cors);
   }catch{json(res,503,{error:'G4 unavailable'},cors);}
+  finally{if(write)inFlightWrites--;else inFlightReads--;}
  });
  server.requestTimeout=9000;
  server.headersTimeout=8000;
