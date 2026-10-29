@@ -77,7 +77,7 @@ const driverInboxRoute=/^\/v1\/staging\/driver\/inbox$/;
 const courierPollRoute=/^\/v1\/staging\/courier\/delivery-offers$/;
 const deliveryOfferReadRoute=/^\/v1\/staging\/courier\/delivery-offers\/[0-9a-f-]{36}$/i;
 const deliveryOfferDecisionRoute=/^\/v1\/staging\/courier\/delivery-offers\/(accept|decline)$/;
-const g187RecipientRoute=/^\/v1\/staging\/(?:sender|recipient)\/deliveries\/[0-9a-f-]{36}\/(?:recipient-bind|recipient-confirmation|confirm)$/i;
+const g187RecipientRoute=/^\/v1\/staging\/(?:sender|recipient)\/deliveries\/[0-9a-f-]{36}\/(?:recipient-bind|recipient-confirmation|confirmation|confirm)$/i;
 const safe=(code,body)=>({status:code,body});
 const maxBody=2048;
 const JSON_HEADERS={
