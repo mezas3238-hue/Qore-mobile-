@@ -21,7 +21,7 @@ function validMessage(x){return exact(x,MSG_KEYS)&&UUID.test(x.messageId)
 export function createG198LostItemsGateway({
  environment,qaOnly,liveEnabled,
  verifyAccessToken,verifySessionNotRevoked,resolveExclusiveRole,
- allowRequest,openCase,readCase,sendCaseMessage,closeCase,driverInbox,
+ allowRequest,verifyDriverStopped,openCase,readCase,sendCaseMessage,closeCase,driverInbox,
  now=Date.now
 }={}){
  if(environment!=='isolated_staging'||qaOnly!==true||liveEnabled!==false
@@ -78,6 +78,15 @@ export function createG198LostItemsGateway({
     operation:openAction?'open':sendAction?'send':closeAction?'close':inbox?'inbox':'read'})!==true)
     return deny(429,'G198_RATE_LIMITED');
   }catch{return deny(503,'G198_IDENTITY_AUTHORITY_DOWN');}
+  // An authenticated Driver may not type/reply while moving; never infer
+  // stopped status from UI or a bare GPS coordinate. Must be independently
+  // verified at the request time (the app cannot self-attest).
+  if(sendAction&&role==='driver'){
+   try{
+    const stationary=await verifyDriverStopped({driverId:actor.id,at});
+    if(stationary!==true)return deny(403,'G198_DRIVER_NOT_VERIFIED_STOPPED');
+   }catch{return deny(503,'G198_DRIVER_MOTION_AUTHORITY_DOWN');}
+  }
   const scope={actorId:actor.id,sessionId:actor.sessionId,tokenIatMs:actor.tokenIatMs};
   let receipt;
   try{
