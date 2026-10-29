@@ -27,7 +27,7 @@ const mk=(server,role='passenger',enabled=true)=>{
    calls++;assert(url.endsWith('/bookings/'+booking+'/status'));
    assert.equal(opts.method,'GET');assert.equal(opts.credentials,'omit');
    return {status:200,ok:true,redirected:false,
-    headers:{get:()=> 'application/json'},text:async()=>JSON.stringify(server)};
+    headers:{get:key=>key==='content-type'?'application/json':null},text:async()=>JSON.stringify(server)};
   }
  });
  return {gateway,calls:()=>calls};
@@ -96,7 +96,7 @@ test('G167 logout aborts stale MOTO read and prevents late status from surfacing
  const signal=await invoked;
  gateway.cancelPending();assert.equal(signal.aborted,true);
  finish({status:200,ok:true,redirected:false,
-  headers:{get:()=> 'application/json'},text:async()=>JSON.stringify(value())});
+  headers:{get:key=>key==='content-type'?'application/json':null},text:async()=>JSON.stringify(value())});
  const result=await pending;assert.equal(result.ok,false);
  assert.equal(result.code,'STALE_SESSION_RESPONSE');
 });

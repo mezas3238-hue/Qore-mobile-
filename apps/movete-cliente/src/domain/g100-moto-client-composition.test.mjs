@@ -115,7 +115,7 @@ test('G166 MOTO passenger foreground GET never rolls back PostgreSQL revision af
     if(calls===2)throw Error('temporary offline');
     const dto=calls===1?status:{...status,tripState:'accepted',tripRevision:2};
     return {status:200,ok:true,redirected:false,
-     headers:{get:()=> 'application/json'},
+     headers:{get:key=>key==='content-type'?'application/json':null},
      text:async()=>JSON.stringify(dto)};
    }
   }
