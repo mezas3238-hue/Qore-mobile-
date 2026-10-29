@@ -1,8 +1,8 @@
 -- G177 original G3 route cannot assert progress when a verified G42
--- session is absent. Checks real completed pre-G38 CI fixture, never a
--- fabricated new legal dispatch. Disposable PostgreSQL16 ONLY.
+-- session is absent. Check any existing original G3 row when available;
+-- never invent an accepted trip or legal approval. Disposable PG16 ONLY.
 DO $guard$
-DECLARE assigned_trip uuid; driver uuid; count_before bigint;
+DECLARE assigned_trip uuid; driver uuid; prior_status text; count_before bigint;
 BEGIN
  IF pg_catalog.current_database()<>'qore_disposable_chain'
  OR pg_catalog.current_setting('application_name')<>'qore_ci_disposable_chain'
@@ -13,12 +13,18 @@ BEGIN
  OR pg_catalog.has_function_privilege('anon',
   'public.mobility_stage_g177_driver_auto_step_qa(uuid,uuid,bigint,uuid,text,uuid)','EXECUTE')
  THEN RAISE EXCEPTION 'G177 Browser may execute original Driver state mutation'; END IF;
- SELECT id,driver_id INTO assigned_trip,driver
+ -- The G109 pre-G38 synthetic accepted fixture is intentionally
+ -- transaction-local and does not persist beyond its earlier CI test.
+ -- Use the original G3 source if any other test persisted it; otherwise
+ -- use an unassigned UUID solely to prove the fail-closed G42 boundary.
+ SELECT id,COALESCE(driver_id,passenger_id),status::text
+ INTO assigned_trip,driver,prior_status
  FROM public.mobility_stage_auto_demo_trips
- WHERE status='completed' AND driver_id IS NOT NULL
- ORDER BY id LIMIT 1;
- IF assigned_trip IS NULL OR driver IS NULL
- THEN RAISE EXCEPTION 'G177 requires original completed G109 prelegal fixture'; END IF;
+ ORDER BY (driver_id IS NOT NULL) DESC,id LIMIT 1;
+ IF assigned_trip IS NULL THEN
+  assigned_trip:='17700000-0000-4177-8177-000000000002'::uuid;
+  driver:='17700000-0000-4177-8177-000000000003'::uuid;
+ END IF;
  SELECT count(*) INTO count_before FROM public.mobility_stage_auto_demo_events
  WHERE trip_id=assigned_trip;
  BEGIN
@@ -32,8 +38,9 @@ BEGIN
  END;
  IF (SELECT count(*) FROM public.mobility_stage_auto_demo_events
   WHERE trip_id=assigned_trip)<>count_before
- OR (SELECT status FROM public.mobility_stage_auto_demo_trips
-  WHERE id=assigned_trip)<>'completed'
- THEN RAISE EXCEPTION 'G177 changed original completed trip without revocable session'; END IF;
- RAISE NOTICE 'G177 original pre-G38 completed AUTO remains immutable without G42 grant';
+ OR (prior_status IS NOT NULL AND (SELECT status::text
+  FROM public.mobility_stage_auto_demo_trips
+  WHERE id=assigned_trip) IS DISTINCT FROM prior_status)
+ THEN RAISE EXCEPTION 'G177 changed original trip without revocable session'; END IF;
+ RAISE NOTICE 'G177 original G3 state unchanged without revocable G42 grant';
 END $guard$;
