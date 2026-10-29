@@ -5,8 +5,8 @@ import psycopg
 assert os.getenv('PGHOST')=='localhost'
 assert os.getenv('PGDATABASE')=='qore_disposable_chain'
 assert os.getenv('PGAPPNAME')=='qore_ci_disposable_chain'
-P='11800000-0000-4118-8118-000000000001'
-D='11800000-0000-4118-8118-000000000003'
+P='19900000-0000-4199-8199-000000000021'
+D='10900000-0000-4109-8109-000000000022'
 S='20000000-0000-4200-8200-000000000001'
 T='20000000-0000-4200-8200-000000000002'
 AT=int(time.time()*1000)
@@ -33,11 +33,8 @@ with db() as c:
   AND completed_at>clock_timestamp()-interval '7 days'
   ORDER BY id LIMIT 1""",(P,D)).fetchone()
  assert ride is not None,'G118 completed Moto fixture absent'
- # G118 generated a synthetic Driver identity with default Passenger role.
- # Correct only that disposable fixture to exclusive Driver for chat auth.
- c.execute('DELETE FROM public.user_roles WHERE user_id=%s',(D,))
- c.execute("""INSERT INTO public.user_roles(user_id,role)
- VALUES(%s,'driver'::public.app_role)""",(D,))
+ # G199 created this explicit owner-only completed MOTO fixture; the original
+ # G109 Driver already has the exclusive Driver role. No fake legal approval.
  for who,sid in [(P,S),(D,T)]:
   c.execute("""INSERT INTO public.mobility_stage_g42_provider_session_grants
  (user_id,session_id,provider_confirmed_at,token_allowed_from,valid_until,evidence_kind)
