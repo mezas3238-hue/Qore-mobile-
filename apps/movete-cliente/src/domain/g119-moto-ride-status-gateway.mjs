@@ -99,11 +99,11 @@ export function createG119MotoStatusGateway({
      return fail('STALE_SESSION_RESPONSE');
     if(response?.status!==200||response?.ok!==true||response.redirected===true)
      return fail('G119_STATUS_UNAVAILABLE');
-    if(!/^application\\/json(?:\\s*;|$)/i.test(response.headers?.get?.('content-type')??''))
+    if(!/^application\/json(?:\s*;|$)/i.test(response.headers?.get?.('content-type')??''))
      return fail('G119_BAD_CONTENT_TYPE');
     const advertised=response.headers?.get?.('content-length');
     if(advertised!==null&&advertised!==undefined&&
-     (!/^\\d+$/.test(advertised)||Number(advertised)>bytes))
+     (!/^\d+$/.test(advertised)||Number(advertised)>bytes))
      return fail('G119_UNTRUSTED_BODY');
     const body=await readBoundedResponseText(response,{
      limit:bytes,signal:ctl.signal,timedOut:()=>timedOut
