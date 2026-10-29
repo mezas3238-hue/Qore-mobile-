@@ -429,7 +429,7 @@ test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigne
  });
 });
 test('G176 denies legacy courier pickup/deliver/return and retains original sender read',async()=>{
- const m=mockSupabase(),runtime=await prepare(m);
+ const m=mockSupabase(),runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  await http(runtime,async base=>{
   const created=await req(base,deliveryRequestPath,'rider','POST',{
    requestKey,vehicleKind:'AUTO',category:'RESTAURANT',grams:3500,
@@ -461,8 +461,20 @@ test('G176 denies legacy courier pickup/deliver/return and retains original send
   assert.doesNotMatch(JSON.stringify(status),/sb_secret|service_role/);
  });
 });
-test('runtime keeps G10 delivery offer private and accepts through atomic offer RPC',async()=>{
+test('G182 unprovisioned courier IdP denies delivery preview and acceptance before SQL',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
+ await http(runtime,async base=>{
+  m.state.deliveryOffer={id:offer,delivery_id:deliveryId,courier_id:driver,
+   vehicle_id:vehicle,status:'offered',expires_at:new Date(now+30000).toISOString()};
+  assert.equal((await req(base,deliveryOfferPath,'driver')).status,401);
+  assert.equal((await req(base,deliveryOfferAcceptPath,'driver','POST',
+   {offerId:offer,requestKey})).status,401);
+  assert.equal(m.state.rpcs.some(x=>
+   x.name==='mobility_stage_delivery_accept_offer'),false);
+ });
+});
+test('runtime keeps G10 delivery offer private and accepts through atomic offer RPC',async()=>{
+ const m=mockSupabase(),runtime=await prepare(m,{driverKycTrust:g80Trust().trust});
  await http(runtime,async base=>{
   assert.equal((await req(base,deliveryRequestPath,'rider','POST',{
    requestKey,vehicleKind:'AUTO',category:'PARCEL',grams:1000,
@@ -471,7 +483,7 @@ test('runtime keeps G10 delivery offer private and accepts through atomic offer 
   })).status,201);
   m.state.deliveryOffer={id:offer,delivery_id:deliveryId,courier_id:driver,
    vehicle_id:vehicle,status:'offered',expires_at:new Date(now+30_000).toISOString()};
-  assert.equal((await req(base,deliveryOfferPath,'stranger')).status,403);
+  assert.equal((await req(base,deliveryOfferPath,'stranger')).status,401);
   const preview=await req(base,deliveryOfferPath,'driver');
   assert.equal(preview.status,200);assert.equal(preview.body.deliveryId,deliveryId);
   assert.equal(preview.body.confirmedAcceptance,false);
