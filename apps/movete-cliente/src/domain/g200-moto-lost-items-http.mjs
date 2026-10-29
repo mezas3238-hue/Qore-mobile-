@@ -27,6 +27,7 @@ const same=(a,b)=>a.subject===b.subject&&a.token===b.token&&
 const OPEN=['mode','caseId','tripId','state','expiresAtMs','qaOnly','productionEnabled'];
 const READ=['mode','caseId','tripId','state','canSend','expiresAtMs','messages','qaOnly','productionEnabled'];
 const MESSAGE=['mode','caseId','messageId','requestKey','serverPersisted','qaOnly','productionEnabled'];
+const CLOSE=['mode','caseId','state','qaOnly','productionEnabled'];
 const msg=x=>exact(x,['messageId','senderRole','body','createdAtMs'])&&
  UUID.test(x.messageId)&&['passenger','driver'].includes(x.senderRole)&&
  typeof x.body==='string'&&x.body.length>=1&&x.body.length<=500&&
@@ -37,6 +38,8 @@ function proof(x,operation,scope){
  if(operation==='open')return exact(x,OPEN)&&x.tripId===scope.tripId&&
  UUID.test(x.caseId)&&['OPEN','CLOSED','BLOCKED'].includes(x.state)&&
  Number.isSafeInteger(x.expiresAtMs);
+ if(operation==='close')return exact(x,CLOSE)&&x.caseId===scope.caseId&&
+  x.state===(scope.block?'BLOCKED':'CLOSED');
  if(operation==='read')return exact(x,READ)&&x.caseId===scope.caseId&&
  x.tripId===scope.tripId&&['OPEN','CLOSED','BLOCKED'].includes(x.state)&&
  typeof x.canSend==='boolean'&&Number.isSafeInteger(x.expiresAtMs)&&
@@ -62,6 +65,7 @@ export function createG200PassengerMotoLostItemsHttp({
    !UUID.test(scope.expectedSubject??'')||
    !Number.isSafeInteger(scope.expectedPrivateViewRevision)||
    (operation!=='open'&&!UUID.test(scope.caseId??''))||
+   (operation==='close'&&typeof scope.block!=='boolean')||
    (operation==='send'&&(!UUID.test(scope.requestKey??'')||
      typeof scope.body!=='string'||scope.body!==scope.body.trim()||
      scope.body.length<1||scope.body.length>500||
@@ -79,9 +83,9 @@ export function createG200PassengerMotoLostItemsHttp({
    const deadline=now()+ms;timer=setTimeout(()=>ctrl.abort(),ms);
    const method=operation==='read'?'GET':'POST';
    const path=operation==='open'?'rider/moto/trips/'+scope.tripId+'/lost-items':
-    'moto/lost-items/'+scope.caseId+(operation==='send'?'/messages':'');
+    'moto/lost-items/'+scope.caseId+(operation==='send'?'/messages':operation==='close'?'/close':'');
    const body=operation==='send'?{requestKey:scope.requestKey,body:scope.body}:
-    operation==='open'?{}:null;
+    operation==='close'?{block:scope.block}:operation==='open'?{}:null;
    const response=await request(host+'/v1/staging/'+path,{
     method,headers:{Authorization:'Bearer '+before.token,Accept:'application/json',
      ...(body?{'Content-Type':'application/json'}:{})},
@@ -115,5 +119,6 @@ export function createG200PassengerMotoLostItemsHttp({
   open:s=>action('open',s),
   read:s=>action('read',s),
   send:s=>action('send',s),
+  close:s=>action('close',s),
   productionEnabled:false});
 }
