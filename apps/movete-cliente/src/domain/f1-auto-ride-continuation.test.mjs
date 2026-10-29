@@ -70,16 +70,45 @@ test('F1 late status GET cannot navigate after changed passenger, JWT or ride',a
   assert.equal(f.verifies(),1);
  }
 });
-test('F1 offline and invalid GET cannot falsely open tracking or retry a booking',async()=>{
- let calls=0,opened=0,errors=0;
+test('F1 transient offline GET can recover same trip after backoff without rebooking',async()=>{
+ let clock=100000,calls=0,opened=0,errors=0,snap=make();
  const ctl=createF1AutoRideContinuation({
-  readSnapshot:make,
-  verifyRide:async()=>{calls++;throw Error('503 network unavailable');},
+  readSnapshot:()=>snap,now:()=>clock,
+  verifyRide:async()=>{
+   calls++;
+   if(calls===1)throw Error('503 network unavailable');
+   snap={...snap,tracking:{subscriptionActive:true,tripId:trip,revision:2}};
+   return {ok:true,tripId:trip};
+  },
   onVerified:()=>opened++,onFailure:()=>errors++
  });
- assert.equal((await ctl.tryResume()).ok,false);
- assert.equal((await ctl.tryResume()).ok,false);
+ assert.equal((await ctl.tryResume()).code,'AUTO_STATUS_NOT_VERIFIED');
+ assert.equal((await ctl.tryResume()).code,'AUTO_CONTINUATION_RETRY_COOLDOWN');
  assert.equal(calls,1);assert.equal(opened,0);assert.equal(errors,1);
+ clock+=4999;
+ assert.equal((await ctl.tryResume()).code,'AUTO_CONTINUATION_RETRY_COOLDOWN');
+ assert.equal(calls,1);
+ clock++;
+ assert.equal((await ctl.tryResume()).ok,true);
+ assert.equal(calls,2);assert.equal(opened,1);assert.equal(errors,1);
+ assert.equal((await ctl.tryResume()).ok,false);
+ assert.equal(calls,2);
+});
+test('F1 failed old passenger scope never blocks a new verified passenger scope',async()=>{
+ let clock=100000,calls=0,snap=make(),opened=[];
+ const ctl=createF1AutoRideContinuation({
+  readSnapshot:()=>snap,now:()=>clock,
+  verifyRide:async()=>{
+   calls++;
+   if(calls===1)throw Error('connection lost');
+   snap={...snap,tracking:{subscriptionActive:true,tripId:trip,revision:2}};
+   return {ok:true,tripId:trip};
+  },onVerified:id=>opened.push(id)
+ });
+ assert.equal((await ctl.tryResume()).ok,false);
+ snap={...make(),privateViewRevision:6};
+ assert.equal((await ctl.tryResume()).ok,true);
+ assert.equal(calls,2);assert.deepEqual(opened,[trip]);
 });
 test('F1 background does not attempt any GET; verified foreground read can resume',async()=>{
  const f=scenario({foreground:false});
