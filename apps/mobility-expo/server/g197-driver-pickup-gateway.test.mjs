@@ -51,7 +51,7 @@ test('G197 forbids Passenger/forged radius/direct body authority/revoked Driver'
  f.role('driver');
  for(const bad of [
   {serviceKind:'RIDE',maximumRoadMeters:50,expectedRevision:0},
-  {serviceKind:'MOTO_RIDE',maximumRoadMeters:5000,expectedRevision:0},
+  {serviceKind:'UNKNOWN',maximumRoadMeters:5000,expectedRevision:0},
   {serviceKind:'MERCHANT_ORDER',maximumRoadMeters:5000,expectedRevision:0,
    driverId:driver},
  ]){
