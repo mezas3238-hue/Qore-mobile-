@@ -94,5 +94,34 @@ try{
  })).status,409);
  assert.equal(steps,0);
  assert.equal(reads,2);
+ // G188: the actual Driver C native HTTP decoder must read this EXACT
+ // PostgreSQL G119 booking, not a copied fixture or a second trip. A
+ // completed QA booking is not a new legally authorized MOTO acceptance.
+ const {readDriverMotoJourney,advanceDriverMotoJourney}=await import(
+  '../../movete-driver/src/domain/driver-moto-journey-http.mjs');
+ const native=await readDriverMotoJourney({
+  apiOrigin:base,bookingKey:booking,accessToken:activeToken,request:fetch
+ });
+ assert.equal(native.bookingKey,booking);
+ assert.equal(native.tripId,original.tripId);
+ assert.equal(native.status,'completed');
+ assert.equal(native.revision,5);
+ assert.equal(native.nextState,null);
+ assert.equal(native.productionEnabled,false);
+ assert.equal(native.qaOnly,true);
+ assert(!JSON.stringify(native).includes(passenger));
+ await assert.rejects(readDriverMotoJourney({
+  apiOrigin:base,bookingKey:booking,accessToken:otherToken,request:fetch
+ }),/unavailable/);
+ // Native C cannot re-send the stale terminal command. G169 blocks it
+ // transactionally and no SQL transition may be fabricated.
+ await assert.rejects(advanceDriverMotoJourney({
+  apiOrigin:base,bookingKey:booking,accessToken:activeToken,request:fetch,
+  expectedRevision:4,nextState:'completed',
+  commandKey:'16900000-0000-4169-8169-000000000008'
+ }),/UNKNOWN/);
+ assert.equal(steps,0,'Native Driver cannot advance a completed original MOTO booking');
+ assert.equal(reads,5,'Native C hits the real scoped G169 SQL GET twice and denied POST once');
+ console.log('G188 CROSS-APP PASS: Driver native G169 HTTP contract reads same durable original completed PostgreSQL MOTO trip and fails closed on foreign or stale commands.');
  console.log('G169 PASS: original G119 MOTO SQL booking -> G169 own Driver GET -> same completed trip/revision; foreign/rejected/terminal transition denied, no legal acceptance fabricated, no PII/PSP/GPS/LIVE.');
 }finally{await new Promise(resolve=>server.close(resolve));}
