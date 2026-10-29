@@ -18,7 +18,7 @@ const reply=(operation,who=sender)=>operation==='bind'?{
  qaOnly:true,productionEnabled:false,paymentAuthorized:false
 }:{
  mode:'STAGING_DEMO_ONLY',deliveryId:delivery,ownerId:who,deliveryState:'delivered',
- revision:4,courierProofCommitted:true,recipientBound:true,recipientConfirmed:true,
+ revision:4,courierProofCommitted:true,recipientBound:true,bindingKey:key,recipientConfirmed:true,
  eligibleForSettlement:true,paymentAuthorized:false,qaOnly:true,productionEnabled:false
 };
 const response=d=>new Response(JSON.stringify(d),{
