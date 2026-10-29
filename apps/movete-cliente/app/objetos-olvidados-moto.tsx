@@ -29,7 +29,7 @@ function PrivateLostItems({client,subject,privacy}:{
  const [busy,setBusy]=useState(false);
  const lock=useRef(false);
  const attempted=useRef(false);
- const gateway=useMemo(()=>createG198PassengerLostItemsHttp({
+ const gateway=useMemo(()=>createG200PassengerMotoLostItemsHttp({
   enabled:yes(process.env.EXPO_PUBLIC_G200_MOTO_OWNER_APPROVED),
   ownerApproved:yes(process.env.EXPO_PUBLIC_G200_MOTO_OWNER_APPROVED),
   providerVerified:yes(process.env.EXPO_PUBLIC_G200_MOTO_IDENTITY_VERIFIED),
