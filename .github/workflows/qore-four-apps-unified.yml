@@ -57,6 +57,7 @@ jobs:
         run: |
           node --check src/domain/g198-lost-items-http.mjs
           node --check src/domain/g200-moto-lost-items-http.mjs
+          node --test src/domain/g211-passenger-closure-http.test.mjs
       - name: G197 Driver road pickup distance security regressions
         working-directory: apps/movete-driver
         run: |
