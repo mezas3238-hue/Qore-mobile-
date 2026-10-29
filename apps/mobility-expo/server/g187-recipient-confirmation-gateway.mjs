@@ -5,7 +5,7 @@
  * QA-only, opt-in external session authority. No recipient phone/PII.
  */
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ROUTE=/^\/v1\/staging\/(sender|recipient)\/deliveries\/([0-9a-f-]{36})\/(recipient-bind|recipient-confirmation|confirm)$/i;
+const ROUTE=/^\/v1\/staging\/(sender|recipient)\/deliveries\/([0-9a-f-]{36})\/(recipient-bind|recipient-confirmation|confirmation|confirm)$/i;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const exact=(x,names)=>x!==null&&typeof x==='object'&&!Array.isArray(x)
  &&Object.getPrototypeOf(x)===Object.prototype
@@ -16,11 +16,11 @@ const deny=(status,code)=>({status,body:{code,retrySafe:false,
 export function createG187RecipientConfirmationGateway({
  environment,qaOnly,liveEnabled,verifyAccessToken,verifySessionNotRevoked,
  resolveExclusiveRole,allowRequest,bindRecipient,confirmReceived,
- readSenderStatus,now=Date.now
+ readSenderStatus,readRecipientStatus,now=Date.now
 }={}){
  if(environment!=='isolated_staging'||qaOnly!==true||liveEnabled!==false||
  [verifyAccessToken,verifySessionNotRevoked,resolveExclusiveRole,
- allowRequest,bindRecipient,confirmReceived,readSenderStatus,now]
+ allowRequest,bindRecipient,confirmReceived,readSenderStatus,readRecipientStatus,now]
  .some(f=>typeof f!=='function'))
  throw Error('G187 independent recipient and sender authorities required');
  return async(input={})=>{
@@ -31,7 +31,9 @@ export function createG187RecipientConfirmationGateway({
   const deliveryId=rawId.toLowerCase();
   const bind=method==='POST'&&side==='sender'&&action==='recipient-bind';
   const confirm=method==='POST'&&side==='recipient'&&action==='confirm';
-  const read=method==='GET'&&side==='sender'&&action==='recipient-confirmation';
+  const senderRead=method==='GET'&&side==='sender'&&action==='recipient-confirmation';
+  const recipientRead=method==='GET'&&side==='recipient'&&action==='confirmation';
+  const read=senderRead||recipientRead;
   if(!UUID.test(deliveryId)||(!bind&&!confirm&&!read))
    return deny(404,'G187_ROUTE_UNKNOWN');
   if(read?(body!==undefined&&body!==null):
@@ -78,7 +80,7 @@ export function createG187RecipientConfirmationGateway({
    receipt=bind?await bindRecipient({...scope,recipientId:body.recipientId,
     requestKey:body.requestKey}):
     confirm?await confirmReceived({...scope,requestKey:body.requestKey}):
-    await readSenderStatus(scope);
+    senderRead?await readSenderStatus(scope):await readRecipientStatus(scope);
   }catch{return deny(503,'G187_SQL_OUTCOME_UNCERTAIN');}
   const common=receipt?.mode==='STAGING_DEMO_ONLY'&&
    receipt?.deliveryId===deliveryId&&receipt?.qaOnly===true&&
@@ -92,7 +94,7 @@ export function createG187RecipientConfirmationGateway({
      'serverPersisted','qaOnly','productionEnabled','paymentAuthorized'])&&
      UUID.test(receipt.confirmationId??'')&&receipt.recipientConfirmed===true&&
      receipt.serverPersisted===true&&receipt.paymentAuthorized===false:
-    exact(receipt,['mode','deliveryId','ownerId','deliveryState','revision',
+    senderRead?exact(receipt,['mode','deliveryId','ownerId','deliveryState','revision',
      'courierProofCommitted','recipientBound','recipientConfirmed',
      'eligibleForSettlement','paymentAuthorized','qaOnly','productionEnabled'])&&
     receipt.ownerId===actor.id&&
@@ -101,8 +103,24 @@ export function createG187RecipientConfirmationGateway({
     Number.isSafeInteger(receipt.revision)&&receipt.revision>=1&&
     ['courierProofCommitted','recipientBound','recipientConfirmed','eligibleForSettlement']
      .every(k=>typeof receipt[k]==='boolean')&&
-    receipt.eligibleForSettlement===receipt.recipientConfirmed&&
-    receipt.paymentAuthorized===false;
+    (!receipt.eligibleForSettlement||(
+      receipt.recipientConfirmed&&receipt.deliveryState==='delivered'))&&
+    (!receipt.recipientConfirmed||(
+      receipt.courierProofCommitted&&receipt.recipientBound))&&
+    receipt.paymentAuthorized===false:
+    exact(receipt,['mode','deliveryId','recipientConfirmed','confirmationId',
+     'deliveryState','revision','eligibleForSettlement',
+     'paymentAuthorized','qaOnly','productionEnabled'])&&
+     typeof receipt.recipientConfirmed==='boolean'&&
+     (receipt.confirmationId===null||UUID.test(receipt.confirmationId))&&
+     receipt.recipientConfirmed===(receipt.confirmationId!==null)&&
+     ['requested','accepted','picked_up','delivered','disputed','returned','cancelled']
+       .includes(receipt.deliveryState)&&
+     Number.isSafeInteger(receipt.revision)&&receipt.revision>=1&&
+     typeof receipt.eligibleForSettlement==='boolean'&&
+     (!receipt.eligibleForSettlement||(
+       receipt.recipientConfirmed&&receipt.deliveryState==='delivered'))&&
+     receipt.paymentAuthorized===false;
   if(!common||!valid)return deny(503,'G187_UNTRUSTED_SQL_RECEIPT');
   const ended=now();
   if(!Number.isSafeInteger(ended)||ended<at||ended>=actor.expiresAtMs)
