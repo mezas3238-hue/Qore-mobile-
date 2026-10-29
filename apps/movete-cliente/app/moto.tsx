@@ -206,6 +206,10 @@ function PrivateMoto({authenticated,client,moto,rideStatus,revision}:{
      } as Record<string,string>)[rideStatus.state]??'Estado no reconocido'}</Text>
      <Text style={styles.small}>Revisión {rideStatus.revision??'—'} · Sin GPS ni ETA certificados ·
       No implica cobro ni liquidación real.</Text>
+     {rideStatus.state==='completed'&&moto.tripId&&
+      <Action secondary label="Olvidé un objeto en la MOTO · contactar al conductor"
+       onPress={()=>router.push({pathname:'/objetos-olvidados-moto',
+        params:{tripId:moto.tripId!}})}/>}
     </View>}
     {!confirmCancel?<Action label="Solicitar cancelación MOTO" secondary
      onPress={()=>setConfirmCancel(true)}/>:<View>
