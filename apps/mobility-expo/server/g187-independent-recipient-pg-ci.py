@@ -120,7 +120,7 @@ with db() as c:
  assert final['revision']==4
  recovered=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
  assert recovered['recipientConfirmed'] is True
- assert recovered['confirmationId']==uuid.UUID(key)
+ assert recovered['confirmationId']==key
  assert recovered['eligibleForSettlement'] is True
  assert recovered['paymentAuthorized'] is False
  denied(c,'P9004',RECOVER,S,SS,AT,delivery)
@@ -134,7 +134,7 @@ with db() as c:
  assert after_dispute['eligibleForSettlement'] is False
  recipient_history=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
  assert recipient_history['recipientConfirmed'] is True
- assert recipient_history['confirmationId']==uuid.UUID(key)
+ assert recipient_history['confirmationId']==key
  assert recipient_history['eligibleForSettlement'] is False
  denied(c,'P8704',READ,OTHER,OS,AT,delivery)
  assert sql(c,"SELECT count(*) FROM public.mobility_stage_g187_recipient_confirmations WHERE delivery_id=%s",delivery).fetchone()[0]==1
