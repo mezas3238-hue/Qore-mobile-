@@ -47,6 +47,9 @@ with db() as con:
    driver=uid()
    vid=uid()
    con.execute("INSERT INTO auth.users(id) VALUES(%s)",(driver,))
+   # G1 signup creates Passenger by default. The test owner must remove
+   # it before assigning an exclusive synthetic Driver role.
+   con.execute("DELETE FROM public.user_roles WHERE user_id=%s",(driver,))
    con.execute("INSERT INTO public.user_roles(user_id,role) VALUES(%s,'driver')",
       (driver,))
    con.execute("""INSERT INTO public.mobility_vehicles(
