@@ -56,7 +56,7 @@ export function createRenderStagingIngress({
  loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
  maxIdentityBuckets=MAX_IDENTITY_BUCKETS,
  maxUpstreamReads=MAX_UPSTREAM_READS,maxUpstreamWrites=MAX_UPSTREAM_WRITES,
- distributedQuota=null
+ distributedQuota=null,readinessProbe=null
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
@@ -72,13 +72,16 @@ export function createRenderStagingIngress({
     maxUpstreamReads>2048||
     !Number.isSafeInteger(maxUpstreamWrites)||maxUpstreamWrites<1||
     maxUpstreamWrites>1024||
-    (distributedQuota!==null&&typeof distributedQuota.claim!=='function'))
+    (distributedQuota!==null&&typeof distributedQuota.claim!=='function')||
+    (readinessProbe!==null&&typeof readinessProbe!=='function'))
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
  // Original fixed-window deadlines are monotonic in insertion order;
  // a request from an existing identity never extends or reorders its TTL.
  // Evict expired prefixes in amortized O(1), not scan all users per GET.
  const requests=new Map();
  let lastTime=0,inFlightReads=0,inFlightWrites=0;
+ // G175 singleflight readiness probes, cached for at most two seconds.
+ let readinessCached=null,readinessCheckedAt=-Infinity,readinessPending=null;
  function pruneExpired(at){
   while(requests.size>0){
    const oldest=requests.entries().next().value;
@@ -93,6 +96,53 @@ export function createRenderStagingIngress({
     rawHeaderCount(req,'x-forwarded-proto')===1){
    json(res,200,{state:'PROCESS_UP_ONLY',commercialRidesEnabled:false});
    return;
+  }
+  // G175: a running process is NOT an Auth/PG/Redis-ready replica.
+  // No JWT, SQL errors or secrets exposed; a public probe cannot certify LIVE.
+  if(req.url==='/_qore/readiness'&&req.method==='GET'){
+   if(req.headers.host!==expectedHost||
+      req.headers['x-forwarded-proto']!=='https'||
+      rawHeaderCount(req,'x-forwarded-proto')!==1||
+      req.headers.cookie!==undefined||
+      req.headers.authorization!==undefined){
+    json(res,403,{state:'DENIED'});return;
+   }
+   if(readinessProbe===null){
+    json(res,503,{state:'STAGING_DEPENDENCIES_NOT_CONFIGURED',
+     commercialRidesEnabled:false,productionCertified:false});return;
+   }
+   const checkedAt=now();
+   if(!Number.isSafeInteger(checkedAt)||checkedAt<0){
+    json(res,503,{state:'STAGING_DEPENDENCIES_UNAVAILABLE',
+     commercialRidesEnabled:false,productionCertified:false});return;
+   }
+   if(readinessPending!==null){
+    await readinessPending;
+   }else if(readinessCached===null||checkedAt<readinessCheckedAt||
+      checkedAt-readinessCheckedAt>=2000){
+    readinessPending=(async()=>{
+     let timeout;
+     try{
+      const result=await Promise.race([
+       readinessProbe(),
+       new Promise((_,reject)=>{
+        timeout=setTimeout(()=>reject(Error('G175 dependency probe timed out')),1500);
+       })
+      ]);
+      readinessCached=result===true;
+     }catch{readinessCached=false;}
+     finally{
+      if(timeout!==undefined)clearTimeout(timeout);
+      readinessCheckedAt=checkedAt;
+     }
+    })();
+    try{await readinessPending;}finally{readinessPending=null;}
+   }
+   const available=readinessCached===true;
+   json(res,available?200:503,{
+    state:available?'STAGING_DEPENDENCIES_READY':'STAGING_DEPENDENCIES_UNAVAILABLE',
+    commercialRidesEnabled:false,productionCertified:false
+   });return;
   }
   if(req.headers.host!==expectedHost||
     req.headers['x-forwarded-proto']!=='https'||

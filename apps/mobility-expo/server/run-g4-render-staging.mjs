@@ -53,7 +53,14 @@ const distributedQuota=redisClient===null?null:createG171DistributedQuota({
 });
 const localOrigin=await listenQoreRadarLoopback(runtime.server);
 const ingress=createRenderStagingIngress({
- loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin,distributedQuota
+ loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin,distributedQuota,
+ readinessProbe:async()=>{
+  if(await runtime.probeDependencies()!==true)
+   throw Error('G175 Auth/PG unavailable');
+  if(redisClient!==null&&await redisClient.ping()!=='PONG')
+   throw Error('G175 Redis unavailable');
+  return true;
+ }
 });
 const shutdown=()=>{
  ingress.close();
