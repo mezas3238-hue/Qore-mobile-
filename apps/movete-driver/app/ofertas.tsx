@@ -82,6 +82,22 @@ export default function DriverOffers(){
    else setResumeMessage('No existe un viaje AUTO activo confirmado por el servidor para esta sesión, o no se pudo verificar. No se habilitan controles de viaje.');
   }finally{resumeLock.current=false;setResuming(false);}
  }
+ async function resumeAssignedDelivery(){
+  // G164: OS keychain stores only an offline hint, NOT authorization. The
+  // existing G66 recovery authenticates again, confirms the same Driver in
+  // PostgreSQL and rejects terminal/revoked/mismatched delivery ownership.
+  if(resumeLock.current||!enabled||!custody.enabled||
+   state.phase!=='connected')return;
+  resumeLock.current=true;setResuming(true);setResumeMessage('');
+  try{
+   const restored=await custody.resumeDelivery();
+   if(restored.ok&&restored.deliveryId){
+    router.push({pathname:'/entrega',
+     params:{deliveryId:restored.deliveryId}});
+   }else setResumeMessage('No se pudo confirmar una entrega activa con la sesión y la custodia originales. No se repetirá ninguna aceptación o recogida.');
+  }catch{setResumeMessage('La recuperación privada de la entrega no está disponible. No se ejecutó ninguna acción de reparto.');}
+  finally{resumeLock.current=false;setResuming(false);}
+ }
  async function continueAcceptedDelivery(decision:DriverOfferDecisionStatus){
   if(resumeLock.current||!enabled||!custody.enabled||
    decision.kind!=='DELIVERY'||decision.phase!=='confirmed'||
@@ -241,6 +257,11 @@ export default function DriverOffers(){
    <Action label={resuming?'Verificando mi viaje…':'Verificar y continuar viaje activo'}
     secondary disabled={resuming||!currentTrip.enabled||state.phase!=='connected'}
     onPress={()=>{void continueOwnActiveAuto();}}/>
+   <Text style={styles.small}>¿Cerraste la app durante una entrega? La recuperación del paquete verifica nuevamente la custodia original. No vuelve a aceptar una oferta.</Text>
+   <Action label={resuming?'Verificando entrega…':'Recuperar entrega activa'}
+    secondary disabled={resuming||!enabled||!custody.enabled||
+     state.phase!=='connected'}
+    onPress={()=>{void resumeAssignedDelivery();}}/>
    {currentTrip.state.phase==='offline'&&
     <Text accessibilityRole="alert" style={styles.small}>No se verificó el servidor; las acciones de viaje están bloqueadas.</Text>}
   </Panel>
