@@ -85,7 +85,9 @@ export default function CalificarServicio(){
    setMessage('Resultado desconocido: no crees otra calificación para este servicio.');
   }finally{lock.current=false;setBusy(false);}
  }
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content}
+  keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+  contentInsetAdjustmentBehavior="automatic">
   <Text accessibilityRole="header" style={styles.heading}>Calificar un servicio</Text>
   <Text style={styles.text}>Las opiniones son privadas y vinculadas a servicios completados.
    Solo sus participantes pueden calificar. Las denuncias requieren investigación:
