@@ -20,11 +20,14 @@ const response=(status,body)=>({status,body});
 export function createQoreDeliveryOfferGateway({
  projectRef,verifyAccessToken,authorizeCourier,allowRequest,
  loadOffer,acceptOffer,declineOffer,now=Date.now,
+ requireFreshSession=false,verifySessionNotRevoked,
 }){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizeCourier,allowRequest,loadOffer,acceptOffer,
   declineOffer,now].every(value=>typeof value==='function'))
   throw Error('Authenticated delivery-offer adapters required');
+ if(requireFreshSession===true&&typeof verifySessionNotRevoked!=='function')
+  throw Error('G182 revocable courier session required');
  return async({method,path,headers,body})=>{
   const read=method==='GET'&&typeof path==='string'?READ.exec(path):null;
   const decision=method==='POST'&&typeof path==='string'?DECIDE.exec(path):null;
@@ -36,6 +39,21 @@ export function createQoreDeliveryOfferGateway({
   let user;
   try{user=await verifyAccessToken(bearer);}catch{return response(401,{error:'Session invalid'});}
   if(!verified(user))return response(401,{error:'Confirmed courier account required'});
+  const verifyFresh=async()=>{
+   const at=now();
+   if(!UUID.test(user.sessionId??'')||!Number.isSafeInteger(at)||at<0||
+      !Number.isSafeInteger(user.expiresAtMs)||user.expiresAtMs<=at)
+    return 'expired';
+   try{
+    return await verifySessionNotRevoked({
+     userId:user.id,sessionId:user.sessionId,at})===true?'valid':'revoked';
+   }catch{return 'unavailable';}
+  };
+  if(requireFreshSession===true){
+   const state=await verifyFresh();
+   if(state!=='valid')return response(state==='unavailable'?503:401,
+    {error:'Verified courier session required'});
+  }
   try{
    if(await authorizeCourier(user.id)!==true)return response(403,{error:'Courier role required'});
   }catch{return response(503,{error:'Courier role verification unavailable'});}
@@ -54,6 +72,11 @@ export function createQoreDeliveryOfferGateway({
       !Number.isSafeInteger(expiresAtMs)||!Number.isSafeInteger(at)||
       expiresAtMs<=at||expiresAtMs-at>45_000)
      return response(404,{error:'No active private delivery offer'});
+    if(requireFreshSession===true){
+     const state=await verifyFresh();
+     if(state!=='valid')return response(state==='unavailable'?503:401,
+      {error:'Courier session revoked during private delivery read'});
+    }
     return response(200,{mode:'STAGING_DEMO_ONLY',liveDeliveriesEnabled:false,
      offerId:offer.offerId,deliveryId:offer.deliveryId,vehicleId:offer.vehicleId,
      vehicleKind:offer.vehicleKind,category:offer.category,grams:offer.grams,
@@ -69,6 +92,11 @@ export function createQoreDeliveryOfferGateway({
    const resultId=action==='accept'?result?.eventId:result?.offerId;
    if(result?.ok!==true||result.liveEnabled!==false||!UUID.test(resultId??''))
     throw Error('Invalid private delivery decision receipt');
+   // The SQL effect might already be committed: do NOT repeat the POST after
+   // a session revoke or an uncertain acknowledgement. Recover by original key.
+   if(requireFreshSession===true&&await verifyFresh()!=='valid')
+    return response(503,{error:'Delivery decision uncertain; reconcile original requestKey',
+     retrySafe:false});
    return response(200,{mode:'STAGING_DEMO_ONLY',liveDeliveriesEnabled:false,
     outcome:action==='accept'?'accepted':'declined',
     ...(action==='accept'?{eventId:resultId}:{offerId:resultId}),
