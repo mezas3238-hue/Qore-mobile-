@@ -28,6 +28,7 @@ import {decidePrivateDriverOffer}
 import {createDriverInboxSessionController}
  from '../../movete-driver/src/domain/driver-inbox-session.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
+import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-cancellation-fence.mjs';
 import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
 import {createG112ScopedAutoDispatchRepository}
  from './g112-scoped-auto-dispatch-repository.mjs';
@@ -511,7 +512,8 @@ async function main(){
   riderHandler:rider,adminF1AuditHandler:adminGateway,
   adminServiceTraceHandler:autoTrace,
   ownerCommissionHandler:ownerRates,
-  offerHandler:driverOffer,tripCommandHandler:tripCommands,
+  offerHandler:driverOffer,
+  tripCommandHandler:createG184SovereignAutoCancellationFence({legacyGateway:tripCommands}),
   driverTripStatusHandler:driverStatus,
   driverCurrentTripHandler:driverCurrent,driverInboxHandler:driverInbox,
   deliveryHandler:noop,merchantHandler:noop,financeHandler:noop,
@@ -797,6 +799,35 @@ async function main(){
   assert.equal(duplicate.status,201,JSON.stringify(duplicate.data));
   assert.equal(duplicate.data.tripId,tripId);
   assert.equal(g111WorkerRuns,1,'G111 replay sent a duplicate Driver offer');
+  // G184 actual HTTP + PostgreSQL16: a G73 booking cannot be cancelled
+  // through the old bare tripId route (missing original G95 consent/ledger).
+  // The following calls must not mutate the trip, ledger or G85 dispatch job.
+  const legacyBefore=sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'status',t.status,'revision',t.revision,'events',"+
+   "(SELECT count(*) FROM public.mobility_stage_auto_demo_events e WHERE e.trip_id=t.id),"+
+   "'voids',(SELECT count(*) FROM public.mobility_stage_g94_auto_voids v WHERE v.trip_id=t.id),"+
+   "'queue',(SELECT status FROM public.mobility_stage_g85_auto_dispatch_jobs j WHERE j.trip_id=t.id))::text "+
+   "FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+tripId+"'");
+  for(const [path,payload] of [
+   ['/v1/staging/rider/trips/request',
+    {requestKey:cancelKey,originTag:'PANTEON',destinationTag:'SHOPPING',service:'economico'}],
+   ['/v1/staging/rider/trips/'+tripId+'/cancel',{requestKey:cancelKey}],
+   ['/v1/staging/trips/'+tripId+'/transition',
+    {event:'cancel',eventKey:cancelKey}]
+  ]){
+   const blocked=await http(base,path,{method:'POST',body:payload});
+   assert.equal(blocked.status,409,JSON.stringify(blocked.data));
+   assert.equal(blocked.data.code,'G184_USE_ORIGINAL_G73_G95_AUTO_BOOKING');
+   assert.equal(blocked.data.retryLegacyRequest,false);
+  }
+  const legacyAfter=sqlJson("SELECT pg_catalog.jsonb_build_object("+
+   "'status',t.status,'revision',t.revision,'events',"+
+   "(SELECT count(*) FROM public.mobility_stage_auto_demo_events e WHERE e.trip_id=t.id),"+
+   "'voids',(SELECT count(*) FROM public.mobility_stage_g94_auto_voids v WHERE v.trip_id=t.id),"+
+   "'queue',(SELECT status FROM public.mobility_stage_g85_auto_dispatch_jobs j WHERE j.trip_id=t.id))::text "+
+   "FROM public.mobility_stage_auto_demo_trips t WHERE t.id='"+tripId+"'");
+  assert.deepEqual(legacyAfter,legacyBefore,
+   'G184 denial must preserve original G73 quote, G3 trip and G85 queue');
   const canceled=await http(base,f1+'/bookings/'+bookingKey+'/cancel',{
    method:'POST',body:{requestKey:cancelKey,confirmed:true}});
   assert.equal(canceled.status,200,JSON.stringify(canceled.data));
