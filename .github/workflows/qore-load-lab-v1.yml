@@ -1,0 +1,38 @@
+name: QORE isolated HTTP load lab V1 (NO LIVE)
+on:
+  pull_request:
+    branches:
+      - integration/qore-mobile-e2e-four-apps-20261027
+    paths:
+      - '.github/workflows/qore-load-lab-v1.yml'
+      - 'apps/mobility-expo/scripts/load/**'
+      - 'apps/mobility-expo/server/render-staging-ingress.mjs'
+      - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-http-stress:
+    name: 5,500 synthetic requests via real ingress and G4 router
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert no external destination, accounts or secrets
+        run: |
+          node --check apps/mobility-expo/scripts/load/load-lab-v1.mjs
+      - name: Run isolated stress staircase (500 + 2,000 + 3,000)
+        run: node apps/mobility-expo/scripts/load/load-lab-v1.mjs --stress
+      - name: Preserve metrics even if overload causes test failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-isolated-http-load-v1
+          path: artifacts/qore-load-lab/results.json
+          if-no-files-found: warn
+          retention-days: 14
