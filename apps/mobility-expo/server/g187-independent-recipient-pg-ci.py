@@ -65,11 +65,14 @@ with db() as c:
  before=sql(c,READ,S,SS,AT,delivery).fetchone()[0]
  assert before['recipientConfirmed'] is False
  assert before['recipientBound'] is False
+ assert before['bindingKey'] is None
  assert before['eligibleForSettlement'] is False
  assert before['paymentAuthorized'] is False
  bindkey=new()
  bound=sql(c,BIND,S,SS,AT,delivery,R,bindkey).fetchone()[0]
  assert bound['bindingPersisted'] is True
+ sender_proof=sql(c,READ,S,SS,AT,delivery).fetchone()[0]
+ assert sender_proof['bindingKey']==bindkey
  pending=sql(c,RECOVER,R,RS,AT,delivery).fetchone()[0]
  assert pending['recipientConfirmed'] is False
  assert pending['confirmationId'] is None
@@ -93,6 +96,7 @@ with db() as c:
  assert courier_only['deliveryState']=='delivered'
  assert courier_only['courierProofCommitted'] is True
  assert courier_only['recipientBound'] is True
+ assert courier_only['bindingKey']==bindkey
  assert courier_only['recipientConfirmed'] is False
  assert courier_only['eligibleForSettlement'] is False
  assert courier_only['paymentAuthorized'] is False
@@ -115,6 +119,7 @@ with db() as c:
  denied(c,'P8704',CONFIRM,R,RS,AT,delivery,new())
  final=sql(c,READ,S,SS,AT,delivery).fetchone()[0]
  assert final['recipientConfirmed'] is True
+ assert final['bindingKey']==bindkey
  assert final['eligibleForSettlement'] is True
  assert final['paymentAuthorized'] is False
  assert final['revision']==4
