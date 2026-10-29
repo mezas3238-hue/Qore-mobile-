@@ -14,13 +14,14 @@ function setup({owner=driver,role='driver',revoked=false,sqlFailure=false}={}){
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
   now:()=>10000000,
   verifyAccessToken:async()=>({id:driver,sessionId:id(6),
-   is_anonymous:false,expiresAtMs:11000000}),
+   tokenIatMs:9999000,is_anonymous:false,expiresAtMs:11000000}),
   verifySessionNotRevoked:async()=>!revoked,
   resolveExclusiveRole:async()=>role,allowRequest:()=>true,
   readMoto:async()=>owner===driver?state:null,
-  advanceMoto:async({driverId,bookingKey,expectedRevision,nextState,commandKey})=>{
-   calls++;assert.deepEqual({driverId,bookingKey,expectedRevision,commandKey},
-    {driverId:driver,bookingKey:booking,expectedRevision:2,commandKey:event});
+  advanceMoto:async({driverId,sessionId,tokenIatMs,bookingKey,expectedRevision,nextState,commandKey})=>{
+   calls++;assert.deepEqual({driverId,sessionId,tokenIatMs,bookingKey,expectedRevision,commandKey},
+    {driverId:driver,sessionId:id(6),tokenIatMs:9999000,
+     bookingKey:booking,expectedRevision:2,commandKey:event});
    if(sqlFailure)throw Error('Unknown DB COMMIT');
    state={...state,tripState:nextState,tripRevision:expectedRevision+1};
   }
@@ -76,7 +77,7 @@ test('G189 current MOTO recovery is read-only and locked to revocable Driver ide
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
   now:()=>10000000,
   verifyAccessToken:async()=>({id:actor,sessionId:id(6),
-   is_anonymous:false,expiresAtMs:11000000}),
+   tokenIatMs:9999000,is_anonymous:false,expiresAtMs:11000000}),
   verifySessionNotRevoked:async()=>!revoked,
   resolveExclusiveRole:async()=>role,allowRequest:()=>true,
   readMoto:async()=>{throw Error('G189 cannot guess any booking key');},
