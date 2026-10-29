@@ -958,8 +958,10 @@ export async function prepareQoreG4StagingRuntime({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
  });
+ // G182: courier decision and preview use the SAME independent revoked
+ // Driver session authority as AUTO offers; SQL G10 alone is not a JWT IdP.
  const deliveryOffers=createQoreDeliveryOfferGateway({
-  projectRef:ref,verifyAccessToken:verified,
+  projectRef:ref,verifyAccessToken:verified,...guardedDriverAuth,
   authorizeCourier:id=>roleHas(admin,id,'driver'),allowRequest,now,
   loadOffer:params=>deliveryOfferPersistence.snapshot({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
