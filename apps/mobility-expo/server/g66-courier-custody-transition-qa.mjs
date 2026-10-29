@@ -82,6 +82,18 @@ export function createG66CourierCustodyTransitionQa({
    receipt.ok!==true||receipt.liveEnabled!==false||
    !UUID.test(receipt.eventId))
    return fail(503,'G66_UNTRUSTED_CUSTODY_RECEIPT');
+  // G185: the SQL transition may already have committed. Never acknowledge
+  // pickup, delivery or return if the Driver token expired or was revoked
+  // during that commit. The outcome is UNKNOWN, not a safe second POST.
+  // The Driver must recover the original delivery with the scoped custody GET.
+  const finished=now();
+  if(!Number.isSafeInteger(finished)||finished<at||
+   finished>=user.expiresAtMs)return fail(503,'G185_CUSTODY_OUTCOME_UNKNOWN');
+  try{
+   if(await verifySessionNotRevoked({
+    userId:user.id,sessionId:user.sessionId,at:finished})!==true)
+    return fail(503,'G185_CUSTODY_OUTCOME_UNKNOWN');
+  }catch{return fail(503,'G185_CUSTODY_OUTCOME_UNKNOWN');}
   return Object.freeze({status:200,body:Object.freeze({
    mode:'STAGING_DEMO_ONLY',deliveryId:found[1].toLowerCase(),
    event:body.event,eventId:receipt.eventId,
