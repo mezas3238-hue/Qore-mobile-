@@ -229,6 +229,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G69_*'
       - 'apps/mobility-expo/server/g69-*'
       - 'apps/mobility-expo/server/g68-*'
+      - 'apps/mobility-expo/server/g66-*'
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
@@ -261,6 +262,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G85_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G5_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
+      - 'apps/mobility-expo/server/g66-*'
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
       - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
@@ -355,6 +357,7 @@ jobs:
           node --check apps/mobility-expo/server/g4-staging-runtime.mjs
           node --test apps/mobility-expo/server/g4-staging-runtime.test.mjs
           node --test apps/mobility-expo/server/g143-courier-custody-http-routing.test.mjs
+          node --test apps/mobility-expo/server/g66-courier-custody-qa.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: Guard isolated local chain database
         run: |
