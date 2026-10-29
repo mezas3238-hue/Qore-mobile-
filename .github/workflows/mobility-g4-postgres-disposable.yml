@@ -948,6 +948,10 @@ jobs:
         run: node apps/mobility-expo/server/g119-moto-status-pg-http-ci.mjs
       - name: G169 authenticated Driver MOTO HTTP owner read on original G119 completed PostgreSQL booking
         run: node apps/mobility-expo/server/g169-driver-moto-pg-http-ci.mjs
+      - name: G212 extend MOTO original Driver Admin timeline with private accepted G118 offer only
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G212_MOTO_ORIGINAL_DRIVER_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
+      - name: G212 PostgreSQL verify original G119 completed MOTO -> Admin and forged offer denial
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G212_MOTO_ORIGINAL_DRIVER_ADMIN_TRACE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G109 end-to-end Driver AUTO legacy QA lifecycle, Rider consistency and slot release
         run: node apps/mobility-expo/server/g109-driver-auto-completion-pg-http-ci.mjs
       - name: G155 install private verified participant ratings on real completed services
