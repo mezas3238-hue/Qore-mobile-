@@ -120,7 +120,7 @@ with psycopg.connect(autocommit=True) as admin:
     for i in range(0,N,max(1,N//50)):
         key,trip=new[i]
         quote=scalar(admin,
-          "SELECT quote_id FROM public.mobility_stage_g72_auto_prequotes WHERE booking_key=%s",
+          "SELECT id FROM public.mobility_stage_g72_auto_prequotes WHERE booking_key=%s",
           (key,))
         passenger=scalar(admin,
           "SELECT passenger_id FROM public.mobility_stage_g85_auto_dispatch_jobs WHERE booking_key=%s",
