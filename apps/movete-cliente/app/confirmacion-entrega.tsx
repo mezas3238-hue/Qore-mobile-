@@ -174,11 +174,16 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
       'No hay confirmación persistida. Este GET no envió una nueva aceptación; consultá soporte antes de intentar otra operación.');
    }else{
     const d=result.data;
-    setVerifiedSenderRead(d.recipientBound===true?d:null);
+    const exactOriginal=d.recipientBound===true&&senderAttempt.current!==null
+     &&d.bindingKey===senderAttempt.current;
+    setVerifiedSenderRead(exactOriginal?d:null);
     if(d.recipientBound===true)setBoundHistoryId(original);
     setStatus({state:d.deliveryState,bound:d.recipientBound,
      confirmed:d.recipientConfirmed,courierProof:d.courierProofCommitted});
-    setSenderMessage('Estado del mismo envío verificado por PostgreSQL. No es un comprobante de pago.');
+    setSenderMessage(d.recipientBound===true&&senderAttempt.current!==null
+     &&!exactOriginal
+      ?'El servidor tiene otra clave de vinculación para este envío. No se puede archivar ni dar por confirmada tu operación; contactá soporte.'
+      :'Estado del mismo envío verificado por PostgreSQL. No es un comprobante de pago.');
    }
   }catch{
    if(!stillOwns())return;
@@ -218,7 +223,7 @@ function PrivateRecipientConfirmation({client,subject,originalDelivery,
   </View>
   {(journalError||!journalReady)&&authenticated&&<Panel>
    <Text accessibilityRole="alert" style={styles.heading}>Protección de recuperación cifrada</Text>
-   <Text style={styles.small}>{journalError?'No se pudo verificar el almacenamiento cifrado. Se bloquearon nuevos envíos de confirmación para evitar operaciones duplicadas.':'Comprobando claves protegidas de entregas anteriores antes de habilitar nuevas operaciones…'}</Text>
+   <Text style={styles.small}>{journal===null?'La recuperación segura de confirmaciones requiere la aplicación instalada en Android o iOS; no hay almacenamiento persistente seguro para esta operación en la web.':journalError?'No se pudo verificar el almacenamiento cifrado. Se bloquearon nuevos envíos de confirmación para evitar operaciones duplicadas.':'Comprobando claves protegidas de entregas anteriores antes de habilitar nuevas operaciones…'}</Text>
   </Panel>}
   {!ready&&<Panel>
    <Text accessibilityRole="alert" style={styles.heading}>Confirmación independiente aún no habilitada</Text>
