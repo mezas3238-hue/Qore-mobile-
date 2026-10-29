@@ -45,6 +45,8 @@ on:
       - 'apps/movete-admin/src/main.tsx'
       - 'apps/mobility-expo/server/g156-*'
       - 'apps/mobility-expo/server/g173-*'
+      - 'apps/mobility-expo/server/g177-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G177_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G173_*'
       - 'apps/movete-cliente/src/domain/g155-*'
       - 'apps/movete-cliente/app/calificar.tsx'
@@ -122,6 +124,8 @@ on:
       - 'apps/movete-admin/src/main.tsx'
       - 'apps/mobility-expo/server/g156-*'
       - 'apps/mobility-expo/server/g173-*'
+      - 'apps/mobility-expo/server/g177-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G177_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G173_*'
       - 'apps/movete-cliente/src/domain/g155-*'
       - 'apps/movete-cliente/app/calificar.tsx'
@@ -803,6 +807,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G173_MERCHANT_TRANSACTION_SESSION_FENCE_POSTGRES_CI_ONLY.sql
       - name: G173 original Buyer merchant fulfillment idempotency and revoked staff HTTP/PG16
         run: node apps/mobility-expo/server/g173-merchant-verified-mutation-pg-http-ci.mjs
+      - name: G177 mount independently revocable Driver G3 AUTO steps under atomic G42 in disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G177_AUTO_DRIVER_G42_TRANSACTION_STEP_POSTGRES_CI_ONLY.sql
+      - name: G177 deny public SQL privilege and unauthenticated replay of original completed G109 AUTO trip
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G177_AUTO_DRIVER_G42_TRANSACTION_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G132 original B Client G5/G121 and C Driver G66 over A PostgreSQL16 (same SHA)
         run: node apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G123 install SQL private delivery offer/accept price fence AFTER G121/G122 receipts
