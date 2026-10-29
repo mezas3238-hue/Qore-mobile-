@@ -51,6 +51,9 @@ with db() as c:
  assert c.execute(OPEN,(P,PS,AT,R)).fetchone()[0]['caseId']==case
  denied(c,'P9803',OPEN,D,DS,AT,R)
  assert c.execute(READ,(case,D,DS,AT)).fetchone()[0]['canSend'] is True
+ inbox=c.execute('SELECT public.mobility_stage_g198_driver_inbox_qa(%s,%s,%s)',(D,DS,AT)).fetchone()[0]
+ assert inbox['cases'][0]['caseId']==case
+ denied(c,'P9803','SELECT public.mobility_stage_g198_driver_inbox_qa(%s,%s,%s)',P,PS,AT)
  k=new()
  receipt=c.execute(SEND,(case,P,PS,AT,k,'Olvide mi mochila negra.')).fetchone()[0]
  assert receipt['serverPersisted'] is True
