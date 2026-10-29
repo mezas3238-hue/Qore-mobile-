@@ -66,3 +66,51 @@ test('expired/foreign snapshots and auth, role, limiter or DB failures fail clos
  assert.equal((await fixture({acceptOffer:async()=>{throw Error('private')}})
   .gateway(req('POST',accept,{offerId:offer,requestKey:key}))).status,409);
 });
+
+
+test('G182 delivery courier revoked during private preview cannot see parcel or offer IDs',async()=>{
+ const sessionId='77777777-7777-4777-8777-777777777777';
+ const actor={...confirmed,sessionId,expiresAtMs:now+60000};
+ let checks=0,reads=0;
+ const g=fixture({
+  requireFreshSession:true,verifyAccessToken:async()=>actor,
+  verifySessionNotRevoked:async()=>++checks===1,
+  loadOffer:async()=>{reads++;return {ok:true,liveEnabled:false,offer:record}}
+ }).gateway;
+ const result=await g(req('GET',read));
+ assert.equal(result.status,401);assert.equal(checks,2);assert.equal(reads,1);
+ assert.doesNotMatch(JSON.stringify(result),new RegExp(offer+'|'+delivery));
+});
+
+test('G182 committed courier acceptance revoked after SQL is uncertain, never retried',async()=>{
+ const sessionId='77777777-7777-4777-8777-777777777777';
+ const actor={...confirmed,sessionId,expiresAtMs:now+60000};
+ let checks=0,mutations=0;
+ const g=fixture({
+  requireFreshSession:true,verifyAccessToken:async()=>actor,
+  verifySessionNotRevoked:async()=>++checks===1,
+  acceptOffer:async()=>{mutations++;return {ok:true,liveEnabled:false,eventId:event}}
+ }).gateway;
+ const result=await g(req('POST',accept,{offerId:offer,requestKey:key}));
+ assert.equal(result.status,503);assert.equal(result.body.retrySafe,false);
+ assert.equal(checks,2);assert.equal(mutations,1);
+ assert.doesNotMatch(JSON.stringify(result),new RegExp(event));
+ assert.doesNotMatch(JSON.stringify(result),/outcome.*accepted/);
+});
+
+test('G182 invalid or expired independent courier session fails before original offer SQL',async()=>{
+ const actor={...confirmed,sessionId:'77777777-7777-4777-8777-777777777777',
+  expiresAtMs:now+60000};
+ let mutations=0;
+ const common={requireFreshSession:true,verifyAccessToken:async()=>actor,
+  acceptOffer:async()=>{mutations++;return {ok:true,liveEnabled:false,eventId:event}}};
+ assert.equal((await fixture({...common,verifySessionNotRevoked:async()=>false}).gateway(
+  req('POST',accept,{offerId:offer,requestKey:key}))).status,401);
+ assert.equal((await fixture({...common,verifySessionNotRevoked:async()=>{throw Error('provider')}}).gateway(
+  req('POST',accept,{offerId:offer,requestKey:key}))).status,503);
+ assert.equal((await fixture({...common,verifyAccessToken:async()=>({...actor,expiresAtMs:now}),
+  verifySessionNotRevoked:async()=>true}).gateway(
+  req('POST',accept,{offerId:offer,requestKey:key}))).status,401);
+ assert.equal(mutations,0);
+ assert.throws(()=>fixture({...common,verifySessionNotRevoked:undefined}));
+});
