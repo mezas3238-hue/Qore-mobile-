@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import {request as httpRequest} from 'node:http';
 import {once} from 'node:events';
+import {mkdir,writeFile} from 'node:fs/promises';
 import {createRenderStagingIngress}
  from '../../server/render-staging-ingress.mjs';
 import {createG171DistributedQuota,hashG171Credential,
@@ -113,15 +114,30 @@ try{
  const seconds=Math.max(.001,(Date.now()-started)/1000);
  assert.equal(passed,identities,'shared Redis must not have old local 16k ceiling');
  assert.equal(failures,0,'no false 429/503 for unique admitted identities');
- console.log(JSON.stringify({lab:'G178_SHARED_REDIS_IDENTITY_CAPACITY',
+ // G179: record Redis state, not just Node HTTP throughput.
+ const info=await clients[2].sendCommand(['INFO','MEMORY']);
+ const size=Number(await clients[2].sendCommand(['DBSIZE']));
+ const match=typeof info==='string'?/^used_memory:(\d+)\r?$/m.exec(info):null;
+ const usedBytes=Number(match?.[1]);
+ assert(Number.isSafeInteger(usedBytes)&&usedBytes>0,
+  'G179 missing real disposable Redis memory evidence');
+ assert(Number.isSafeInteger(size)&&size>=identities,
+  'G179 Redis must retain 16,500 live quota keys');
+ const report={lab:'G178_SHARED_REDIS_IDENTITY_CAPACITY',
   distinctSyntheticTokens:identities,maxLocalIdentityBuckets:1,
   realRedisEvals:identities,uniqueTokensAccepted:passed,
   failed:failures,loadWorkers:workers,
   requestsPerSecond:Math.round(identities/seconds),
+  redisMemoryBytes:usedBytes,redisKeys:size,
+  nodeResidentMemoryBytes:process.memoryUsage().rss,
   redisUnavailableStillRejected:true,
   actualClientAuthentication:'NOT_EXERCISED',
   realPostgresBusiness:'NOT_EXERCISED',
-  verdict:'DISTRIBUTED_QUOTA_LOCAL_CAP_REMOVED_PASS'}));
+  verdict:'DISTRIBUTED_QUOTA_LOCAL_CAP_REMOVED_PASS'};
+ await mkdir('artifacts/qore-load-lab',{recursive:true});
+ await writeFile('artifacts/qore-load-lab/g178-redis-results.json',
+  JSON.stringify(report,null,2)+'\n',{encoding:'utf8'});
+ console.log(JSON.stringify(report));
 
  console.log(JSON.stringify({lab:'G171_REDISTRIBUTED_INGRESS',
   realRedis:true,ingressReplicas:3,restarted:true,
