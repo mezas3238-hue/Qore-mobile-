@@ -45,6 +45,7 @@ jobs:
           npm install --no-audit --no-fund --ignore-scripts
           npm run typecheck
           node --test src/domain/driver-document-upload.test.mjs src/domain/driver-document-recovery.test.mjs
+          node --test src/domain/driver-bounded-qa-get.test.mjs src/domain/driver-documents.test.mjs src/domain/driver-license-readiness.test.mjs
       - name: Verify Owner Admin web bundles from the same code revision
         working-directory: apps/movete-admin
         run: |

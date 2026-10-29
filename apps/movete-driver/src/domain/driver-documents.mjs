@@ -10,9 +10,10 @@ const KINDS=new Set(['licencia','identidad_frente','identidad_dorso',
 const STATES=new Set(['pending','approved','rejected']);
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 import {resolveDriverStatusOrigin} from './driver-status-origin.mjs';
+import {readBoundedDriverQaGet} from './driver-bounded-qa-get.mjs';
 export async function readDriverDocumentStatuses({
  apiOrigin,accessToken,approvedStagingHost=null,allowedByOwner=false,
- request=fetch
+ request=fetch,timeoutMs=8000
 }={}){
  if(typeof apiOrigin!=='string'||typeof accessToken!=='string'||
     !BEARER.test(accessToken)||typeof request!=='function')
@@ -20,16 +21,15 @@ export async function readDriverDocumentStatuses({
  const origin=resolveDriverStatusOrigin({apiOrigin,approvedStagingHost,allowedByOwner});
  let response;
  try{
-  response=await request(origin+'/v1/staging/driver/documents',{
-   method:'GET',cache:'no-store',credentials:'omit',
-   headers:{authorization:'Bearer '+accessToken,accept:'application/json'}
+  response=await readBoundedDriverQaGet({
+   origin,path:'/v1/staging/driver/documents',accessToken,
+   request,timeoutMs,maxBytes:8192
   });
  }catch{throw Error('Driver document status unavailable');}
- if(response?.status===401)throw Error('Driver session expired');
- if(response?.status===403)throw Error('Driver role not authorized');
- if(response?.status!==200)throw Error('Driver document status unavailable');
- let body;
- try{body=await response.json();}catch{throw Error('Invalid private document response');}
+ if(response.status===401)throw Error('Driver session expired');
+ if(response.status===403)throw Error('Driver role not authorized');
+ if(response.status!==200)throw Error('Driver document status unavailable');
+ const body=response.data;
  if(!plain(body)||Object.keys(body).length!==3||
     body.mode!=='STAGING_DEMO_ONLY'||body.liveOperationsEnabled!==false||
     !Array.isArray(body.documents)||body.documents.length>8)
