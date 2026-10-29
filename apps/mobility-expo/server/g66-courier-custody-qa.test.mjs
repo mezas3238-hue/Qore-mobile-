@@ -193,3 +193,69 @@ test('G66 default live or without proof verifier and session authority refuses s
   }));
  }
 });
+
+test('G185 courier custody SQL read never discloses state after session revocation or expiry',async()=>{
+ for(const mode of ['revoked','expired','outage']){
+  let checks=0,reads=0,clock=at;
+  const instance=createG66CourierCustodyStatusQa({
+   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+   now:()=>clock,
+   verifyAccessToken:async()=>({...auth,expiresAtMs:at+2000}),
+   verifySessionNotRevoked:async()=>{
+    checks++;
+    if(checks===2&&mode==='revoked')return false;
+    if(checks===2&&mode==='outage')throw Error('IdP unavailable');
+    return true;
+   },resolveExclusiveRole:async()=> 'driver',allowRequest:()=>true,
+   loadAssignedDelivery:async()=>{reads++;if(mode==='expired')clock=at+3000;
+    return source;},verifyStoredProof:async()=>true
+  });
+  const result=await instance(get());
+  assert.equal(result.status,mode==='outage'?503:401);
+  assert.equal(result.body.code,mode==='revoked'? 'G185_COURIER_SESSION_REVOKED':
+   mode==='expired'?'G185_COURIER_SESSION_EXPIRED':
+   'G185_COURIER_REVOCATION_UNAVAILABLE');
+  assert.equal(reads,1,'original assigned SQL row has been read');
+  assert.equal(checks,mode==='expired'?1:2);
+  assert(!JSON.stringify(result).includes(delivery));
+  assert(!JSON.stringify(result).includes(sender));
+ }
+});
+test('G185 after committed custody event, revoked/expired/outage never acknowledges success or retries',async()=>{
+ for(const mode of ['revoked','expired','outage','success']){
+  let checks=0,commits=0,clock=at;
+  const instance=createG66CourierCustodyTransitionQa({
+   environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+   now:()=>clock,
+   verifyAccessToken:async()=>({...auth,expiresAtMs:at+2000}),
+   verifySessionNotRevoked:async()=>{
+    checks++;
+    if(checks===2&&mode==='revoked')return false;
+    if(checks===2&&mode==='outage')throw Error('IdP disconnected');
+    return true;
+   },resolveExclusiveRole:async()=> 'driver',allowRequest:()=>true,
+   verifyIndependentProof:async()=>true,
+   transitionDelivery:async ({deliveryId,event,eventKey:ek})=>{
+    commits++;
+    assert.equal(deliveryId,delivery);
+    assert.equal(event,'deliver');
+    assert.equal(ek,eventKey);
+    if(mode==='expired')clock=at+3000;
+    return {ok:true,liveEnabled:false,eventId:receipt};
+   }
+  });
+  const result=await instance(post('deliver',{event:'deliver',eventKey,proofRef:proof}));
+  assert.equal(commits,1,'G5 SQL authority executes at most once per request');
+  if(mode==='success'){
+   assert.equal(result.status,200);
+   assert.equal(result.body.eventId,receipt);
+   assert.equal(checks,2);
+  }else{
+   assert.equal(result.status,503,'post-SQL uncertainty is not a definitive rejection');
+   assert.equal(result.body.code,'G185_CUSTODY_OUTCOME_UNKNOWN');
+   assert.equal(result.body.retrySafe,false);
+   assert.equal(checks,mode==='expired'?1:2);
+   assert(!JSON.stringify(result).includes(receipt));
+  }
+ }
+});
