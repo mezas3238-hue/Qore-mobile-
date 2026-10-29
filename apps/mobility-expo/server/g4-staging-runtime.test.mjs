@@ -1912,3 +1912,64 @@ test('G174 mismatched original Buyer IdP never reaches G45 stock SQL',async()=>{
   assert(!m.state.rpcs.some(x=>x.name.startsWith('mobility_stage_g45_')));
  });
 });
+
+test('G175 original Buyer commerce prevents legacy G6 unverified stock and transition writes',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m,{buyerCommerceTrust:buyerCommerceTrust()});
+ const legacyCreate='/v1/staging/buyer/orders/request';
+ const legacyBuyerTransition='/v1/staging/buyer/orders/'+ride+'/transition';
+ const oldBody={requestKey,branchId:vehicle,vehicleKind:'MOTO',
+  items:[{itemId:deliveryId,quantity:1}]};
+ await http(runtime,async base=>{
+  const old=await req(base,legacyCreate,'rider','POST',oldBody);
+  assert.equal(old.status,409,JSON.stringify(old.body));
+  assert.equal(old.body.code,'G175_USE_ORIGINAL_G45_G139_BUYER_ORDER');
+  assert.equal(old.body.retryLegacyRequest,false);
+  assert.equal(old.body.paymentEnabled,false);
+  const update=await req(base,legacyBuyerTransition,'rider','POST',{
+   event:'cancel',eventKey:requestKey
+  });
+  assert.equal(update.status,409,JSON.stringify(update.body));
+  assert.equal(update.body.code,'G175_USE_ORIGINAL_G45_G139_BUYER_ORDER');
+  const upper=await req(base,legacyCreate.toUpperCase(),'rider','POST',oldBody);
+  assert.equal(upper.status,409);
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_merchant_order_request'||
+   x.name==='mobility_stage_merchant_order_transition'),false,
+   'No original commerce inventory or Buyer state changes under G6 legacy authority');
+ });
+});
+test('G175 preserves G174 original G45 reserve and G144 recovery with independent Buyer IdP',async()=>{
+ const m=mockSupabase(),old=m.createClient;
+ m.createClient=(url,key)=>{
+  const sdk=old(url,key);
+  if(key===serviceKey){
+   const former=sdk.rpc;
+   sdk.rpc=async(name,params)=>{
+    if(name==='mobility_stage_g45_reserve_order_qa'){
+     m.state.rpcs.push({name,params});
+     return {data:g174Receipt(),error:null};
+    }
+    if(name==='mobility_stage_g144_recover_order_qa'){
+     m.state.rpcs.push({name,params});
+     return {data:{...g174Receipt(),status:'requested',
+      revision:1,deliveryId:null},error:null};
+    }
+    return former(name,params);
+   };
+  }
+  return sdk;
+ };
+ const runtime=await prepare(m,{buyerCommerceTrust:buyerCommerceTrust()});
+ await http(runtime,async base=>{
+  const body={requestKey,branchId:vehicle,catalogVersion:1,
+   vehicleKind:'MOTO',items:[{itemId:deliveryId,quantity:1}]};
+  const receipt=await req(base,g174Reserve,'rider','POST',body);
+  assert.equal(receipt.status,201,JSON.stringify(receipt.body));
+  assert.equal(receipt.body.orderId,ride);
+  const recovery=await req(base,g174Recover,'rider');
+  assert.equal(recovery.status,200,JSON.stringify(recovery.body));
+  assert.equal(recovery.body.orderId,ride);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g45_reserve_order_qa').length,1);
+  assert.equal(m.state.rpcs.filter(x=>x.name==='mobility_stage_g144_recover_order_qa').length,1);
+ });
+});
