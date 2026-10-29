@@ -237,6 +237,8 @@ on:
       - 'apps/mobility-expo/server/g68-*'
       - 'apps/mobility-expo/server/g66-*'
       - 'apps/mobility-expo/server/g67-*'
+      - 'apps/mobility-expo/server/g187-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
       - 'apps/mobility-expo/server/g59b-*'
       - 'apps/mobility-expo/server/g59-*'
       - 'apps/mobility-expo/server/g56-*'
@@ -270,6 +272,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
       - 'apps/mobility-expo/server/g66-*'
       - 'apps/mobility-expo/server/g67-*'
+      - 'apps/mobility-expo/server/g187-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
       - 'apps/mobility-expo/server/g12-delivery-push-concurrency-ci.py'
 permissions:
@@ -673,6 +677,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G67_DELIVERY_PROOF_ATOMIC_FENCE_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G67 test real two-session COMMIT proof and revocation race, UUID forgery and rollback
         run: python3 apps/mobility-expo/server/g67-delivery-proof-atomic-race-ci.py
+      - name: G187 install independently authenticated recipient confirmation for original G5 delivery
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G187_INDEPENDENT_RECIPIENT_CONFIRMATION_POSTGRES_CI_ONLY.sql
+      - name: G187 two-session recipient receipt after original G67 proof, separate from PSP settlement
+        run: python3 apps/mobility-expo/server/g187-independent-recipient-pg-ci.py
       - name: G68 install private sender-owned delivery custody (disposable PG16)
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G68_SENDER_OWNED_DELIVERY_READ_POSTGRES_CI_ONLY.sql
       - name: G68 assert owned DTO, disjoint Passenger roles and G42 revocation in PostgreSQL
