@@ -26,16 +26,14 @@ function fixture(overrides={}){
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now:()=>at,
   verifyAccessToken:async()=>({id:actor,sessionId:session,tokenIatMs:at-1000,
    expiresAtMs:at+10000,is_anonymous:false}),
-  verifySessionNotRevoked:async()=>{
-   if(afterCommit)return false;
-   return !revoked;
-  },
+  verifySessionNotRevoked:async()=>!revoked,
   resolveExclusiveRole:async()=>actor===courier?'driver':'passenger',
   allowRequest:()=>true,
   bindRecipient:async x=>{calls.push(['bind',x]);return {
    mode:'STAGING_DEMO_ONLY',deliveryId:delivery,bindingPersisted:true,
    recipientConfirmed:false,qaOnly:true,productionEnabled:false}},
   confirmReceived:async x=>{calls.push(['confirm',x]);commitCount++;
+   if(afterCommit)revoked=true;
    return {mode:'STAGING_DEMO_ONLY',deliveryId:delivery,
     confirmationId:key,recipientConfirmed:true,serverPersisted:true,
     qaOnly:true,productionEnabled:false,paymentAuthorized:false}},
