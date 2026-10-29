@@ -46,6 +46,8 @@ with db() as con:
     JOIN public.user_roles r ON r.user_id=v.driver_id AND r.role='driver'
     WHERE v.vehicle_kind=%s AND v.review_status NOT IN ('rejected','suspended')
     AND v.driver_id<>%s
+    AND NOT EXISTS(SELECT 1 FROM public.mobility_stage_g36_driver_slots active
+       WHERE active.driver_id=v.driver_id)
     ORDER BY v.id LIMIT 1
    """,(kind,sender)).fetchone()
    assert vehicle is not None,kind+" G5 courier vehicle fixture missing"
@@ -66,6 +68,11 @@ with db() as con:
       WHERE id=%s""",(driver,vid,did))
    finally:
     con.execute("ALTER TABLE public.mobility_stage_deliveries ENABLE TRIGGER USER")
+   # G36's original single-assignment slot is required by the G5
+   # transition integrity trigger; only the disposable fixture seeds it.
+   con.execute("""INSERT INTO public.mobility_stage_g36_driver_slots(
+      driver_id,assignment_kind,assignment_id) VALUES(%s,'DELIVERY',%s)""",
+      (driver,did))
    decision=uid()
    event_id=con.execute("""INSERT INTO public.mobility_stage_delivery_events(
       request_key,delivery_id,actor_id,action,next_status,delivery_revision)
