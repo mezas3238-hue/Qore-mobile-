@@ -56,6 +56,16 @@ export function createG106PrivateDriverCurrentTripQa({
     !ACTIVE.has(row.status)||!Number.isSafeInteger(row.revision)||
     row.revision<2))
    return deny(503,'G106_UNTRUSTED_ASSIGNMENT');
+  // A revocation can commit while the original PostgreSQL read is pending.
+  // Never return a recovered active trip from a session revoked mid-request.
+  const finishedAt=now();
+  if(!Number.isSafeInteger(finishedAt)||finishedAt<at||
+    finishedAt>=actor.expiresAtMs)return deny(401,'G106_SESSION_EXPIRED');
+  try{
+   if(await verifySessionNotRevoked({
+    userId:actor.id,sessionId:actor.sessionId,at:finishedAt})!==true)
+    return deny(401,'G106_SESSION_REVOKED');
+  }catch{return deny(503,'G106_AUTH_UNAVAILABLE');}
   return {status:200,body:{
    mode:'STAGING_DEMO_ONLY',
    activeTrip:row===null?null:{
