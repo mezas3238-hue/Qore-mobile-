@@ -31,29 +31,19 @@ BEGIN
  SET state='OPEN',closed_at=NULL WHERE case_id=a;
  UPDATE public.mobility_stage_g200_lost_item_cases
  SET state='OPEN',closed_at=NULL WHERE case_id=m;
+ -- Test-only original identifiers are stored in this SQL transaction.
+ PERFORM pg_catalog.set_config('qore.g214_auto_case',a::text,true);
+ PERFORM pg_catalog.set_config('qore.g214_moto_case',m::text,true);
 END $setup$;
 SET LOCAL ROLE service_role;
 DO $check$
-DECLARE a uuid;m uuid;v jsonb;denied boolean:=false;
+DECLARE a uuid:=pg_catalog.current_setting('qore.g214_auto_case')::uuid;
+ m uuid:=pg_catalog.current_setting('qore.g214_moto_case')::uuid;
+ v jsonb;denied boolean:=false;
  iat bigint:=(extract(epoch FROM pg_catalog.clock_timestamp()-interval '20 seconds')*1000)::bigint;
 BEGIN
- -- The IDs are not generated or guessed by Driver or Passenger: they are
- -- looked up within the disposable test only, via fixed original trip.
- -- service_role cannot read private tables, so use the original case
- -- opening function to retrieve its owner-scoped original caseId.
- SELECT (public.mobility_stage_g198_open_case_qa(
-  '10900000-0000-4109-8109-000000000021',
-  '19800000-0000-4198-8198-000000000031',iat,
-  '19800000-0000-4198-8198-000000000021')->>'caseId')::uuid INTO a;
- SELECT (public.mobility_stage_g200_open_case_qa(
-  '19900000-0000-4199-8199-000000000021',
-  '20000000-0000-4200-8200-000000000001',iat,
-  (SELECT id FROM public.mobility_stage_g100_moto_trips
-   WHERE passenger_id='19900000-0000-4199-8199-000000000021'
-   AND status='completed' ORDER BY id LIMIT 1)
- )->>'caseId')::uuid INTO m;
- -- Open function may guard itself, so explicit failures must never
- -- accidentally use case IDs from another user or fabricate a second case.
+ -- Original case identifiers are captured by the isolated database owner.
+ -- This application role cannot SELECT the underlying case tables.
  IF a IS NULL OR m IS NULL THEN RAISE EXCEPTION 'G214 original source unknown'; END IF;
  v:=public.mobility_stage_g214_close_g198_case_qa(
   a,'10900000-0000-4109-8109-000000000021',
