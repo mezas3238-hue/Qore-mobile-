@@ -87,11 +87,17 @@ BEGIN
    3,'in_progress','21300000-0000-4213-8213-000000000012');
  EXCEPTION WHEN SQLSTATE 'P2131' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G213 advanced MOTO after session revocation'; END IF;
+END $revoked$;
+RESET ROLE;
+-- G118 events remain inaccessible to service_role. Only the isolated QA
+-- database owner may inspect the event count, never the app or Driver.
+DO $auditor$
+DECLARE event_count integer;
+BEGIN
  SELECT count(*) INTO event_count FROM public.mobility_stage_g118_moto_events
  WHERE trip_id=(SELECT id FROM public.mobility_stage_g100_moto_trips
    WHERE booking_key='11900000-0000-4119-8119-000000000020');
  IF event_count<>1 THEN RAISE EXCEPTION 'G213 duplicate event after revocation'; END IF;
  RAISE NOTICE 'G213 PASS: original G119 MOTO accepted Driver to arriving under G42 row lock, revoked session rejects next stage, direct G118 SQL privilege blocked, no LIVE';
-END $revoked$;
-RESET ROLE;
+END $auditor$;
 ROLLBACK;
