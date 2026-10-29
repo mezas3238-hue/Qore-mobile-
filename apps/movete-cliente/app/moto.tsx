@@ -2,7 +2,7 @@
 import React,{useCallback,useRef,useState} from 'react';
 import * as Crypto from 'expo-crypto';
 import {AppState,ScrollView,Text,TextInput,View} from 'react-native';
-import {useFocusEffect} from 'expo-router';
+import {router,useFocusEffect} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewMotoRideDraft} from '../src/domain/moto-ride-draft.mjs';
