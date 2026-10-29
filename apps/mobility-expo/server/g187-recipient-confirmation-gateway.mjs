@@ -54,6 +54,9 @@ export function createG187RecipientConfirmationGateway({
     !Number.isSafeInteger(actor.expiresAtMs)||actor.expiresAtMs<=at||
     actor.is_anonymous!==false)
    return deny(401,'G187_IDENTITY_INVALID');
+  // A sender cannot designate their own IdP subject as an independent receiver.
+  if(bind&&body.recipientId===actor.id)
+   return deny(403,'G187_SELF_CONFIRMATION_DENIED');
   try{
    if(await verifySessionNotRevoked({
     userId:actor.id,sessionId:actor.sessionId,at})!==true)
