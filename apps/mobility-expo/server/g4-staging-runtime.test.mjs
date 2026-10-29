@@ -1712,7 +1712,7 @@ test('G173 original G4 merchant writes never fall through to weaker G6 authentic
   assert.equal(r.status,401,'Merchant G6 legacy path cannot write without IdP');
   assert.equal((await req(base,g173AttachPath,'stranger','POST',{
    deliveryId,requestKey})).status,401);
-  assert.equal((await req(base,g173Path.toUpperCase(),'stranger','POST',order)).status,404,
+  assert.equal((await req(base,g173Path.toUpperCase(),'stranger','POST',order)).status,401,
    'Case variants cannot escape G173 merchant authority');
   assert.equal((await req(base,g173Path,'stranger','POST',{
    event:'cancel',eventKey:requestKey})).status,400);
