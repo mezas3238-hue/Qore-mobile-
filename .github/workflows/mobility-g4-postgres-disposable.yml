@@ -331,6 +331,8 @@ jobs:
           node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
           node --test apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs
           node --test apps/mobility-expo/server/g101-moto-passenger-gateway.test.mjs
+          node --test apps/movete-cliente/src/domain/g119-moto-ride-status-gateway.test.mjs
+          node --test apps/movete-cliente/src/domain/g100-moto-client-composition.test.mjs
           node --check apps/mobility-expo/server/g4-staging-runtime.mjs
           node --test apps/mobility-expo/server/g4-staging-runtime.test.mjs
           node --test apps/mobility-expo/server/g143-courier-custody-http-routing.test.mjs
