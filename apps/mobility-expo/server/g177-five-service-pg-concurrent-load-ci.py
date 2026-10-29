@@ -208,7 +208,9 @@ with psycopg.connect(autocommit=True) as admin:
       SELECT r.request_key::text,r.order_id::text,o.status,
         o.requested_vehicle_kind::text,
         (SELECT count(*) FROM public.mobility_stage_merchant_order_events e
-          WHERE e.order_id=o.id) AS n_events
+          JOIN public.mobility_stage_g45_cancel_receipts c
+            ON c.event_id=e.id AND c.order_id=o.id
+          WHERE e.order_id=o.id AND e.action='cancel') AS n_cancel_events
       FROM public.mobility_stage_g45_order_receipts r
       JOIN public.mobility_stage_merchant_orders o ON o.id=r.order_id
       WHERE r.request_key IN(
@@ -218,7 +220,11 @@ with psycopg.connect(autocommit=True) as admin:
     """).fetchall()
     assert len(commerce)==2,commerce
     assert len({x[1] for x in commerce})==2
-    assert all(row[4]>=2 for row in commerce),commerce
+    # G45 reservation is captured in the original order row, NOT in the
+    # merchant transitions table. An authenticated cancellation commits
+    # exactly one G45 cancel receipt/event, never a fabricated "requested"
+    # event. These rows came from the original B HTTP checkout/cancel flow.
+    assert all(row[2]=='cancelled' and row[4]==1 for row in commerce),commerce
 
     # ORIGINAL G173 1000 AUTO dispatch rows remain intact after concurrent
     # other-service operations; never silently consume another user's job.
