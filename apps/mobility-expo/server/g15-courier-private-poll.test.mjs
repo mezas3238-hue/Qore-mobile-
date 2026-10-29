@@ -96,3 +96,33 @@ test('G15 empty queue is valid and never invents a push receipt',async()=>{
  assert.equal(result.status,200);assert.deepEqual(result.body.offers,[]);
  assert.equal(result.body.deviceReceived,false);
 });
+
+
+test('G183 revocation during original courier SQL poll never exposes private offer identifiers',async()=>{
+ const actor={...user,sessionId:'77777777-7777-4777-8777-777777777777',
+  expiresAtMs:now+60000};
+ let checks=0,reads=0;
+ const {fn}=gateway({
+  requireFreshSession:true,verifyAccessToken:async()=>actor,
+  verifySessionNotRevoked:async()=>++checks===1,
+  listForCourier:async()=>{reads++;return {ok:true,liveEnabled:false,
+   offers:[{offerId:offer,deliveryId:delivery,expiresAtMs:now+30000}]}}
+ });
+ const denied=await fn(request);
+ assert.equal(denied.status,401);assert.equal(checks,2);assert.equal(reads,1);
+ assert.doesNotMatch(JSON.stringify(denied),new RegExp(offer+'|'+delivery));
+});
+
+test('G183 revoked, expired and unavailable courier authority fail before private polling',async()=>{
+ const actor={...user,sessionId:'77777777-7777-4777-8777-777777777777',
+  expiresAtMs:now+60000};
+ let reads=0;
+ const init={requireFreshSession:true,verifyAccessToken:async()=>actor,
+  listForCourier:async()=>{reads++;return {ok:true,liveEnabled:false,offers:[]}}};
+ assert.equal((await gateway({...init,verifySessionNotRevoked:async()=>false}).fn(request)).status,401);
+ assert.equal((await gateway({...init,verifySessionNotRevoked:async()=>{throw Error('IdP offline')}}).fn(request)).status,503);
+ assert.equal((await gateway({...init,verifyAccessToken:async()=>({...actor,expiresAtMs:now}),
+  verifySessionNotRevoked:async()=>true}).fn(request)).status,401);
+ assert.equal(reads,0);
+ assert.throws(()=>gateway({...init,verifySessionNotRevoked:undefined}));
+});
