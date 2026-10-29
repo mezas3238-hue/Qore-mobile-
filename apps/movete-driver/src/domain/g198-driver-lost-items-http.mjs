@@ -28,6 +28,9 @@ function validResponse(dto,op,actor,caseId,key){
   &&dto.cases.every(c=>exact(c,['caseId','tripId','state','expiresAtMs'])
    &&UUID.test(c.caseId)&&UUID.test(c.tripId)&&c.state==='OPEN'
    &&Number.isSafeInteger(c.expiresAtMs));
+ if(op==='close')return exact(dto,
+  ['mode','caseId','state','qaOnly','productionEnabled'])&&
+  dto.caseId===caseId&&['CLOSED','BLOCKED'].includes(dto.state);
  if(op==='read')return exact(dto,['mode','caseId','tripId','state',
   'canSend','expiresAtMs','messages','qaOnly','productionEnabled'])
   &&dto.caseId===caseId&&UUID.test(dto.tripId)&&
@@ -53,10 +56,11 @@ export function createG198DriverLostItemsHttp({
   &&verifiedStoppedProvider===true&&host!==null&&host===hostOf(pinnedOrigin)
   &&typeof getSession==='function'&&typeof request==='function';
  let busy=false;
- async function action(op,{caseId,requestKey,body}={}){
+ async function action(op,{caseId,requestKey,body,block}={}){
   if(!ready)return fail('G198_DRIVER_UNAVAILABLE');
   if(busy)return fail('G198_DRIVER_BUSY');
   if(op!=='inbox'&&!UUID.test(caseId??'')||
+    op==='close'&&typeof block!=='boolean'||
     op==='send'&&(!UUID.test(requestKey??'')||
      typeof body!=='string'||body!==body.trim()||
      body.length<1||body.length>500))
@@ -67,11 +71,11 @@ export function createG198DriverLostItemsHttp({
    if(!validActor(before))return fail('G198_DRIVER_AUTH_REQUIRED');
    const deadline=now()+8000;timer=setTimeout(()=>controller.abort(),8000);
    const isSend=op==='send';
-   const data=isSend?{requestKey,body}:undefined;
+   const data=isSend?{requestKey,body}:op==='close'?{block}:undefined;
    const path=op==='inbox'?'/v1/staging/driver/lost-items':
-    '/v1/staging/lost-items/'+caseId+(isSend?'/messages':'');
+    '/v1/staging/lost-items/'+caseId+(isSend?'/messages':op==='close'?'/close':'');
    const response=await request(host+path,{
-    method:isSend?'POST':'GET',credentials:'omit',redirect:'error',
+    method:isSend||op==='close'?'POST':'GET',credentials:'omit',redirect:'error',
     cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal,
     headers:{Authorization:'Bearer '+before.accessToken,Accept:'application/json',
      ...(data?{'Content-Type':'application/json'}:{})},
@@ -111,5 +115,6 @@ export function createG198DriverLostItemsHttp({
  return Object.freeze({isConfigured:()=>ready,
   inbox:()=>action('inbox'),read:caseId=>action('read',{caseId}),
   send:(caseId,requestKey,body)=>action('send',{caseId,requestKey,body}),
+  close:(caseId,block)=>action('close',{caseId,block}),
   productionEnabled:false});
 }
