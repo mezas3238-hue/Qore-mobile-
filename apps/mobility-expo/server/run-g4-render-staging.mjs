@@ -36,11 +36,13 @@ if(!['true','false',undefined].includes(process.env.QORE_G171_REDIS_QUOTA_ENABLE
  throw Error('G171 invalid Redis opt-in value');
 if(replicaCount>1&&!redisEnabled)
  throw Error('G176 multi-instance STAGING requires shared Redis quotas');
-if(redisEnabled)validateG171RedisEndpoint({
+const redisEndpoint=redisEnabled?validateG171RedisEndpoint({
  url:process.env.QORE_G171_REDIS_URL,
  privateStagingApproved:process.env.QORE_G171_PRIVATE_REDIS_APPROVED==='true',
  pinnedHostname:process.env.QORE_G171_REDIS_PINNED_HOST??null
-});
+}):null;
+if(replicaCount>1&&redisEndpoint?.mode!=='OWNER_APPROVED_STAGING_TLS')
+ throw Error('G176 multiple hosts require shared pinned TLS Redis; localhost is not distributed');
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,

@@ -426,3 +426,18 @@ test('G176 refuses unpinned redis config before Supabase initialization',()=>{
  assert.match(result.stderr,/G174 requires pinned private STAGING TLS Redis and ACL/);
  assert.doesNotMatch(result.stdout,/started/);
 });
+
+test('G176 multi-host staging refuses loopback Redis even when enabled',()=>{
+ const result=spawn({
+  QORE_RENDER_STAGING_APPROVED:'true',
+  QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',
+  QORE_RENDER_NO_COMMERCIAL_TRIPS:'true',
+  PORT:'10000',QORE_RENDER_HOSTNAME:host,
+  QORE_STAGING_REPLICA_COUNT:'3',
+  QORE_G171_REDIS_QUOTA_ENABLED:'true',
+  QORE_G171_REDIS_URL:'redis://127.0.0.1:6379'
+ });
+ assert.notEqual(result.status,0);
+ assert.match(result.stderr,/G176 multiple hosts require shared pinned TLS Redis/);
+});
