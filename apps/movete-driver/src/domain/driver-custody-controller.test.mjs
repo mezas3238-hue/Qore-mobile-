@@ -71,6 +71,31 @@ test('G66 HTTP rejects fake proof, unauthorized origin, malformed status, spoofe
  ])await assert.rejects(transitionPrivateCourierCustody({...scope,
   event:'pickup',eventKey:key,request:async()=>response(fake)}));
 });
+test('G187 one transient custody GET reset is safely recovered without authorizing an unassigned courier',async()=>{
+ let count=0;
+ const read=async()=>{
+  count++;
+  if(count===1)throw new TypeError('fetch failed');
+  return response({error:'Private courier custody unavailable'},503);
+ };
+ await assert.rejects(readPrivateCourierCustody({
+  ...scope,request:read
+ }),/assigned custody not verified/);
+ assert.equal(count,2,'G187 only repeated a private GET and never creates custody');
+});
+
+test('G187 never repeats a custody mutation even if the POST transport fails',async()=>{
+ let calls=0;
+ await assert.rejects(transitionPrivateCourierCustody({
+  ...scope,event:'pickup',eventKey:key,
+  request:async(_,options)=>{
+   calls++;assert.equal(options.method,'POST');
+   throw new TypeError('fetch failed');
+  }
+ }),/UNKNOWN_COMMIT/);
+ assert.equal(calls,1,'G66 must never retry a potentially committed POST');
+});
+
 function scenario({lost=null,proofSource=true}={}){
  let phase='accepted',revision=2,mutations=0,reads=0;
  const posted=[];
