@@ -15,6 +15,7 @@ export async function readG178BoundedDriverLifecycleJson({
  const cap=Number.isSafeInteger(maxBytes)&&maxBytes>=512&&maxBytes<=32768?
   maxBytes:4096;
  const ctl=new AbortController();
+ let timer;
  const deadline=new Promise((_,reject)=>{
   const t=setTimeout(()=>{
    ctl.abort();reject(Error('G178 Driver response deadline exceeded'));
@@ -22,7 +23,6 @@ export async function readG178BoundedDriverLifecycleJson({
   // The timer is cleared on exit via the mutable reference below.
   timer=t;
  });
- let timer;
  const within=p=>Promise.race([Promise.resolve(p),deadline]);
  try{
   const response=await within(request(url,{...options,signal:ctl.signal}));
