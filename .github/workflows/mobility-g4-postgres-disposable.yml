@@ -22,6 +22,8 @@ on:
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
       - 'apps/mobility-expo/server/g10-delivery-offer-gateway.mjs'
       - 'apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs'
+      - 'apps/mobility-expo/server/g15-courier-private-poll-gateway.mjs'
+      - 'apps/mobility-expo/server/g15-courier-private-poll.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
@@ -103,6 +105,8 @@ on:
       - 'apps/mobility-expo/server/g16-driver-private-inbox.test.mjs'
       - 'apps/mobility-expo/server/g10-delivery-offer-gateway.mjs'
       - 'apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs'
+      - 'apps/mobility-expo/server/g15-courier-private-poll-gateway.mjs'
+      - 'apps/mobility-expo/server/g15-courier-private-poll.test.mjs'
       - 'apps/mobility-expo/server/g4-offer-gateway.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
@@ -773,6 +777,7 @@ jobs:
           node --test apps/mobility-expo/server/g16-driver-private-inbox.test.mjs
           node --test apps/mobility-expo/server/g4-offer-gateway.test.mjs
           node --test apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs
+          node --test apps/mobility-expo/server/g15-courier-private-poll.test.mjs
       - name: G138 install original AUTO service ID event and ledger trace
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G138_ORIGINAL_AUTO_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
       - name: G107 A+B Client HTTP through real PG16 and Admin reconciliation
