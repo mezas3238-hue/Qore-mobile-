@@ -24,7 +24,7 @@ BEGIN
  BEGIN
   PERFORM public.mobility_stage_g177_driver_auto_step_qa(
    driver,'17700000-0000-4177-8177-000000000001'::uuid,
-   (pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint,
+   (pg_catalog.date_part('epoch',pg_catalog.clock_timestamp())*1000)::bigint,
    assigned_trip,'arrive',
    '17700000-0000-4177-8177-000000000099'::uuid);
   RAISE EXCEPTION 'G177 improperly advanced a Driver without G42 session';
