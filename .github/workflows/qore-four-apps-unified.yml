@@ -6,6 +6,9 @@ on:
   push:
     branches:
       - integration/qore-mobile-e2e-four-apps-20261027
+  pull_request:
+    branches:
+      - integration/qore-mobile-e2e-four-apps-20261027
   workflow_dispatch:
 permissions:
   contents: read
