@@ -102,6 +102,8 @@ on:
       - 'apps/mobility-expo/server/g187-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G67_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G214_*'
+      - 'apps/mobility-expo/server/g214-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G197_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G199_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G200_*'
@@ -270,6 +272,8 @@ on:
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g187-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G214_*'
+      - 'apps/mobility-expo/server/g214-*'
       - 'apps/movete-cliente/src/domain/g187-recipient-http-gateway*'
       - 'apps/movete-cliente/app/confirmacion-entrega.tsx'
       - 'apps/mobility-expo/server/g59b-*'
@@ -307,6 +311,8 @@ on:
       - 'apps/mobility-expo/server/g67-*'
       - 'apps/mobility-expo/server/g187-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G187_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G214_*'
+      - 'apps/mobility-expo/server/g214-*'
       - 'apps/movete-cliente/src/domain/g187-recipient-http-gateway*'
       - 'apps/movete-cliente/app/confirmacion-entrega.tsx'
       - 'apps/mobility-expo/docs/backend/staging_only/G10_*'
@@ -406,6 +412,8 @@ jobs:
           node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.mjs
           node --check apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
           node --test apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
+          node --check apps/mobility-expo/server/g214-admin-delivery-handoff-gateway.mjs
+          node --test apps/mobility-expo/server/g214-admin-delivery-handoff-gateway.test.mjs
           node --test apps/movete-driver/src/domain/driver-custody-controller.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
       - name: G209 verify G194 read/write ingress backpressure and G207 Client original AUTO resume
@@ -978,6 +986,10 @@ jobs:
         run: node apps/mobility-expo/server/g158-admin-fraud-pg-http-ci.mjs
       - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
         run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs
+      - name: G214 install source-backed original G5/G10/G67/G187 Admin independent handoff receipt
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G214_ADMIN_INDEPENDENT_DELIVERY_HANDOFF_POSTGRES_CI_ONLY.sql
+      - name: G214 actual original priced AUTO and MOTO -> G10 Driver -> G67 proof -> G187 Recipient -> Admin PG16
+        run: python3 apps/mobility-expo/server/g214-admin-recipient-handoff-pg-ci.py
       - name: G202 audit five original Cliente -> Driver or Comercio -> Admin sources in ONE PostgreSQL16
         run: node apps/mobility-expo/server/g202-five-original-service-journeys-pg-ci.mjs
       - name: G202 publish verified five-service evidence and missing commercial gates
