@@ -1,7 +1,8 @@
 /** MOTO_RIDE Passenger: independent, local-only route review until A certifies API. */
-import React,{useState} from 'react';
+import React,{useCallback,useRef,useState} from 'react';
 import * as Crypto from 'expo-crypto';
-import {ScrollView,Text,TextInput,View} from 'react-native';
+import {AppState,ScrollView,Text,TextInput,View} from 'react-native';
+import {useFocusEffect} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewMotoRideDraft} from '../src/domain/moto-ride-draft.mjs';
@@ -28,6 +29,36 @@ function PrivateMoto({authenticated,client,moto,rideStatus,revision}:{
  const [sending,setSending]=useState(false);
  const [confirmBook,setConfirmBook]=useState(false);
  const [confirmCancel,setConfirmCancel]=useState(false);
+ // G166: reflect current booking/session without recreating timers on
+ // every status update. No background GPS, no POST and no push assumptions.
+ const pollActive=useRef(false);
+ const pollingContext=useRef({authenticated,phase:moto.phase,
+  bookingKey:moto.bookingKey,tripId:moto.tripId,
+  readReady:rideStatus.readReady,sending,terminal:rideStatus.tripId===moto.tripId
+   &&['completed','cancelled'].includes(rideStatus.state??'')});
+ pollingContext.current={authenticated,phase:moto.phase,
+  bookingKey:moto.bookingKey,tripId:moto.tripId,
+  readReady:rideStatus.readReady,sending,terminal:rideStatus.tripId===moto.tripId
+   &&['completed','cancelled'].includes(rideStatus.state??'')};
+ useFocusEffect(useCallback(()=>{
+  let focused=true;
+  const refresh=async()=>{
+   const scope=pollingContext.current;
+   if(!focused||AppState.currentState!=='active'||pollActive.current||
+    !scope.authenticated||scope.phase!=='booked'||!scope.readReady||
+    !scope.bookingKey||!scope.tripId||scope.sending||scope.terminal)return;
+   pollActive.current=true;
+   try{await client.refreshMotoRideStatus({bookingKey:scope.bookingKey});}
+   catch{/* G119 already hides unverified responses; do not invent state */}
+   finally{pollActive.current=false;}
+  };
+  void refresh();
+  const timer=setInterval(()=>{void refresh();},5000);
+  const change=AppState.addEventListener('change',state=>{
+   if(state==='active')void refresh();
+  });
+  return ()=>{focused=false;clearInterval(timer);change.remove();};
+ },[client]));
  // A reviewed route must not diverge from a priced or possibly booked quote.
  const canEdit=moto.phase==='idle'&&!sending;
  const quoteExpired=Boolean(moto.quote&&['quoted','accepted'].includes(moto.phase)
@@ -110,7 +141,7 @@ function PrivateMoto({authenticated,client,moto,rideStatus,revision}:{
     accessibilityLabel="Destino del viaje MOTO"
     placeholder="¿A dónde vas?"
     onChangeText={value=>edit(setDestination,value)}/>
-   <Text style={styles.small}>Las direcciones permanecen en este formulario y no se transmiten. El GPS y la ruta solo podrán venir de permisos y proveedor verificado.</Text>
+   <Text style={styles.small}>Las direcciones se envían al backend exclusivamente si confirmás una cotización con proveedor habilitado. Sin esa autorización permanecen en el formulario. No se publica GPS.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Seguridad del pasajero</Text>
@@ -165,6 +196,7 @@ function PrivateMoto({authenticated,client,moto,rideStatus,revision}:{
      <Action label={sending?'Consultando estado…':'Consultar estado MOTO en servidor'}
       disabled={sending||rideStatus.busy} busy={sending}
       onPress={()=>{void refreshMotoTracking();}}/>}
+    {rideStatus.error&&<Text accessibilityRole="alert" style={styles.small}>No se pudo verificar el estado actualizado. Los datos anteriores se ocultan hasta recibir una revisión válida.</Text>}
     {rideStatus.tripId===moto.tripId&&rideStatus.state&&<View>
      <Text style={styles.text}>Estado certificado en PostgreSQL QA: {({
       searching:'Buscando motociclista autorizado',

@@ -72,6 +72,10 @@ export function createClientExperience({authProvider=null,gateway=null,
  let g95={phase:'idle',requestKey:null,scope:null,receipt:null,error:null};
  let g95Epoch=0,g95Restored=null,restoringG95=false;
  let motoRide={busy:false,data:null,error:null},motoRideEpoch=0;
+ // G166: retain the highest PostgreSQL MOTO revision even if a later GET
+ // fails and UI hides its stale status. A lagging replica cannot roll back
+ // to accepted/searching after we already observed arriving/in_progress.
+ let motoRideFloor={tripId:null,revision:1};
  const G95_ID=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
  const canSaveG95=Boolean(g95RecoveryStore&&['read','write','clear'].every(k=>typeof g95RecoveryStore[k]==='function'));
  const g93Required=autoG73HttpOptions?.subsidyContractCertified===true;
@@ -98,6 +102,7 @@ export function createClientExperience({authProvider=null,gateway=null,
   resumeGeneration++;resumeBusy=false;historyRideProof=null;recoveredRide=null;
   completedEpoch++;completedBusy=false;completedProof=null;
   motoRideEpoch++;motoRide={busy:false,data:null,error:null};
+  motoRideFloor={tripId:null,revision:1};
   motoRideGateway?.cancelPending();
   if(motoFlow)motoFlow.clear(true);
   if(motoHttp)motoHttp.cancelPending();
@@ -1176,12 +1181,13 @@ export function createClientExperience({authProvider=null,gateway=null,
   const a=actor(),state=motoFlow.snapshot();
   if(!motoRideGateway?.isConfigured())return fail('G119_MOTO_STATUS_NOT_CERTIFIED');
   if(!a||!['booked','cancelled'].includes(state.phase)
-   ||!G95_ID.test(bookingKey??'')||!G95_ID.test(state.tripId??''))
+   ||!G95_ID.test(bookingKey??'')||bookingKey!==state.bookingKey||
+   !G95_ID.test(state.tripId??''))
    return fail('G119_MOTO_BOOKING_REQUIRED');
   if(motoRide.busy)return fail('G119_MOTO_READ_IN_FLIGHT');
   const seq=++motoRideEpoch,scope=session.privacyRevision();
   const tripId=state.tripId,owner=a.subject;
-  const floor=motoRide.data?.tripId===tripId?motoRide.data.tripRevision:1;
+  const floor=motoRideFloor.tripId===tripId?motoRideFloor.revision:1;
   motoRide={busy:true,data:null,error:null};notify();
   let result;try{result=await motoRideGateway.read({
    bookingKey,expectedTripId:tripId,minimumRevision:floor
@@ -1192,6 +1198,7 @@ export function createClientExperience({authProvider=null,gateway=null,
    motoRide={busy:false,data:null,error:result?.code??'G119_STATUS_UNAVAILABLE'};
    notify();return fail(motoRide.error);
   }
+  motoRideFloor={tripId,revision:result.data.tripRevision};
   motoRide={busy:false,data:result.data,error:null};notify();
   return Object.freeze({ok:true,qaOnly:true,productionEnabled:false});
  }

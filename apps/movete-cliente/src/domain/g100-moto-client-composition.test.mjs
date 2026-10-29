@@ -82,3 +82,60 @@ test('R78 default native Cliente never exposes MOTO prices or booking without A 
  assert.equal(changes<10,true);
  assert.equal(c.snapshot().authenticated,false);
 });
+
+test('G166 MOTO passenger foreground GET never rolls back PostgreSQL revision after network failure',async()=>{
+ let auth={subject:owner,role:'passenger',expiresAt:t+600000,
+  token:'moto-g166-qa-passenger-jwt-abcdefghijklmnop'};
+ let calls=0;
+ const origin='https://g166-moto-qa.invalid';
+ const status={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+  ownerId:owner,bookingKey,tripId,serviceKind:'MOTO_RIDE',
+  tripState:'arriving',tripRevision:3,driverAssigned:true,
+  driverIdentityExposed:false,gpsVerified:false,etaAvailable:false,
+  commissionBps:1200,subsidyBps:1000,amountGs:11000,
+  customerPaysGs:9900,customerSubsidyGs:1100,financialState:'RESERVED_QA',
+  pspCollected:false,serverPersisted:true};
+ const c=createClientExperience({
+  now:()=>t,authProvider:{readSession:async()=>auth,signOut:async()=>{}},
+  motoPassengerOptions:{
+   enabled:true,contractCertified:true,externalRuntimeVerified:true,
+   motoLegalVerified:true,motoRouteVerified:true,
+   quoteGateway:async()=>({ok:true,data:quote}),
+   bookGateway:async()=>({ok:true,data:booked}),
+   bookingReadGateway:async()=>({ok:true,data:booked}),
+   cancelGateway:async()=>({ok:false}),
+   cancelReadGateway:async()=>({ok:false})
+  },
+  motoRideStatusOptions:{
+   enabled:true,contractCertified:true,stagingRuntimeVerified:true,
+   origin,pinnedOrigin:origin,fetchImpl:async(url,opts)=>{
+    assert(url.endsWith('/v1/staging/rider/moto/bookings/'+bookingKey+'/status'));
+    assert.equal(opts.method,'GET');
+    calls++;
+    if(calls===2)throw Error('temporary offline');
+    const dto=calls===1?status:{...status,tripState:'accepted',tripRevision:2};
+    return {status:200,ok:true,redirected:false,
+     headers:{get:()=> 'application/json'},
+     text:async()=>JSON.stringify(dto)};
+   }
+  }
+ });
+ await c.refreshSession();
+ assert.equal((await c.requestMotoQuote({origin:'Centro de Asunción',
+  destination:'Villa Morra',quoteRequestKey:requestKey,
+  safetyAcknowledged:true})).ok,true);
+ assert.equal(c.acceptMotoQuote({quoteId,customerPaysGs:9900}).ok,true);
+ assert.equal((await c.bookMoto({bookingKey})).ok,true);
+ assert.equal((await c.refreshMotoRideStatus({bookingKey})).ok,true);
+ assert.equal(c.snapshot().motoRideStatus.revision,3);
+ assert.equal((await c.refreshMotoRideStatus({bookingKey})).ok,false);
+ assert.equal(c.snapshot().motoRideStatus.revision,null,
+  'unverified data must not be shown after network loss');
+ const regression=await c.refreshMotoRideStatus({bookingKey});
+ assert.equal(regression.ok,false);
+ assert.equal(regression.code,'G119_INVALID_PERSISTED_STATUS');
+ assert.equal(c.snapshot().motoRideStatus.state,null);
+ assert.equal(calls,3);
+ assert.equal((await c.refreshMotoRideStatus({bookingKey:id(99)})).ok,false);
+ assert.equal(calls,3,'foreign/original-key mismatch never reaches HTTP');
+});
