@@ -83,3 +83,41 @@ test('G106 SQL repository selects only active records of verified Driver',async(
  {id:trip,driver_id:foreign,status:'accepted',revision:2}],error:null})})}});
  await assert.rejects(()=>bad.loadCurrentAssignedTrip({actorId:driver}));
 });
+
+test('G170 SQL read loses permission after revocation committed during recovery',async()=>{
+ let revoked=false,checks=0,queries=0;
+ const handler=create({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  now:()=>at,verifyAccessToken:async()=>({
+   id:driver,sessionId:session,tokenIatMs:at-1000,
+   expiresAtMs:at+10000,is_anonymous:false}),
+  verifySessionNotRevoked:async()=>{checks++;return !revoked;},
+  resolveExclusiveRole:async()=> 'driver',allowRequest:()=>true,
+  loadCurrentAssignedTrip:async()=>{queries++;revoked=true;
+   return {tripId:trip,driverId:driver,status:'in_progress',revision:4};}
+ });
+ const denied=await handler({method:'GET',path,headers});
+ assert.equal(denied.status,401);
+ assert.equal(denied.body.code,'G106_SESSION_REVOKED');
+ assert.equal(queries,1);
+ assert.equal(checks,2,'Revocation authority required on both sides of the read');
+ assert.equal(denied.body.activeTrip,undefined);
+});
+test('G170 second revocation oracle failure denies recovered trip',async()=>{
+ let calls=0;
+ const handler=create({
+  environment:'isolated_staging',localQaOnly:true,liveEnabled:false,
+  now:()=>at,verifyAccessToken:async()=>({
+   id:driver,sessionId:session,tokenIatMs:at-1000,
+   expiresAtMs:at+10000,is_anonymous:false}),
+  verifySessionNotRevoked:async()=>{calls++;if(calls===2)throw Error('G42 offline');
+   return true;},
+  resolveExclusiveRole:async()=> 'driver',allowRequest:()=>true,
+  loadCurrentAssignedTrip:async()=>({tripId:trip,driverId:driver,
+   status:'accepted',revision:2})
+ });
+ const denied=await handler({method:'GET',path,headers});
+ assert.equal(denied.status,503);
+ assert.equal(denied.body.code,'G106_AUTH_UNAVAILABLE');
+ assert.equal(denied.body.activeTrip,undefined);
+});
