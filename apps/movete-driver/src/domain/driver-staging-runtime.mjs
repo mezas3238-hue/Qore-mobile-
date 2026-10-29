@@ -22,7 +22,7 @@ import {readDriverKycExpiry} from './driver-kyc-expiry.mjs';
 import {submitPrivateDriverEvidence}
  from './driver-document-upload.mjs';
 import {readDriverCurrentTrip} from './driver-current-trip-http.mjs';
-import {readDriverMotoJourney,advanceDriverMotoJourney}
+import {readDriverMotoJourney,advanceDriverMotoJourney,readCurrentDriverMoto}
  from './driver-moto-journey-http.mjs';
 import {readDriverPrivateDeliveryDetail} from './driver-private-delivery-detail.mjs';
 import {resolveDriverStatusOrigin}
@@ -120,6 +120,12 @@ export function createDriverStagingRuntime({
   makeRequestKey:chatAdapters.makeRequestKey,
   liveEnabled:false
  });
+ const motoCurrentReader=Object.freeze({
+  readCurrent:({accessToken})=>readCurrentDriverMoto({
+   apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
+   accessToken,request
+  })
+ });
  const motoActions=Object.freeze({
   readStatus:({accessToken,bookingKey})=>readDriverMotoJourney({
    apiOrigin:origin,approvedStagingHost,allowedByOwner:true,
@@ -162,7 +168,7 @@ export function createDriverStagingRuntime({
   documentUploads,kycValidityAdapter,
   apiOrigin:origin,approvedStagingHost,
   allowedByOwner:true,authAdapter,chatAdapters,workspaceReaders,
-  offerActions,tripActions,motoActions,custodyActions,currentTripReader,
+  offerActions,tripActions,motoActions,motoCurrentReader,custodyActions,currentTripReader,
   productionEnabled:false,qaOnly:true
  });
 }
