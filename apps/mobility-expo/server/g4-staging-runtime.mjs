@@ -1099,9 +1099,23 @@ export async function prepareQoreG4StagingRuntime({
   });
   const write=createG66CourierCustodyTransitionQa({...shared,
    verifyIndependentProof:p=>g66ProofTrust.verifyIndependentProof(p),
-   transitionDelivery:p=>deliveryPersistence.transition({
-    mode:'SYNTHETIC_STAGING',liveEnabled:false,...p
-   })
+   // G212: every G66 pickup, deliver and return holds the original
+   // provider G42 session through G5/G10/G67 SQL COMMIT.
+   transitionDelivery:async p=>{
+    if(!UUID.test(p.actorId??'')||!UUID.test(p.sessionId??'')||
+     !Number.isSafeInteger(p.tokenIatMs)||!UUID.test(p.deliveryId??'')||
+     !UUID.test(p.eventKey??'')||
+     !['pickup','deliver','return'].includes(p.event))
+     throw Error('G212 independently attested courier command required');
+    const {data,error}=await admin.rpc('mobility_stage_g212_courier_custody_step_qa',{
+     _driver:p.actorId,_session:p.sessionId,_iat:p.tokenIatMs,
+     _delivery:p.deliveryId,_action:p.event,_key:p.eventKey,
+     _proof:p.event==='deliver'?p.proofRef:null
+    });
+    if(error||typeof data!=='string'||!UUID.test(data))
+     throw Error('G212 original delivery SQL denied or unavailable');
+    return {ok:true,liveEnabled:false,eventId:data};
+   }
   });
   return input=>input.method==='GET'?read(input):write(input);
  })();
