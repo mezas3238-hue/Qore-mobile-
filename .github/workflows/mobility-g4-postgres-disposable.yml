@@ -400,6 +400,10 @@ jobs:
           node --test apps/mobility-expo/server/g187-recipient-confirmation-gateway.test.mjs
           node --test apps/movete-driver/src/domain/driver-custody-controller.test.mjs
           node --check apps/mobility-expo/server/g121-delivery-reconcile-pg-http-ci.mjs
+      - name: G209 verify G194 read/write ingress backpressure and G207 Client original AUTO resume
+        run: |
+          node --test apps/mobility-expo/server/render-staging-ingress.test.mjs
+          node --test apps/movete-cliente/src/domain/f1-auto-ride-continuation.test.mjs
       - name: Guard isolated local chain database
         run: |
           test "$PGHOST" = "localhost"
