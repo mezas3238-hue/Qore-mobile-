@@ -5,7 +5,7 @@
  */
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
-const KINDS=['RIDE','DELIVERY','MERCHANT_ORDER'];
+const KINDS=['RIDE','MOTO_RIDE','DELIVERY','MERCHANT_ORDER'];
 const BANDS=[1000,2000,3000,5000,8000,10000,15000,20000,30000,50000];
 const exact=(x,keys)=>x!==null&&typeof x==='object'&&!Array.isArray(x)
  &&Object.getPrototypeOf(x)===Object.prototype&&Object.keys(x).length===keys.length
@@ -64,7 +64,7 @@ export function createG197DriverPickupGateway({
    result.liveEnabled===false;
   const valid=method==='GET'?
    exact(result,['mode','driverId','preferences','productionEnabled','liveEnabled'])
-   &&Array.isArray(result.preferences)&&result.preferences.length<=3
+   &&Array.isArray(result.preferences)&&result.preferences.length<=4
    &&result.preferences.every(row)
    &&new Set(result.preferences.map(x=>x.serviceKind)).size===result.preferences.length:
    exact(result,['mode','driverId','serviceKind','maximumRoadMeters','revision',
