@@ -194,17 +194,49 @@ BEGIN
  WHERE case_id=_case AND state='OPEN';
  RETURN true;
 END $f$;
+-- A Driver discovers cases ONLY by their own verified Auth identity. The
+-- client cannot supply a passenger UUID or query any foreign Driver inbox.
+CREATE FUNCTION public.mobility_stage_g198_driver_inbox_qa(
+ _driver uuid,_session uuid,_iat_ms bigint
+) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
+DECLARE cases jsonb;
+BEGIN
+ IF _driver IS NULL OR _session IS NULL OR _iat_ms IS NULL OR
+ NOT public.mobility_stage_g42_lock_session(_driver,_session,_iat_ms)
+ THEN RAISE EXCEPTION 'G198 Driver inbox session denied' USING ERRCODE='P9802'; END IF;
+ IF (SELECT count(*) FROM public.user_roles WHERE user_id=_driver)<>1
+ OR NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_driver
+  AND role='driver'::public.app_role)
+ THEN RAISE EXCEPTION 'G198 exclusive Driver inbox role required' USING ERRCODE='P9803'; END IF;
+ SELECT COALESCE(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+  'caseId',c.case_id,'tripId',c.trip_id,'state',c.state,
+  'expiresAtMs',floor(extract(epoch FROM c.expires_at)*1000)::bigint)
+  ORDER BY c.opened_at DESC,c.case_id DESC),'[]'::jsonb)
+ INTO cases FROM (
+  SELECT c.* FROM public.mobility_stage_g198_lost_item_cases c
+  JOIN public.mobility_stage_auto_demo_trips t ON t.id=c.trip_id
+  WHERE c.driver_id=_driver AND t.driver_id=_driver
+   AND t.passenger_id=c.passenger_id AND t.status='completed'
+   AND c.state='OPEN' AND c.expires_at>pg_catalog.clock_timestamp()
+  ORDER BY c.opened_at DESC,c.case_id DESC LIMIT 50
+ ) c;
+ RETURN pg_catalog.jsonb_build_object(
+  'mode','STAGING_DEMO_ONLY','driverId',_driver,'cases',cases,
+  'qaOnly',true,'productionEnabled',false);
+END $f$;
 REVOKE ALL ON FUNCTION
  public.mobility_stage_g198_authorize_qa(uuid,uuid,uuid,bigint,boolean),
  public.mobility_stage_g198_open_case_qa(uuid,uuid,bigint,uuid),
  public.mobility_stage_g198_send_message_qa(uuid,uuid,uuid,bigint,uuid,text),
  public.mobility_stage_g198_read_case_qa(uuid,uuid,uuid,bigint),
+ public.mobility_stage_g198_driver_inbox_qa(uuid,uuid,bigint),
  public.mobility_stage_g198_close_case_qa(uuid,uuid,uuid,bigint,boolean)
  FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION
  public.mobility_stage_g198_open_case_qa(uuid,uuid,bigint,uuid),
  public.mobility_stage_g198_send_message_qa(uuid,uuid,uuid,bigint,uuid,text),
  public.mobility_stage_g198_read_case_qa(uuid,uuid,uuid,bigint),
+ public.mobility_stage_g198_driver_inbox_qa(uuid,uuid,bigint),
  public.mobility_stage_g198_close_case_qa(uuid,uuid,uuid,bigint,boolean)
  TO service_role;
 COMMIT;
