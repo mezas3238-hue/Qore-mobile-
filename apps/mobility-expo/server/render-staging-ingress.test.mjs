@@ -368,6 +368,26 @@ test('Render runner refuses unapproved staging and commercial flags before any s
   assert.doesNotMatch(res.stdout,/started|secret|token/);
  }
 });
+test('G194 Render runner blocks unlimited and malformed concurrency env before privileged clients',()=>{
+ const approved={
+  QORE_RENDER_STAGING_APPROVED:'true',QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',QORE_RENDER_NO_COMMERCIAL_TRIPS:'true',
+  PORT:'10000',QORE_RENDER_HOSTNAME:host
+ };
+ for(const override of [
+  {QORE_EDGE_MAX_READS:'0'},
+  {QORE_EDGE_MAX_READS:'2049'},
+  {QORE_EDGE_MAX_WRITES:'1025'},
+  {QORE_EDGE_MAX_IDENTITIES:'65537'},
+  {QORE_EDGE_MAX_READS:'unlimited'},
+  {QORE_EDGE_MAX_WRITES:'1.5'}
+ ]){
+  const result=spawn({...approved,...override});
+  assert.notEqual(result.status,0);
+  assert.match(result.stderr,/STAGING admission budget/);
+  assert.doesNotMatch(result.stdout,/transport started|secret|token/);
+ }
+});
 test('Render runner with explicitly allowed STAGING still fails closed on missing IdP/PG secrets',()=>{
  const result=spawn({QORE_RENDER_STAGING_APPROVED:'true',
   QORE_MOBILITY_ENV:'staging',LIVE_TRIPS_ENABLED:'false',
