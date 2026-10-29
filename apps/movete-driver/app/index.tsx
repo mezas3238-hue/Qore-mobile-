@@ -19,7 +19,9 @@ export default function DriverHome(){
  const [authMessage,setAuthMessage]=useState('');
  const [resuming,setResuming]=useState(false);
  const [resumeNotice,setResumeNotice]=useState('');
- const [motoBookingKey,setMotoBookingKey]=useState('');
+ const [motoRecoveryMessage,setMotoRecoveryMessage]=useState('');
+ const [motoBusy,setMotoBusy]=useState(false);
+ const motoLock=useRef(false);
  const resumeLock=useRef(false);
  useEffect(()=>{
   let active=true;
@@ -32,7 +34,7 @@ export default function DriverHome(){
   };
   void verify();
   const unsubscribe=auth?.subscribe?.(()=>{
-   setMotoBookingKey('');void verify();
+   setMotoRecoveryMessage('');void verify();
   });
   return ()=>{active=false;unsubscribe?.();};
  },[auth]);
@@ -55,7 +57,7 @@ export default function DriverHome(){
  }
  async function signOut(){
   if(!auth||authBusy)return;
-  setAuthBusy(true);setPassword('');setMotoBookingKey('');setAuthenticated(false);
+  setAuthBusy(true);setPassword('');setMotoRecoveryMessage('');setAuthenticated(false);
   try{await auth.signOut();setAuthMessage('Sesión Driver cerrada.');}
   catch{setAuthMessage('Acceso oculto; no se confirmó revocación remota.');}
   finally{setAuthBusy(false);}
@@ -89,6 +91,23 @@ export default function DriverHome(){
   'offline':'Sin conexión confirmada — datos privados ocultos',
   'connected':'Sesión Driver de STAGING validada para consulta'
  };
+ async function resumeActiveMoto(){
+  if(motoLock.current||!moto.enabled||state.phase!=='connected'||
+   kyc.snapshot?.state!=='READY_QA'||kyc.snapshot.accountBlocked!==false)
+   return;
+  motoLock.current=true;setMotoBusy(true);setMotoRecoveryMessage('');
+  try{
+   const result=await moto.recoverCurrent();
+   if(result.ok&&result.bookingKey){
+    router.push({pathname:'/moto-viaje',
+     params:{bookingKey:result.bookingKey}});
+   }else setMotoRecoveryMessage(result.reason==='MOTO_NONE'
+    ?'El servidor no encontró un viaje MOTO activo para tu identidad.'
+    :'No se pudo verificar una asignación MOTO original y vigente. No se abrió ningún viaje.');
+  }catch{
+   setMotoRecoveryMessage('No se pudo verificar la asignación MOTO. Ninguna operación fue enviada.');
+  }finally{motoLock.current=false;setMotoBusy(false);}
+ }
  async function continueVerifiedTrip(){
   const old=currentTrip.state.trip;
   if(resumeLock.current||!currentTrip.enabled||!old||
@@ -178,21 +197,16 @@ export default function DriverHome(){
     onPress={()=>{void currentTrip.refresh();}}/>
   </Panel>
   <Panel>
-   <Text style={styles.heading}>MOTO original · verificación de prueba</Text>
-   <Text style={styles.small}>Introducí exclusivamente el identificador de una reserva MOTO original ya autorizada por el backend. El código no demuestra asignación, no acepta una oferta y no evita los requisitos legales. PostgreSQL debe confirmar que sos su conductor.</Text>
-   <TextInput style={styles.field} value={motoBookingKey}
-    onChangeText={setMotoBookingKey} autoCapitalize="none"
-    autoCorrect={false} maxLength={36}
-    accessibilityLabel="Identificador de reserva MOTO original"
-    placeholder="UUID de reserva MOTO · solo QA"
-    editable={moto.enabled&&authenticated&&state.phase==='connected'}/>
-   <Action label="Verificar mi reserva MOTO en servidor" secondary
-    disabled={!moto.enabled||!authenticated||
+   <Text style={styles.heading}>Recuperar mi viaje MOTO activo</Text>
+   <Text style={styles.small}>Después de cerrar la aplicación, el backend busca solamente la reserva MOTO vigente asignada a tu identidad Driver. No hace falta copiar códigos del cliente ni guardar identificadores en el teléfono.</Text>
+   <Action label={motoBusy?'Verificando mi viaje MOTO…':'Recuperar mi viaje MOTO'} secondary
+    disabled={!moto.enabled||!authenticated||motoBusy||
      state.phase!=='connected'||kyc.snapshot?.state!=='READY_QA'||
-     !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(motoBookingKey)}
-    onPress={()=>router.push({pathname:'/moto-viaje',
-     params:{bookingKey:motoBookingKey}})}/>
-   <Text style={styles.small}>Sin autorización municipal y evidencia real G71/G118 no existe aceptación comercial. La consulta no crea viajes ni envía operaciones automáticamente.</Text>
+     kyc.snapshot.accountBlocked!==false}
+    onPress={()=>{void resumeActiveMoto();}}/>
+   {motoRecoveryMessage!==''&&<Text accessibilityRole="alert" style={styles.small}>
+    {motoRecoveryMessage}</Text>}
+   <Text style={styles.small}>Solo STAGING. G71 y la habilitación municipal G118 continúan siendo requisitos externos; la recuperación nunca acepta ofertas ni asigna pasajeros.</Text>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Recuperar mi envío asignado</Text>
