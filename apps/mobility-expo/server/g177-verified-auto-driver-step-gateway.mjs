@@ -25,8 +25,12 @@ export function createG177VerifiedAutoDriverStepGateway({
  return async input=>{
   const {method,path,headers={},body}=input??{};
   const found=typeof path==='string'?PATH.exec(path):null;
-  if(method!=='POST'||!found||!EVENTS.has(body?.event))
-   return legacyGateway(input);
+  // A recognized AUTO Driver transition must NEVER fall back to G4's
+  // weaker legacy command handler, even for malformed methods/events.
+  // Unknown routes still belong to the legacy cancellation fence.
+  if(!found)return legacyGateway(input);
+  if(method!=='POST'||!EVENTS.has(body?.event))
+   return deny(400,'G177_DRIVER_STEP_INVALID');
   const tripId=found[1].toLowerCase();
   if(!UUID.test(tripId)||!exact(body,['event','eventKey'])||
      !UUID.test(body.eventKey))return deny(400,'G177_DRIVER_STEP_INVALID');
