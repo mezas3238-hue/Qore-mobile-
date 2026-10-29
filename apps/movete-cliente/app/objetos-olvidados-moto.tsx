@@ -100,7 +100,8 @@ function PrivateLostItems({client,subject,privacy}:{
   }finally{lock.current=false;setBusy(false);}
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
-  keyboardShouldPersistTaps="handled">
+  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
+  keyboardDismissMode="on-drag">
   <View style={styles.hero}>
    <Text accessibilityRole="header" style={styles.heroText}>¿Olvidaste algo en la moto?</Text>
    <Text style={styles.heroSub}>Podés contactar al motociclista asignado a ese viaje sin compartir tu número de teléfono.</Text>

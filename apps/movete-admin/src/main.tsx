@@ -518,6 +518,24 @@ function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSna
   setMessage(output.ok?'Consulta STAGING verificada por estructura; no implica autorización comercial.':
    'No se pudo confirmar una reserva persistida para esta identidad.');
  };
+ const linkedKind=match?.serviceKind==='COMMERCE'&&
+  (match.vehicleKind==='AUTO'||match.vehicleKind==='MOTO')&&
+  typeof match.deliveryId==='string'&&F1_TRIP.test(match.deliveryId)
+  ?('DELIVERY_'+match.vehicleKind) as 'DELIVERY_AUTO'|'DELIVERY_MOTO':null;
+ const inspectLinkedDelivery=async()=>{
+  const linkedId=match?.deliveryId;
+  if(!ready||!linkedKind||typeof linkedId!=='string'||current.loading)return;
+  // Read the linked ORIGINAL G5 delivery from independent Admin AAL2 HTTP.
+  // Only navigate on a verified response; a missing/unpriced delivery is
+  // not silently reclassified or created by an Admin browser.
+  const output=await client.loadServiceTrace(linkedKind,linkedId);
+  if(!output.ok){
+   setMessage('El envío original no pudo cotejarse. No se confirmó reparto.');
+   return;
+  }
+  setKind(linkedKind);setId(linkedId);
+  setMessage('Entrega original vinculada cotejada por Admin. Sin despacho comercial habilitado.');
+ };
  return <Panel className="detail">
   <div className="section-head"><div>
    <h2>Seguimiento por serviceId — cinco modalidades</h2>
@@ -546,6 +564,12 @@ function ServiceTracePanel({client,state}:{client:AdminExperience;state:AdminSna
    <button type="button" disabled={!match||current.loading}
     onClick={()=>{client.clearServiceTrace();setMessage('');}}>Limpiar</button>
   </div>
+  {linkedKind&&<div className="refresh-actions">
+   <button type="button" disabled={!ready||current.loading}
+    onClick={()=>{void inspectLinkedDelivery();}}>
+    Verificar envío {match?.vehicleKind} vinculado desde el pedido original
+   </button>
+  </div>}
   {match?.serviceKind==='AUTO_RIDE'&&<div className="refresh-actions">
    <button type="button" disabled={!f1Ready||current.loading||state.f1RideAudit.loading}
     onClick={()=>{void inspectF1();}}>

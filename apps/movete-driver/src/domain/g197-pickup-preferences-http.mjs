@@ -3,7 +3,7 @@
  * Native Client never calculates, signs or trusts a GPS circle. Staging only,
  * pinned HTTPS, independently verified exclusive Driver Auth.
  */
-import {readBoundedResponseText} from '../../../movete-cliente/src/domain/bounded-http-response.mjs';
+import {readG178BoundedDriverLifecycleJson} from './g178-bounded-driver-lifecycle-json.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const KINDS=['RIDE','MOTO_RIDE','DELIVERY','MERCHANT_ORDER'];
 const BANDS=[1000,2000,3000,5000,8000,10000,15000,20000,30000,50000];
@@ -86,11 +86,19 @@ export function createG197DriverPickupPreferencesHttp({
    const size=res.headers?.get?.('content-length');
    if(size!=null&&(!/^\d+$/.test(size)||Number(size)>4096))
     return fail('G197_INVALID_RECEIPT');
-   const loaded=await readBoundedResponseText(res,{limit:4096,signal:ctrl.signal,
-    timedOut:()=>ctrl.signal.aborted||now()>=deadline});
-   if(!loaded.ok)return fail('G197_INVALID_RECEIPT');
+   // Driver-owned G178 bounded reader: no cross-app imports or independent
+   // React Native/Client bundler dependency. Enforces 4KiB before JSON parse.
+   // A late or aborted PUT never triggers a duplicate mutation.
    let parsed;
-   try{parsed=JSON.parse(loaded.text);}catch{return fail('G197_INVALID_RECEIPT');}
+   try{
+    parsed=await readG178BoundedDriverLifecycleJson({
+     request:async()=>res,url:host+'/v1/staging/driver/pickup-preferences',
+     options:{method:'GET'},timeoutMs:Math.max(100,deadline-now()),
+     maxBytes:4096
+    });
+   }catch{return fail('G197_INVALID_RECEIPT');}
+   if(ctrl.signal.aborted||now()>=deadline)
+    return fail('G197_UNKNOWN_OUTCOME');
    if(!verified(parsed,before,method,body?.serviceKind,
     body?.maximumRoadMeters,body?.expectedRevision))
     return fail('G197_UNTRUSTED_RECEIPT');
