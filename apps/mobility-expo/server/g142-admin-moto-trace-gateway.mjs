@@ -7,6 +7,35 @@ const PATH=/^\/v1\/staging\/admin\/services\/MOTO_RIDE\/([0-9a-f-]{36})\/trace$/
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const deny=(status,code)=>({status,body:{code,qaOnly:true,productionEnabled:false}});
+const PHASES=['searching','assigned','arriving','in_progress','completed'];
+function validJourney(d,trip){
+ const stage=PHASES.indexOf(d.status);
+ const ended=d.status==='cancelled';
+ if(!ended&&stage<0)return false;
+ const expected=ended?2:stage+1;
+ if(d.revision!==expected||!Array.isArray(d.events)||
+  d.events.length!==expected||d.events.length>5)return false;
+ const assigned=!ended&&stage>0;
+ if(!obj(d.assignment)||Object.keys(d.assignment).length!==2)return false;
+ if(assigned){
+  if(d.assignment.state!==(d.status==='completed'?'QA_COMPLETED':'QA_ACCEPTED')
+   ||d.assignment.legalGate!=='EXTERNAL_NOT_CERTIFIED')return false;
+ }else if(d.assignment.state!=='NOT_ASSIGNABLE'
+  ||d.assignment.legalGate!=='G38_BLOCKED')return false;
+ const seen=new Set();
+ for(let i=0;i<expected;i++){
+  const event=d.events[i];
+  if(!obj(event)||Object.keys(event).length!==5||
+    !UUID.test(event.eventId??'')||seen.has(event.eventId)||
+    event.serviceId!==trip||event.sequence!==i+1||
+    event.status!==(ended&&i===1?'cancelled':PHASES[i])||
+    !Number.isSafeInteger(event.at)||event.at<0||
+    event.at>d.observedAt||(i>0&&event.at<d.events[i-1].at))return false;
+  seen.add(event.eventId);
+ }
+ return true;
+}
+
 export function createG142AdminMotoTraceGateway({
  projectRef,environment,qaOnly,liveEnabled,
  verifyAccessToken,verifySessionNotRevoked,loadExclusiveBackofficeRole,
@@ -67,20 +96,12 @@ export function createG142AdminMotoTraceGateway({
    d.mode!=='STAGING_DEMO_ONLY'||d.viewerId!==user.id||
    d.serviceId!==tripId||d.serviceKind!=='MOTO_RIDE'||
    !UUID.test(d.bookingRequestKey??'')||!UUID.test(d.quoteId??'')||
-   !['searching','cancelled'].includes(d.status)||d.revision!==
-    (d.status==='searching'?1:2)||d.serverPersisted!==true||
+   !validJourney(d,tripId)||d.serverPersisted!==true||
    d.productionEnabled!==false||!Number.isSafeInteger(d.observedAt)||
    d.observedAt>now()||now()-d.observedAt>30000||
    !Number.isSafeInteger(d.expiresAt)||d.expiresAt<=now()||
    d.expiresAt>now()+60000||
-   !obj(d.assignment)||d.assignment.state!=='NOT_ASSIGNABLE'||
-   d.assignment.legalGate!=='G38_BLOCKED'||
-   !Array.isArray(d.events)||d.events.length!==d.revision||
-   d.events.some((e,i)=>!obj(e)||!UUID.test(e.eventId??'')||
-    e.serviceId!==tripId||e.sequence!==i+1||
-    e.status!==(i===0?'searching':'cancelled')||
-    !Number.isSafeInteger(e.at)||e.at>d.observedAt||
-    i>0&&e.at<d.events[i-1].at)||
+
    !obj(d.ledger)||d.ledger.serviceId!==tripId||
    d.ledger.currency!=='PYG'||d.ledger.reconciliationStatus!=='PENDING'||
    !['grossGs','platformCommissionGs','customerSubsidyGs','driverPayoutGs']
