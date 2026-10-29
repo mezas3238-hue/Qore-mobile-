@@ -65,6 +65,7 @@ import {createG66CourierCustodyStatusQa} from './g66-courier-custody-status-qa.m
 import {createG66CourierCustodyTransitionQa} from './g66-courier-custody-transition-qa.mjs';
 import {createVerifiedPrivateDriverEvidenceObserver} from './g19-private-driver-evidence-observer.mjs';
 import {createG155VerifiedRatingGateway} from './g155-verified-rating-gateway.mjs';
+import {createG156MerchantInboxGateway} from './g156-merchant-inbox-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -179,7 +180,7 @@ export async function prepareQoreG4StagingRuntime({
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
  g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
- ratingTrust=null,g66ProofTrust=null,
+ ratingTrust=null,merchantStaffTrust=null,g66ProofTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -288,6 +289,11 @@ export async function prepareQoreG4StagingRuntime({
      ['verifyDriverSession','verifySessionNotRevoked',
       'resolveActiveVehicle','queryOwnerValidity']
       .every(k=>typeof driverKycTrust[k]==='function')))||
+   !(merchantStaffTrust===null||(
+     Object.getPrototypeOf(merchantStaffTrust)===Object.prototype&&
+     Object.keys(merchantStaffTrust).length===2&&
+     typeof merchantStaffTrust.verifyMerchantSession==='function'&&
+     typeof merchantStaffTrust.verifySessionNotRevoked==='function'))||
    !(ratingTrust===null||(
      Object.getPrototypeOf(ratingTrust)===Object.prototype&&
      Object.keys(ratingTrust).length===2&&
@@ -421,6 +427,34 @@ export async function prepareQoreG4StagingRuntime({
    });
    if(error||!data||typeof data!=='object'||Array.isArray(data))
     throw Error('G155 original SQL denied');
+   return data;
+  }
+ });
+ // G156 private staff inbox: session is confirmed by independent IdP;
+ // original order, branch and merchant membership are checked again in G42 SQL.
+ const merchantInbox=merchantStaffTrust===null?null:createG156MerchantInboxGateway({
+  environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+  verifyAccessToken:async token=>{
+   const provider=await verified(token);
+   const a=await merchantStaffTrust.verifyMerchantSession(token);
+   if(!a||typeof a!=='object'||Array.isArray(a)||
+    Object.getPrototypeOf(a)!==Object.prototype||Object.keys(a).length!==5||
+    !['id','sessionId','tokenIatMs','expiresAtMs','is_anonymous'].every(k=>Object.hasOwn(a,k))||
+    a.id!==provider.id||a.is_anonymous!==false||provider.is_anonymous===true||
+    !(typeof provider.email_confirmed_at==='string'||
+      typeof provider.phone_confirmed_at==='string'))
+    throw Error('G156 independently verified merchant staff required');
+   return a;
+  },
+  verifySessionNotRevoked:x=>merchantStaffTrust.verifySessionNotRevoked(x),
+  allowRequest:({userId})=>allowRequest({userId}),
+  loadInbox:async x=>{
+   const {data,error}=await admin.rpc('mobility_stage_g156_merchant_inbox_qa',{
+    _actor:x.actorId,_merchant:x.merchantId,
+    _session:x.sessionId,_iat:x.tokenIatMs
+   });
+   if(error||!data||typeof data!=='object'||Array.isArray(data))
+    throw Error('G156 original merchant SQL unavailable');
    return data;
   }
  });
@@ -937,6 +971,7 @@ export async function prepareQoreG4StagingRuntime({
    safetyHandler:guard(safety),
    merchantManagementHandler:guard(merchantManagement),
    deliveryOfferHandler:guard(deliveryOffers),
+    ...(merchantInbox===null?{}:{merchantInboxHandler:guard(merchantInbox)}),
     ...(ratings===null?{}:{ratingHandler:guard(ratings)}),
    ...(courierCustody===null?{}:{courierCustodyHandler:guard(courierCustody)}),
    courierPollHandler:guard(courierPoll),
