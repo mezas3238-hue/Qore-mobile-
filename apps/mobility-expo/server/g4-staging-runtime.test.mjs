@@ -387,7 +387,7 @@ test('real HTTP with Supabase-like adapters verifies role/JWT and uses server-de
   assert.equal((await req(base,statusPath,'stranger')).status,403);
  });
 });
-test('runtime closes unpriced AUTO request but preserves Driver trip transitions',async()=>{
+test('G177 unpriced AUTO and unverifiable Driver sessions cannot advance assigned trip',async()=>{
  const m=mockSupabase(),runtime=await prepare(m);
  await http(runtime,async base=>{
   const created=await req(base,requestPath,'rider','POST',{
@@ -404,16 +404,12 @@ test('runtime closes unpriced AUTO request but preserves Driver trip transitions
   const eventKey='88888888-8888-4888-8888-888888888888';
   const arriving=await req(base,transitionPath,'driver','POST',
    {event:'arrive',eventKey});
-  assert.equal(arriving.status,200);
-  assert.equal(arriving.body.serverPersisted,true);
-  assert.equal(m.state.trip.status,'arriving');
-  const rpc=m.state.rpcs.at(-1);
-  assert.deepEqual(rpc,{name:'mobility_stage_auto_demo_transition',params:{
-   _trip_id:ride,_actor_id:driver,_next:'arriving',_request_key:eventKey
-  }});
+  assert.equal(arriving.status,401,'No independently revocable Driver IdP');
+  assert.equal(m.state.trip.status,'accepted');
+  assert.equal(m.state.rpcs.some(x=>x.name==='mobility_stage_auto_demo_transition'),false);
   const before=m.state.rpcs.length;
   assert.equal((await req(base,transitionPath,'rider','POST',
-   {event:'pickup',eventKey})).status,403);
+   {event:'pickup',eventKey})).status,401);
   assert.equal(m.state.rpcs.length,before);
  });
 });
