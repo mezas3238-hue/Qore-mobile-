@@ -77,6 +77,7 @@ import {createG175SovereignBuyerCommerceFence} from './g175-sovereign-buyer-comm
 import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-custody-fence.mjs';
 import {createG177VerifiedAutoDriverStepGateway} from './g177-verified-auto-driver-step-gateway.mjs';
 import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-cancellation-fence.mjs';
+import {createG187RecipientConfirmationGateway} from './g187-recipient-confirmation-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -192,6 +193,7 @@ export async function prepareQoreG4StagingRuntime({
  g134GeoapifyAutoOptions=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
+ recipientTrust=null,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -287,6 +289,11 @@ export async function prepareQoreG4StagingRuntime({
      &&typeof g77RouteOptions.verifyRouteTolls==='function'
      &&typeof g77RouteOptions.request==='function'
      &&verifiedAutoRoute===null))||
+   !(recipientTrust===null||(
+     Object.getPrototypeOf(recipientTrust)===Object.prototype&&
+     Object.keys(recipientTrust).length===2&&
+     typeof recipientTrust.verifyParticipantSession==='function'&&
+     typeof recipientTrust.verifySessionNotRevoked==='function'))||
    !(g66ProofTrust===null||(
      driverKycTrust!==null&&Object.getPrototypeOf(g66ProofTrust)===Object.prototype
      &&Object.keys(g66ProofTrust).length===2
@@ -1083,6 +1090,44 @@ export async function prepareQoreG4StagingRuntime({
   });
   return input=>input.method==='GET'?read(input):write(input);
  })();
+ // G187: original G5/G67 recipient evidence through the SAME PostgreSQL
+ // authority. Every participant uses an independently revocable G42 session.
+ const recipientConfirmation=recipientTrust===null?null:(()=>{
+  const verifiedParticipant=async token=>{
+   const provider=await verified(token);
+   const attested=await recipientTrust.verifyParticipantSession(token);
+   if(provider?.id!==attested?.id||provider?.is_anonymous===true||
+     attested?.is_anonymous!==false||
+     !(typeof provider?.email_confirmed_at==='string'||
+       typeof provider?.phone_confirmed_at==='string'))
+    throw Error('G187 independent participant identity mismatch');
+   return {id:attested.id,sessionId:attested.sessionId,
+    tokenIatMs:attested.tokenIatMs,expiresAtMs:attested.expiresAtMs,
+    is_anonymous:attested.is_anonymous};
+  };
+  const readSql=async(name,params)=>{
+   const {data,error}=await admin.rpc(name,params);
+   if(error||!data)throw Error('G187 original PostgreSQL receipt unavailable');
+   return data;
+  };
+  return createG187RecipientConfirmationGateway({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+   verifyAccessToken:verifiedParticipant,
+   verifySessionNotRevoked:p=>recipientTrust.verifySessionNotRevoked(p),
+   resolveExclusiveRole:id=>singleRole(admin,id),
+   allowRequest:({actorId})=>allowRequest({userId:actorId}),
+   bindRecipient:p=>readSql('mobility_stage_g187_bind_recipient_qa',{
+    _sender:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
+    _delivery:p.deliveryId,_recipient:p.recipientId,
+    _binding_key:p.requestKey}),
+   confirmReceived:p=>readSql('mobility_stage_g187_confirm_received_qa',{
+    _recipient:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
+    _delivery:p.deliveryId,_event_key:p.requestKey}),
+   readSenderStatus:p=>readSql('mobility_stage_g187_sender_confirmation_status_qa',{
+    _sender:p.actorId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
+    _delivery:p.deliveryId})
+  });
+ })();
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -1152,6 +1197,7 @@ export async function prepareQoreG4StagingRuntime({
     ...(merchantInbox===null?{}:{merchantInboxHandler:guard(merchantInbox)}),
     ...(ratings===null?{}:{ratingHandler:guard(ratings)}),
    ...(courierCustody===null?{}:{courierCustodyHandler:guard(courierCustody)}),
+   ...(recipientConfirmation===null?{}:{recipientConfirmationHandler:guard(recipientConfirmation)}),
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
    driverDocumentHandler:guard(driverDocuments),
