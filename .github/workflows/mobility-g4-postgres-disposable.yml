@@ -83,6 +83,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/server/g220-*'
+      - 'apps/mobility-expo/server/g221-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
@@ -203,6 +204,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/server/g220-*'
+      - 'apps/mobility-expo/server/g221-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
@@ -1018,6 +1020,17 @@ jobs:
         run: node apps/mobility-expo/server/g215-five-journey-e2e-readiness-pg-ci.mjs
       - name: G220 strictly rerun 2 original rides + 2 original deliveries + original Commerce with SQL receipts and rollback
         run: node apps/mobility-expo/server/g220-five-rollback-journeys-aggregate-pg-ci.mjs
+      - name: G221 unit-test independent source-boundary invariants
+        run: node --test apps/mobility-expo/server/g221-source-authority-gate.test.mjs
+      - name: G221 inspect unchanged five same-ID G215 sources and active G38/G118 legal fences
+        run: node apps/mobility-expo/server/g221-source-authority-gate-pg-ci.mjs
+      - name: G221 archive machine-readable no-bypass and rollback-integrity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g221-source-authority-gate-${{ github.sha }}
+          path: /tmp/qore-g221-source-authority-gate.json
+          if-no-files-found: error
+          retention-days: 14
       - name: G220 publish explicitly isolated 5-of-5 QA scenario evidence (NOT five committed sources)
         run: |
           python3 - <<'PY'
