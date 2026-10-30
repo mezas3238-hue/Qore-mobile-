@@ -94,7 +94,12 @@ AS $f$
   AND s.proven_delivery->>'serviceKind'=
     'DELIVERY_'||s.requested_vehicle_kind::text
   AND s.proven_delivery->>'status'='delivered'
+  AND s.proven_delivery->>'revision'='4'
+  AND s.proven_delivery->>'productionEnabled'='false'
+  AND s.proven_delivery->'ledger'='null'::jsonb
+  AND pg_catalog.jsonb_array_length(s.proven_delivery->'events')=4
   AND (s.proven_delivery->'assignment'->>'state')='QA_COMPLETED'
+  AND (s.proven_delivery->'assignment'->>'legalGate')='EXTERNAL_NOT_CERTIFIED'
  LIMIT 1
 $f$;
 REVOKE ALL ON FUNCTION public.mobility_stage_g217_commerce_terminal_admin_qa(uuid,uuid)
