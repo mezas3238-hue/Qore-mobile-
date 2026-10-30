@@ -23,7 +23,9 @@ export function verifyG217TerminalRead({
   !isUuid(receipt.viewerId)||!Number.isSafeInteger(receipt.observedAt)||
   !Number.isSafeInteger(receipt.expiresAt)||receipt.observedAt>now||
   now-receipt.observedAt>30000||receipt.expiresAt<=now||
-  !obj(receipt.assignment)||receipt.assignment.legalGate!=='EXTERNAL_NOT_CERTIFIED')
+  !obj(receipt.assignment)||(source.serviceKind==='COMMERCE'
+   ?receipt.assignment.legalGate!=='G38_BLOCKED'
+   :receipt.assignment.legalGate!=='EXTERNAL_NOT_CERTIFIED'))
   return reject('TERMINAL_PROVENANCE_OR_ADMIN_AUTHORITY_MISMATCH');
  if(source.serviceKind==='COMMERCE'){
   if(receipt.status!=='ready'||receipt.revision!==5||
