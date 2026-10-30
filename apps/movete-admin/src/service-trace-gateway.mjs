@@ -71,7 +71,9 @@ function validated(d,kind,id,subject,t){
   ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)&&(
     !['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO'].includes(kind)||
     (d.assignment.state==='QA_ACCEPTED'&&
-     !['assigned','arriving','in_progress'].includes(d.status))||
+     !(['AUTO_RIDE','MOTO_RIDE'].includes(kind)
+       ?['assigned','arriving','in_progress'].includes(d.status)
+       :['accepted','picked_up'].includes(d.status)))||
     (d.assignment.state==='QA_COMPLETED'&&
      !(['AUTO_RIDE','MOTO_RIDE'].includes(kind)?d.status==='completed':
       d.status==='delivered'))))
@@ -103,6 +105,14 @@ function validated(d,kind,id,subject,t){
     event.status!==timeline[index]))return false;
  }
 
+ if(['DELIVERY_AUTO','DELIVERY_MOTO'].includes(kind)&&
+  d.assignment.state==='QA_ACCEPTED'){
+  const timeline=['requested','accepted','picked_up'];
+  if(d.revision!==(d.status==='accepted'?2:3)||
+   d.events.length!==d.revision||d.ledger!==null||
+   d.events.some((event,i)=>event.sequence!==i+1||
+    event.status!==timeline[i]))return false;
+ }
  if(['DELIVERY_AUTO','DELIVERY_MOTO'].includes(kind)&&
   d.assignment.state==='QA_COMPLETED'){
   const timeline=['requested','accepted','picked_up','delivered'];
