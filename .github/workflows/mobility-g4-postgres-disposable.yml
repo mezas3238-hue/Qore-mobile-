@@ -83,6 +83,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -202,6 +203,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -1029,6 +1031,8 @@ jobs:
            f.write('\n**Commercial E2E certification: 0/5.** ')
            f.write('Real external IdP/legal/GPS, Geoapify and PSP are not established by disposable PG16.\n')
           PY
+      - name: G220 fresh G73 AUTO + G100 MOTO quote/book accepted-fixture, three original G42 Driver steps and Admin five events (rollback only)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G220_ORIGINAL_PASSENGER_AUTO_MOTO_COMPLETE_QA_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G215 archive machine-readable five-service E2E result
         uses: actions/upload-artifact@v4
         with:
