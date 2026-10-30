@@ -88,3 +88,14 @@ test('R77 authorized runtime connects F1 Admin GET with verified MFA Admin; neve
  assert.equal((await ownerInst.loadF1RideAudit(trip)).ok,false);
  assert.equal(calls.length,1);
 });
+
+test('G229 Admin Railway HTTPS is allowed only with independently pinned origin and MFA gates',()=>{
+ const railway='https://qore-mobile-staging.up.railway.app';
+ const valid=createF1AdminAuthorizedQaOptions({...approval,
+  origin:railway,pinnedOrigin:railway});
+ assert(valid);assert.equal(valid.productionEnabled,false);
+ assert.equal(createF1AdminAuthorizedQaOptions({...approval,
+  origin:railway,pinnedOrigin:hostname}),null);
+ assert.equal(createF1AdminAuthorizedQaOptions({...approval,
+  origin:railway,pinnedOrigin:railway,serverMfaVerified:false}),null);
+});
