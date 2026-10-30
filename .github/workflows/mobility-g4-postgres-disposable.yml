@@ -79,6 +79,7 @@ on:
       - 'apps/movete-admin/src/main.tsx'
       - 'apps/mobility-expo/server/g145-admin-cargo-trace-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G145_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G216_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -194,6 +195,7 @@ on:
       - 'apps/movete-admin/src/main.tsx'
       - 'apps/mobility-expo/server/g145-admin-cargo-trace-pg-ci.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G145_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G216_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -914,6 +916,10 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G123_DELIVERY_PRICE_BEFORE_PRIVATE_OFFER_FENCE_POSTGRES_CI_ONLY.sql
       - name: G123 prove accepted MOTO/AUTO quotes, deny unpriced/expires/unauthorized offers and SQL privilege bypass
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G123_DELIVERY_PRICE_BEFORE_PRIVATE_OFFER_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G216 install original source-backed completed cargo projection (G10 plus G67 plus G187)
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G216_VERIFIED_COMPLETED_DELIVERY_ADMIN_PROVENANCE_POSTGRES_CI_ONLY.sql
+      - name: G216 prove both priced AUTO and MOTO originals reach courier proof and recipient through Admin only in rollback fixture
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G216_VERIFIED_COMPLETED_DELIVERY_ADMIN_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G154 install original COMMERCE ready & G150 link fence on G10 offers and acceptance
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G154_COMMERCE_PRIVATE_DISPATCH_READINESS_FENCE_POSTGRES_CI_ONLY.sql
       - name: G154 prove real G139/G148/G150 same-order source and reject priced but unlinked merchant delivery
