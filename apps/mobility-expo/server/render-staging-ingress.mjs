@@ -150,17 +150,20 @@ export function createRenderStagingIngress({
   if(req.method==='OPTIONS'){
    if(origin===undefined||badPath(req.url)||
      req.headers['access-control-request-method']===undefined||
-     !['GET','POST'].includes(req.headers['access-control-request-method'])||
+     !['GET','POST','PUT'].includes(req.headers['access-control-request-method'])||
+     (req.headers['access-control-request-method']==='PUT'&&
+      req.url!=='/v1/staging/driver/pickup-preferences')||
      (req.headers['access-control-request-headers']??'').toLowerCase()
        .split(',').map(x=>x.trim()).some(x=>!['authorization','content-type'].includes(x))){
     json(res,403,{error:'Unapproved preflight'},cors);return;
    }
    res.writeHead(204,{...JSON_HEADERS,...cors,
-    'access-control-allow-methods':'GET, POST, OPTIONS',
+    'access-control-allow-methods':'GET, POST, PUT, OPTIONS',
     'access-control-allow-headers':'Authorization, Content-Type',
     'access-control-max-age':'300'});res.end();return;
   }
-  if(!['GET','POST'].includes(req.method)||badPath(req.url)){
+  if(!['GET','POST','PUT'].includes(req.method)||badPath(req.url)||
+     (req.method==='PUT'&&req.url!=='/v1/staging/driver/pickup-preferences')){
    json(res,404,{error:'Not found'},cors);return;
   }
   if(rawHeaderCount(req,'authorization')!==1||
@@ -192,7 +195,7 @@ export function createRenderStagingIngress({
    json(res,400,{error:'GET body not allowed'},cors);return;
   }
   let body;
-  if(req.method==='POST'){
+  if(req.method==='POST'||req.method==='PUT'){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     json(res,415,{error:'JSON body required'},cors);return;
    }
@@ -229,9 +232,9 @@ export function createRenderStagingIngress({
     headers:{
      authorization:req.headers.authorization,
      ...(historyCursor===undefined?{}:{'x-qore-history-cursor':historyCursor}),
-     ...(req.method==='POST'?{'content-type':'application/json'}:{})
+     ...(['POST','PUT'].includes(req.method)?{'content-type':'application/json'}:{})
     },
-    ...(req.method==='POST'?{body}:{}),
+    ...(['POST','PUT'].includes(req.method)?{body}:{}),
     redirect:'error',cache:'no-store',credentials:'omit',
     signal:AbortSignal.timeout(7000)
    });
