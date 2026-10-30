@@ -45,7 +45,7 @@ function fixture(){
  const guard={db:'qore_disposable_chain',app:'qore_ci_disposable_chain',
   g38Auto:true,g38Delivery:true,deliveryTriggersDisabled:0,
   authorizedSyntheticZones:0,municipalMotoAuthorized:0,
-  authenticatedCanRead:false};
+  authenticatedCanRead:false,serviceRoleCanWriteQaReceipts:false};
  const rides=[{serviceKind:'AUTO_RIDE',originalTripId:ids[0]},
   {serviceKind:'MOTO_RIDE',originalTripId:ids[1]}];
  return {sources,cargoRows,commerceRows,cargoProofs,commerceProof,
@@ -75,6 +75,7 @@ test('G225 rejects inactive legal fences, public receipt privileges and LIVE',()
   x=>x.guard.authorizedSyntheticZones=1,
   x=>x.guard.municipalMotoAuthorized=1,
   x=>x.guard.authenticatedCanRead=true,
+  x=>x.guard.serviceRoleCanWriteQaReceipts=true,
   x=>x.guard.db='live',
   x=>x.commerceRows[0].productionEnabled=true,
   x=>x.cargoRows[1].productionEnabled=true
