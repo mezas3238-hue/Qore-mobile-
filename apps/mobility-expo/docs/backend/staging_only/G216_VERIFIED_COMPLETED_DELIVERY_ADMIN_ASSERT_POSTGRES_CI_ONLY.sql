@@ -31,6 +31,20 @@ CREATE TEMP TABLE g216_fixture(
 -- runtime transitions are executed. Entire transaction ROLLBACKS below.
 ALTER TABLE public.mobility_stage_delivery_offers DISABLE TRIGGER USER;
 ALTER TABLE public.mobility_stage_deliveries DISABLE TRIGGER USER;
+-- The historical MOTO courier is already assigned elsewhere in G5. Use
+-- one new QA actor with a matching vehicle inside this ROLLBACK transaction.
+INSERT INTO auth.users(id) VALUES ('21600000-0000-4216-8216-000000000103'::uuid);
+DELETE FROM public.user_roles
+ WHERE user_id='21600000-0000-4216-8216-000000000103'::uuid;
+INSERT INTO public.user_roles(user_id,role)
+ VALUES ('21600000-0000-4216-8216-000000000103'::uuid,'driver');
+INSERT INTO public.mobility_vehicles
+ (id,driver_id,vehicle_kind,service_kind,country_code,
+  municipality_code,plate_normalized,brand,model,manufacture_year,
+  passenger_capacity,review_status)
+ VALUES ('21600000-0000-4216-8216-000000000104'::uuid,
+ '21600000-0000-4216-8216-000000000103'::uuid,
+ 'MOTO','moto_pasajero','PY','ASUNCION','QOR216M','QORE','QA',2025,1,'approved');
 DO $seed$
 DECLARE
  row record; courier uuid; vehicle uuid;
@@ -75,8 +89,8 @@ BEGIN
    courier:='00000000-0000-4000-8000-000000000181'::uuid;
    vehicle:='00000000-0000-4000-8000-000000000184'::uuid;
   ELSE
-   courier:='00000000-0000-4000-8000-000000000103'::uuid;
-   vehicle:='00000000-0000-4000-8000-000000000104'::uuid;
+   courier:='21600000-0000-4216-8216-000000000103'::uuid;
+   vehicle:='21600000-0000-4216-8216-000000000104'::uuid;
   END IF;
   IF NOT EXISTS(SELECT 1 FROM public.mobility_vehicles v
    WHERE v.id=vehicle AND v.driver_id=courier
