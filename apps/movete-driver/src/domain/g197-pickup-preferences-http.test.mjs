@@ -34,6 +34,24 @@ test('G197 exact three scopes, server-sourced preferences and revision fencing',
  assert.deepEqual(JSON.parse(requests[1].init.body),
   {serviceKind:'MERCHANT_ORDER',maximumRoadMeters:2000,expectedRevision:1});
 });
+test('G228 client transmits OFF and only accepts an exact zero-metre SQL receipt',async()=>{
+ const requests=[];
+ const api=createG197DriverPickupPreferencesHttp(options({
+  request:async(url,init)=>{
+   requests.push({url,init});
+   return result({...saved(),maximumRoadMeters:0});
+  }
+ }));
+ const response=await api.update('MERCHANT_ORDER',0,1);
+ assert.equal(response.ok,true);
+ assert.equal(response.data.maximumRoadMeters,0);
+ assert.equal(JSON.parse(requests[0].init.body).maximumRoadMeters,0);
+ const lying=createG197DriverPickupPreferencesHttp(options({
+  request:async()=>result({...saved(),maximumRoadMeters:1000})
+ }));
+ assert.equal((await lying.update('MERCHANT_ORDER',0,1)).code,
+  'G197_UNTRUSTED_RECEIPT');
+});
 test('G197 no preference mutation without independent owner+road approval',async()=>{
  let called=0;
  for(const disabled of [{enabled:false},{roadEnforcementVerified:false},
