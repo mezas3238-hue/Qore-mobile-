@@ -75,12 +75,19 @@ with conn() as c:
  SET distance_meters=2900 WHERE road_evidence_id=%s""",(road_id,))
  assert c.execute(CHECK,('MOTO_RIDE',trip,D)).fetchone()[0] is True
  assert c.execute(CHECK,('RIDE',trip,D)).fetchone()[0] is False
- c.execute(SAVE,(D,S,AT,'MOTO_RIDE',2000,1))
+ # Explicit MOTO passenger OFF never authorizes passenger or cargo dispatch.
+ off=c.execute(SAVE,(D,S,AT,'MOTO_RIDE',0,1)).fetchone()[0]
+ assert off['maximumRoadMeters']==0 and off['revision']==2
+ assert c.execute(CHECK,('MOTO_RIDE',trip,D)).fetchone()[0] is False
+ restored=c.execute(SAVE,(D,S,AT,'MOTO_RIDE',3000,2)).fetchone()[0]
+ assert restored['revision']==3
+ assert c.execute(CHECK,('MOTO_RIDE',trip,D)).fetchone()[0] is True
+ c.execute(SAVE,(D,S,AT,'MOTO_RIDE',2000,3))
  assert c.execute(CHECK,('MOTO_RIDE',trip,D)).fetchone()[0] is False
  c.execute("""UPDATE public.mobility_stage_g42_provider_session_grants
  SET revoked_at=clock_timestamp(),revision=revision+1
  WHERE user_id=%s AND session_id=%s""",(D,S))
- denied(c,'P9702',SAVE,D,S,AT,'MOTO_RIDE',50000,2)
+ denied(c,'P9702',SAVE,D,S,AT,'MOTO_RIDE',50000,4)
  for role in ('anon','authenticated','mobility_g48_gateway_ci'):
   c.execute('SET LOCAL ROLE '+role)
   denied(c,'42501',SAVE,D,S,AT,'MOTO_RIDE',50000,2)
