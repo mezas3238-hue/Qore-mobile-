@@ -56,12 +56,21 @@ test('G229 same backend for Cliente, Driver, Comercio, Admin without changing or
    assert.equal(reply.status,200);
    assert.equal((await reply.json()).sameServiceId,'g229-original-demo-id');
   }
-  assert.deepEqual(calls.map(x=>x.path),paths);
+  const radius=await call(remote,'/v1/staging/driver/pickup-preferences',{
+   method:'PUT',headers:{'content-type':'application/json'},
+   body:JSON.stringify({serviceKind:'RIDE',maximumRoadMeters:0,expectedRevision:1})
+  });
+  assert.equal(radius.status,200);
+  assert.equal((await call(remote,'/v1/staging/rider/history',{
+   method:'PUT',headers:{'content-type':'application/json'},body:'{}'
+  })).status,404);
+  assert.deepEqual(calls.map(x=>x.path),[...paths,
+   '/v1/staging/driver/pickup-preferences']);
   assert(calls.every(x=>x.authorization==='Bearer '+TOKEN));
   assert.equal((await call(remote,paths[0],{headers:{host:'evil.up.railway.app'}})).status,403);
   assert.equal((await call(remote,paths[0],{headers:{'x-forwarded-proto':'http'}})).status,403);
   assert.equal((await call(remote,paths[0],{auth:null})).status,401);
-  assert.equal(calls.length,4);
+  assert.equal(calls.length,5);
   const live=await call(remote,'/_qore/liveness',{auth:null});
   assert.equal(live.status,200);
   assert.deepEqual(await live.json(),{state:'PROCESS_UP_ONLY',commercialRidesEnabled:false});
