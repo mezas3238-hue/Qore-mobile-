@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
+import {validateHistoricalQaProgress} from './g226-historical-qa-progress-contract.mjs';
 
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
  process.env.PGPORT!=='5432'||process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -20,7 +21,10 @@ if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
 
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const sourcePath='/tmp/qore-g202-five-original-journeys-qa.json';
-const outputPath='/tmp/qore-g215-five-journey-e2e-readiness.json';
+const terminalRecheck=process.env.QORE_G215_RECHECK_AFTER_QA==='true';
+const outputPath=terminalRecheck
+ ?'/tmp/qore-g226-g215-after-committed-qa.json'
+ :'/tmp/qore-g215-five-journey-e2e-readiness.json';
 const sources=JSON.parse(readFileSync(sourcePath,'utf8'));
 const kinds=['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO','COMMERCE'];
 assert.equal(sources.mode,'STAGING_DEMO_ONLY');
@@ -142,8 +146,10 @@ const services=sources.services.map(source=>{
  assert.equal(source.clientToAdminSameOriginal,true);
  const state=contexts[source.serviceKind](source.originalServiceId);
  assert(state,'G215 original service was deleted: '+source.serviceKind);
- assert.equal(state.state,source.status,
+ if(!terminalRecheck)assert.equal(state.state,source.status,
   'G215 source state changed after Admin receipt: '+source.serviceKind);
+ // G226 deliberately allows only completed G223 deliveries with authentic
+ // G5/G67/G187 evidence, never passenger resurrections or fake assignment.
  let steps;
  if(source.serviceKind.endsWith('_RIDE')){
   steps={
@@ -178,6 +184,25 @@ const services=sources.services.map(source=>{
  const missing=Object.entries(steps).filter(([,value])=>value!==true)
   .map(([label])=>label);
  const qaJourneyClosed=missing.length===0;
+ if(terminalRecheck){
+  const admin=query(`SELECT to_jsonb(user_id::text) FROM
+   public.mobility_stage_backoffice_roles WHERE role='admin'
+   AND status='active'
+   AND public.mobility_stage_g27_backoffice_role_of(user_id)='admin'
+   ORDER BY user_id LIMIT 1`);
+  assert(uuid.test(admin),'G226 independent Admin identity missing');
+  const fns={
+   AUTO_RIDE:'mobility_stage_g138_auto_trace_qa',
+   MOTO_RIDE:'mobility_stage_g142_moto_trace_qa',
+   DELIVERY_AUTO:'mobility_stage_g216_completed_delivery_trace_qa',
+   DELIVERY_MOTO:'mobility_stage_g216_completed_delivery_trace_qa',
+   COMMERCE:'mobility_stage_g146_commerce_trace_qa'
+  };
+  const receipt=query('SET ROLE service_role; SELECT public.'+
+   fns[source.serviceKind]+'('+quote(admin)+','+
+   quote(source.originalServiceId)+')::text');
+  assert(validateHistoricalQaProgress(source,state,steps,receipt));
+ }
  return {
   serviceKind:source.serviceKind,
   originalServiceId:source.originalServiceId,
@@ -198,7 +223,9 @@ const qaClosed=services.filter(x=>x.qaJourneyClosed).length;
 const audit={
  name:'G215_FIVE_JOURNEY_E2E_GAP_LAB',
  mode:'ISOLATED_DISPOSABLE_POSTGRES16',productionEnabled:false,
- type:'INDEPENDENT_DATABASE_READBACK_AFTER_HTTP_CI',
+ type:terminalRecheck
+  ?'G226_INDEPENDENT_POST_COMMIT_HISTORIC_SOURCE_ADMIN_READBACK'
+  :'INDEPENDENT_DATABASE_READBACK_AFTER_HTTP_CI',
  sourceAndAdminOriginalCount:services.length,
  qaJourneysCompleted:qaClosed,
  qaJourneysStillOpen:services.length-qaClosed,
@@ -206,8 +233,11 @@ const audit={
  geoapifyProviderStatus:'SEPARATE_G129_REAL_SMOKE_REQUIRES_GITHUB_SECRET',
  allFiveQaClosed:qaClosed===5,
  commercialLaunchAllowed:false,
- verdict:qaClosed===5?'FIVE_QA_CHAINS_CLOSED_EXTERNAL_GATES_PENDING'
-  :'E2E_QA_CLOSURE_NOT_COMPLETE',
+ verdict:terminalRecheck
+  ?qaClosed===3?'THREE_HISTORIC_CARGO_COMMERCE_QA_CLOSED_PASSENGERS_PENDING'
+   :'G226_HISTORIC_QA_RECHECK_FAILED'
+  :qaClosed===5?'FIVE_QA_CHAINS_CLOSED_EXTERNAL_GATES_PENDING'
+   :'E2E_QA_CLOSURE_NOT_COMPLETE',
  services
 };
 writeFileSync(outputPath,JSON.stringify(audit,null,2)+'\n',{mode:0o600});
@@ -224,4 +254,9 @@ if(process.env.QORE_REQUIRE_FIVE_QA_CLOSURES==='true'&&qaClosed!==5){
  console.error('G215 strict QA E2E gate RED: '+(5-qaClosed)+
   ' original journeys do not yet have a complete same-ID lifecycle');
  process.exitCode=2;
+}
+
+if(terminalRecheck&&qaClosed!==3){
+ console.error('G226 expected exactly 3/5 historic original sources closed: '+qaClosed);
+ process.exitCode=3;
 }
