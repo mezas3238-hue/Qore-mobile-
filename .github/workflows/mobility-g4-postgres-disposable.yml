@@ -82,6 +82,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G216_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -200,6 +201,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G216_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -924,6 +926,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G216_VERIFIED_COMPLETED_DELIVERY_ADMIN_PROVENANCE_POSTGRES_CI_ONLY.sql
       - name: G216 prove both priced AUTO and MOTO originals reach courier proof and recipient through Admin only in rollback fixture
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G216_VERIFIED_COMPLETED_DELIVERY_ADMIN_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G219 install intermediate original G10/G5 courier acceptance and pickup trace for Admin
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G219_ACTIVE_ORIGINAL_DELIVERY_ADMIN_TRACE_POSTGRES_CI_ONLY.sql
       - name: G217 preserve merchant original priced delivery link after verified G216 completion
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G217_COMMERCE_ADMIN_LINKED_COMPLETED_DELIVERY_POSTGRES_CI_ONLY.sql
       - name: G217 verify G150 linked order, Admin-only and no presumed courier fulfillment
