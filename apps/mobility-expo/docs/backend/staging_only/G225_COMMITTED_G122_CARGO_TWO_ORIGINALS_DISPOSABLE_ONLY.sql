@@ -66,10 +66,14 @@ BEGIN
   FROM public.mobility_stage_deliveries d
   JOIN public.mobility_stage_g122_delivery_price_consents c
    ON c.delivery_id=d.id AND c.sender_id=d.sender_id
+  -- G202/G223 select the most recent G125-price-consented Client originals,
+  -- NOT older G122-only sources used by G216 rollback regression. Never
+  -- substitute a different booking to fabricate same-original completion.
+  JOIN public.mobility_stage_g223_original_manifest_ci m
+   ON m.original_service_id=d.id AND
+      m.original_request_key=d.request_key
+   AND m.service_kind='DELIVERY_'||d.requested_vehicle_kind::text
   WHERE d.status='requested' AND d.revision=1
-   AND d.sender_id IN (
-    '12200000-0000-4122-8122-000000000011'::uuid,
-    '12200000-0000-4122-8122-000000000012'::uuid)
   ORDER BY d.requested_vehicle_kind
  LOOP
   -- This is a pre-accepted HISTORICAL QA fixture, not a new offer.
@@ -231,6 +235,6 @@ DO $checkpoint$ BEGIN
   'public.mobility_stage_delivery_offers'::regclass,
   'public.mobility_stage_deliveries'::regclass)
   AND NOT tgisinternal AND tgenabled NOT IN('O','A'))
- THEN RAISE EXCEPTION 'G225 two G223 original cargo IDs or delivery triggers failed'; END IF;
+ THEN RAISE EXCEPTION 'G225 G202/G223 exact original cargo IDs or delivery triggers failed'; END IF;
 END $checkpoint$;
 COMMIT;
