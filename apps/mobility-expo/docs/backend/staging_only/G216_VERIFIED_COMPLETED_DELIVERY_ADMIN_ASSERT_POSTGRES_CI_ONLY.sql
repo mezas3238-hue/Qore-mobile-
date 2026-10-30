@@ -48,6 +48,8 @@ BEGIN
   JOIN public.mobility_stage_g122_delivery_price_consents c
    ON c.delivery_id=d.id AND c.sender_id=d.sender_id
   WHERE d.status='requested' AND d.revision=1
+   AND d.sender_id IN ('12200000-0000-4122-8122-000000000011'::uuid,
+    '12200000-0000-4122-8122-000000000012'::uuid)
    AND d.requested_vehicle_kind IN ('AUTO','MOTO')
   ORDER BY d.requested_vehicle_kind
  LOOP
