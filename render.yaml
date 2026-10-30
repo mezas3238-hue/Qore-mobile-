@@ -43,5 +43,8 @@ services:
         sync: false
       - key: QORE_HISTORY_CURSOR_SIGNING_KEY
         sync: false
+      # Private operator-only read-only Auth/DB probe; never the service role key.
+      - key: QORE_STAGING_READINESS_KEY
+        sync: false
       - key: QORE_ADMIN_BROWSER_ORIGIN
         sync: false
