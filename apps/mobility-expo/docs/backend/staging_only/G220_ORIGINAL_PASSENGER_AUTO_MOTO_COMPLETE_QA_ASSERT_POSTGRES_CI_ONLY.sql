@@ -46,7 +46,7 @@ VALUES('22000000-0000-4220-8220-000000000025'::uuid,'AUTO_RIDE',
  'G222_OWNER_TEST_PRICE_ONLY',
  '22000000-0000-4220-8220-000000000015'::uuid,true,
  pg_catalog.transaction_timestamp()-interval '1 hour',
- pg_catalog.transaction_timestamp()+interval '59 days',60);
+ pg_catalog.transaction_timestamp()-interval '1 hour'+interval '60 days',60);
 INSERT INTO public.mobility_vehicles(
  id,driver_id,vehicle_kind,service_kind,country_code,municipality_code,
  plate_normalized,brand,model,manufacture_year,passenger_capacity,review_status)
