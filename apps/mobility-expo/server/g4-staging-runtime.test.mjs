@@ -199,6 +199,9 @@ function mockSupabase(){
     if(name==='mobility_stage_g145_delivery_trace_qa')
      return {data:params._admin===stranger&&params._delivery===deliveryId?
       state.cargoTraceReceipt:null,error:null};
+    if(name==='mobility_stage_g216_completed_delivery_trace_qa')
+     return {data:params._admin===stranger&&params._delivery===deliveryId?
+      (state.completedCargoTraceReceipt??null):null,error:null};
     if(name==='mobility_stage_auto_demo_request'){
      if(params._passenger_id!==passenger)return {error:{message:'Wrong passenger'}};
      return {data:ride,error:null};
