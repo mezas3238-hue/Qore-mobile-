@@ -999,6 +999,8 @@ jobs:
         run: node --test apps/mobility-expo/server/g217-five-terminal-proof-validator.test.mjs
       - name: G202 audit five original Cliente -> Driver or Comercio -> Admin sources in ONE PostgreSQL16
         run: node apps/mobility-expo/server/g202-five-original-service-journeys-pg-ci.mjs
+      - name: G217 positive original G45 Commerce order and original G150 delivery through G5 G67 G187 Admin PostgreSQL QA rollback
+        run: python3 apps/mobility-expo/server/g217-commerce-terminal-positive-pg-ci.py
       - name: G217 original Commerce source must DENY terminal Admin until G10 G67 G187 evidence
         run: node apps/mobility-expo/server/g217-commerce-terminal-source-denial-pg-ci.mjs
       - name: G215 independently verify each original ID through final Driver/Courier/Recipient and Admin
