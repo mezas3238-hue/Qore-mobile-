@@ -70,8 +70,8 @@ const contexts={
    AND o.status='accepted' AND o.decision_key IS NOT NULL),
  'completedEventConfirmed',EXISTS(
   SELECT 1 FROM public.mobility_stage_g118_moto_events e
-  WHERE e.trip_id=t.id AND e.actor_id=t.driver_id
-   AND e.next_status='completed'),
+  WHERE e.trip_id=t.id AND e.driver_id=t.driver_id
+   AND e.to_state='completed'),
  'events',(SELECT count(*) FROM public.mobility_stage_g118_moto_events e
   WHERE e.trip_id=t.id),
  'quotePersisted',t.quote_id IS NOT NULL
