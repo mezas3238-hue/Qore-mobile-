@@ -84,6 +84,14 @@ jobs:
           npm run check
           npm run build
           test -f dist/index.html
+      - name: Build independent Comercio portal without Admin bundle or session
+        working-directory: apps/movete-admin
+        run: |
+          npm run build:comercio
+          test -s dist-comercio/index.html
+          test ! -e dist-comercio/comercio.html
+          grep -q 'merchant-root' dist-comercio/index.html
+          ! grep -q 'id="root"' dist-comercio/index.html
       - name: Backend HTTP/SQL modules checked without external secrets
         run: |
           node --check apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs
