@@ -136,6 +136,32 @@ function delivery(id){
  ) FROM public.mobility_stage_deliveries d
  WHERE d.id=${quote(id)}`);
 }
+// G221: a post-source independent Admin SQL read is mandatory. G202's old
+// Admin observation is not sufficient to certify a later terminal lifecycle.
+const independentAdmin=query(
+ "SELECT pg_catalog.to_jsonb(user_id::text) "+
+ "FROM public.mobility_stage_backoffice_roles "+
+ "WHERE role='admin' AND status='active' AND "+
+ "public.mobility_stage_g27_backoffice_role_of(user_id)='admin' "+
+ "ORDER BY user_id LIMIT 1");
+assert(uuid.test(independentAdmin),'G221 independent Admin role unavailable');
+function finalAdminTrace(kind,id,state){
+ const fn=kind==='AUTO_RIDE'?'mobility_stage_g138_auto_trace_qa':
+  kind==='MOTO_RIDE'?'mobility_stage_g142_moto_trace_qa':
+  kind==='COMMERCE'?'mobility_stage_g146_commerce_trace_qa':
+  state==='delivered'?'mobility_stage_g216_completed_delivery_trace_qa':
+  state==='accepted'||state==='picked_up'?
+   'mobility_stage_g219_active_delivery_trace_qa':
+   'mobility_stage_g145_delivery_trace_qa';
+ const trace=query('SET ROLE service_role; SELECT public.'+fn+
+  '('+quote(independentAdmin)+','+quote(id)+')::text');
+ return {fn,valid:trace!==null &&
+  trace.mode==='STAGING_DEMO_ONLY' &&
+  trace.serviceId===id &&
+  trace.serverPersisted===true &&
+  trace.productionEnabled===false,
+  trace};
+}
 const services=sources.services.map(source=>{
  assert(uuid.test(source.originalServiceId));
  assert(uuid.test(source.originalRequestKey));
@@ -144,6 +170,15 @@ const services=sources.services.map(source=>{
  assert(state,'G215 original service was deleted: '+source.serviceKind);
  assert.equal(state.state,source.status,
   'G215 source state changed after Admin receipt: '+source.serviceKind);
+ const admin=finalAdminTrace(source.serviceKind,
+  source.originalServiceId,state.state);
+ assert.equal(admin.valid,true,
+  'G221 independent post-source Admin trace denied: '+
+  source.serviceKind+' via '+admin.fn);
+ assert.equal(admin.trace.bookingRequestKey,source.originalRequestKey,
+  'G221 post-source Admin returned a different original booking key');
+ assert.equal(admin.trace.status,state.state,
+  'G221 independent Admin state diverged from persisted original');
  let steps;
  if(source.serviceKind.endsWith('_RIDE')){
   steps={
@@ -152,7 +187,7 @@ const services=sources.services.map(source=>{
     source.serviceKind==='AUTO_RIDE'?state.routePersisted:state.quotePersisted,
    driverAccepted:state.driverAssigned&&state.acceptedOfferConfirmed,
    driverCompleted:state.state==='completed'&&state.completedEventConfirmed,
-   originalAdminRead:true
+   originalAdminRead:admin.valid
   };
  }else if(source.serviceKind.startsWith('DELIVERY_')){
   assert.equal(state.vehicleKind,source.serviceKind.slice(9));
@@ -163,7 +198,7 @@ const services=sources.services.map(source=>{
    courierDelivered:state.state==='delivered'&&state.deliveredEvent
     &&state.verifiedProofConsumed,
    independentRecipientConfirmed:state.independentRecipientConfirmed,
-   originalAdminRead:true
+   originalAdminRead:admin.valid
   };
  }else{
   assert.equal(state.deliveryId,source.linkedCommerceDeliveryId);
@@ -172,7 +207,7 @@ const services=sources.services.map(source=>{
    linkedPricedDelivery:state.pricedLinkedDelivery,
    courierDelivered:state.courierCompleted,
    independentRecipientConfirmed:state.recipientConfirmed,
-   originalAdminRead:true
+   originalAdminRead:admin.valid
   };
  }
  const missing=Object.entries(steps).filter(([,value])=>value!==true)
