@@ -128,6 +128,34 @@ test('G211 Admin reads original AUTO QA arrival, pickup and completion without l
  }
 });
 
+test('G219 Admin maintains original priced cargo history at accept and pickup, never as delivered',async()=>{
+ for(const kind of ['DELIVERY_AUTO','DELIVERY_MOTO']){
+  for(const phase of ['accepted','picked_up']){
+   const dto=row(kind);
+   dto.status=phase;dto.revision=phase==='accepted'?2:3;
+   dto.assignment={state:'QA_ACCEPTED',legalGate:'EXTERNAL_NOT_CERTIFIED'};
+   dto.ledger=null;
+   dto.events=['requested','accepted','picked_up'].slice(0,dto.revision)
+    .map((status,index)=>({eventId:uuid(83+index),serviceId:id,
+     sequence:index+1,status,at:at-4000+index*1000}));
+   const got=await configured(async()=>response(dto)).read(kind,id);
+   assert.equal(got.ok,true,kind+' '+phase+' '+JSON.stringify(got));
+   assert.equal(got.data.assignment.legalGate,'EXTERNAL_NOT_CERTIFIED');
+   assert.equal(got.data.productionEnabled,false);
+   for(const mutate of [
+    x=>x.events[x.events.length-1].status='delivered',
+    x=>x.assignment.state='QA_COMPLETED',
+    x=>x.assignment.legalGate='CLEARED',
+    x=>x.revision=4
+   ]){
+    const invalid=structuredClone(dto);mutate(invalid);
+    assert.equal((await configured(async()=>response(invalid)).read(kind,id))
+     .code,'INVALID_TRACE_RECEIPT');
+   }
+  }
+ }
+});
+
 test('G216 Admin renders only the original four-event verified cargo chain (AUTO and MOTO)',async()=>{
  for(const kind of ['DELIVERY_AUTO','DELIVERY_MOTO']){
   const valid=row(kind);
