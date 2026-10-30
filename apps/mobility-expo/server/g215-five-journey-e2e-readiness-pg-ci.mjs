@@ -149,6 +149,7 @@ assert(uuid.test(admin),'G217 cannot prove original terminal state without indep
 function terminalAdminRead(kind,id){
  const sqlFunction=kind==='AUTO_RIDE'?'mobility_stage_g138_auto_trace_qa':
   kind==='MOTO_RIDE'?'mobility_stage_g142_moto_trace_qa':
+  kind==='COMMERCE'?'mobility_stage_g217_commerce_terminal_admin_qa':
   'mobility_stage_g216_completed_delivery_trace_qa';
  return query("SET ROLE service_role; SELECT public."+sqlFunction+
   "("+quote(admin)+","+quote(id)+")::text");
@@ -202,10 +203,12 @@ const services=sources.services.map(source=>{
  let adminTerminalReceipt=null,linkedTerminalReceipt=null;
  if(hasTerminal){
   if(source.serviceKind==='COMMERCE'){
-   // G151 source receipt predates custody; no final commerce SQL claim exists
-   // until an independently authorized terminal order attestation is added.
-   linkedTerminalReceipt=terminalAdminRead('DELIVERY_'+
-    (state.deliveryVehicleKind??'AUTO'),source.linkedCommerceDeliveryId);
+   adminTerminalReceipt=terminalAdminRead('COMMERCE',
+    source.originalServiceId);
+   if(adminTerminalReceipt){
+    linkedTerminalReceipt=terminalAdminRead('DELIVERY_'+
+     adminTerminalReceipt.vehicleKind,source.linkedCommerceDeliveryId);
+   }
   }else adminTerminalReceipt=terminalAdminRead(source.serviceKind,
    source.originalServiceId);
  }
