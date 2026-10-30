@@ -78,9 +78,54 @@ const sources=[
   "WHERE o.status='ready' AND o.revision=5 "+
   "ORDER BY o.created_at DESC LIMIT 1"]
 ];
+// G221 supplies five positive SAME-ORIGINAL-ID rows COMMITTED only in the
+// disposable CI database. Without G221, retain the conservative G202 base
+// audit of five pending/cancelled sources exactly as before.
+const positiveSameIdMode=sql("SELECT (to_regclass("+
+ "'public.mobility_stage_g221_five_original_qa_sources') IS NOT NULL)::text")==='true';
+const positiveQueries={
+ AUTO_RIDE:"SELECT jsonb_build_object('id',t.id,'requestKey',t.request_key,"+
+  "'status',t.status,'driverAssigned',t.driver_id IS NOT NULL) "+
+  "FROM public.mobility_stage_g221_five_original_qa_sources m "+
+  "JOIN public.mobility_stage_auto_demo_trips t ON t.id=m.service_id "+
+  "AND t.request_key=m.request_key AND t.status::text=m.source_status "+
+  "WHERE m.service_kind='AUTO_RIDE' AND t.status='completed' AND t.revision=5",
+ MOTO_RIDE:"SELECT jsonb_build_object('id',t.id,'requestKey',t.booking_key,"+
+  "'status',t.status,'driverAssigned',t.driver_id IS NOT NULL) "+
+  "FROM public.mobility_stage_g221_five_original_qa_sources m "+
+  "JOIN public.mobility_stage_g100_moto_trips t ON t.id=m.service_id "+
+  "AND t.booking_key=m.request_key AND t.status=m.source_status "+
+  "WHERE m.service_kind='MOTO_RIDE' AND t.status='completed' AND t.revision=5",
+ DELIVERY_AUTO:"SELECT jsonb_build_object('id',d.id,'requestKey',d.request_key,"+
+  "'status',d.status,'driverAssigned',d.courier_id IS NOT NULL) "+
+  "FROM public.mobility_stage_g221_five_original_qa_sources m "+
+  "JOIN public.mobility_stage_deliveries d ON d.id=m.service_id "+
+  "AND d.request_key=m.request_key AND d.status::text=m.source_status "+
+  "WHERE m.service_kind='DELIVERY_AUTO' AND d.status='delivered' "+
+  "AND d.requested_vehicle_kind='AUTO' AND d.revision=4",
+ DELIVERY_MOTO:"SELECT jsonb_build_object('id',d.id,'requestKey',d.request_key,"+
+  "'status',d.status,'driverAssigned',d.courier_id IS NOT NULL) "+
+  "FROM public.mobility_stage_g221_five_original_qa_sources m "+
+  "JOIN public.mobility_stage_deliveries d ON d.id=m.service_id "+
+  "AND d.request_key=m.request_key AND d.status::text=m.source_status "+
+  "WHERE m.service_kind='DELIVERY_MOTO' AND d.status='delivered' "+
+  "AND d.requested_vehicle_kind='MOTO' AND d.revision=4",
+ COMMERCE:"SELECT jsonb_build_object('id',o.id,'requestKey',o.request_key,"+
+  "'status',o.status,'driverAssigned',false,'merchantReady',true,"+
+  "'linkedDeliveryId',o.delivery_id) "+
+  "FROM public.mobility_stage_g221_five_original_qa_sources m "+
+  "JOIN public.mobility_stage_merchant_orders o ON o.id=m.service_id "+
+  "AND o.request_key=m.request_key AND o.status=m.source_status "+
+  "AND o.delivery_id=m.linked_delivery_id "+
+  "JOIN public.mobility_stage_deliveries d ON d.id=o.delivery_id "+
+  "AND d.status='delivered' "+
+  "WHERE m.service_kind='COMMERCE' AND o.status='ready' AND o.revision=5"
+};
 const results=[];
-for(const [kind,fn,query] of sources){
- const source=json(query);
+for(const [kind,baseFn,query] of sources){
+ const source=json(positiveSameIdMode?positiveQueries[kind]:query);
+ const fn=positiveSameIdMode&&kind.startsWith('DELIVERY_')
+  ?'mobility_stage_g216_completed_delivery_trace_qa':baseFn;
  assert(source&&UUID.test(source.id)&&UUID.test(source.requestKey),
   kind+' missing original real PostgreSQL Client booking');
  const signature='public.'+fn+'(uuid,uuid)';
@@ -98,8 +143,13 @@ for(const [kind,fn,query] of sources){
   kind+' Client / PostgreSQL / Admin original identity mismatch');
  assert.equal(trace.status,source.status,
   kind+' original source status diverged from Admin');
- assert.equal(trace.assignment.state,'NOT_ASSIGNABLE',
-  kind+' falsely suggests real driver assignment');
+ const expectedState=positiveSameIdMode&&kind!=='COMMERCE'
+  ?'QA_COMPLETED':'NOT_ASSIGNABLE';
+ assert.equal(trace.assignment.state,expectedState,
+  kind+' source-backed Admin completion state invalid');
+ if(positiveSameIdMode&&kind!=='COMMERCE')
+  assert.equal(trace.assignment.legalGate,'EXTERNAL_NOT_CERTIFIED',
+   kind+' QA synthetic acceptance must never mean legal clearance');
  assert.notEqual(trace.assignment.legalGate,'CLEARED');
  results.push({
   serviceKind:kind,originalServiceId:source.id,
@@ -108,7 +158,9 @@ for(const [kind,fn,query] of sources){
   clientToAdminSameOriginal:true,
   merchantReady:source.merchantReady===true,
   linkedCommerceDeliveryId:source.linkedDeliveryId??null,
-  realDriverOrCourierAccepted:source.driverAssigned===true,
+  realDriverOrCourierAccepted:false,
+  syntheticQaAccepted:positiveSameIdMode&&source.driverAssigned===true,
+  qaJourneyClosedInDisposableSource:positiveSameIdMode,
   realFinalCustomerHandoff:false,realPSPSettlement:false,
   independentLegalApproval:false,
   commercialEndToEndComplete:false
@@ -120,6 +172,8 @@ const audit={
  name:'G202_FIVE_ORIGINAL_SERVICE_JOURNEYS',
  mode:'STAGING_DEMO_ONLY',productionEnabled:false,
  originalPostgresAndAdminReceipts:5,
+ qaPositiveSameOriginalIds:positiveSameIdMode?5:0,
+ syntheticAcceptedOnlyInDisposableCi:positiveSameIdMode,
  commerciallyCompletedEndToEndJourneys:0,
  externalIdpLegalGpsCourierAndPspPending:true,
  services:results
