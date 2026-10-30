@@ -43,6 +43,17 @@ test('G197 Driver chooses exact road pickup meters per service; SQL revision use
  assert.equal(f.saves(),1);
  assert.equal(saved.body.productionEnabled,false);
 });
+test('G228 OFF is a persisted per-service choice, not a forged kilometre',async()=>{
+ const f=fixture();
+ const saved=await f.gateway(request('PUT',{serviceKind:'MERCHANT_ORDER',
+  maximumRoadMeters:0,expectedRevision:0}));
+ assert.equal(saved.status,200);
+ assert.equal(saved.body.maximumRoadMeters,0);
+ assert.equal(saved.body.serviceKind,'MERCHANT_ORDER');
+ assert.equal(saved.body.revision,1);
+ assert.equal(saved.body.productionEnabled,false);
+ assert.equal(f.saves(),1);
+});
 test('G197 forbids Passenger/forged radius/direct body authority/revoked Driver',async()=>{
  const f=fixture();
  f.role('passenger');
