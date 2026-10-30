@@ -77,6 +77,7 @@ function mockSupabase(){
          return {data:rows,error:null};
         }
         if(table==='user_roles'){
+         if(state.missing===table)return {data:null,error:{code:'42P01'}};
          state.rolesLookups++;
          const roles=filter.user_id===passenger?['passenger']:
           filter.user_id===driver?(state.dualRoleDriver?['driver','admin']:['driver']):[];
