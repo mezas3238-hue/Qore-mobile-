@@ -133,13 +133,26 @@ DECLARE
 BEGIN
  SELECT * INTO s FROM pg_temp.g218_case;
  iat:=(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint;
- IF public.mobility_stage_g146_commerce_trace_qa(adm,s.order_id) IS NOT NULL
- THEN RAISE EXCEPTION 'G218 Commerce misrepresented accepted courier as recipient handoff'; END IF;
+ -- The original accepted courier is a REAL recorded QA source state,
+ -- not proof of physical handoff or legal authority. Both Admin reads stay
+ -- available continuously, with the correct progress state.
+ before_cargo:=public.mobility_stage_g219_active_delivery_trace_qa(adm,s.delivery_id);
+ IF before_cargo IS NULL OR before_cargo->>'status'<>'accepted'
+  OR before_cargo->'assignment'->>'state'<>'QA_ACCEPTED'
+  OR pg_catalog.jsonb_array_length(before_cargo->'events')<>2
+  OR public.mobility_stage_g146_commerce_trace_qa(adm,s.order_id) IS NULL
+ THEN RAISE EXCEPTION 'G219 original commerce courier acceptance not source-visible'; END IF;
  PERFORM public.mobility_stage_g187_bind_recipient_qa(
   s.buyer_id,s.buyer_session,iat,s.delivery_id,
   s.recipient_id,pg_catalog.gen_random_uuid());
  PERFORM public.mobility_stage_delivery_transition(
   s.delivery_id,s.courier_id,'pickup',pg_catalog.gen_random_uuid(),NULL);
+ before_cargo:=public.mobility_stage_g219_active_delivery_trace_qa(adm,s.delivery_id);
+ IF before_cargo IS NULL OR before_cargo->>'status'<>'picked_up'
+  OR (before_cargo->>'revision')::integer<>3
+  OR pg_catalog.jsonb_array_length(before_cargo->'events')<>3
+  OR public.mobility_stage_g146_commerce_trace_qa(adm,s.order_id) IS NULL
+ THEN RAISE EXCEPTION 'G219 picked-up original courier chain unavailable'; END IF;
  proof:=pg_catalog.gen_random_uuid();
  PERFORM public.mobility_stage_g67_register_proof_owner_qa(
   s.delivery_id,s.courier_id,s.courier_session,iat,proof,
@@ -154,6 +167,8 @@ BEGIN
  PERFORM public.mobility_stage_g187_confirm_received_qa(
   s.recipient_id,s.recipient_session,iat,s.delivery_id,
   pg_catalog.gen_random_uuid());
+ IF public.mobility_stage_g219_active_delivery_trace_qa(adm,s.delivery_id) IS NOT NULL
+ THEN RAISE EXCEPTION 'G219 active projection leaked into completed delivery'; END IF;
  cargo:=public.mobility_stage_g216_completed_delivery_trace_qa(adm,s.delivery_id);
  commerce:=public.mobility_stage_g146_commerce_trace_qa(adm,s.order_id);
  IF cargo IS NULL OR commerce IS NULL
