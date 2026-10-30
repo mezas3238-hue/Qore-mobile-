@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
+import {verifyG217TerminalRead} from './g217-five-terminal-proof-validator.mjs';
 
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
  process.env.PGPORT!=='5432'||process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -136,6 +137,23 @@ function delivery(id){
  ) FROM public.mobility_stage_deliveries d
  WHERE d.id=${quote(id)}`);
 }
+// The G202 Admin receipt was taken BEFORE a journey. The G217 final receipt
+// must be read again from independently authorized ORIGINAL Admin SQL AFTER
+// all Driver/Courier SQL commits; never mark a final Admin read true by fiat.
+const admin=query("SELECT jsonb_build_object('id',user_id) "+
+ "FROM public.mobility_stage_backoffice_roles "+
+ "WHERE role='admin' AND status='active' "+
+ "AND public.mobility_stage_g27_backoffice_role_of(user_id)='admin' "+
+ "ORDER BY user_id LIMIT 1")?.id;
+assert(uuid.test(admin),'G217 cannot prove original terminal state without independent Admin');
+function terminalAdminRead(kind,id){
+ const sqlFunction=kind==='AUTO_RIDE'?'mobility_stage_g138_auto_trace_qa':
+  kind==='MOTO_RIDE'?'mobility_stage_g142_moto_trace_qa':
+  'mobility_stage_g216_completed_delivery_trace_qa';
+ return query("SET ROLE service_role; SELECT public."+sqlFunction+
+  "("+quote(admin)+","+quote(id)+")::text");
+}
+
 const services=sources.services.map(source=>{
  assert(uuid.test(source.originalServiceId));
  assert(uuid.test(source.originalRequestKey));
@@ -175,6 +193,26 @@ const services=sources.services.map(source=>{
    originalAdminRead:true
   };
  }
+ // Final Admin must independently certify the exact persisted timeline.
+ // Missing or blocked legal acceptance produces null, not synthetic success.
+ const hasTerminal=source.serviceKind.endsWith('_RIDE')
+  ?Boolean(steps.driverCompleted):source.serviceKind.startsWith('DELIVERY_')
+   ?Boolean(steps.courierDelivered&&steps.independentRecipientConfirmed)
+   :Boolean(steps.courierDelivered&&steps.independentRecipientConfirmed);
+ let adminTerminalReceipt=null,linkedTerminalReceipt=null;
+ if(hasTerminal){
+  if(source.serviceKind==='COMMERCE'){
+   // G151 source receipt predates custody; no final commerce SQL claim exists
+   // until an independently authorized terminal order attestation is added.
+   linkedTerminalReceipt=terminalAdminRead('DELIVERY_'+
+    (state.deliveryVehicleKind??'AUTO'),source.linkedCommerceDeliveryId);
+  }else adminTerminalReceipt=terminalAdminRead(source.serviceKind,
+   source.originalServiceId);
+ }
+ const terminal=verifyG217TerminalRead({
+  source,receipt:adminTerminalReceipt,
+  linkedDeliveryReceipt:linkedTerminalReceipt,now:Date.now()});
+ steps.terminalAdminRechecked=terminal.ok===true;
  const missing=Object.entries(steps).filter(([,value])=>value!==true)
   .map(([label])=>label);
  const qaJourneyClosed=missing.length===0;
@@ -184,6 +222,7 @@ const services=sources.services.map(source=>{
   originalRequestKey:source.originalRequestKey,
   status:state.state,steps,missingQaSteps:missing,
   qaJourneyClosed,
+  terminalAdminEvidence:terminal.ok?'ORIGINAL_SQL_READBACK_VERIFIED':terminal.reason,
   // No CI-only synthetic session, route, image or offer can prove these.
   commercialEndToEndCertified:false,
   unverifiedExternalAuthorities:[
