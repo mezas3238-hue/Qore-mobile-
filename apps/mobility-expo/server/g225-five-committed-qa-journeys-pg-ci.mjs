@@ -32,6 +32,7 @@ export function verifyThreeCompleted({sources,cargoRows,commerceRows,
  assert.equal(guard.authorizedSyntheticZones,0);
  assert.equal(guard.municipalMotoAuthorized,0);
  assert.equal(guard.authenticatedCanRead,false);
+ assert.equal(guard.serviceRoleCanWriteQaReceipts,false);
  const initialStates=['requested','requested'];
  for(let i=0;i<2;i++){
   const row=cargoRows[i],src=byKind[row.serviceKind],trace=cargoProofs[i];
@@ -132,7 +133,12 @@ function guard(){
  has_table_privilege('authenticated',
   'public.mobility_stage_g225_cargo_receipts_ci','SELECT') OR
  has_table_privilege('authenticated',
-  'public.mobility_stage_g225_commerce_receipt_ci','SELECT'))::text`);
+  'public.mobility_stage_g225_commerce_receipt_ci','SELECT'),
+ 'serviceRoleCanWriteQaReceipts',
+ has_table_privilege('service_role',
+  'public.mobility_stage_g225_cargo_receipts_ci','INSERT') OR
+ has_table_privilege('service_role',
+  'public.mobility_stage_g225_commerce_receipt_ci','INSERT'))::text`);
 }
 function main(){
  assertLocal();
