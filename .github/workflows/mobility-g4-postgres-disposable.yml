@@ -20,7 +20,10 @@ on:
     branches:
       - 'feature/mobility-monorepo-isolated-20261016'
       - 'integration/qore-mobile-e2e-four-apps-20261027'
+      # Isolated G228 pre-merge QA of the same G221 five-original-ID chain.
+      - 'agent/qore-g228-pickup-off-per-vertical-20261030'
     paths:
+      - '.github/workflows/mobility-g4-postgres-disposable.yml'
       - 'apps/mobility-expo/server/g98-f1-auto-postgres-loopback-e2e-ci.mjs'
       - 'apps/mobility-expo/server/g138-admin-auto-trace-gateway.mjs'
       - 'apps/mobility-expo/docs/backend/staging_only/G138_*'
