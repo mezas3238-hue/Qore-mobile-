@@ -161,8 +161,18 @@ const services=sources.services.map(source=>{
  assert.equal(source.clientToAdminSameOriginal,true);
  const state=contexts[source.serviceKind](source.originalServiceId);
  assert(state,'G215 original service was deleted: '+source.serviceKind);
- assert.equal(state.state,source.status,
-  'G215 source state changed after Admin receipt: '+source.serviceKind);
+ // G202 takes the ORIGINAL immutable pre-acceptance snapshot. A separate
+ // G217 terminal lab may legitimately advance the same ID afterwards.
+ // Never resurrect a cancelled/returned original or silently hide a regression.
+ const allowedStart=source.serviceKind.endsWith('_RIDE')?'searching':
+  source.serviceKind==='COMMERCE'?'ready':'requested';
+ const progress=source.serviceKind.endsWith('_RIDE')
+  ?['searching','accepted','arriving','in_progress','completed']
+  :source.serviceKind==='COMMERCE'?['ready']
+   :['requested','accepted','picked_up','delivered'];
+ assert(source.status===state.state ||
+  source.status===allowedStart&&progress.includes(state.state),
+  'G215 source was cancelled, rewritten or regressed: '+source.serviceKind);
  let steps;
  if(source.serviceKind.endsWith('_RIDE')){
   steps={
