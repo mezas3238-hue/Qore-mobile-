@@ -15,7 +15,7 @@ CREATE TABLE public.mobility_stage_g197_pickup_preferences(
  driver_id uuid NOT NULL REFERENCES auth.users(id),
  service_kind text NOT NULL CHECK(service_kind IN ('RIDE','DELIVERY','MERCHANT_ORDER')),
  maximum_road_meters integer NOT NULL
-  CHECK(maximum_road_meters IN (1000,2000,3000,5000,8000,10000,15000,20000,30000,50000)),
+  CHECK(maximum_road_meters IN (0,1000,2000,3000,5000,8000,10000,15000,20000,30000,50000)),
  revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
  updated_at timestamptz NOT NULL DEFAULT pg_catalog.clock_timestamp(),
  PRIMARY KEY(driver_id,service_kind)
@@ -51,7 +51,7 @@ BEGIN
  IF _driver IS NULL OR _session IS NULL OR _iat_ms IS NULL
  OR _kind NOT IN ('RIDE','DELIVERY','MERCHANT_ORDER')
  OR _distance_meters IS NULL OR _distance_meters NOT IN
-   (1000,2000,3000,5000,8000,10000,15000,20000,30000,50000)
+   (0,1000,2000,3000,5000,8000,10000,15000,20000,30000,50000)
  OR _expected_revision IS NULL OR _expected_revision<0
  THEN RAISE EXCEPTION 'G197 invalid preference input' USING ERRCODE='P9701'; END IF;
  IF NOT public.mobility_stage_g42_lock_session(_driver,_session,_iat_ms)
@@ -121,6 +121,9 @@ BEGIN
  -- No verified preference means no claim of distance filtering. Existing
  -- G82/G10 QA candidate discovery remains documentary-only until enrolled.
  IF max_road IS NULL THEN RETURN true; END IF;
+ -- The Driver explicitly chose OFF for this specific service. Deny even
+ -- zero-meter road evidence; never deliver an offer to a disabled category.
+ IF max_road=0 THEN RETURN false; END IF;
  SELECT distance_meters,verified_at,expires_at,source INTO verified
  FROM public.mobility_stage_g197_verified_pickup_routes
  WHERE service_kind=_kind AND service_id=_service AND driver_id=_driver FOR SHARE;
