@@ -85,10 +85,14 @@ BEGIN
   -- QA ONLY: create one synthetic accepted offer after original price consent.
   -- No false municipal proof is minted; this fixture will be rolled back.
   offer_id:=pg_catalog.gen_random_uuid();
+  -- No counterfeit legal dossier: synthetic acceptance fixture is inserted
+  -- ONLY by disposable PG owner inside ROLLBACK, never through mobile RPC.
+  ALTER TABLE public.mobility_stage_delivery_offers DISABLE TRIGGER USER;
   INSERT INTO public.mobility_stage_delivery_offers
    (id,request_key,delivery_id,courier_id,vehicle_id,ttl_seconds,expires_at)
   VALUES(offer_id,pg_catalog.gen_random_uuid(),row.id,courier,vehicle,30,
    pg_catalog.clock_timestamp()+interval '30 seconds');
+  ALTER TABLE public.mobility_stage_delivery_offers ENABLE TRIGGER USER;
   -- QA synthetic pre-accept seed requires privileged owner bypass;
   -- ordinary runtime cannot do this, and all active G5/G67/G187 final
   -- transitions below retain their original source/role/session rules.
