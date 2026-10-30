@@ -28,7 +28,7 @@ CREATE TEMP TABLE g218_case (
  courier_session uuid NOT NULL, recipient_session uuid NOT NULL
 ) ON COMMIT DROP;
 DO $original$
-DECLARE o record; d record;
+DECLARE o record; ship record;
 BEGIN
  SELECT id,request_key,buyer_id,delivery_id,requested_vehicle_kind,
   status,revision INTO o
@@ -38,18 +38,18 @@ BEGIN
  OR o.revision<>5 OR o.requested_vehicle_kind<>'MOTO'
  THEN RAISE EXCEPTION 'G218 original G150 linked ready order unavailable'; END IF;
  SELECT d.id,d.request_key,d.sender_id,d.status,d.revision,
-  c.quote_id,c.confirmed_at INTO d
+  c.quote_id,c.confirmed_at INTO ship
  FROM public.mobility_stage_deliveries d
  JOIN public.mobility_stage_g122_delivery_price_consents c
   ON c.delivery_id=d.id AND c.sender_id=d.sender_id
   AND c.vehicle_kind=d.requested_vehicle_kind
  WHERE d.id=o.delivery_id;
- IF d.id IS NULL OR d.status<>'requested' OR d.revision<>1
- OR d.sender_id<>o.buyer_id OR
- NOT public.mobility_stage_g154_merchant_dispatch_ready_qa(d.id)
+ IF ship.id IS NULL OR ship.status<>'requested' OR ship.revision<>1
+ OR ship.sender_id<>o.buyer_id OR
+ NOT public.mobility_stage_g154_merchant_dispatch_ready_qa(ship.id)
  THEN RAISE EXCEPTION 'G218 original G154 verified merchant ready and buyer fare absent'; END IF;
  INSERT INTO pg_temp.g218_case VALUES (
-  o.id,d.id,o.request_key,d.request_key,o.buyer_id,d.quote_id,
+  o.id,ship.id,o.request_key,ship.request_key,o.buyer_id,ship.quote_id,
   '21800000-0000-4218-8218-000000000103'::uuid,
   '21800000-0000-4218-8218-000000000104'::uuid,
   '18700000-0000-4187-8187-000000000002'::uuid,
@@ -57,7 +57,7 @@ BEGIN
   '21800000-0000-4218-8218-000000000112'::uuid,
   '21800000-0000-4218-8218-000000000113'::uuid);
  IF public.mobility_stage_g216_completed_delivery_trace_qa(
-   '14500000-0000-4145-8145-000000000002'::uuid,d.id) IS NOT NULL
+   '14500000-0000-4145-8145-000000000002'::uuid,ship.id) IS NOT NULL
  THEN RAISE EXCEPTION 'G218 requested cargo was falsely completed'; END IF;
 END $original$;
 
