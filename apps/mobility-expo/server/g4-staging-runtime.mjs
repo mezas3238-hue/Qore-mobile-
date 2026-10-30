@@ -932,6 +932,13 @@ export async function prepareQoreG4StagingRuntime({
    });
    if(error)throw Error('G145 original SQL cargo trace unavailable');
    if(data!==null)return data;
+   // G219 active source transition is visible to the independent Admin
+   // before G187 recipient receives it. No synthetic state transition.
+   const active=await admin.rpc('mobility_stage_g219_active_delivery_trace_qa',{
+    _admin:actorId,_delivery:deliveryId
+   });
+   if(active.error)throw Error('G219 active delivery provenance SQL unavailable');
+   if(active.data!==null)return active.data;
    // G216 complete only with same original G10 accepted offer, G67 consumed
    // proof and G187 independent recipient. No synthetic completion fallback.
    const completed=await admin.rpc('mobility_stage_g216_completed_delivery_trace_qa',{
