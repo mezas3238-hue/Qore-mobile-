@@ -73,14 +73,18 @@ export function createG145AdminCargoTraceGateway({
   const clock=now();
   const isCancelled=data?.status==='cancelled';
   const completed=data?.status==='delivered';
-  const expectedLength=completed?4:isCancelled?2:1;
+  const inProgress=['accepted','picked_up'].includes(data?.status);
+  const expectedLength=completed?4:inProgress?
+   data.status==='accepted'?2:3:isCancelled?2:1;
   const timeline=completed?['requested','accepted','picked_up','delivered']:
+   inProgress?['requested','accepted','picked_up'].slice(0,expectedLength):
    isCancelled?['requested','cancelled']:['requested'];
   if(!exact(data,ROOT)||data.mode!=='STAGING_DEMO_ONLY'||
    data.productionEnabled!==false||data.serverPersisted!==true||
    data.viewerId!==user.id||data.serviceId!==deliveryId||
    data.serviceKind!==kind||!id(data.bookingRequestKey)||
-   !id(data.quoteId)||!['requested','cancelled','delivered'].includes(data.status)||
+   !id(data.quoteId)||
+   !['requested','cancelled','accepted','picked_up','delivered'].includes(data.status)||
    data.revision!==expectedLength||!time(data.observedAt)||
    data.observedAt>clock||clock-data.observedAt>30000||
    !time(data.expiresAt)||data.expiresAt<=clock||
@@ -88,6 +92,8 @@ export function createG145AdminCargoTraceGateway({
    !exact(data.assignment,['state','legalGate'])||
    (completed?(data.assignment.state!=='QA_COMPLETED'||
     data.assignment.legalGate!=='EXTERNAL_NOT_CERTIFIED'):
+    inProgress?(data.assignment.state!=='QA_ACCEPTED'||
+     data.assignment.legalGate!=='EXTERNAL_NOT_CERTIFIED'):
     (data.assignment.state!=='NOT_ASSIGNABLE'||
      data.assignment.legalGate!=='G38_BLOCKED'))||data.ledger!==null||
    !Array.isArray(data.events)||data.events.length!==expectedLength||
