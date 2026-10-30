@@ -11,8 +11,13 @@ import {DriverCustodyProvider} from './DriverCustodyProvider';
 import type {DriverStagingRuntime} from './domain/driver-staging-runtime.mjs';
 import {getNativeDriverAuth} from './NativeDriverAuth';
 import type {NativeDriverAuth} from './domain/native-driver-auth.mjs';
+import type {DriverAuthSessionAdapter} from './domain/driver-workspace.mjs';
 const NativeAuthContext=createContext<NativeDriverAuth|null>(null);
 export const useNativeDriverAuth=()=>useContext(NativeAuthContext);
+// The same verified identity used for offers, KYC and trips must own pickup
+// preferences. Native Auth alone is not an approved STAGING role/session.
+const RuntimeAuthContext=createContext<DriverAuthSessionAdapter|null>(null);
+export const useVerifiedDriverRuntimeAuth=()=>useContext(RuntimeAuthContext);
 
 /**
  * G62C: single Driver-only application composition. No default STAGING
@@ -31,7 +36,8 @@ export function DriverApplicationProviders({
  const nativeAuth=useMemo(()=>getNativeDriverAuth(),[]);
  // Native login alone grants no Driver dispatch or KYC authority.
  const identity=runtime?.authAdapter??nativeAuth;
- return <NativeAuthContext.Provider value={nativeAuth}><DriverWorkspaceProvider
+ return <NativeAuthContext.Provider value={nativeAuth}>
+ <RuntimeAuthContext.Provider value={identity}><DriverWorkspaceProvider
   authAdapter={identity}
   apiOrigin={runtime?.apiOrigin??null}
   approvedStagingHost={runtime?.approvedStagingHost??null}
@@ -72,5 +78,6 @@ export function DriverApplicationProviders({
  </DriverDocumentUploadProvider>
  </DriverKycExpiryProvider>
  </DriverCurrentTripProvider>
- </DriverWorkspaceProvider></NativeAuthContext.Provider>;
+ </DriverWorkspaceProvider></RuntimeAuthContext.Provider>
+ </NativeAuthContext.Provider>;
 }
