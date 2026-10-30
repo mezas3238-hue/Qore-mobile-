@@ -84,7 +84,10 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G224_*'
       - 'apps/mobility-expo/server/g220-*'
+      - 'apps/mobility-expo/server/g223-*'
+      - 'apps/mobility-expo/server/g224-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -205,7 +208,10 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G224_*'
       - 'apps/mobility-expo/server/g220-*'
+      - 'apps/mobility-expo/server/g223-*'
+      - 'apps/mobility-expo/server/g224-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -1016,6 +1022,10 @@ jobs:
         run: node apps/mobility-expo/server/g202-five-original-service-journeys-pg-ci.mjs
       - name: G215 independently verify each original ID through final Driver/Courier/Recipient and Admin
         run: node apps/mobility-expo/server/g215-five-journey-e2e-readiness-pg-ci.mjs
+      - name: G223 test five-source identity and mutation-fence regressions
+        run: node --test apps/mobility-expo/server/g223-original-id-ledger.test.mjs
+      - name: G223 CAPTURE five original IDs in committed isolated PostgreSQL before rollback QA
+        run: node apps/mobility-expo/server/g223-original-id-ledger-pg-ci.mjs capture
       - name: G215 publish five-service E2E reality matrix in Actions summary
         shell: bash
         run: |
@@ -1035,6 +1045,49 @@ jobs:
           PY
       - name: G220 execute 5 positive original source QA lifecycles with legal acceptance explicitly synthetic and rolled back
         run: node apps/mobility-expo/server/g220-five-positive-original-journeys-pg-ci.mjs
+      - name: G223 VERIFY new PostgreSQL session reads unchanged five committed original IDs and Admin
+        run: node apps/mobility-expo/server/g223-original-id-ledger-pg-ci.mjs verify
+      - name: G223 publish durable original ID boundary evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open('/tmp/qore-g223-persisted-original-id-audit.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+           f.write('### G223: 5/5 committed original source IDs retained after G220 rollback\n\n')
+           f.write('**G215 persistent QA closures: '+str(r['qaJourneysCompleted'])+
+             '/5; external legal/IdP/GPS/PSP certified: 0/5.**\n\n')
+           f.write('SHA256 manifest: '+r['manifestSha256']+'\n')
+          PY
+      - name: G223 archive independent five-original-source committed ledger audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g223-original-ids-${{ github.sha }}
+          path: /tmp/qore-g223-persisted-original-id-audit.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: G224 unit test two fresh committed passenger receipts and strict negative cases
+        run: node --test apps/mobility-expo/server/g224-committed-fresh-rides.test.mjs
+      - name: G224 COMMIT two fresh original AUTO and MOTO QA journeys and independently verify Admin
+        run: node apps/mobility-expo/server/g224-committed-fresh-rides-pg-ci.mjs
+      - name: G224 publish fresh committed passenger QA evidence separate from original G215
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open('/tmp/qore-g224-two-committed-qa-rides.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+           f.write('### G224: 2/2 NEW passenger QA originals committed & independently verified\n\n')
+           f.write('**Five older G215 sources unchanged: '+str(r['historicalG215FiveJourneysClosed'])+'/5 closed.**\n\n')
+           f.write('**Legal/IdP/GPS/municipal/PSP certification: 0/5.** All G224 acceptance synthetic in disposable CI.\n')
+          PY
+      - name: G224 archive committed and independently verified QA passenger receipt IDs
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g224-two-new-committed-qa-rides-${{ github.sha }}
+          path: /tmp/qore-g224-two-committed-qa-rides.json
+          if-no-files-found: error
+          retention-days: 14
       - name: G220 publish five positive QA closures separately from unresolved persistent G215
         shell: bash
         run: |
