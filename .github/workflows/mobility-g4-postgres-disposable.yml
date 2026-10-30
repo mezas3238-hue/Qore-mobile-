@@ -81,6 +81,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G145_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G216_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -198,6 +199,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G145_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G216_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G217_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G218_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -930,6 +932,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G154_COMMERCE_PRIVATE_DISPATCH_READINESS_FENCE_POSTGRES_CI_ONLY.sql
       - name: G154 prove real G139/G148/G150 same-order source and reject priced but unlinked merchant delivery
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G154_COMMERCE_PRIVATE_DISPATCH_READINESS_ASSERT_POSTGRES_CI_ONLY.sql
+
+      - name: G218 prove same original G150 Commerce order and G5 MOTO linked delivery reach G67/G187 and two Admin SQL reads
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G218_COMMERCE_ORIGINAL_ORDER_LINKED_DELIVERY_RECIPIENT_ADMIN_ASSERT_POSTGRES_CI_ONLY.sql
 
       - name: G124 install Owner-only independent AUTO/MOTO cargo tariffs
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G124_OWNER_DELIVERY_TARIFF_POSTGRES_CI_ONLY.sql
