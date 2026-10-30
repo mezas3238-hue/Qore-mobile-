@@ -72,23 +72,28 @@ export function createG145AdminCargoTraceGateway({
   if(data===null)return deny(404,'G145_PRICE_CONSENTED_SERVICE_NOT_FOUND');
   const clock=now();
   const isCancelled=data?.status==='cancelled';
-  const expectedLength=isCancelled?2:1;
+  const completed=data?.status==='delivered';
+  const expectedLength=completed?4:isCancelled?2:1;
+  const timeline=completed?['requested','accepted','picked_up','delivered']:
+   isCancelled?['requested','cancelled']:['requested'];
   if(!exact(data,ROOT)||data.mode!=='STAGING_DEMO_ONLY'||
    data.productionEnabled!==false||data.serverPersisted!==true||
    data.viewerId!==user.id||data.serviceId!==deliveryId||
    data.serviceKind!==kind||!id(data.bookingRequestKey)||
-   !id(data.quoteId)||!['requested','cancelled'].includes(data.status)||
+   !id(data.quoteId)||!['requested','cancelled','delivered'].includes(data.status)||
    data.revision!==expectedLength||!time(data.observedAt)||
    data.observedAt>clock||clock-data.observedAt>30000||
    !time(data.expiresAt)||data.expiresAt<=clock||
    data.expiresAt>clock+60000||
    !exact(data.assignment,['state','legalGate'])||
-   data.assignment.state!=='NOT_ASSIGNABLE'||
-   data.assignment.legalGate!=='G38_BLOCKED'||data.ledger!==null||
+   (completed?(data.assignment.state!=='QA_COMPLETED'||
+    data.assignment.legalGate!=='EXTERNAL_NOT_CERTIFIED'):
+    (data.assignment.state!=='NOT_ASSIGNABLE'||
+     data.assignment.legalGate!=='G38_BLOCKED'))||data.ledger!==null||
    !Array.isArray(data.events)||data.events.length!==expectedLength||
    data.events.some((e,i)=>!exact(e,EVT)||!id(e.eventId)||
     e.serviceId!==deliveryId||e.sequence!==i+1||
-    e.status!==(i===0?'requested':'cancelled')||!time(e.at)||
+    e.status!==timeline[i]||!time(e.at)||
     e.at>data.observedAt||i>0&&e.at<data.events[i-1].at))
    return deny(503,'G145_SOURCE_PROVENANCE_INVALID');
   return Object.freeze({status:200,body:Object.freeze({...data})});
