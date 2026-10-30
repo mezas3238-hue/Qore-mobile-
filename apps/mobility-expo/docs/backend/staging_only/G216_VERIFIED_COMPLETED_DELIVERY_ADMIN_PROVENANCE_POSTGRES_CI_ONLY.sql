@@ -36,6 +36,9 @@ AS $f$
     AND r.mode='DELIVERY'
   JOIN public.mobility_stage_g122_delivery_rate_vehicle_qa v
    ON v.rule_id=r.id AND v.vehicle_kind=d.requested_vehicle_kind
+  JOIN public.mobility_vehicles active_vehicle
+   ON active_vehicle.id=d.vehicle_id AND active_vehicle.driver_id=d.courier_id
+    AND active_vehicle.vehicle_kind=d.requested_vehicle_kind
   JOIN public.mobility_stage_delivery_offers o
    ON o.delivery_id=d.id AND o.courier_id=d.courier_id
     AND o.vehicle_id=d.vehicle_id AND o.status='accepted'
