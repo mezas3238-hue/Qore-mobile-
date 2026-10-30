@@ -73,6 +73,9 @@ BEGIN
   'economico','PANTEON','AEROPUERTO','ASUNCION_FIXTURE',5400,720,0);
  quote:=public.mobility_stage_g73_quote(
   pa,route,'22000000-0000-4220-8220-000000000042'::uuid);
+ -- G93 requires a real SQL-backed passenger subsidy preview BEFORE booking.
+ IF public.mobility_stage_g93_preview_auto_qa(pa,quote) IS NULL
+ THEN RAISE EXCEPTION 'G222 original AUTO subsidy not disclosed'; END IF;
  trip:=public.mobility_stage_g73_book(pa,quote,ba);
  IF trip IS NULL OR public.mobility_stage_g73_booking_receipt(pa,ba)->>
   'tripId'<>trip::text
