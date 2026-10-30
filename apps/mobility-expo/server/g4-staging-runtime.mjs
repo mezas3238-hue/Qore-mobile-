@@ -1274,7 +1274,8 @@ export async function prepareQoreG4StagingRuntime({
    'mobility_stage_ledger_entries',
    'mobility_stage_driver_documents'
   ]){
-   const {error}=await admin.from(table).select('id',{head:true,count:'exact'}).limit(0);
+   const column=table==='user_roles'?'user_id':'id';
+   const {error}=await admin.from(table).select(column,{head:true}).limit(0);
    if(error)throw Error('STAGING dependency unavailable');
   }
   return true;
