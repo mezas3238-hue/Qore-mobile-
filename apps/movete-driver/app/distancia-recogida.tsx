@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {ScrollView,Text,View} from 'react-native';
 import {Action,Panel,styles} from '../src/DriverUI';
-import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
+import {useVerifiedDriverRuntimeAuth} from '../src/DriverApplicationProviders';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {createG197DriverPickupPreferencesHttp}
  from '../src/domain/g197-pickup-preferences-http.mjs';
@@ -16,7 +16,7 @@ const SERVICES:{kind:Kind;label:string}[]=[
 const METERS=[0,1000,2000,3000,5000,8000,10000,15000,20000,30000,50000];
 const yes=(x:string|undefined)=>x==='true';
 export default function DriverPickupDistance(){
- const auth=useNativeDriverAuth();
+ const auth=useVerifiedDriverRuntimeAuth();
  const {state:workspace}=useDriverWorkspace();
  const accountEpoch=useRef(0);
  const [kind,setKind]=useState<Kind>('RIDE');
