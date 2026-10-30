@@ -33,11 +33,10 @@ function assertRailwayEnvironment(env){
   maxIdentityBuckets:bound('QORE_EDGE_MAX_IDENTITIES',32768,65536)
  };
  // Reject untrusted public hostname before initializing the service-role SDK.
- const proof=createRailwayStagingIngress({
+ createRailwayStagingIngress({
   loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,
   adminOrigin,...admission
  });
- proof.close();
  return {port,hostname,adminOrigin,admission};
 }
 const {port,hostname,adminOrigin,admission}=assertRailwayEnvironment(process.env);
