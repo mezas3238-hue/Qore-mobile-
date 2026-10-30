@@ -77,3 +77,17 @@ test('G217 Commerce requires original G45 ready order and same linked G5 termina
   receipt:{...order,deliveryId:quote},
   linkedDeliveryReceipt:receipt('DELIVERY_AUTO'),now:at}).ok,false);
 });
+
+test('G217 requires G202 original source provenance, never a fabricated passed flag',()=>{
+ const d=receipt('MOTO_RIDE');
+ for(const corruption of [
+  {sourcePersisted:false},
+  {clientToAdminSameOriginal:false},
+  {originalServiceId:quote},
+  {originalRequestKey:id}
+ ]){
+  const source={...original('MOTO_RIDE'),...corruption};
+  assert.equal(verifyG217TerminalRead({
+   source,receipt:d,now:at}).ok,false);
+ }
+});
