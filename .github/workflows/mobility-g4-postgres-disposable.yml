@@ -90,6 +90,7 @@ on:
       - 'apps/mobility-expo/server/g223-*'
       - 'apps/mobility-expo/server/g224-*'
       - 'apps/mobility-expo/server/g225-*'
+      - 'apps/mobility-expo/server/g226-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -216,6 +217,7 @@ on:
       - 'apps/mobility-expo/server/g223-*'
       - 'apps/mobility-expo/server/g224-*'
       - 'apps/mobility-expo/server/g225-*'
+      - 'apps/mobility-expo/server/g226-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -1112,6 +1114,33 @@ jobs:
         with:
           name: qore-g225-five-original-qa-${{ github.sha }}
           path: /tmp/qore-g225-five-committed-qa-originals.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: G226 unit test strict same-original historical terminal state advances
+        run: node --test apps/mobility-expo/server/g226-historical-qa-progress-contract.test.mjs
+      - name: G226 independent RECHECK G215 original five AFTER three historic cargo-commerce commits
+        env:
+          QORE_G215_RECHECK_AFTER_QA: 'true'
+        run: node apps/mobility-expo/server/g215-five-journey-e2e-readiness-pg-ci.mjs
+      - name: G226 publish split historic and new QA completion matrix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          before=json.load(open('/tmp/qore-g215-five-journey-e2e-readiness.json'))
+          after=json.load(open('/tmp/qore-g226-g215-after-committed-qa.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+           f.write('### G226: SAME G202/G223 five historic source IDs post-QA audit\\n\\n')
+           f.write('**Before G225: '+str(before['qaJourneysCompleted'])+'/5; after G225: '+
+             str(after['qaJourneysCompleted'])+'/5 (cargo x2, Commerce x1).**\\n\\n')
+           f.write('Two historical passenger IDs remain cancelled/open; the two fresh G224 ride completions are DISTINCT IDs.\\n\\n')
+           f.write('Commercial/legal/GPS/IdP/PSP certification remains 0/5.\\n')
+          PY
+      - name: G226 archive historic same-five before-after Admin recheck
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g226-historic-three-of-five-after-qa-${{ github.sha }}
+          path: /tmp/qore-g226-g215-after-committed-qa.json
           if-no-files-found: error
           retention-days: 14
       - name: G220 publish five positive QA closures separately from unresolved persistent G215
