@@ -3,19 +3,6 @@
 name: QORE G4 PostgreSQL disposable smoke
 on:
   workflow_dispatch:
-  # G228: verify the COMPLETE G221 same-original-ID PG16 chain on a draft PR;
-  # never require an Owner merge just to discover a SQL regression.
-  pull_request:
-    branches:
-      - 'integration/qore-mobile-e2e-four-apps-20261027'
-    paths:
-      - '.github/workflows/mobility-g4-postgres-disposable.yml'
-      - 'apps/mobility-expo/docs/backend/staging_only/G197_*'
-      - 'apps/mobility-expo/docs/backend/staging_only/G199_*'
-      - 'apps/mobility-expo/server/g197-*'
-      - 'apps/mobility-expo/server/g199-*'
-      - 'apps/movete-driver/app/distancia-recogida.tsx'
-      - 'apps/movete-driver/src/domain/g197-*'
   push:
     branches:
       - 'feature/mobility-monorepo-isolated-20261016'
