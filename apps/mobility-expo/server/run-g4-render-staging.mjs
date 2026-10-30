@@ -31,17 +31,17 @@ function boundedEnv(name,defaultValue,max){
   throw Error('Unsafe STAGING admission budget '+name);
  return value;
 }
+const admission={
+ maxConcurrentReads:boundedEnv('QORE_EDGE_MAX_READS',256,2048),
+ maxConcurrentWrites:boundedEnv('QORE_EDGE_MAX_WRITES',128,1024),
+ maxIdentityBuckets:boundedEnv('QORE_EDGE_MAX_IDENTITIES',32768,65536)
+};
 const readinessKey=process.env.QORE_STAGING_READINESS_KEY;
 if(typeof readinessKey!=='string'||!(/^[A-Za-z0-9_-]{48,128}$/).test(readinessKey)||
    [process.env.QORE_STAGING_SERVICE_ROLE_KEY,
     process.env.QORE_STAGING_PUBLISHABLE_KEY,
     process.env.QORE_HISTORY_CURSOR_SIGNING_KEY].includes(readinessKey))
  throw Error('Private STAGING readiness credential required');
-const admission={
- maxConcurrentReads:boundedEnv('QORE_EDGE_MAX_READS',256,2048),
- maxConcurrentWrites:boundedEnv('QORE_EDGE_MAX_WRITES',128,1024),
- maxIdentityBuckets:boundedEnv('QORE_EDGE_MAX_IDENTITIES',32768,65536)
-};
 // Validate host/origin BEFORE initializing any privileged clients.
 createRenderStagingIngress({
  loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,adminOrigin,
