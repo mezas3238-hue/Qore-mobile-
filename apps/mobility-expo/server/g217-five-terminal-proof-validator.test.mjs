@@ -20,7 +20,7 @@ function receipt(kind='DELIVERY_AUTO'){
   assignment:{state:'QA_COMPLETED',legalGate:'EXTERNAL_NOT_CERTIFIED'},
   events:states.map((status,i)=>({
    serviceId:id,eventId:i===0?id:'21700000-0000-4217-8217-'+
-     String(i).padStart(12,'0'),sequence:i+1,status,at:at-5000+i*1000
+     String(i+10).padStart(12,'0'),sequence:i+1,status,at:at-5000+i*1000
   })),
   ledger:kind.endsWith('_RIDE')?{serviceId:id,currency:'PYG',
    reconciliationStatus:'PENDING'}:null};
