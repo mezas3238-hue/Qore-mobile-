@@ -128,6 +128,40 @@ test('G211 Admin reads original AUTO QA arrival, pickup and completion without l
  }
 });
 
+test('G216 Admin renders only the original four-event verified cargo chain (AUTO and MOTO)',async()=>{
+ for(const kind of ['DELIVERY_AUTO','DELIVERY_MOTO']){
+  const valid=row(kind);
+  valid.status='delivered';valid.revision=4;
+  valid.assignment={state:'QA_COMPLETED',legalGate:'EXTERNAL_NOT_CERTIFIED'};
+  valid.ledger=null;
+  valid.events=['requested','accepted','picked_up','delivered'].map((state,i)=>({
+   eventId:uuid(70+i),serviceId:id,sequence:i+1,status:state,
+   at:at-4000+i*1000
+  }));
+  const pass=await configured(async()=>response(valid)).read(kind,id);
+  assert.equal(pass.ok,true,kind+': '+JSON.stringify(pass));
+  assert.equal(pass.data.revision,4);
+  assert.equal(pass.data.assignment.state,'QA_COMPLETED');
+  assert.equal(pass.data.productionEnabled,false);
+  for(const change of [
+   x=>x.events[2].status='delivered',
+   x=>x.events[3].sequence=3,
+   x=>x.events[3].eventId=x.events[1].eventId,
+   x=>x.assignment.legalGate='CLEARED',
+   x=>x.assignment.state='ASSIGNED',
+   x=>x.ledger={serviceId:id,currency:'PYG',grossGs:20000,
+    platformCommissionGs:3000,customerSubsidyGs:0,
+    driverPayoutGs:17000,reconciliationStatus:'RECONCILED'},
+   x=>x.revision=5
+  ]){
+   const forged=structuredClone(valid);change(forged);
+   const out=await configured(async()=>response(forged)).read(kind,id);
+   assert.equal(out.code,'INVALID_TRACE_RECEIPT',
+    kind+' accepted forged source '+JSON.stringify(forged));
+  }
+ }
+});
+
 test('D rejects role downgrade during HTTP, does not leak private session',async()=>{
  let who=session;
  const got=await configured(async()=>{who={...session,role:'owner'};
