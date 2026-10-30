@@ -21,10 +21,10 @@ DO $test$
 DECLARE
  row record;
  admin_user uuid:='14500000-0000-4145-8145-000000000002';
- courier uuid:='00000000-0000-4000-8000-000000000181';
- vehicle uuid:='00000000-0000-4000-8000-000000000184';
+ courier uuid;
+ vehicle uuid;
  recipient uuid:='18700000-0000-4187-8187-000000000002';
- courier_session uuid:='21600000-0000-4216-8216-000000000001';
+ courier_session uuid;
  recipient_session uuid:='21600000-0000-4216-8216-000000000002';
  sender_session uuid;
  offer_id uuid; accepted_id uuid; proof uuid; event_key uuid; dto jsonb;
@@ -38,11 +38,7 @@ BEGIN
   (user_id,session_id,provider_confirmed_at,token_allowed_from,
    valid_until,evidence_kind)
  VALUES
-  (courier,courier_session,pg_catalog.clock_timestamp()-interval '1 day',
-   pg_catalog.clock_timestamp()-interval '1 minute',
-   pg_catalog.clock_timestamp()+interval '1 hour',
-   'QA_SYNTHETIC_PROVIDER_SESSION_ONLY'),
-  (recipient,recipient_session,pg_catalog.clock_timestamp()-interval '1 day',
+   (recipient,recipient_session,pg_catalog.clock_timestamp()-interval '1 day',
    pg_catalog.clock_timestamp()-interval '1 minute',
    pg_catalog.clock_timestamp()+interval '1 hour',
    'QA_SYNTHETIC_PROVIDER_SESSION_ONLY');
@@ -55,6 +51,22 @@ BEGIN
    AND d.requested_vehicle_kind IN ('AUTO','MOTO')
   ORDER BY d.requested_vehicle_kind
  LOOP
+  IF row.requested_vehicle_kind='AUTO' THEN
+   courier:='00000000-0000-4000-8000-000000000181'::uuid;
+   vehicle:='00000000-0000-4000-8000-000000000184'::uuid;
+  ELSE
+   courier:='00000000-0000-4000-8000-000000000103'::uuid;
+   vehicle:='00000000-0000-4000-8000-000000000104'::uuid;
+  END IF;
+  courier_session:=pg_catalog.gen_random_uuid();
+  INSERT INTO public.mobility_stage_g42_provider_session_grants
+   (user_id,session_id,provider_confirmed_at,token_allowed_from,
+    valid_until,evidence_kind)
+  VALUES(courier,courier_session,
+    pg_catalog.clock_timestamp()-interval '1 day',
+    pg_catalog.clock_timestamp()-interval '1 minute',
+    pg_catalog.clock_timestamp()+interval '1 hour',
+    'QA_SYNTHETIC_PROVIDER_SESSION_ONLY');
   sender_session:=pg_catalog.gen_random_uuid();
   INSERT INTO public.mobility_stage_g42_provider_session_grants
    (user_id,session_id,provider_confirmed_at,token_allowed_from,
