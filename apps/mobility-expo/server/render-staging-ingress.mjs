@@ -8,7 +8,8 @@
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
 
-const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com)$/;
+const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/;
+const RAILWAY_HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.up\.railway\.app$/;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const MAX_BODY=2048;
 const MAX_REPLY=32768;
@@ -81,13 +82,14 @@ export function createRenderStagingIngress({
  loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
  maxConcurrentReads=DEFAULT_MAX_READS,
  maxConcurrentWrites=DEFAULT_MAX_WRITES,
- maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS
+ maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS,platform='render'
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
  if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||!url.port||
     url.pathname!=='/'||url.username||url.password||url.search||url.hash||
-    !HOST.test(expectedHost)||!validOrigin('https://'+expectedHost)||
+    !(platform==='render'?HOST:platform==='railway'?RAILWAY_HOST:/^$/).test(expectedHost)||
+    !validOrigin('https://'+expectedHost)||
     (adminOrigin!==null&&(!validOrigin(adminOrigin)||
       new URL(adminOrigin).hostname===expectedHost))||
     typeof request!=='function'||typeof now!=='function'||
