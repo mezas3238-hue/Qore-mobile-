@@ -194,8 +194,8 @@ const services=sources.services.map(source=>{
   const fns={
    AUTO_RIDE:'mobility_stage_g138_auto_trace_qa',
    MOTO_RIDE:'mobility_stage_g142_moto_trace_qa',
-   DELIVERY_AUTO:'mobility_stage_g145_delivery_trace_qa',
-   DELIVERY_MOTO:'mobility_stage_g145_delivery_trace_qa',
+   DELIVERY_AUTO:'mobility_stage_g216_completed_delivery_trace_qa',
+   DELIVERY_MOTO:'mobility_stage_g216_completed_delivery_trace_qa',
    COMMERCE:'mobility_stage_g146_commerce_trace_qa'
   };
   const receipt=query('SET ROLE service_role; SELECT public.'+
