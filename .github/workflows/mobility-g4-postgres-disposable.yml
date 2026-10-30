@@ -85,6 +85,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
       - 'apps/mobility-expo/server/g220-*'
+      - 'apps/mobility-expo/server/g221-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G221_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -206,6 +208,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
       - 'apps/mobility-expo/server/g220-*'
+      - 'apps/mobility-expo/server/g221-*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G221_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -1012,9 +1016,13 @@ jobs:
         run: node apps/mobility-expo/server/g158-admin-fraud-pg-http-ci.mjs
       - name: G117 real B Owner gateway through A HTTP plus PostgreSQL commission, MFA and revocation
         run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs
+      - name: G221 persist five ORIGINAL positive QA lifecycles in disposable PG16 only (synthetic acceptance explicitly NOT legal)
+        run: node apps/mobility-expo/server/g221-five-original-persistent-e2e-pg-ci.mjs
       - name: G202 audit five original Cliente -> Driver or Comercio -> Admin sources in ONE PostgreSQL16
         run: node apps/mobility-expo/server/g202-five-original-service-journeys-pg-ci.mjs
-      - name: G215 independently verify each original ID through final Driver/Courier/Recipient and Admin
+      - name: G215 independently verify all five original IDs and fail CI if any QA phase is missing
+        env:
+          QORE_REQUIRE_FIVE_QA_CLOSURES: 'true'
         run: node apps/mobility-expo/server/g215-five-journey-e2e-readiness-pg-ci.mjs
       - name: G215 publish five-service E2E reality matrix in Actions summary
         shell: bash
@@ -1033,28 +1041,26 @@ jobs:
            f.write('\n**Commercial E2E certification: 0/5.** ')
            f.write('Real external IdP/legal/GPS, Geoapify and PSP are not established by disposable PG16.\n')
           PY
-      - name: G220 execute 5 positive original source QA lifecycles with legal acceptance explicitly synthetic and rolled back
-        run: node apps/mobility-expo/server/g220-five-positive-original-journeys-pg-ci.mjs
-      - name: G220 publish five positive QA closures separately from unresolved persistent G215
+      - name: G221 certify all five original Client Driver Courier Merchant Admin identities on exact persistent disposable-source IDs
+        run: node apps/mobility-expo/server/g221-five-same-id-qa-certification-pg-ci.mjs
+      - name: G221 publish strict five same-original-ID E2E QA closures and external blockers
         shell: bash
         run: |
           python3 - <<'PY'
           import json,os
-          a=json.load(open('/tmp/qore-g220-five-positive-qa-journeys.json'))
+          a=json.load(open('/tmp/qore-g221-five-same-id-e2e-certification.json'))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
-           f.write('### G220: '+a['verdict']+'\\n\\n')
-           f.write('**Positive rollback-only synthetic-acceptance QA: 5/5.**\\n\\n')
-           f.write('**G215 independent persistent original-id closure: '+
-             str(a['persistentG215SameFiveJourneysCompleted'])+'/5.**\\n\\n')
-           f.write('**Certified physical/legal/payment journeys: 0/5.**\\n\\n')
+           f.write('### G221: five SAME original IDs closed in disposable PostgreSQL QA\\n\\n')
+           f.write('**QA Client -> Driver/Courier/Commerce -> Admin: 5/5 independently verified by G215.**\\n\\n')
+           f.write('**Synthetic legal acceptance: yes; REAL commercial certification: 0/5.**\\n\\n')
            for service in a['services']:
-            f.write('- '+service['serviceKind']+': original SQL custody/Driver/Admin sequence proven in rollback fixture\\n')
+            f.write('- '+service['serviceKind']+' original '+service['originalServiceId']+': QA complete, external gates BLOCKED\\n')
           PY
-      - name: G220 archive five actual QA fixture outcomes separately from G215
+      - name: G221 archive independently reconciled five same-ID original-source QA result
         uses: actions/upload-artifact@v4
         with:
-          name: qore-g220-five-positive-original-qa-${{ github.sha }}
-          path: /tmp/qore-g220-five-positive-qa-journeys.json
+          name: qore-g221-five-same-original-id-qa-${{ github.sha }}
+          path: /tmp/qore-g221-five-same-id-e2e-certification.json
           if-no-files-found: error
           retention-days: 14
       - name: G215 archive machine-readable five-service E2E result
