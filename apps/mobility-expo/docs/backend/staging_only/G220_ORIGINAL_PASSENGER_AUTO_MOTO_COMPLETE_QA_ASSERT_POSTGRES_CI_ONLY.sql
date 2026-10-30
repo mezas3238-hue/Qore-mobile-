@@ -52,7 +52,7 @@ BEGIN
  -- QA synthetic route is not Geoapify real-provider evidence.
  route:=public.mobility_stage_g73_route(
   pa,'22000000-0000-4220-8220-000000000041'::uuid,
-  'economico','CENTRO_QA','AEROPUERTO_QA','ASUNCION_QA',5400,720,0);
+  'economico','PANTEON','AEROPUERTO','ASUNCION_FIXTURE',5400,720,0);
  quote:=public.mobility_stage_g73_quote(
   pa,route,'22000000-0000-4220-8220-000000000042'::uuid);
  trip:=public.mobility_stage_g73_book(pa,quote,ba);
