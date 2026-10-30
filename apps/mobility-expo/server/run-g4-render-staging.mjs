@@ -31,6 +31,12 @@ function boundedEnv(name,defaultValue,max){
   throw Error('Unsafe STAGING admission budget '+name);
  return value;
 }
+const readinessKey=process.env.QORE_STAGING_READINESS_KEY;
+if(typeof readinessKey!=='string'||!(/^[A-Za-z0-9_-]{48,128}$/).test(readinessKey)||
+   [process.env.QORE_STAGING_SERVICE_ROLE_KEY,
+    process.env.QORE_STAGING_PUBLISHABLE_KEY,
+    process.env.QORE_HISTORY_CURSOR_SIGNING_KEY].includes(readinessKey))
+ throw Error('Private STAGING readiness credential required');
 const admission={
  maxConcurrentReads:boundedEnv('QORE_EDGE_MAX_READS',256,2048),
  maxConcurrentWrites:boundedEnv('QORE_EDGE_MAX_WRITES',128,1024),
@@ -39,7 +45,7 @@ const admission={
 // Validate host/origin BEFORE initializing any privileged clients.
 createRenderStagingIngress({
  loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,adminOrigin,
- ...admission
+ readinessKey,...admission
 });
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
@@ -56,7 +62,7 @@ const runtime=await prepareQoreG4StagingRuntime({
 const localOrigin=await listenQoreRadarLoopback(runtime.server);
 const ingress=createRenderStagingIngress({
  loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin,
- ...admission
+ readinessKey,readinessProbe:runtime.readinessProbe,...admission
 });
 const shutdown=()=>{
  ingress.close();
