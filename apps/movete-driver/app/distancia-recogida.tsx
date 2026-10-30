@@ -12,7 +12,7 @@ const SERVICES:{kind:Kind;label:string}[]=[
  {kind:'DELIVERY',label:'Recoger envíos particulares'},
  {kind:'MERCHANT_ORDER',label:'Recoger pedidos de comercios'}
 ];
-const METERS=[1000,2000,3000,5000,8000,10000,15000,20000,30000,50000];
+const METERS=[0,1000,2000,3000,5000,8000,10000,15000,20000,30000,50000];
 const yes=(x:string|undefined)=>x==='true';
 export default function DriverPickupDistance(){
  const auth=useNativeDriverAuth();
@@ -60,7 +60,9 @@ export default function DriverPickupDistance(){
     return;
    }
    setSaved(old=>({...old,[kind]:{maximumRoadMeters:draft,revision:r.data!.revision!}}));
-   setNotice('Distancia máxima confirmada en PostgreSQL QA. El backend rechazará una oferta fuera del rango cuando reciba ruta real y reciente.');
+   setNotice(draft===0
+    ?'OFF confirmado en PostgreSQL QA para este servicio. El servidor bloqueará nuevas ofertas de esa categoría.'
+    :'Distancia máxima confirmada en PostgreSQL QA. El backend rechazará una oferta fuera del rango cuando reciba ruta real y reciente.');
   }finally{lock.current=false;setBusy(false);}
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
@@ -82,15 +84,15 @@ export default function DriverPickupDistance(){
   </Panel>
   <Panel>
    <Text style={styles.heading}>Máximo de recogida</Text>
-   <Text style={styles.text}>Seleccionado: {(draft/1000).toLocaleString('es-PY')} km</Text>
+   <Text style={styles.text}>Seleccionado: {draft===0?'OFF — no recibir ofertas nuevas de este servicio':(draft/1000).toLocaleString('es-PY')+' km'}</Text>
    <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
     {METERS.map(m=><View key={m} style={{minWidth:72,flexGrow:1}}>
-     <Action label={m/1000+' km'+(draft===m?' ✓':'')} secondary={draft!==m}
+     <Action label={(m===0?'OFF':m/1000+' km')+(draft===m?' ✓':'')} secondary={draft!==m}
       onPress={()=>{setDraft(m);setNotice('');}}/>
     </View>)}
    </View>
    <Text style={styles.small}>Guardado en servidor para este servicio: {
-    saved[kind]?saved[kind].maximumRoadMeters/1000+' km':'No verificado'}.</Text>
+    saved[kind]?(saved[kind].maximumRoadMeters===0?'OFF':saved[kind].maximumRoadMeters/1000+' km'):'No verificado'}.</Text>
    <Action label={busy?'Comprobando…':'Consultar preferencias del servidor'}
     secondary disabled={!gateway.isConfigured()||busy}
     onPress={()=>{void reload();}}/>
