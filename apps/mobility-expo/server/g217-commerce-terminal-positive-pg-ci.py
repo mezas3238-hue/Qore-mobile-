@@ -42,13 +42,18 @@ with db() as c:
   baseline=read(c,"mobility_stage_g146_commerce_trace_qa",OID)
   assert baseline['serviceId']==OID and baseline['deliveryId']==DID
   assert baseline['bookingRequestKey']==order['originalRequestKey']
-  # Synthetic Driver/vehicle are existing QA identities, not legal permits.
-  courier,vehicle=(("00000000-0000-4000-8000-000000000181",
-    "00000000-0000-4000-8000-000000000184") if kind=='AUTO' else
-   ("00000000-0000-4000-8000-000000000103",
-    "00000000-0000-4000-8000-000000000104"))
-  assert scalar(c,"SELECT count(*) FROM public.mobility_vehicles "+
-   "WHERE id=%s AND driver_id=%s AND vehicle_kind=%s",vehicle,courier,kind)==1
+  # Unique explicitly simulated Driver+vehicle only in transaction rollback:
+  # never hijack a real or existing QA courier's exclusive G36 slot.
+  courier,vehicle=uid(),uid()
+  sql(c,"INSERT INTO auth.users(id) VALUES(%s)",courier)
+  sql(c,"DELETE FROM public.user_roles WHERE user_id=%s",courier)
+  sql(c,"INSERT INTO public.user_roles(user_id,role) VALUES(%s,'driver')",courier)
+  sql(c,"""INSERT INTO public.mobility_vehicles(
+   id,driver_id,vehicle_kind,service_kind,municipality_code,plate_normalized,
+   brand,model,manufacture_year,passenger_capacity,review_status)
+   VALUES(%s,%s,%s,%s,'ASUNCION',%s,'TEST','G217',2020,%s,'approved')""",
+   vehicle,courier,kind,'economico' if kind=='AUTO' else 'moto_pasajero',
+   'QA'+uuid.uuid4().hex[:8].upper(),4 if kind=='AUTO' else 1)
   at=int(time.time()*1000)
   sessions={x:uid() for x in (sender,courier,RECIPIENT)}
   for actor,sid in sessions.items():
