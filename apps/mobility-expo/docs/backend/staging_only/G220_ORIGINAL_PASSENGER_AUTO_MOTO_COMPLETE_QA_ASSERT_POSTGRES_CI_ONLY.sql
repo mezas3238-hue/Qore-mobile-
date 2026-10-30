@@ -29,6 +29,24 @@ DELETE FROM public.user_roles WHERE user_id IN(
 INSERT INTO public.user_roles(user_id,role) VALUES
  ('22000000-0000-4220-8220-000000000013'::uuid,'driver'),
  ('22000000-0000-4220-8220-000000000014'::uuid,'driver');
+-- G222: the original G73/G72 AUTO quote is governed by the owner-reviewed
+-- G93 price rule. Give this ROLLBACK-only Owner an explicit test campaign,
+-- rather than ignoring the quote-time financial authority. This does NOT
+-- approve an external price, PSP capture, municipal license or LIVE dispatch.
+INSERT INTO auth.users(id)
+ VALUES ('22000000-0000-4220-8220-000000000015'::uuid);
+DELETE FROM public.user_roles
+ WHERE user_id='22000000-0000-4220-8220-000000000015'::uuid;
+INSERT INTO public.mobility_stage_backoffice_roles(user_id,role,status,approved_by)
+ VALUES('22000000-0000-4220-8220-000000000015'::uuid,'owner','active',
+ '22000000-0000-4220-8220-000000000015'::uuid);
+INSERT INTO public.mobility_stage_g93_ride_campaigns(
+ id,service_kind,rule_version,approved_by,active,begins_at,ends_at,duration_days)
+VALUES('22000000-0000-4220-8220-000000000025'::uuid,'AUTO_RIDE',
+ 'G222_OWNER_TEST_PRICE_ONLY',
+ '22000000-0000-4220-8220-000000000015'::uuid,true,
+ pg_catalog.transaction_timestamp()-interval '1 hour',
+ pg_catalog.transaction_timestamp()+interval '59 days',60);
 INSERT INTO public.mobility_vehicles(
  id,driver_id,vehicle_kind,service_kind,country_code,municipality_code,
  plate_normalized,brand,model,manufacture_year,passenger_capacity,review_status)
