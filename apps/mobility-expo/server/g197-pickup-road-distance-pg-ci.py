@@ -52,16 +52,24 @@ with db() as c:
  c.execute("""UPDATE public.mobility_stage_g197_verified_pickup_routes
  SET distance_meters=4500 WHERE road_evidence_id=%s""",(road_id,))
  assert c.execute(CHECK,('RIDE',T,D)).fetchone()[0] is True
+ # Owner explicitly disables RIDE while DELIVERY/COMMERCE preferences remain
+ # distinct. A valid road route may never bypass this zero-metre OFF value.
+ off=c.execute(SET,(D,S,AT,'RIDE',0,1)).fetchone()[0]
+ assert off['maximumRoadMeters']==0 and off['revision']==2
+ assert c.execute(CHECK,('RIDE',T,D)).fetchone()[0] is False
+ restored=c.execute(SET,(D,S,AT,'RIDE',5000,2)).fetchone()[0]
+ assert restored['revision']==3
+ assert c.execute(CHECK,('RIDE',T,D)).fetchone()[0] is True
  assert c.execute(CHECK,('MERCHANT_ORDER',T,D)).fetchone()[0] is False
  assert c.execute(CHECK,('DELIVERY',T,D)).fetchone()[0] is True
- old=c.execute(SET,(D,S,AT,'RIDE',3000,1)).fetchone()[0]
- assert old['revision']==2
+ old=c.execute(SET,(D,S,AT,'RIDE',3000,3)).fetchone()[0]
+ assert old['revision']==4
  assert c.execute(CHECK,('RIDE',T,D)).fetchone()[0] is False
  # Revoked IdP prevents *any* preference mutation even with valid JWT age.
  c.execute("""UPDATE public.mobility_stage_g42_provider_session_grants
  SET revoked_at=clock_timestamp(),revision=revision+1
  WHERE user_id=%s AND session_id=%s""",(D,S))
- fail(c,'P9702',SET,D,S,AT,'RIDE',50000,2)
+ fail(c,'P9702',SET,D,S,AT,'RIDE',50000,4)
  for role in ('anon','authenticated','mobility_g48_gateway_ci'):
   c.execute('SET LOCAL ROLE '+role)
   fail(c,'42501',SET,D,S,AT,'RIDE',10000,2)
