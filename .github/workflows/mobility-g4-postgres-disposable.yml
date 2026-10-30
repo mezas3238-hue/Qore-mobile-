@@ -85,9 +85,11 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G224_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G225_*'
       - 'apps/mobility-expo/server/g220-*'
       - 'apps/mobility-expo/server/g223-*'
       - 'apps/mobility-expo/server/g224-*'
+      - 'apps/mobility-expo/server/g225-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -209,9 +211,11 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G219_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G220_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G224_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G225_*'
       - 'apps/mobility-expo/server/g220-*'
       - 'apps/mobility-expo/server/g223-*'
       - 'apps/mobility-expo/server/g224-*'
+      - 'apps/mobility-expo/server/g225-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G142_*'
       - 'apps/mobility-expo/server/g139-*'
       - 'apps/movete-cliente/src/domain/g139-*'
@@ -1086,6 +1090,28 @@ jobs:
         with:
           name: qore-g224-two-new-committed-qa-rides-${{ github.sha }}
           path: /tmp/qore-g224-two-committed-qa-rides.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: G225 unit test three original delivery-commerce chains and negative fail-closed variants
+        run: node --test apps/mobility-expo/server/g225-five-committed-qa-journeys.test.mjs
+      - name: G225 COMMIT G223 original AUTO and MOTO delivery plus Commerce and independently verify Admin
+        run: node apps/mobility-expo/server/g225-five-committed-qa-journeys-pg-ci.mjs
+      - name: G225 publish five committed QA identity distinction
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open('/tmp/qore-g225-five-committed-qa-originals.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+           f.write('### G225: five committed QA source lifecycles read from independent Admin connections\\n\\n')
+           f.write('**2/2 fresh original passenger journeys + 3/3 historic original cargo/commerce sources.**\\n\\n')
+           f.write('Two historical cancelled/open passenger G215 sources remain incomplete; synthetic acceptance does not certify legal IdP/GPS/PSP.\\n')
+          PY
+      - name: G225 archive five distinct original QA completion IDs and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g225-five-original-qa-${{ github.sha }}
+          path: /tmp/qore-g225-five-committed-qa-originals.json
           if-no-files-found: error
           retention-days: 14
       - name: G220 publish five positive QA closures separately from unresolved persistent G215
