@@ -46,6 +46,14 @@ CREATE OR REPLACE FUNCTION public.mobility_stage_g146_commerce_trace_qa(
        (d.status='requested' AND d.courier_id IS NULL
         AND d.vehicle_id IS NULL AND d.proof_ref IS NULL)
        OR
+       -- G219 original accepted/picked_up courier progress; still NOT
+       -- delivery, recipient acknowledgement or a captured payment.
+       (d.status IN ('accepted','picked_up')
+        AND d.courier_id IS NOT NULL AND d.vehicle_id IS NOT NULL
+        AND d.proof_ref IS NULL
+        AND public.mobility_stage_g219_active_delivery_trace_qa(
+         _admin,d.id) IS NOT NULL)
+       OR
        -- Only a COMPLETE original G5/G10/G67/G187 delivery is eligible:
        -- courier's click is not a recipient ACK or merchant payout.
        (d.status='delivered' AND d.courier_id IS NOT NULL
