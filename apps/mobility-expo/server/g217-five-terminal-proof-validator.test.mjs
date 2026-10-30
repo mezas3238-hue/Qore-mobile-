@@ -65,7 +65,7 @@ test('G217 never interprets courier-only delivery, unbound recipient or stale re
 test('G217 Commerce requires original G45 ready order and same linked G5 terminal receipt',()=>{
  const order={...receipt('DELIVERY_AUTO'),serviceKind:'COMMERCE',status:'ready',
  revision:5,deliveryId:id,vehicleKind:'AUTO',assignment:{
-  state:'NOT_ASSIGNABLE',legalGate:'EXTERNAL_NOT_CERTIFIED'}};
+  state:'NOT_ASSIGNABLE',legalGate:'G38_BLOCKED'}};
  const originalOrder={...original('COMMERCE'),linkedCommerceDeliveryId:id};
  assert.equal(verifyG217TerminalRead({source:originalOrder,
   receipt:order,linkedDeliveryReceipt:receipt('DELIVERY_AUTO'),now:at}).ok,true);
