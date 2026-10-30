@@ -9,8 +9,8 @@ export const TRACE_SERVICE_KINDS=Object.freeze([
 const STATES=Object.freeze({
  AUTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
  MOTO_RIDE:['requested','searching','assigned','arriving','in_progress','completed','cancelled'],
- DELIVERY_MOTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
- DELIVERY_AUTO:['requested','searching','assigned','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
+ DELIVERY_MOTO:['requested','searching','assigned','accepted','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
+ DELIVERY_AUTO:['requested','searching','assigned','accepted','pickup_pending','picked_up','in_transit','delivered','returned','cancelled'],
  COMMERCE:['requested','confirmed','preparing','ready','in_transit','delivered','returned','cancelled']
 });
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -65,15 +65,16 @@ function validated(d,kind,id,subject,t){
   ||(d.assignment.legalGate!=='CLEARED'&&d.assignment.state!=='NOT_ASSIGNABLE'
    &&!['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state))
   ||(d.assignment.state==='ASSIGNED'&&d.assignment.legalGate!=='CLEARED')
-  // A source-attested QA assignment is never a legal permit, a payment,
-  // or an assignment for MOTO/courier/commerce.
+  // QA source provenance is never physical delivery, legal permission or PSP settlement.
   ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)!==
     (d.assignment.legalGate==='EXTERNAL_NOT_CERTIFIED'))
   ||(['QA_ACCEPTED','QA_COMPLETED'].includes(d.assignment.state)&&(
-    !['AUTO_RIDE','MOTO_RIDE'].includes(kind)||
+    !['AUTO_RIDE','MOTO_RIDE','DELIVERY_AUTO','DELIVERY_MOTO'].includes(kind)||
     (d.assignment.state==='QA_ACCEPTED'&&
      !['assigned','arriving','in_progress'].includes(d.status))||
-    (d.assignment.state==='QA_COMPLETED'&&d.status!=='completed')))
+    (d.assignment.state==='QA_COMPLETED'&&
+     !(['AUTO_RIDE','MOTO_RIDE'].includes(kind)?d.status==='completed':
+      d.status==='delivered'))))
   ||!Array.isArray(d.events)||d.events.length<1||d.events.length>40
   ||(kind==='COMMERCE'&&(
     !['requested','confirmed','preparing','ready','cancelled'].includes(d.status)
@@ -102,6 +103,13 @@ function validated(d,kind,id,subject,t){
     event.status!==timeline[index]))return false;
  }
 
+ if(['DELIVERY_AUTO','DELIVERY_MOTO'].includes(kind)&&
+  d.assignment.state==='QA_COMPLETED'){
+  const timeline=['requested','accepted','picked_up','delivered'];
+  if(d.revision!==4||d.events.length!==4||d.ledger!==null||
+   d.events.some((event,i)=>event.sequence!==i+1||
+    event.status!==timeline[i]))return false;
+ }
  if(kind==='COMMERCE'&&d.events.some((e,i)=>
   e.sequence!==i+1||
   e.status!==(d.status==='cancelled'&&i===d.revision-1
