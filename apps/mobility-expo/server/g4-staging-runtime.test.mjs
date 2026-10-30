@@ -199,6 +199,9 @@ function mockSupabase(){
     if(name==='mobility_stage_g145_delivery_trace_qa')
      return {data:params._admin===stranger&&params._delivery===deliveryId?
       state.cargoTraceReceipt:null,error:null};
+    if(name==='mobility_stage_g219_active_delivery_trace_qa')
+     return {data:params._admin===stranger&&params._delivery===deliveryId?
+      (state.activeCargoTraceReceipt??null):null,error:null};
     if(name==='mobility_stage_g216_completed_delivery_trace_qa')
      return {data:params._admin===stranger&&params._delivery===deliveryId?
       (state.completedCargoTraceReceipt??null):null,error:null};
