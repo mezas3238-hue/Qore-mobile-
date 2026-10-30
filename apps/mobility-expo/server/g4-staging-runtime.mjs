@@ -1261,9 +1261,27 @@ export async function prepareQoreG4StagingRuntime({
     return driverKycValidity({bearer});
    })}),
   });
+ // G229 private, read-only infrastructure check. Not a QA/E2E certificate.
+ // Supabase Auth must remain closed to public signup; essential persistent
+ // tables and role authority must still answer. No SQL mutation or fixtures.
+ const readinessProbe=async()=>{
+  await inspect();
+  for(const table of [
+   'user_roles',
+   'mobility_stage_auto_demo_trips',
+   'mobility_stage_deliveries',
+   'mobility_stage_merchant_orders',
+   'mobility_stage_ledger_entries',
+   'mobility_stage_driver_documents'
+  ]){
+   const {error}=await admin.from(table).select('id',{head:true,count:'exact'}).limit(0);
+   if(error)throw Error('STAGING dependency unavailable');
+  }
+  return true;
+ };
  return {
   projectRef:ref,commercialRidesEnabled:false,qaAutoDispatchRetry,
-  server:qaServer,
+  readinessProbe,server:qaServer,
   listenQa:({port=0}={})=>listenG165IsolatedQaRuntime({
    server:qaServer,worker:qaAutoDispatchRetry,port
   })
