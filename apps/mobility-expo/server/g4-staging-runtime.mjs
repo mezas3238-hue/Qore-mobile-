@@ -931,7 +931,14 @@ export async function prepareQoreG4StagingRuntime({
     _admin:actorId,_delivery:deliveryId
    });
    if(error)throw Error('G145 original SQL cargo trace unavailable');
-   return data;
+   if(data!==null)return data;
+   // G216 complete only with same original G10 accepted offer, G67 consumed
+   // proof and G187 independent recipient. No synthetic completion fallback.
+   const completed=await admin.rpc('mobility_stage_g216_completed_delivery_trace_qa',{
+    _admin:actorId,_delivery:deliveryId
+   });
+   if(completed.error)throw Error('G216 delivery evidence SQL unavailable');
+   return completed.data;
   }
  });
  // G146: original G45 Buyer stock/order, read-only Admin provenance.
