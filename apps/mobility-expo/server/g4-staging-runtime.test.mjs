@@ -2418,3 +2418,19 @@ test('G177 denied SQL cannot be presented as an acknowledged Driver arrival',asy
   assert.equal(m.state.trip.status,'accepted');
  });
 });
+
+test('G229 operator readiness is read-only and fails closed when Auth, roles or a service table disappear',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m);
+ assert.equal(typeof runtime.readinessProbe,'function');
+ assert.equal(await runtime.readinessProbe(),true);
+ assert.equal(m.state.rpcs.length,0,'health never performs business RPCs');
+ m.state.missing='mobility_stage_merchant_orders';
+ await assert.rejects(runtime.readinessProbe(),/STAGING dependency unavailable/);
+ m.state.missing='user_roles';
+ await assert.rejects(runtime.readinessProbe(),/STAGING dependency unavailable/);
+ m.state.missing=null;
+ m.state.policy=false;
+ await assert.rejects(runtime.readinessProbe(),/Auth public signup/);
+ assert.equal(m.state.rpcs.length,0,'readiness must remain read-only on failure');
+});
