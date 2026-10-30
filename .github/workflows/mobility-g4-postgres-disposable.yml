@@ -109,6 +109,7 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G200_*'
       - 'apps/mobility-expo/server/g200-*'
       - 'apps/mobility-expo/server/g202-*'
+      - 'apps/mobility-expo/server/g215-*'
       - 'apps/mobility-expo/server/g201-*'
       - 'apps/mobility-expo/server/g199-*'
       - 'apps/mobility-expo/docs/backend/staging_only/G198_*'
@@ -988,6 +989,32 @@ jobs:
         run: node apps/mobility-expo/server/g116-owner-commission-a-b-postgres-http-ci.mjs
       - name: G202 audit five original Cliente -> Driver or Comercio -> Admin sources in ONE PostgreSQL16
         run: node apps/mobility-expo/server/g202-five-original-service-journeys-pg-ci.mjs
+      - name: G215 independently verify each original ID through final Driver/Courier/Recipient and Admin
+        run: node apps/mobility-expo/server/g215-five-journey-e2e-readiness-pg-ci.mjs
+      - name: G215 publish five-service E2E reality matrix in Actions summary
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          a=json.load(open('/tmp/qore-g215-five-journey-e2e-readiness.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+           f.write('### G215 five-service same-ID E2E audit: '+a['verdict']+'\n\n')
+           f.write('| Service | Original source | QA E2E completed | Missing steps |\n')
+           f.write('|---|---|---|---|\n')
+           for s in a['services']:
+            missing=', '.join(s['missingQaSteps']) or 'none'
+            f.write('| '+s['serviceKind']+' | verified | '+
+             ('YES' if s['qaJourneyClosed'] else 'NO')+' | '+missing+' |\n')
+           f.write('\n**Commercial E2E certification: 0/5.** ')
+           f.write('Real external IdP/legal/GPS, Geoapify and PSP are not established by disposable PG16.\n')
+          PY
+      - name: G215 archive machine-readable five-service E2E result
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-g215-five-journey-e2e-reality-${{ github.sha }}
+          path: /tmp/qore-g215-five-journey-e2e-readiness.json
+          if-no-files-found: error
+          retention-days: 14
       - name: G202 publish verified five-service evidence and missing commercial gates
         uses: actions/upload-artifact@v4
         with:
