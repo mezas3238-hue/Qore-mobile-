@@ -1488,6 +1488,38 @@ test('G145 cargo original SQL trace is securely mounted for AUTO and MOTO',async
   });
  }
 });
+test('G219 independent Admin follows accepted and picked-up original cargo without a false delivery',async()=>{
+ for(const [path,kind] of [[g145Auto,'DELIVERY_AUTO'],[g145Moto,'DELIVERY_MOTO']]){
+  for(const state of ['accepted','picked_up']){
+   const m=mockSupabase();m.state.adminRole='admin';
+   m.state.cargoTraceReceipt=null;
+   const dto=g145Snapshot(kind);
+   dto.status=state;dto.revision=state==='accepted'?2:3;
+   dto.assignment={state:'QA_ACCEPTED',legalGate:'EXTERNAL_NOT_CERTIFIED'};
+   dto.events=[
+    {eventId:deliveryId,serviceId:deliveryId,sequence:1,
+     status:'requested',at:now-5000},
+    ...['accepted','picked_up'].slice(0,dto.revision-1).map((status,i)=>({
+     eventId:[offer,vehicle][i],serviceId:deliveryId,
+     sequence:i+2,status,at:now-4000+i*1000
+    }))
+   ];
+   m.state.activeCargoTraceReceipt=dto;
+   await http(await prepare(m,{adminF1Trust:trust()}),async base=>{
+    const result=await req(base,path,'stranger');
+    assert.equal(result.status,200,kind+' '+state+' '+JSON.stringify(result.body));
+    assert.equal(result.body.status,state);
+    assert.equal(result.body.assignment.state,'QA_ACCEPTED');
+    assert.equal(result.body.events.length,dto.revision);
+    assert.equal(result.body.ledger,null);
+    assert(m.state.rpcs.some(x=>x.name==='mobility_stage_g219_active_delivery_trace_qa'
+     &&x.params._delivery===deliveryId));
+    assert(!m.state.rpcs.some(x=>x.name==='mobility_stage_g216_completed_delivery_trace_qa'));
+   });
+  }
+ }
+});
+
 test('G216 original delivered cargo is visible via authenticated Admin HTTP only after completed SQL read',async()=>{
  for(const [path,kind] of [[g145Auto,'DELIVERY_AUTO'],[g145Moto,'DELIVERY_MOTO']]){
   const m=mockSupabase();m.state.adminRole='admin';
