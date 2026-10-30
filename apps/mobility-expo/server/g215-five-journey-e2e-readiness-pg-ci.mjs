@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
+import {verifyG217TerminalRead} from './g217-five-terminal-proof-validator.mjs';
 
 if(process.env.CI!=='true'||process.env.PGHOST!=='localhost'||
  process.env.PGPORT!=='5432'||process.env.PGDATABASE!=='qore_disposable_chain'||
@@ -136,14 +137,42 @@ function delivery(id){
  ) FROM public.mobility_stage_deliveries d
  WHERE d.id=${quote(id)}`);
 }
+// The G202 Admin receipt was taken BEFORE a journey. The G217 final receipt
+// must be read again from independently authorized ORIGINAL Admin SQL AFTER
+// all Driver/Courier SQL commits; never mark a final Admin read true by fiat.
+const admin=query("SELECT jsonb_build_object('id',user_id) "+
+ "FROM public.mobility_stage_backoffice_roles "+
+ "WHERE role='admin' AND status='active' "+
+ "AND public.mobility_stage_g27_backoffice_role_of(user_id)='admin' "+
+ "ORDER BY user_id LIMIT 1")?.id;
+assert(uuid.test(admin),'G217 cannot prove original terminal state without independent Admin');
+function terminalAdminRead(kind,id){
+ const sqlFunction=kind==='AUTO_RIDE'?'mobility_stage_g138_auto_trace_qa':
+  kind==='MOTO_RIDE'?'mobility_stage_g142_moto_trace_qa':
+  kind==='COMMERCE'?'mobility_stage_g217_commerce_terminal_admin_qa':
+  'mobility_stage_g216_completed_delivery_trace_qa';
+ return query("SET ROLE service_role; SELECT public."+sqlFunction+
+  "("+quote(admin)+","+quote(id)+")::text");
+}
+
 const services=sources.services.map(source=>{
  assert(uuid.test(source.originalServiceId));
  assert(uuid.test(source.originalRequestKey));
  assert.equal(source.clientToAdminSameOriginal,true);
  const state=contexts[source.serviceKind](source.originalServiceId);
  assert(state,'G215 original service was deleted: '+source.serviceKind);
- assert.equal(state.state,source.status,
-  'G215 source state changed after Admin receipt: '+source.serviceKind);
+ // G202 takes the ORIGINAL immutable pre-acceptance snapshot. A separate
+ // G217 terminal lab may legitimately advance the same ID afterwards.
+ // Never resurrect a cancelled/returned original or silently hide a regression.
+ const allowedStart=source.serviceKind.endsWith('_RIDE')?'searching':
+  source.serviceKind==='COMMERCE'?'ready':'requested';
+ const progress=source.serviceKind.endsWith('_RIDE')
+  ?['searching','accepted','arriving','in_progress','completed']
+  :source.serviceKind==='COMMERCE'?['ready']
+   :['requested','accepted','picked_up','delivered'];
+ assert(source.status===state.state ||
+  source.status===allowedStart&&progress.includes(state.state),
+  'G215 source was cancelled, rewritten or regressed: '+source.serviceKind);
  let steps;
  if(source.serviceKind.endsWith('_RIDE')){
   steps={
@@ -175,6 +204,28 @@ const services=sources.services.map(source=>{
    originalAdminRead:true
   };
  }
+ // Final Admin must independently certify the exact persisted timeline.
+ // Missing or blocked legal acceptance produces null, not synthetic success.
+ const hasTerminal=source.serviceKind.endsWith('_RIDE')
+  ?Boolean(steps.driverCompleted):source.serviceKind.startsWith('DELIVERY_')
+   ?Boolean(steps.courierDelivered&&steps.independentRecipientConfirmed)
+   :Boolean(steps.courierDelivered&&steps.independentRecipientConfirmed);
+ let adminTerminalReceipt=null,linkedTerminalReceipt=null;
+ if(hasTerminal){
+  if(source.serviceKind==='COMMERCE'){
+   adminTerminalReceipt=terminalAdminRead('COMMERCE',
+    source.originalServiceId);
+   if(adminTerminalReceipt){
+    linkedTerminalReceipt=terminalAdminRead('DELIVERY_'+
+     adminTerminalReceipt.vehicleKind,source.linkedCommerceDeliveryId);
+   }
+  }else adminTerminalReceipt=terminalAdminRead(source.serviceKind,
+   source.originalServiceId);
+ }
+ const terminal=verifyG217TerminalRead({
+  source,receipt:adminTerminalReceipt,
+  linkedDeliveryReceipt:linkedTerminalReceipt,now:Date.now()});
+ steps.terminalAdminRechecked=terminal.ok===true;
  const missing=Object.entries(steps).filter(([,value])=>value!==true)
   .map(([label])=>label);
  const qaJourneyClosed=missing.length===0;
@@ -184,6 +235,7 @@ const services=sources.services.map(source=>{
   originalRequestKey:source.originalRequestKey,
   status:state.state,steps,missingQaSteps:missing,
   qaJourneyClosed,
+  terminalAdminEvidence:terminal.ok?'ORIGINAL_SQL_READBACK_VERIFIED':terminal.reason,
   // No CI-only synthetic session, route, image or offer can prove these.
   commercialEndToEndCertified:false,
   unverifiedExternalAuthorities:[

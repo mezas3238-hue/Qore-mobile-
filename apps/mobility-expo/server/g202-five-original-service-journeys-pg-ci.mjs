@@ -39,7 +39,8 @@ const sources=[
   "JOIN public.mobility_stage_g93_auto_ledger l ON l.trip_id=t.id "+
   "AND l.booking_key=t.request_key AND l.quote_id=q.id "+
   "WHERE t.driver_id IS NULL AND t.status IN ('searching','cancelled') "+
-  "ORDER BY t.created_at DESC LIMIT 1"],
+  "ORDER BY CASE WHEN t.status='searching' THEN 0 ELSE 1 END, "+
+  "t.created_at DESC LIMIT 1"],
  ['MOTO_RIDE','mobility_stage_g142_moto_trace_qa',
   "SELECT jsonb_build_object('id',t.id,'requestKey',t.booking_key,"+
   "'status',t.status,'driverAssigned',false) "+
@@ -49,7 +50,8 @@ const sources=[
   "WHERE t.status IN ('searching','cancelled') "+
   "AND (SELECT count(*) FROM public.mobility_stage_g100_moto_entries e "+
   "WHERE e.quote_id=q.id AND e.phase='reserve')=4 "+
-  "ORDER BY t.created_at DESC LIMIT 1"],
+  "ORDER BY CASE WHEN t.status='searching' THEN 0 ELSE 1 END, "+
+  "t.created_at DESC LIMIT 1"],
  ...['AUTO','MOTO'].map(vehicle=>[
   'DELIVERY_'+vehicle,'mobility_stage_g145_delivery_trace_qa',
   "SELECT "+common+" FROM public.mobility_stage_deliveries s "+
