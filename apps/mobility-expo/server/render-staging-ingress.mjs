@@ -6,7 +6,7 @@
  * Every operation still authenticates and authorizes in G4/PG. NOT LIVE.
  */
 import {createServer} from 'node:http';
-import {createHash} from 'node:crypto';
+import {createHash,timingSafeEqual} from 'node:crypto';
 
 const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com)$/;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
@@ -81,7 +81,8 @@ export function createRenderStagingIngress({
  loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
  maxConcurrentReads=DEFAULT_MAX_READS,
  maxConcurrentWrites=DEFAULT_MAX_WRITES,
- maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS
+ maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS,
+ readinessKey=null,readinessProbe=null
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
@@ -96,12 +97,17 @@ export function createRenderStagingIngress({
     !Number.isSafeInteger(maxConcurrentWrites)||maxConcurrentWrites<1||
     maxConcurrentWrites>1024||
     !Number.isSafeInteger(maxIdentityBuckets)||maxIdentityBuckets<1||
-    maxIdentityBuckets>65536)
+    maxIdentityBuckets>65536||
+    !(readinessProbe===null||typeof readinessProbe==='function')||
+    !(readinessKey===null||(typeof readinessKey==='string'&&
+      /^[A-Za-z0-9_-]{48,128}$/.test(readinessKey)))||
+    (readinessProbe!==null&&readinessKey===null))
   throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
  // Fixed windows retain insertion order. Evict expired entries at the head
  // in amortized O(1), not an O(number-of-users) sweep on every request.
  const requests=new Map();
  let lastAt=0,readsInFlight=0,writesInFlight=0;
+ let readinessInFlight=null;
  function pruneExpired(at){
   while(requests.size){
    const [key,item]=requests.entries().next().value;
@@ -115,6 +121,52 @@ export function createRenderStagingIngress({
     req.headers.host===expectedHost&&req.headers['x-forwarded-proto']==='https'&&
     rawHeaderCount(req,'x-forwarded-proto')===1){
    json(res,200,{state:'PROCESS_UP_ONLY',commercialRidesEnabled:false});
+   return;
+  }
+  // Operator-only infrastructure readiness. NEVER asserts trip, legal, PSP,
+  // GPS or commercial availability. Secrets and dependency errors are never
+  // returned to callers. This route cannot reach the G4 business handler.
+  if(req.url==='/_qore/readiness'){
+   const presented=req.headers['x-qore-readiness-key'];
+   const trusted=req.method==='GET'&&req.headers.host===expectedHost&&
+    req.headers['x-forwarded-proto']==='https'&&
+    rawHeaderCount(req,'x-forwarded-proto')===1&&
+    req.headers.origin===undefined&&req.headers.cookie===undefined&&
+    req.headers['proxy-authorization']===undefined&&
+    req.headers['transfer-encoding']===undefined&&
+    (req.headers['x-forwarded-host']===undefined||
+     req.headers['x-forwarded-host']===expectedHost)&&
+    (req.headers['content-length']===undefined||
+     req.headers['content-length']==='0')&&
+    readinessProbe!==null&&readinessKey!==null&&
+    rawHeaderCount(req,'x-qore-readiness-key')===1&&
+    typeof presented==='string'&&
+    /^[A-Za-z0-9_-]{48,128}$/.test(presented)&&
+    timingSafeEqual(
+     createHash('sha256').update(presented).digest(),
+     createHash('sha256').update(readinessKey).digest()
+    );
+   if(!trusted){json(res,404,{error:'Not found'});return;}
+   if(readinessInFlight===null){
+    let timeout;
+    const pending=(async()=>{
+     try{
+      const ok=await Promise.race([
+       Promise.resolve().then(()=>readinessProbe()),
+       new Promise(resolve=>{timeout=setTimeout(()=>resolve(false),4000);})
+      ]);
+      return ok===true;
+     }catch{return false;}
+     finally{clearTimeout(timeout);}
+    })();
+    readinessInFlight=pending;
+    void pending.finally(()=>{if(readinessInFlight===pending)readinessInFlight=null;});
+   }
+   const ready=await readinessInFlight;
+   json(res,ready?200:503,{
+    state:ready?'INFRASTRUCTURE_READY_ONLY':'STAGING_UNAVAILABLE',
+    stagingE2ECertified:false,commercialRidesEnabled:false
+   });
    return;
   }
   if(req.headers.host!==expectedHost||
