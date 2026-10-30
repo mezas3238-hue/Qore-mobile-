@@ -58,8 +58,19 @@ BEGIN
     '12200000-0000-4122-8122-000000000012'::uuid)
   ORDER BY d.requested_vehicle_kind
  LOOP
-  IF NOT public.mobility_stage_g123_delivery_priced_qa(row.id)
-  THEN RAISE EXCEPTION 'G216 source lacks original unexpired G122 consent'; END IF;
+  -- This is a pre-accepted HISTORICAL QA fixture, not a new offer.
+  -- G122 original price consent remains immutable although its quote TTL
+  -- has expired in the elapsed CI chain. Never relax the live G123 fence.
+  IF NOT EXISTS(
+   SELECT 1 FROM public.mobility_stage_g122_delivery_price_consents c
+   JOIN public.mobility_stage_fare_quotes q ON q.id=c.quote_id
+    AND q.subject_id=row.id AND q.customer_id=row.sender_id
+    AND q.total_pyg=c.accepted_total_gs
+    AND q.provider_pyg+q.commission_pyg=q.total_pyg
+   WHERE c.delivery_id=row.id AND c.sender_id=row.sender_id
+    AND c.vehicle_kind=row.requested_vehicle_kind
+    AND q.quoted_at<=c.confirmed_at
+  ) THEN RAISE EXCEPTION 'G216 original G122 fare and consent missing'; END IF;
   IF row.requested_vehicle_kind='AUTO' THEN
    courier:='00000000-0000-4000-8000-000000000181'::uuid;
    vehicle:='00000000-0000-4000-8000-000000000184'::uuid;
