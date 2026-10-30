@@ -1,14 +1,17 @@
 /**
- * Render HTTPS edge adapter for explicitly approved, non-commercial STAGING.
+ * Strict HTTPS edge adapter for approved Render/Railway, non-commercial STAGING.
  * NOT the local G4 listener: loopback remains 127.0.0.1 and cannot be
- * published. Render terminates TLS; this ingress enforces the pinned HTTPS
+ * published. The provider terminates TLS; this ingress enforces the pinned HTTPS
  * host/origin before forwarding to exactly one fixed loopback authority.
  * Every operation still authenticates and authorizes in G4/PG. NOT LIVE.
  */
 import {createServer} from 'node:http';
 import {createHash,timingSafeEqual} from 'node:crypto';
 
-const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com)$/;
+const HOSTS=Object.freeze({
+ render:/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/,
+ railway:/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.up\.railway\.app$/
+});
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const MAX_BODY=2048;
 const MAX_REPLY=32768;
@@ -82,13 +85,13 @@ export function createRenderStagingIngress({
  maxConcurrentReads=DEFAULT_MAX_READS,
  maxConcurrentWrites=DEFAULT_MAX_WRITES,
  maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS,
- readinessKey=null,readinessProbe=null
+ readinessKey=null,readinessProbe=null,edgeProvider='render'
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
  if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||!url.port||
     url.pathname!=='/'||url.username||url.password||url.search||url.hash||
-    !HOST.test(expectedHost)||!validOrigin('https://'+expectedHost)||
+    !Object.hasOwn(HOSTS,edgeProvider)||!HOSTS[edgeProvider].test(expectedHost)||!validOrigin('https://'+expectedHost)||
     (adminOrigin!==null&&(!validOrigin(adminOrigin)||
       new URL(adminOrigin).hostname===expectedHost))||
     typeof request!=='function'||typeof now!=='function'||
@@ -102,7 +105,7 @@ export function createRenderStagingIngress({
     !(readinessKey===null||(typeof readinessKey==='string'&&
       /^[A-Za-z0-9_-]{48,128}$/.test(readinessKey)))||
     (readinessProbe!==null&&readinessKey===null))
-  throw Error('Render ingress requires pinned STAGING hostname and fixed loopback');
+  throw Error('Cloud STAGING ingress requires provider-pinned hostname and fixed loopback');
  // Fixed windows retain insertion order. Evict expired entries at the head
  // in amortized O(1), not an O(number-of-users) sweep on every request.
  const requests=new Map();
