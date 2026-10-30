@@ -115,7 +115,7 @@ const positiveQueries={
   "'linkedDeliveryId',o.delivery_id) "+
   "FROM public.mobility_stage_g221_five_original_qa_sources m "+
   "JOIN public.mobility_stage_merchant_orders o ON o.id=m.service_id "+
-  "AND o.request_key=m.request_key AND o.status=m.source_status "+
+  "AND o.request_key=m.request_key AND o.status::text=m.source_status "+
   "AND o.delivery_id=m.linked_delivery_id "+
   "JOIN public.mobility_stage_deliveries d ON d.id=o.delivery_id "+
   "AND d.status='delivered' "+
