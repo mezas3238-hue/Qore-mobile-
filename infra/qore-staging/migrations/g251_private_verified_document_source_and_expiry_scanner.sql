@@ -124,7 +124,7 @@ BEGIN
    ELSE 'D30' END;
   key:='G251:'||item.source_document_id::text||':'||
    item.evidence_revision::text||':'||
-   (pg_catalog.extract(epoch FROM item.valid_until)*1000)::bigint::text||
+   (extract(epoch FROM item.valid_until)*1000)::bigint::text||
    ':'||band_code;
   INSERT INTO public.mobility_stage_document_expiry_alert_outbox
   (event_key,driver_id,vehicle_id,source_document_id,document_revision,
