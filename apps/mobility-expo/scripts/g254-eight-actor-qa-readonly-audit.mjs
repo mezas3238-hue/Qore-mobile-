@@ -140,7 +140,7 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
    ref:process.env.QORE_STAGING_PROJECT_REF,
    environment:process.env.QORE_MOBILITY_ENV,
    liveTripsEnabled:false,
-   publicKey:process.env.QORE_STAGING_ANON_KEY,
+   publicKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
    serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY
   });
   console.log(JSON.stringify(report));
