@@ -144,8 +144,10 @@ function validClients(auth,admin){
 }
 async function assertDatabaseG4(admin){
  for(const table of STAGE_TABLES){
-  // Head-only, SELECT id, zero returned rows; strictly no writes or fixtures.
-  const q=admin.from(table).select('id',{head:true,count:'exact'}).limit(0);
+  // Head-only schema probe: no row data, no exact counts, no assumed 'id'.
+  // Five valid STAGING tables use composite/non-id keys; SELECT id fails
+  // with 42703 even though the table exists and is accessible.
+  const q=admin.from(table).select('*',{head:true}).limit(0);
   const {error}=await q;
   if(error)throw Error('G4/G5 ephemeral-only schema not installed in target staging');
  }
