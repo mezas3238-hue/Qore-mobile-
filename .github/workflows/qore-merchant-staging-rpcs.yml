@@ -1,0 +1,22 @@
+name: QORE Supabase Merchant STAGING privileged-boundary contracts
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/supabase/staging_sql/qore_staging_merchant_authorized_rpcs.sql'
+      - 'apps/mobility-expo/scripts/qore-merchant-authorized-rpcs.test.mjs'
+      - '.github/workflows/qore-merchant-staging-rpcs.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  merchant-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/mobility-expo/scripts/qore-merchant-authorized-rpcs.test.mjs
