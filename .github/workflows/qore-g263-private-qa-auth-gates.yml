@@ -1,0 +1,30 @@
+name: QORE G263 private eight QA credentials and Admin G27 safety
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g263-*.mjs'
+      - 'apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap.mjs'
+      - '.github/workflows/qore-g263-private-qa-auth-gates.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Eight QA secret-file and Admin backoffice trust contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test G263 private manifest and no credential logs
+        run: node --test apps/mobility-expo/scripts/g263-private-qa-manifest.test.mjs
+      - name: Test G263 G27 independent Admin approval gate
+        run: node --test apps/mobility-expo/scripts/g263-backoffice-authority-audit.test.mjs
+      - name: Regression G251 G254 G261 offline
+        run: node --test apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap.test.mjs apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit.test.mjs apps/mobility-expo/scripts/g261-eight-real-qa-auth-sessions.test.mjs
+      - name: No users, keys, or production
+        run: echo 'G263 entirely offline; no Auth user or role changes'
