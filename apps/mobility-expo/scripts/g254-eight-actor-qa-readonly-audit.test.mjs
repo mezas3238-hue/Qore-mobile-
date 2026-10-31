@@ -17,15 +17,16 @@ const roles=users.map((u,i)=>({
 const defaults={ref:G254_STAGING_REF,environment:'staging',
  liveTripsEnabled:false,publicKey,serviceKey};
 function simulated({returnedUsers=users,returnedRoles=roles,
- signupDisabled=true,authFail=false,roleFail=false}={}){
+ signupDisabled=true,authFail=false,roleFail=false,apiKey=serviceKey}={}){
  const paths=[];
  const fetcher=async (url,options)=>{
   const u=new URL(url);
   assert.equal(u.hostname,G254_STAGING_REF+'.supabase.co');
   assert.equal(options.method,'GET');
   assert.equal(options.redirect,'error');
-  assert.equal(options.headers.apikey,serviceKey);
-  assert.equal(options.headers.Authorization,'Bearer '+serviceKey);
+  assert.equal(options.headers.apikey,apiKey);
+  assert.equal(options.headers.Authorization,
+   apiKey.startsWith('sb_secret_')?undefined:'Bearer '+apiKey);
   paths.push(u.pathname);
   if(u.pathname==='/auth/v1/admin/users'){
    assert.equal(u.searchParams.get('per_page'),'50');
@@ -40,7 +41,7 @@ function simulated({returnedUsers=users,returnedRoles=roles,
   }
   throw Error('Unexpected privileged endpoint');
  };
- const inspect=()=>inspectEightActorQa({...defaults,fetcher,
+ const inspect=()=>inspectEightActorQa({...defaults,serviceKey:apiKey,fetcher,
   signupGate:async()=>({certified:signupDisabled})});
  return {inspect,paths};
 }
@@ -123,4 +124,15 @@ test('G254 Auth or PostgREST outage denies readiness, never attempts creation or
   assert(x.paths.every(v=>v==='/auth/v1/admin/users'||
    v==='/rest/v1/user_roles'));
  }
+});
+
+test('G259 modern sb_secret uses apikey only and legacy JWT uses Bearer',async()=>{
+ const modern=simulated();
+ assert.equal((await modern.inspect()).qaAuthAccounts,8);
+ const h=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+ const p=Buffer.from(JSON.stringify({role:'service_role',ref:G254_STAGING_REF})).toString('base64url');
+ const jwt=h+'.'+p+'.'+'x'.repeat(43);
+ const legacy=simulated({apiKey:jwt});
+ assert.equal((await legacy.inspect()).qaAuthAccounts,8);
+ assert.deepEqual(legacy.paths,['/auth/v1/admin/users','/rest/v1/user_roles']);
 });
