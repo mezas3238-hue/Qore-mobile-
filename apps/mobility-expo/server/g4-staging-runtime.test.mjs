@@ -26,7 +26,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  driver:'syntheticDriverBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
- const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
+ const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],schemaProbes:[],
    adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
    g77RegisteredRoute:null,
    g84Enabled:false,g84DispatchAttempts:0,g113BatchCalls:0,g89TripReadError:false,
@@ -84,6 +84,16 @@ function mockSupabase(){
         }
         assert.equal(options?.head,true);
         assert.equal(n,0);
+        const noId=new Set([
+         'mobility_stage_auto_demo_push_outbox',
+         'mobility_stage_delivery_offer_outbox',
+         'mobility_stage_delivery_vehicle_clearance',
+         'mobility_stage_merchant_staff',
+         'mobility_stage_merchant_order_lines'
+        ]);
+        state.schemaProbes.push({table,cols,options,n});
+        // Actual PG17 rejects "id" on these existing composite-key tables.
+        if(noId.has(table)&&cols==='id')return {error:{code:'42703'}};
         return {error:state.missing===table?{code:'42P01'}:null};
        },
        async maybeSingle(){
@@ -354,9 +364,24 @@ test('boot refuses even loopback listener when native Auth signup remains public
  await assert.rejects(prepare(m),/Auth public signup/);
  assert.equal(m.state.rpcs.length,0);
 });
+test('G272 zero-row schema probe tolerates all five real PG17 tables without id',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m);
+ assert.equal(runtime.commercialRidesEnabled,false);
+ const names=m.state.schemaProbes.map(x=>x.table);
+ assert.equal(names.length,29);
+ assert.equal(new Set(names).size,29);
+ for(const p of m.state.schemaProbes){
+  assert.equal(p.cols,'*');
+  assert.equal(p.options.head,true);
+  assert.equal(Object.hasOwn(p.options,'count'),false);
+  assert.equal(p.n,0);
+ }
+ assert.equal(m.state.rpcs.length,0);
+});
 test('boot refuses G3/G4 missing private SQL tables (without any remote write)',async()=>{
  const m=mockSupabase();m.state.missing='mobility_stage_auto_demo_offers';
- await assert.rejects(prepare(m),/schema not installed/);
+ await assert.rejects(prepare(m),/required table missing or unreadable/);
  assert.equal(m.state.rpcs.length,0);
 });
 test('boot rejects LIVE, old backend, unsafe env and public/foreign server role',async()=>{
