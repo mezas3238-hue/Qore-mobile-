@@ -252,6 +252,49 @@ configuration remain external gates. No public signup, LIVE or PSP authorization
   and Railway external STAGING is not running. PR47 remains DRAFT;
   no merge, LIVE ride, production PSP or automatic deployment.
 
+
+### G254–G255 — external IdP identity and same-original-source evidence (31 Oct 2026)
+
+- **G254**: `apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit.mjs`
+  is an EXECUTABLE, secret-redacting, read-only audit. It pins project
+  `mrjzxftsdxzepzbcuids`, requires `LIVE_TRIPS_ENABLED=false` and
+  `disable_signup=true` confirmed from Supabase Auth. It verifies
+  **exactly eight** QA-created `.invalid` Auth users with distinct
+  `app_metadata.qore_qa_slot`, confirmed email and exactly eight
+  independently stored `user_roles` (1 admin / 4 driver / 3 passenger).
+  It does not prove successful password login, G42 signed sessions or
+  certify any external service journey. It never creates identities.
+  The new `.github/workflows/qore-g254-eight-actor-readiness-contract.yml`
+  executes regression tests using only mocks and **no Supabase secrets**.
+  Actual audit is operator-executed `node
+  apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit.mjs --audit`
+  with the *private STAGING backend* `QORE_STAGING_SERVICE_ROLE_KEY` and
+  publishable `QORE_STAGING_ANON_KEY`. No credentials or manifest in GitHub.
+- PR #55 separately implements the guarded eight-user Auth Admin **bootstrap**,
+  but has NOT run: direct Supabase PG17 inspection found 0 `auth.users`,
+  0 `auth.sessions`, and 0 `user_roles`. Do not present PR #55 or
+  G254 mock tests as successful external IdP login. It is a different draft
+  branch; do not overwrite it or impersonate operator-side Auth signup settings.
+- **G255**: `infra/qore-staging/g255_five_original_journeys_external_evidence_readonly.sql`
+  runs on the **actual Supabase STAGING PG17**. Its last execution returned:
+  AUTO passenger **0**, MOTO passenger **0**, AUTO delivery **0**,
+  MOTO delivery **0**, COMMERCE **0** persisted original-source rows;
+  zero terminal/assigned/linked source rows, zero source events,
+  zero active backoffice and zero ledger entries. All twelve inspected
+  structural SQL RPCs were registered, but this alone proves NO operational
+  legal authority, cross-app HTTP, external JWT session or Admin reconciliation.
+  A future external QA completion requires **same original IDs in the
+  actual PostgreSQL source** plus independent signed actor access and
+  admin audit; the read-only query must be rerun for evidence, with
+  real E2E certificates collected separately.
+- Railway inspection: only the historical `qore-mobile-gateway` **production**
+  environment exists, with removed historical deployments. Do not
+  redeploy/repurpose it. Railway trial/plan is not authorized for spending.
+  There is no independent QORE STAGING service in Railway yet.
+
+All of the above remain **NO MERGE / NO LIVE / NO PSP / NO PAID PLAN / NO
+EXTERNAL 5/5 CLAIM**. No SQL writes were required by G254 or G255.
+
 ## Four application connections
 
 Use the **same** approved Railway HTTPS origin and independent pin for
