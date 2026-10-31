@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify isolated Owner AAL2 gateway contract
-        run: node --test apps/mobility-expo/server/g268-owner-auto-fare-gateway.test.mjs
+        run: node --test apps/mobility-expo/server/g268-owner-auto-fare-gateway.test.mjs apps/mobility-expo/server/g268-owner-auto-fare-http.test.mjs
       - name: Parse production-facing backend modules without starting a server
         run: node --check apps/mobility-expo/server/g4-staging-runtime.mjs && node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
       - name: No external users, databases, deployment or secrets
