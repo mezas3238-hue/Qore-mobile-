@@ -24,10 +24,40 @@ function serverRole(x,ref){
 }
 const denied=reason=>Object.freeze({ok:false,code:reason,stageOnly:true,
  commercialRidesEnabled:false});
-export async function verifyG256RailwayLaunch({
- env={},checkSignup=inspectStageSignup
+
+/**
+ * Independently prove a backend-only credential can read the pinned
+ * Supabase Auth Admin endpoint. This GET never creates an identity and
+ * deliberately returns only a boolean, not user data or credentials.
+ * New sb_secret_* keys travel only in apikey (they are not JWTs).
+ */
+export async function checkStageServerCredential({
+ ref,key,request=fetch
 }={}){
- if(typeof checkSignup!=='function')return denied('INVALID_PREFLIGHT_ADAPTER');
+ if(ref!==TARGET_REF||!serverRole(key,ref)||typeof request!=='function')
+  return Object.freeze({certified:false});
+ try{
+  const response=await request(
+   'https://'+TARGET_REF+'.supabase.co/auth/v1/admin/users?per_page=1&page=1',{
+    method:'GET',redirect:'error',cache:'no-store',
+    signal:AbortSignal.timeout(10000),
+    headers:{
+     apikey:key,Accept:'application/json',
+     ...(key.startsWith('sb_secret_')?{}:{Authorization:'Bearer '+key})
+    }
+   });
+  if(response?.ok!==true||response.status!==200)
+   return Object.freeze({certified:false});
+  const body=await response.json();
+  return Object.freeze({certified:Array.isArray(body?.users)});
+ }catch{return Object.freeze({certified:false});}
+}
+export async function verifyG256RailwayLaunch({
+ env={},checkSignup=inspectStageSignup,
+ checkServerCredential=checkStageServerCredential
+}={}){
+ if(typeof checkSignup!=='function'||typeof checkServerCredential!=='function')
+  return denied('INVALID_PREFLIGHT_ADAPTER');
  if(env.QORE_MOBILITY_ENV!=='staging'||
   env.RAILWAY_ENVIRONMENT_NAME?.toLowerCase()!=='staging'||
   env.LIVE_TRIPS_ENABLED!=='false'||
@@ -62,6 +92,12 @@ export async function verifyG256RailwayLaunch({
  }catch{return denied('SUPABASE_AUTH_STATUS_UNVERIFIED');}
  if(policy?.certified!==true)
   return denied('PUBLIC_SIGNUP_NOT_CERTIFIED_CLOSED');
+ let backend;
+ try{backend=await checkServerCredential({
+  ref:TARGET_REF,key:env.QORE_STAGING_SERVICE_ROLE_KEY
+ });}catch{return denied('SUPABASE_SERVER_AUTH_UNVERIFIED');}
+ if(backend?.certified!==true)
+  return denied('SUPABASE_SERVER_AUTH_UNVERIFIED');
  return Object.freeze({ok:true,code:'STAGING_PREDEPLOY_GATES_PASS',
   projectRef:TARGET_REF,stageOnly:true,commercialRidesEnabled:false,
   fiveExternalJourneysCertified:false});

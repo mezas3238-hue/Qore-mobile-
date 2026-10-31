@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {verifyG256RailwayLaunch}
+import {verifyG256RailwayLaunch,checkStageServerCredential}
  from './g256-railway-launch-preflight.mjs';
 const REF='mrjzxftsdxzepzbcuids';
 const HOST='qore-mobile-backend-staging-staging.up.railway.app';
@@ -19,6 +19,7 @@ const env={
 const run=(patch={},extra={})=>verifyG256RailwayLaunch({
  env:{...env,...patch},
  checkSignup:async()=>({certified:true,reason:'No public registration'}),
+ checkServerCredential:async()=>({certified:true}),
  ...extra
 });
 test('G256 predeploy accepts only closed independent staging and does not certify 5 trips',async()=>{
@@ -92,4 +93,56 @@ test('G256 fails closed when Auth settings missing, signup open or provider unav
 test('G256 cannot mistake an empty Auth project for disabled public signup',async()=>{
  const r=await run({},{checkSignup:async()=>null});
  assert.equal(r.code,'PUBLIC_SIGNUP_NOT_CERTIFIED_CLOSED');
+});
+
+test('G259 refuses STAGING startup when actual backend credential cannot reach pinned Auth Admin',async()=>{
+ let calls=0;
+ for(const checkServerCredential of [
+  async({ref,key})=>{
+   assert.equal(ref,REF);
+   assert.equal(key,secret);
+   calls++;
+   return {certified:false};
+  },
+  async()=>({}),
+  async()=>{throw Error('secret backend failure')}
+ ]){
+  const r=await run({},{checkServerCredential});
+  assert.equal(r.ok,false);
+  assert.equal(r.code,'SUPABASE_SERVER_AUTH_UNVERIFIED');
+  assert.equal(JSON.stringify(r).includes(secret),false);
+ }
+ assert.equal(calls,1);
+});
+test('G259 Auth Admin GET only, pinned project and no leaked modern sb_secret credential',async()=>{
+ let called=0;
+ const probe=async(url,options)=>{
+  called++;
+  assert.equal(url,'https://'+REF+'.supabase.co/auth/v1/admin/users?per_page=1&page=1');
+  assert.equal(options.method,'GET');
+  assert.equal(options.redirect,'error');
+  assert.equal(options.headers.apikey,secret);
+  assert.equal(options.headers.Authorization,undefined);
+  return {ok:true,status:200,json:async()=>({users:[]})};
+ };
+ assert.deepEqual(await checkStageServerCredential({ref:REF,key:secret,request:probe}),
+  {certified:true});
+ assert.equal(called,1);
+ assert.deepEqual(await checkStageServerCredential({
+  ref:'qdqrlgzlotnfdxzpacxs',key:secret,request:probe
+ }),{certified:false});
+ assert.equal(called,1);
+});
+test('G259 refuses untrusted Auth Admin results and HTTP errors without exposing provider details',async()=>{
+ for(const response of [
+  {ok:false,status:401},
+  {ok:true,status:200,json:async()=>({error:'leak@example.invalid'})},
+  {ok:true,status:200,json:async()=>{throw Error('private provider body')}}
+ ]){
+  const r=await checkStageServerCredential({
+   ref:REF,key:secret,request:async()=>response
+  });
+  assert.deepEqual(r,{certified:false});
+  assert.equal(JSON.stringify(r).includes('private provider body'),false);
+ }
 });
