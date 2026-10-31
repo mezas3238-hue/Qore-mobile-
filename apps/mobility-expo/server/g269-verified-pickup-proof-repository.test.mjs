@@ -9,6 +9,7 @@ const scope={
 const at=Date.parse('2026-10-31T18:00:00Z');
 const proof={routingVerified:true,coverageVerified:true,fallbackUsed:false,
  trafficAware:true,provider:'GEOAPIFY',passengerId:scope.passengerId,
+ bookingKey:scope.bookingKey,proofKey:scope.proofKey,
  tripId:scope.tripId,driverId:scope.driverId,vehicleId:scope.vehicleId,
  pickupRoadMeters:2300,verifiedAtMs:at-5000};
 function make(patch={},extra={}){
@@ -44,7 +45,9 @@ test('G269 never stores untrusted provider, fallback, stale or mismatched identi
  const changes=[
   {routingVerified:false},{coverageVerified:false},{fallbackUsed:true},
   {trafficAware:false},{provider:'STRAIGHT_LINE'},
-  {passengerId:id(102)},{tripId:id(666)},{driverId:id(104)},
+  {passengerId:id(102)},{bookingKey:id(555)},
+  {proofKey:id(444)},{bookingKey:undefined},{proofKey:undefined},
+  {tripId:id(666)},{driverId:id(104)},
   {vehicleId:id(304)},{pickupRoadMeters:0},
   {pickupRoadMeters:50001},{pickupRoadMeters:2.5},
   {verifiedAtMs:at-31000},{verifiedAtMs:at+2100}
