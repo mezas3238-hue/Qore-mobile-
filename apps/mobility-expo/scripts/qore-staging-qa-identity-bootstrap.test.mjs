@@ -10,7 +10,8 @@ function mock({signup=true,users=[],wrongTrigger=false,failedAt=null}={}){
  const saved=new Map(),roles=new Map(),calls=[];
  const fetcher=async(url,options)=>{
   const u=new URL(url),method=options.method;
-  calls.push({path:u.pathname,method,query:u.search});
+  calls.push({path:u.pathname,method,query:u.search,
+   apikey:options.headers.apikey,authorization:options.headers.Authorization});
   if(failedAt===u.pathname)return {ok:false,status:503};
   if(u.pathname==='/auth/v1/admin/users'&&method==='GET')
    return {ok:true,status:200,json:async()=>({users})};
@@ -72,4 +73,21 @@ test('eight identities created with confirmed email and audited role transitions
 test('unexpected signup trigger role or API failure fail closed',async()=>{
  await assert.rejects(run(mock({wrongTrigger:true})),/Unexpected trigger/);
  await assert.rejects(run(mock({failedAt:'/auth/v1/admin/users'})),/STAGING QA API failed/);
+});
+
+test('G260 modern sb_secret uses only apikey for GET, POST and PATCH; never Bearer',async()=>{
+ const m=mock();
+ await run(m);
+ assert(m.calls.some(c=>c.method==='GET'));
+ assert(m.calls.some(c=>c.method==='POST'));
+ assert(m.calls.some(c=>c.method==='PATCH'));
+ assert(m.calls.every(c=>c.apikey===secret&&c.authorization===undefined));
+});
+test('G260 legacy service_role JWT retains Bearer for backwards compatibility',async()=>{
+ const header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+ const claims=Buffer.from(JSON.stringify({role:'service_role',ref:STAGING_REF})).toString('base64url');
+ const legacy=[header,claims,'dummy-signature'].join('.');
+ const m=mock();
+ await run(m,{secret:legacy});
+ assert(m.calls.every(c=>c.apikey===legacy&&c.authorization==='Bearer '+legacy));
 });
