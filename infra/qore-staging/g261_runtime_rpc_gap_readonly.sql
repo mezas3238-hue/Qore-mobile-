@@ -42,7 +42,12 @@ WITH expected(area, rpc) AS (
  ('FINANCE_QUOTES','mobility_stage_g126_recover_cargo_quote_qa'),
  ('FINANCE_QUOTES','mobility_stage_fare_quote'),
  ('FINANCE_QUOTES','mobility_stage_payment_authorize'),
- ('FINANCE_QUOTES','mobility_stage_payment_transition')
+ ('FINANCE_QUOTES','mobility_stage_payment_transition'),
+ ('MOTO','mobility_stage_g100_moto_quote_qa'),
+ ('MOTO','mobility_stage_g100_moto_book_qa'),
+ ('MOTO','mobility_stage_g100_moto_booking_receipt_qa'),
+ ('MOTO','mobility_stage_g118_moto_status_qa'),
+ ('MOTO','mobility_stage_g100_moto_cancel_qa')
 ), audit AS (
  SELECT e.area,e.rpc,
  EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
