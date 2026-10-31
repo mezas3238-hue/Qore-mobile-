@@ -31,6 +31,11 @@ function assertRailwayEnvironment(env){
   throw Error('Railway STAGING requires a valid PORT');
  const hostname=env.QORE_RAILWAY_HOSTNAME;
  const adminOrigin=env.QORE_ADMIN_BROWSER_ORIGIN||null;
+ // G264/G263 browser Admin cannot reach this API without explicit pinned
+ // CORS. Forbid toggling the Admin AAL2 gateway into an unreachable or
+ // accidentally arbitrary browser origin. Never enable a wildcard origin.
+ if(g260AdminAal2Approved&&adminOrigin===null)
+  throw Error('G260 Admin AAL2 requires explicit pinned browser HTTPS origin');
  const bound=(name,def,max)=>{
   const value=env[name];
   if(value===undefined)return def;
