@@ -81,19 +81,38 @@ export async function inspectEightActorQa({
  }
  if(found.size!==8)throw fail();
 
+ // CRITICAL G264/G27: auth.users triggers default passenger in user_roles,
+ // but exclusive Admin MUST NOT retain a native user_roles row. The private
+ // registry is the SOLE source of Admin/Owner privileges, never metadata.
  const rolesResponse=await getJson(fetcher,
   root+'/rest/v1/user_roles?select=user_id,role',serviceKey);
- if(!Array.isArray(rolesResponse)||rolesResponse.length!==8)throw fail();
+ if(!Array.isArray(rolesResponse)||rolesResponse.length!==7)throw fail();
  const roleMap=new Map();
  for(const row of rolesResponse){
   if(!plain(row)||!UUID.test(row.user_id??'')||
      !ids.has(row.user_id)||roleMap.has(row.user_id)||
-     !['admin','passenger','driver'].includes(row.role))
+     !['passenger','driver'].includes(row.role))
    throw fail();
   roleMap.set(row.user_id,row.role);
  }
- for(const {id,role} of found.values())
-  if(roleMap.get(id)!==role)throw fail();
+ const adminIdentity=found.get('owner_admin')?.id;
+ if(!adminIdentity||roleMap.has(adminIdentity))throw fail();
+ for(const {id,role} of found.values()){
+  if(role==='admin'){if(roleMap.has(id))throw fail();}
+  else if(roleMap.get(id)!==role)throw fail();
+ }
+ const backoffice=await getJson(fetcher,
+  root+'/rest/v1/mobility_stage_backoffice_roles?select=user_id,role,status,approved_by,revision',
+  serviceKey);
+ if(!Array.isArray(backoffice)||backoffice.length!==1)throw fail();
+ const approved=backoffice[0];
+ if(!plain(approved)||approved.user_id!==adminIdentity||
+    approved.role!=='admin'||approved.status!=='active'||
+    !UUID.test(approved.approved_by??'')||
+    approved.approved_by===adminIdentity||
+    !ids.has(approved.approved_by)||
+    !Number.isSafeInteger(approved.revision)||approved.revision<1)
+  throw fail();
 
  // This evidence proves registration and exclusive roles ONLY.
  // No password-based login, independent JWT, G42 session, KYC, GPS,
@@ -104,6 +123,8 @@ export async function inspectEightActorQa({
   signupDisabled:true,
   qaAuthAccounts:8,
   exclusiveQaRoles:8,
+  privateBackofficeAdminActors:1,nativeQaRoles:7,
+  independentOwnerApprovalVerified:false,
   roleCounts:Object.freeze({admin:1,driver:4,passenger:3}),
   verifiedPasswordLogin:false,
   verifiedG42Sessions:0,
