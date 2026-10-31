@@ -1,0 +1,22 @@
+name: QORE G261 eight STAGING QA password-session contracts (offline)
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g261-eight-real-qa-auth-sessions*'
+      - 'apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit.mjs'
+      - 'apps/mobility-expo/scripts/staging-auth-policy-gate.mjs'
+      - '.github/workflows/qore-g261-qa-sessions-offline-contracts.yml'
+permissions:
+  contents: read
+jobs:
+  g261-no-network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify all eight independent Auth / G42 / local-revocation contracts
+        working-directory: apps/mobility-expo/scripts
+        run: node --test g261-eight-real-qa-auth-sessions.test.mjs
