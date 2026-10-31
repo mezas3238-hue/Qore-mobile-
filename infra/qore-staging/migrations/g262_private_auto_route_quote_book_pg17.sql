@@ -140,7 +140,7 @@ BEGIN
   AND valid_from<=pg_catalog.statement_timestamp()
   AND valid_until>pg_catalog.statement_timestamp() FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'G262 pricing rule unavailable' USING ERRCODE='P2622'; END IF;
- subtotal:=pg_catalog.greatest(rule.minimum_pyg::bigint,
+ subtotal:=GREATEST(rule.minimum_pyg::bigint,
    rule.base_pyg::bigint+(r.distance_meters::bigint*rule.per_km_pyg+500)/1000+
    (r.duration_seconds::bigint*rule.per_minute_pyg+30)/60);
  total:=subtotal+r.tolls_pyg;
@@ -150,7 +150,7 @@ BEGIN
  INSERT INTO public.mobility_stage_g262_auto_prequotes(
   request_key,passenger_id,route_id,rule_id,total_pyg,commission_pyg,expires_at)
  VALUES(_quote_request_key,_passenger_id,r.id,rule.id,total,commission,
-  pg_catalog.least(r.expires_at,pg_catalog.clock_timestamp()+interval '5 minutes'))
+  LEAST(r.expires_at,pg_catalog.clock_timestamp()+interval '5 minutes'))
  RETURNING id INTO new_id;
  RETURN new_id;
 END $f$;
