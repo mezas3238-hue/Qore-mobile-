@@ -124,8 +124,15 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
    if(process.env.QORE_QA_EXPLICIT_APPLY!=='CONFIRM_STAGING_ONLY')
     throw Error('Explicit staging operator gate required');
    let manifest;
-   try{manifest=JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');}
-   catch{throw Error('Secure QA manifest JSON missing');}
+   if(process.env.QORE_QA_MANIFEST_FILE&&process.env.QORE_QA_ACTORS_JSON)
+    throw Error('Choose exactly one QA manifest source');
+   if(process.env.QORE_QA_MANIFEST_FILE){
+    const {readPrivateQaManifest}=await import('./g263-private-qa-manifest.mjs');
+    manifest=await readPrivateQaManifest(process.env.QORE_QA_MANIFEST_FILE);
+   }else{
+    try{manifest=JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');}
+    catch{throw Error('Secure QA manifest missing');}
+   }
    const result=await bootstrapQa({
     ref:process.env.QORE_STAGING_PROJECT_REF,
     environment:process.env.QORE_MOBILITY_ENV,
