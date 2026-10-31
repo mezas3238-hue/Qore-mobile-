@@ -158,7 +158,7 @@ CREATE FUNCTION qore_stage_internal.mobility_stage_g112_run_booked_auto_dispatch
  _passenger_id uuid,_booking_key uuid,_trip_id uuid
 ) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
 DECLARE j public.mobility_stage_g269_auto_dispatch_jobs%ROWTYPE;
- t public.mobility_stage_auto_demo_trips%ROWTYPE;
+ trip_row public.mobility_stage_auto_demo_trips%ROWTYPE;
  candidate public.mobility_stage_g269_pickup_road_proofs%ROWTYPE;
  prior public.mobility_stage_auto_demo_offers%ROWTYPE;
  matched_offer_id uuid; fanout integer;
@@ -180,11 +180,11 @@ BEGIN
  WHERE booking_key=_booking_key AND passenger_id=_passenger_id AND trip_id=_trip_id
  FOR UPDATE SKIP LOCKED;
  IF NOT FOUND THEN RAISE EXCEPTION 'G269 dispatch claim absent or busy' USING ERRCODE='P2693'; END IF;
- SELECT * INTO t FROM public.mobility_stage_auto_demo_trips
+ SELECT * INTO trip_row FROM public.mobility_stage_auto_demo_trips
  WHERE id=j.trip_id AND passenger_id=j.passenger_id AND request_key=j.booking_key
  FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'G269 trip disappeared' USING ERRCODE='P2693'; END IF;
- IF t.status<>'searching' THEN
+ IF trip_row.status<>'searching' THEN
   UPDATE public.mobility_stage_g269_auto_dispatch_jobs
   SET status='CLOSED',offer_id=NULL,updated_at=pg_catalog.clock_timestamp()
   WHERE booking_key=j.booking_key;
@@ -248,7 +248,7 @@ BEGIN
      WHERE prior_offer.trip_id=p.trip_id AND prior_offer.driver_id=p.driver_id)
   ORDER BY p.pickup_road_meters,p.verified_at DESC,p.id LIMIT 1;
   IF FOUND AND public.mobility_vehicle_preflight(
-    candidate.driver_id,candidate.vehicle_id,t.service) IS TRUE THEN
+    candidate.driver_id,candidate.vehicle_id,trip_row.service) IS TRUE THEN
     matched_offer_id:=public.mobility_stage_auto_demo_offer(
      j.trip_id,candidate.driver_id,candidate.vehicle_id,j.offer_key,30);
   END IF;
