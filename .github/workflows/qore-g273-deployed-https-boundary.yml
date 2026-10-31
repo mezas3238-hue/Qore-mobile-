@@ -1,0 +1,32 @@
+# G273 - Actual HTTPS boundary inspection of deployed STAGING only.
+# Does NOT create accounts, requests, trips, payments or post to Supabase.
+# The G258 Node script makes exactly two unauthenticated GET requests to
+# the pinned Railway hostname and fails closed when either check differs.
+name: QORE G273 deployed STAGING HTTPS read-only boundary
+on:
+  push:
+    branches:
+      - agent/qore-g229-railway-supabase-staging-20261030
+    paths:
+      - '.github/workflows/qore-g273-deployed-https-boundary.yml'
+      - 'apps/mobility-expo/scripts/g258-railway-https-boundary-smoke.mjs'
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g273-deployed-https-boundary.yml'
+      - 'apps/mobility-expo/scripts/g258-railway-https-boundary-smoke.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  external-staging-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Checkout source without private credentials
+        uses: actions/checkout@v4
+      - name: Use pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe public liveness and deny private inbox without bearer
+        run: node apps/mobility-expo/scripts/g258-railway-https-boundary-smoke.mjs
