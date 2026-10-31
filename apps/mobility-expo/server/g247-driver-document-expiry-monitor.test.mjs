@@ -94,7 +94,7 @@ test('refuses stale, forged, duplicate, oversized or incomplete pages without wr
   async()=>page([{...doc(3,10),status:'pending'}]),
   async()=>page([doc(3,3),doc(3,3)]),
   async()=>page([doc(3,3)],'repeated'),
-  async()=>page([doc(3,3)],null,undefined),
+  async()=>page([doc(3,3)],null,-1),
   async()=>page([doc(3,3)],'\nforged'),
   async()=>page([doc(3,3),doc(4,4,'seguro')])
  ]){
