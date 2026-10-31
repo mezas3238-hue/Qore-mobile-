@@ -34,7 +34,11 @@ async function getJson(fetcher,url,key){
  try{
   resp=await fetcher(url,{
    method:'GET',redirect:'error',signal:AbortSignal.timeout(10000),
-   headers:{apikey:key,Authorization:'Bearer '+key,Accept:'application/json'}
+   // Modern sb_secret_* keys must be sent in apikey, not as Bearer JWTs.
+   // Legacy service_role JWTs keep their Authorization header.
+   headers:{apikey:key,
+    ...(key.startsWith('sb_secret_')?{}:{Authorization:'Bearer '+key}),
+    Accept:'application/json'}
   });
   if(resp?.ok!==true||resp.status!==200)throw fail();
   return await resp.json();
