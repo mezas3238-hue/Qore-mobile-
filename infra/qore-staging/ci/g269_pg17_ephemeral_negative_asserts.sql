@@ -29,6 +29,12 @@ BEGIN
   'public.mobility_stage_g90_passenger_dispatch_status_qa(uuid,uuid)','EXECUTE')
  OR has_function_privilege('authenticated',
   'public.mobility_stage_g269_register_pickup_road_proof(uuid,uuid,uuid,uuid,uuid,uuid,text,integer,timestamp with time zone)','EXECUTE')
+ OR NOT has_function_privilege('service_role',
+  'public.mobility_stage_g113_run_due_auto_batch_qa(integer)','EXECUTE')
+ OR has_function_privilege('anon',
+  'public.mobility_stage_g113_run_due_auto_batch_qa(integer)','EXECUTE')
+ OR has_function_privilege('authenticated',
+  'public.mobility_stage_g113_run_due_auto_batch_qa(integer)','EXECUTE')
  THEN RAISE EXCEPTION 'G269 public RPC privilege leak'; END IF;
  IF public.mobility_stage_g90_passenger_dispatch_status_qa(fake,fake) IS NOT NULL
  THEN RAISE EXCEPTION 'G269 missing user can see Passenger queue'; END IF;
@@ -43,5 +49,10 @@ BEGIN
    fake,fake,fake,fake,fake,fake,'GEOAPIFY',2500,pg_catalog.clock_timestamp());
  EXCEPTION WHEN SQLSTATE 'P2692' THEN denied:=true; END;
  IF NOT denied THEN RAISE EXCEPTION 'G269 forged booking proof not blocked'; END IF;
+ denied:=false;
+ BEGIN
+  PERFORM public.mobility_stage_g113_run_due_auto_batch_qa(0);
+ EXCEPTION WHEN SQLSTATE 'P2694' THEN denied:=true; END;
+ IF NOT denied THEN RAISE EXCEPTION 'G113 unbounded worker budget allowed'; END IF;
  RAISE NOTICE 'G269 negative safeguards verified without modifying real users';
 END $a$;
