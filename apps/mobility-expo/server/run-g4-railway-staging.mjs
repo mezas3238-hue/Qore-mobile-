@@ -7,6 +7,7 @@ import {once} from 'node:events';
 import {prepareQoreG4StagingRuntime} from './g4-staging-runtime.mjs';
 import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createRailwayStagingIngress} from './railway-staging-ingress.mjs';
+import {verifyG256RailwayLaunch} from '../scripts/g256-railway-launch-preflight.mjs';
 
 function assertRailwayEnvironment(env){
  if(env.QORE_RAILWAY_STAGING_APPROVED!=='true'||
@@ -47,6 +48,10 @@ function assertRailwayEnvironment(env){
  return {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,g252MerchantInboxAuthApproved};
 }
 const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,g252MerchantInboxAuthApproved}=assertRailwayEnvironment(process.env);
+// Repeat the G256 read-only checks at process start: a missing Railway
+// pre-deploy hook must never bypass STAGING ownership or public-signup fence.
+const g256=await verifyG256RailwayLaunch({env:process.env});
+if(!g256.ok)throw Error('G256 staging startup blocked: '+g256.code);
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
