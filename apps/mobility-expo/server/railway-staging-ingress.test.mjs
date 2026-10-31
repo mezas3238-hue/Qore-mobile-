@@ -20,7 +20,7 @@ function call(base,path,{method='GET',headers={},auth=TOKEN,body}={}){
    ...headers
   }},res=>{const chunks=[];res.on('data',d=>chunks.push(d));
    res.once('error',reject);res.once('end',()=>resolve({
-    status:res.statusCode,json:()=>JSON.parse(Buffer.concat(chunks).toString())
+    status:res.statusCode,headers:res.headers,json:()=>JSON.parse(Buffer.concat(chunks).toString())
    }));});
   req.once('error',reject);if(body!==undefined)req.write(body);req.end();
  });
@@ -140,4 +140,68 @@ test('G230 C/D independent synthetic JWT actors reach one service ID without cro
   await new Promise(done=>edge.close(done));
   await new Promise(done=>upstream.close(done));
  }
+});
+
+test('G265 native Admin AAL2 browser uses exact pinned HTTPS CORS and no cookie/Origin forwarding',async()=>{
+ const source='26500000-0000-4265-8265-000000000005';
+ const path='/v1/staging/admin/native-services/AUTO_RIDE/'+source+'/trace';
+ const touched=[];
+ const upstream=createServer((req,res)=>{
+  touched.push({method:req.method,path:req.url,
+   origin:req.headers.origin??null,cookie:req.headers.cookie??null,
+   bearer:req.headers.authorization??null});
+  res.writeHead(200,{'content-type':'application/json'});
+  res.end(JSON.stringify({serviceId:source,externallyCertified:false}));
+ });
+ const local=await listen(upstream);
+ const edge=createRailwayStagingIngress({loopbackOrigin:local,
+  expectedHost:HOST,adminOrigin:ADMIN});
+ const remote=await listen(edge);
+ try{
+  const preflight=await call(remote,path,{
+   method:'OPTIONS',auth:null,headers:{
+    origin:ADMIN,'access-control-request-method':'GET',
+    'access-control-request-headers':'authorization'
+   }
+  });
+  assert.equal(preflight.status,204);
+  assert.equal(preflight.headers['access-control-allow-origin'],ADMIN);
+  assert.match(preflight.headers['access-control-allow-headers'],/Authorization/);
+  assert.equal(touched.length,0);
+  const allowed=await call(remote,path,{headers:{origin:ADMIN}});
+  assert.equal(allowed.status,200);
+  assert.equal(allowed.headers['access-control-allow-origin'],ADMIN);
+  assert.equal((await allowed.json()).serviceId,source);
+  assert.deepEqual(touched,[{method:'GET',path,origin:null,
+   cookie:null,bearer:'Bearer '+TOKEN}]);
+  for(const malicious of [
+   ADMIN+'.evil.tld','http://movete-admin.example.org',
+   'https://unknown.example.org'
+  ]){
+   const denied=await call(remote,path,{headers:{origin:malicious}});
+   assert.equal(denied.status,403);
+   assert.equal(denied.headers['access-control-allow-origin'],undefined);
+  }
+  assert.equal((await call(remote,path,{auth:null,headers:{origin:ADMIN}})).status,401);
+  assert.equal((await call(remote,path,{
+   headers:{origin:ADMIN,cookie:'session=stolen'}
+  })).status,403);
+  assert.equal(touched.length,1);
+ }finally{
+  await new Promise(done=>edge.close(done));
+  await new Promise(done=>upstream.close(done));
+ }
+});
+test('G265 Railway rejects activating Admin AAL2 without explicit browser origin',()=>{
+ const safe={QORE_RAILWAY_STAGING_APPROVED:'true',
+  QORE_MOBILITY_ENV:'staging',LIVE_TRIPS_ENABLED:'false',
+  QORE_RAILWAY_NO_COMMERCIAL_TRIPS:'true',
+  RAILWAY_ENVIRONMENT_NAME:'STAGING',PORT:'8080',
+  QORE_RAILWAY_HOSTNAME:HOST,QORE_G260_ADMIN_AAL2_APPROVED:'true'};
+ const absent=run(safe);
+ assert.notEqual(absent.status,0);
+ assert.match(absent.stderr,/requires explicit pinned browser HTTPS origin/);
+ const invalid=run({...safe,QORE_ADMIN_BROWSER_ORIGIN:'https://bad.example.invalid/'});
+ assert.notEqual(invalid.status,0);
+ assert.doesNotMatch(invalid.stdout,/transport ready/);
 });
