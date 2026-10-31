@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createReviewDraft,TRAINING_CASES} from './review-draft.mjs';
 import {AdminRuntimeProvider,useAdminView} from './AdminRuntime';
+import {NativeAdminTracePanel} from './NativeAdminTracePanel';
 import {AdminAuthPanel} from './AdminAuthPanel';
 import {OwnerCommissionEditor} from './OwnerCommissionEditor';
 import {OwnerCargoRateEditor} from './OwnerCargoRateEditor';
@@ -775,7 +776,7 @@ function App(){
         <p>Los permisos de administrador nunca deben enviarse ni empaquetarse en una app móvil.</p>
         <div className="empty-chip">Solo presentación · Sin service role</div>
        </Panel></div>
-     </>:page==='servicios'?<><ServiceTracePanel client={client} state={adminState}/><FiveFlowsReadOnly state={adminState}/></>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
+     </>:page==='servicios'?<><ServiceTracePanel client={client} state={adminState}/><NativeAdminTracePanel authorized={adminState.account?.role==='admin'} subject={adminState.account?.subject??null}/><FiveFlowsReadOnly state={adminState}/></>:page==='propietario'?<OwnerPanel authorized={adminState.account?.role==='owner'} ownerSubject={adminState.account?.role==='owner'?adminState.account.subject:null} finance={adminState.account?.role==='owner'?adminState.finance:null}/>:page==='viajes'?<F1RideAuditPanel client={client} state={adminState}/>:page==='auditoria'?<AuditReadOnly audit={adminState.audit} allowed={adminState.account?.role==='admin'}/>:page==='incidentes'?<>
    <MerchantCasesReadOnly
     cases={adminState.merchantCases}
     contractReady={adminState.merchantCaseContractReady}
