@@ -34,7 +34,13 @@ async function getJson(fetcher,url,key){
  try{
   resp=await fetcher(url,{
    method:'GET',redirect:'error',signal:AbortSignal.timeout(10000),
-   headers:{apikey:key,Authorization:'Bearer '+key,Accept:'application/json'}
+   // New sb_secret_ is an opaque API key, not a JWT. Supabase's current
+   // API gateway accepts it on apikey; only legacy service_role JWTs
+   // may also be used as Authorization: Bearer.
+   headers:{apikey:key,
+    ...(/^sb_secret_[A-Za-z0-9_-]{20,}$/.test(key)?{}:
+     {Authorization:'Bearer '+key}),
+    Accept:'application/json'}
   });
   if(resp?.ok!==true||resp.status!==200)throw fail();
   return await resp.json();
