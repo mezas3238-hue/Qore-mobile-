@@ -19,6 +19,9 @@ function assertRailwayEnvironment(env){
  if(![undefined,'true','false'].includes(env.QORE_G247_RECIPIENT_AUTH_APPROVED))
   throw Error('G249 opt-in must be an explicit boolean string');
  const g247RecipientAuthApproved=env.QORE_G247_RECIPIENT_AUTH_APPROVED==='true';
+ if(![undefined,'true','false'].includes(env.QORE_G252_MERCHANT_INBOX_APPROVED))
+  throw Error('G252 merchant read-only inbox opt-in must be explicit boolean');
+ const g252MerchantInboxAuthApproved=env.QORE_G252_MERCHANT_INBOX_APPROVED==='true';
  const port=Number(env.PORT);
  if(!Number.isInteger(port)||port<1024||port>65535)
   throw Error('Railway STAGING requires a valid PORT');
@@ -41,13 +44,13 @@ function assertRailwayEnvironment(env){
   loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,
   adminOrigin,...admission
  });
- return {port,hostname,adminOrigin,admission,g247RecipientAuthApproved};
+ return {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,g252MerchantInboxAuthApproved};
 }
-const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved}=assertRailwayEnvironment(process.env);
+const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,g252MerchantInboxAuthApproved}=assertRailwayEnvironment(process.env);
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
- g247RecipientAuthApproved,
+ g247RecipientAuthApproved,g252MerchantInboxAuthApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
