@@ -24,7 +24,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U postgres -d qore_g265_disposable'
+          --health-cmd "pg_isready -U postgres -d qore_g265_disposable"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
