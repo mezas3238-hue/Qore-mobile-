@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {stageAndProveEightQa} from './g275-staging-qa-operator.mjs';
+import {stageAndProveEightQa,verifyExistingEightQa} from './g275-staging-qa-operator.mjs';
 import {QA_SLOTS,STAGING_REF} from './qore-staging-qa-identity-bootstrap.mjs';
 
 const manifest=QA_SLOTS.map(([slot,role],i)=>({
@@ -55,4 +55,33 @@ test('G275 refuses certification if session revocation evidence is partial',asyn
  const s=spies({revoked:7});
  await assert.rejects(stageAndProveEightQa({...conf,...s}));
  assert.deepEqual(s.calls,['provision','audit','sessions']);
+});
+
+test('G276 verify-only resumes proof for existing eight actors without calling bootstrap',async()=>{
+ const s=spies();
+ const result=await verifyExistingEightQa({...conf,...s});
+ assert.deepEqual(s.calls,['audit','sessions']);
+ assert.equal(result.authAccounts,8);
+ assert.equal(result.independentSessionsVerified,8);
+ assert.equal(result.externalJourneysCertified,0);
+});
+test('G276 verify-only rejects partial identities without sessions or account mutation',async()=>{
+ const s=spies({auditCount:7});
+ await assert.rejects(verifyExistingEightQa({...conf,...s}));
+ assert.deepEqual(s.calls,['audit']);
+});
+test('G276 verify-only checks staging, flags and QA manifest before network',async()=>{
+ for(const override of [
+  {ref:'qdqrlgzlotnfdxzpacxs'},{environment:'production'},
+  {liveTripsEnabled:'true'},{manifest:manifest.slice(1)}
+ ]){
+  const s=spies();
+  await assert.rejects(verifyExistingEightQa({...conf,...s,...override}));
+  assert.deepEqual(s.calls,[]);
+ }
+});
+test('G276 verify-only refuses fake session evidence or incomplete logout',async()=>{
+ const s=spies({revoked:7});
+ await assert.rejects(verifyExistingEightQa({...conf,...s}));
+ assert.deepEqual(s.calls,['audit','sessions']);
 });
