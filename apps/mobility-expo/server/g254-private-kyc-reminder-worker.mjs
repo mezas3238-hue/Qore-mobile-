@@ -46,6 +46,9 @@ export function createG254PrivateDocumentReminderWorker({
    try{alert=await claimNextAlert();}
    catch{return result('CLAIM_UNAVAILABLE');}
    if(alert===null)return result('IDLE');
+   if(exact(alert,['state','qaOnly','productionEnabled'])&&
+    alert.state==='WORKER_DISABLED'&&alert.qaOnly===true&&
+    alert.productionEnabled===false)return result('WORKER_DISABLED');
    if(!exact(alert,ALERT_FIELDS)||!integer(alert.alertId)||alert.alertId===0||
     !KEY.test(alert.eventKey)||!UUID.test(alert.driverId??'')||
     !KINDS.has(alert.kind)||!BANDS.has(alert.band)||
