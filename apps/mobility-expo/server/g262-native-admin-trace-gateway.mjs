@@ -4,7 +4,7 @@
  * billing, settlement or external five-journey E2E. Opt-in G260 AAL2/G42 only.
  */
 const PATH=/^\/v1\/staging\/admin\/native-services\/(AUTO_RIDE|MOTO_RIDE|DELIVERY_AUTO|DELIVERY_MOTO|COMMERCE)\/([0-9a-f-]{36})\/trace$/i;
-const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}-[0-9a-f]{12}$/i;
+const ID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const deny=(status,code)=>({status,body:{code,qaOnly:true,productionEnabled:false}});
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const FIELDS=['mode','serviceKind','serviceId','requestKey','viewerId',
