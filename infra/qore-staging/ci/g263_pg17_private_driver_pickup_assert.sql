@@ -46,7 +46,7 @@ BEGIN
  FOREACH k IN ARRAY ARRAY['RIDE','MOTO_RIDE','DELIVERY','MERCHANT_ORDER'] LOOP
   pos:=pos+1;
   q:=public.mobility_stage_g197_save_pickup_qa(a,s,12345,k,
-   CASE WHEN k='MOTO_RIDE' THEN 0 ELSE pos*1000 END,0);
+   CASE WHEN k='MOTO_RIDE' THEN 0 WHEN k='MERCHANT_ORDER' THEN 5000 ELSE pos*1000 END,0);
   IF q->>'driverId'<>a::text OR q->>'serviceKind'<>k
   OR q->>'revision'<>'1' OR q->>'serverPersisted'<>'true'
   THEN RAISE EXCEPTION 'G263 first revision not persisted %',k; END IF;
