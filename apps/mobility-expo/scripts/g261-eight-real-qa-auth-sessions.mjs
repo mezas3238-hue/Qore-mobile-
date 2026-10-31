@@ -104,7 +104,8 @@ export async function verifyEightQaSessions({
  try{prior=await actorAudit({ref,environment,liveTripsEnabled:false,
   publicKey,serviceKey,fetcher,signupGate});}
  catch{throw fail();}
- if(prior?.qaAuthAccounts!==8||prior.exclusiveQaRoles!==8||
+ if(prior?.qaAuthAccounts!==8||prior.exclusiveQaRoles!==7||
+    prior.adminBackofficeAuthorized!==false||prior.pendingBackofficeApproval!==1||
     prior.signupDisabled!==true||prior.projectPinned!==true)throw fail();
  const sessions=[];let positive=0,negative=0,revoked=0;
  try{
