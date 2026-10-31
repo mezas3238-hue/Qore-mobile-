@@ -16,6 +16,27 @@ const check=(response,status)=>{
   response.headers?.get?.('content-type')??''))
   throw Error('invalid_content_type');
 };
+async function boundedJson(response){
+ const stream=response?.body;
+ if(!stream||typeof stream.getReader!=='function')
+  throw Error('response_stream_missing');
+ const reader=stream.getReader();let bytes=0,done=false;
+ const chunks=[];
+ try{
+  for(;;){
+   const part=await reader.read();
+   if(part.done){done=true;break;}
+   if(!(part.value instanceof Uint8Array))
+    throw Error('invalid_response_chunk');
+   bytes+=part.value.byteLength;
+   if(bytes>1024)throw Error('response_too_large');
+   chunks.push(part.value);
+  }
+ }finally{if(!done)await reader.cancel().catch(()=>{});}
+ const decoded=new TextDecoder('utf-8',{fatal:true}).decode(
+  Buffer.concat(chunks,bytes));
+ return JSON.parse(decoded);
+}
 export async function checkG258RailwayPublicBoundary({
  origin=ORIGIN,request=fetch,timeoutMs=7000
 }={}){
@@ -28,9 +49,7 @@ export async function checkG258RailwayPublicBoundary({
  try{
   const live=await request(origin+'/_qore/liveness',args);
   check(live,200);
-  const t=await live.text();
-  if(t.length>1024)throw Error('unbounded_health');
-  const body=JSON.parse(t);
+  const body=await boundedJson(live);
   if(!body||typeof body!=='object'||Array.isArray(body)||
    Object.keys(body).length!==2||
    body.state!=='PROCESS_UP_ONLY'||
@@ -38,9 +57,7 @@ export async function checkG258RailwayPublicBoundary({
    return fatal('LIVENESS_UNTRUSTED');
   const blocked=await request(origin+GATEWAY,args);
   check(blocked,401);
-  const text=await blocked.text();
-  if(text.length>1024)throw Error('unbounded_unauth');
-  const parsed=JSON.parse(text);
+  const parsed=await boundedJson(blocked);
   if(parsed?.error!=='Verified bearer required')
    return fatal('UNAUTHENTICATED_ACCESS_NOT_DENIED');
   return Object.freeze({ok:true,code:'HTTPS_PROCESS_AND_AUTH_BOUNDARY_PASS',
