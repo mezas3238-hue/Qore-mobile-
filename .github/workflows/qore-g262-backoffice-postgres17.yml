@@ -1,0 +1,43 @@
+name: QORE G262 backoffice invoker / scope PG17 (disposable)
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/g262_backoffice_role_readonly_functions_staging_candidate.sql'
+      - 'apps/mobility-expo/docs/backend/staging_only/G262_BACKOFFICE_PG17_*'
+      - '.github/workflows/qore-g262-backoffice-postgres17.yml'
+permissions:
+  contents: read
+jobs:
+  g262-real-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: g262_disposable_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGDATABASE: postgres
+      PGPASSWORD: g262_disposable_only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Create disposable Auth/role schema with zero users
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G262_BACKOFFICE_PG17_FIXTURE_CI_ONLY.sql
+      - name: Apply exact G262 SQL proposed for isolated STAGING
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/g262_backoffice_role_readonly_functions_staging_candidate.sql
+      - name: Verify invoker, strict grants, exclusive scopes and all deny cases
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G262_BACKOFFICE_PG17_ASSERT_CI_ONLY.sql
