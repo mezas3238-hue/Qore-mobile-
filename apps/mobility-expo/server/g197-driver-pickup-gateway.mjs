@@ -45,7 +45,8 @@ export function createG197DriverPickupGateway({
    ||!Number.isSafeInteger(actor.expiresAtMs)||actor.expiresAtMs<=at
    ||actor.is_anonymous!==false)return deny(401,'G197_IDENTITY_INVALID');
   try{
-   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,at})!==true)
+   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at})!==true)
     return deny(401,'G197_SESSION_REVOKED');
    if(await resolveExclusiveRole(actor.id)!=='driver')
     return deny(403,'G197_EXCLUSIVE_DRIVER_REQUIRED');
@@ -76,7 +77,8 @@ export function createG197DriverPickupGateway({
   const ended=now();
   if(ended<at||ended>=actor.expiresAtMs)return deny(503,'G197_SESSION_CHANGED');
   try{
-   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,at:ended})!==true)
+   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at:ended})!==true)
     return deny(503,'G197_SESSION_CHANGED');
   }catch{return deny(503,'G197_SESSION_CHANGED');}
   return {status:200,body:result};

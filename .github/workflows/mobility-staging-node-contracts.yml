@@ -5,10 +5,16 @@ on:
       - feature/mobility-monorepo-isolated-20261016
     paths:
       - 'apps/mobility-expo/server/**'
+      - 'apps/mobility-expo/scripts/g256-railway-launch-preflight*'
+      - 'apps/mobility-expo/scripts/g271-supabase-service-key-readonly-probe*'
+      - 'apps/mobility-expo/scripts/g258-railway-https-boundary-smoke*'
       - '.github/workflows/mobility-staging-node-contracts.yml'
   pull_request:
     paths:
       - 'apps/mobility-expo/server/**'
+      - 'apps/mobility-expo/scripts/g256-railway-launch-preflight*'
+      - 'apps/mobility-expo/scripts/g271-supabase-service-key-readonly-probe*'
+      - 'apps/mobility-expo/scripts/g258-railway-https-boundary-smoke*'
       - '.github/workflows/mobility-staging-node-contracts.yml'
 permissions:
   contents: read
@@ -27,3 +33,12 @@ jobs:
       - name: Run synthetic staging server contracts
         working-directory: apps/mobility-expo/server
         run: node --test *.test.mjs
+      - name: Verify G256 Railway predeploy security gates (no external secrets)
+        working-directory: apps/mobility-expo/scripts
+        run: node --test g256-railway-launch-preflight.test.mjs
+      - name: Verify G271 provider API-key probe (offline)
+        working-directory: apps/mobility-expo/scripts
+        run: node --test g271-supabase-service-key-readonly-probe.test.mjs
+      - name: Verify G258 external HTTPS boundary contract (no live request)
+        working-directory: apps/mobility-expo/scripts
+        run: node --test g258-railway-https-boundary-smoke.test.mjs

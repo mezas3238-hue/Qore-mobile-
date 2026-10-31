@@ -8,7 +8,8 @@
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
 
-const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com)$/;
+const HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/;
+const RAILWAY_HOST=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.up\.railway\.app$/;
 const BEARER=/^Bearer ([A-Za-z0-9._~-]{20,7900})$/;
 const MAX_BODY=2048;
 const MAX_REPLY=32768;
@@ -81,13 +82,14 @@ export function createRenderStagingIngress({
  loopbackOrigin,expectedHost,adminOrigin=null,request=fetch,now=Date.now,
  maxConcurrentReads=DEFAULT_MAX_READS,
  maxConcurrentWrites=DEFAULT_MAX_WRITES,
- maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS
+ maxIdentityBuckets=DEFAULT_IDENTITY_BUCKETS,platform='render'
 }={}){
  let url;
  try{url=new URL(loopbackOrigin);}catch{throw Error('Fixed G4 loopback origin required');}
  if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||!url.port||
     url.pathname!=='/'||url.username||url.password||url.search||url.hash||
-    !HOST.test(expectedHost)||!validOrigin('https://'+expectedHost)||
+    !(platform==='render'?HOST:platform==='railway'?RAILWAY_HOST:/^$/).test(expectedHost)||
+    !validOrigin('https://'+expectedHost)||
     (adminOrigin!==null&&(!validOrigin(adminOrigin)||
       new URL(adminOrigin).hostname===expectedHost))||
     typeof request!=='function'||typeof now!=='function'||
@@ -148,17 +150,20 @@ export function createRenderStagingIngress({
   if(req.method==='OPTIONS'){
    if(origin===undefined||badPath(req.url)||
      req.headers['access-control-request-method']===undefined||
-     !['GET','POST'].includes(req.headers['access-control-request-method'])||
+     !['GET','POST','PUT'].includes(req.headers['access-control-request-method'])||
+     (req.headers['access-control-request-method']==='PUT'&&
+      req.url!=='/v1/staging/driver/pickup-preferences')||
      (req.headers['access-control-request-headers']??'').toLowerCase()
        .split(',').map(x=>x.trim()).some(x=>!['authorization','content-type'].includes(x))){
     json(res,403,{error:'Unapproved preflight'},cors);return;
    }
    res.writeHead(204,{...JSON_HEADERS,...cors,
-    'access-control-allow-methods':'GET, POST, OPTIONS',
+    'access-control-allow-methods':'GET, POST, PUT, OPTIONS',
     'access-control-allow-headers':'Authorization, Content-Type',
     'access-control-max-age':'300'});res.end();return;
   }
-  if(!['GET','POST'].includes(req.method)||badPath(req.url)){
+  if(!['GET','POST','PUT'].includes(req.method)||badPath(req.url)||
+     (req.method==='PUT'&&req.url!=='/v1/staging/driver/pickup-preferences')){
    json(res,404,{error:'Not found'},cors);return;
   }
   if(rawHeaderCount(req,'authorization')!==1||
@@ -190,7 +195,7 @@ export function createRenderStagingIngress({
    json(res,400,{error:'GET body not allowed'},cors);return;
   }
   let body;
-  if(req.method==='POST'){
+  if(req.method==='POST'||req.method==='PUT'){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     json(res,415,{error:'JSON body required'},cors);return;
    }
@@ -227,9 +232,9 @@ export function createRenderStagingIngress({
     headers:{
      authorization:req.headers.authorization,
      ...(historyCursor===undefined?{}:{'x-qore-history-cursor':historyCursor}),
-     ...(req.method==='POST'?{'content-type':'application/json'}:{})
+     ...(['POST','PUT'].includes(req.method)?{'content-type':'application/json'}:{})
     },
-    ...(req.method==='POST'?{body}:{}),
+    ...(['POST','PUT'].includes(req.method)?{body}:{}),
     redirect:'error',cache:'no-store',credentials:'omit',
     signal:AbortSignal.timeout(7000)
    });

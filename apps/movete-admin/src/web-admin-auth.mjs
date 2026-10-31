@@ -1,8 +1,9 @@
 /**
  * Admin Auth client for isolated STAGING. Password alone is NOT an Admin
  * session: the provider MUST attest AAL2 with a VERIFIED TOTP enrollment
- * and server Auth getUser; RLS MUST return exactly one matching Admin/Owner
- * role. G75 backend rechecks JWT, provider MFA, RBAC and session revocation.
+ * and server Auth getUser; G264 returns only the caller's exclusive
+ * G27-backoffice role under Auth JWT AAL2. No user_roles bypass. The backend
+ * separately rechecks JWT, provider MFA, RBAC and session revocation.
  *
  * Browser has memory-only token storage. Never rely on a local JWT decode.
  */
@@ -18,7 +19,7 @@ export function createWebAdminAuth({supabase,now=Date.now}={}){
   typeof supabase.auth?.mfa?.getAuthenticatorAssuranceLevel!=='function'||
   typeof supabase.auth?.mfa?.listFactors!=='function'||
   typeof supabase.auth?.mfa?.challengeAndVerify!=='function'||
-  typeof supabase.from!=='function')
+  typeof supabase.rpc!=='function')
   throw Error('Admin requires provider-certified AAL2 and RLS');
  let busy=false;
  async function factor(){
@@ -49,14 +50,14 @@ export function createWebAdminAuth({supabase,now=Date.now}={}){
      ||typeof user.phone_confirmed_at==='string')||
    aal?.currentLevel!=='aal2'||totpId===null)
    return null;
-  const roles=await supabase.from('user_roles').select('role')
-   .eq('user_id',user.id).limit(3);
-  if(roles.error||!Array.isArray(roles.data)||roles.data.length!==1||
-   !['admin','owner'].includes(roles.data[0]?.role))
+  // IMPORTANT: G27 forbids users present in native user_roles. Query only
+  // the minimal AAL2 self-role disclosure from its SAME private registry.
+  // Never query mobility_stage_backoffice_roles directly from the browser.
+  const own=await supabase.rpc('mobility_stage_g264_my_backoffice_role');
+  if(own.error||!['admin','owner'].includes(own.data))
    return null;
-  // Client gate protects display only; G75 will independently verify AAL2
-  // and Admin role from its real IdP, backoffice registry and RLS.
-  return Object.freeze({role:roles.data[0].role,
+  // This browser gate does not authorize requests: G27/G42/G260 still do.
+  return Object.freeze({role:own.data,
    subject:user.id,token:s.access_token,
    mfaVerified:true,expiresAt:expiry});
  }

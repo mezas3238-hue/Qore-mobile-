@@ -61,7 +61,8 @@ export function createG187RecipientConfirmationGateway({
    return deny(403,'G187_SELF_CONFIRMATION_DENIED');
   try{
    if(await verifySessionNotRevoked({
-    userId:actor.id,sessionId:actor.sessionId,at})!==true)
+    userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at})!==true)
     return deny(401,'G187_SESSION_REVOKED');
   }catch{return deny(503,'G187_SESSION_AUTHORITY_UNAVAILABLE');}
   try{
@@ -129,7 +130,7 @@ export function createG187RecipientConfirmationGateway({
    return deny(503,'G187_SESSION_LOST_AFTER_SQL');
   try{
    if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,
-    at:ended})!==true)return deny(503,'G187_SESSION_LOST_AFTER_SQL');
+    tokenIatMs:actor.tokenIatMs,at:ended})!==true)return deny(503,'G187_SESSION_LOST_AFTER_SQL');
   }catch{return deny(503,'G187_SESSION_LOST_AFTER_SQL');}
   return {status:200,body:receipt};
  };

@@ -58,3 +58,15 @@ test('G73 Cliente never trusts arbitrary domain, different pin, HTTP, query, cre
   ...approved,pinnedOrigin:'https://another-staging.onrender.com'
  }),null);
 });
+
+test('G229 Cliente permits only independently pinned Railway STAGING HTTPS after all gates',()=>{
+ const railway='https://qore-mobile-staging.up.railway.app';
+ const valid=createF1AuthorizedQaHttpOptions({...approved,
+  origin:railway,pinnedOrigin:railway});
+ assert(valid);assert.equal(valid.origin,railway);
+ assert.equal(createF1AuthorizedQaHttpOptions({...approved,
+  origin:railway,pinnedOrigin:origin}),null);
+ assert.equal(createF1AuthorizedQaHttpOptions({...approved,
+  origin:'https://evil.up.railway.app.evil.org',
+  pinnedOrigin:'https://evil.up.railway.app.evil.org'}),null);
+});

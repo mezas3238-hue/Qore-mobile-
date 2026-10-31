@@ -89,3 +89,17 @@ test('G197 rejects server-suggested distance not chosen by the Driver',async()=>
  }));
  assert.equal((await api.update('MERCHANT_ORDER',2000,1)).code,'G197_UNTRUSTED_RECEIPT');
 });
+
+test('G229 Driver OFF and pickup preferences accept exact Railway HTTPS pin only',async()=>{
+ const railway='https://qore-mobile-staging.up.railway.app';
+ const a=createG197DriverPickupPreferencesHttp(options({
+  origin:railway,pinnedOrigin:railway,
+  request:async()=>result(listing())
+ }));
+ assert.equal(a.isConfigured(),true);
+ assert.equal((await a.read()).ok,true);
+ const b=createG197DriverPickupPreferencesHttp(options({
+  origin:railway,pinnedOrigin:origin
+ }));
+ assert.equal(b.isConfigured(),false);
+});

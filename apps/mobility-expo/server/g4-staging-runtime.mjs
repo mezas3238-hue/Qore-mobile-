@@ -80,6 +80,12 @@ import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-ca
 import {createG187RecipientConfirmationGateway} from './g187-recipient-confirmation-gateway.mjs';
 import {createG201FiveJourneyRuntimeBridges,validG201IndependentTrust}
  from './g201-five-journey-runtime-bridges.mjs';
+import {createQoreG247ProviderSessionTrust}
+ from './g247-supabase-provider-session-trust.mjs';
+import {createQoreG260AdminAal2Trust}
+ from './g260-supabase-admin-aal2-trust.mjs';
+import {createG262NativeAdminTraceGateway}
+ from './g262-native-admin-trace-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -138,10 +144,13 @@ function validClients(auth,admin){
 }
 async function assertDatabaseG4(admin){
  for(const table of STAGE_TABLES){
-  // Head-only, SELECT id, zero returned rows; strictly no writes or fixtures.
-  const q=admin.from(table).select('id',{head:true,count:'exact'}).limit(0);
+  // G272: persistent PG17 has composite-key tables without an "id"
+  // column (clearance, outboxes, merchant staff/lines). Discover each
+  // table with HEAD SELECT * LIMIT 0: no rows, no count, no writes.
+  // An actual missing/unreadable table still blocks startup.
+  const q=admin.from(table).select('*',{head:true}).limit(0);
   const {error}=await q;
-  if(error)throw Error('G4/G5 ephemeral-only schema not installed in target staging');
+  if(error)throw Error('G4 STAGING required table missing or unreadable: '+table);
  }
 }
 async function singleRole(admin,id){
@@ -196,11 +205,22 @@ export async function prepareQoreG4StagingRuntime({
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
+ g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
+ g260AdminAal2Approved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
+ if(typeof g247RecipientAuthApproved!=='boolean'||
+    (g247RecipientAuthApproved&&recipientTrust!==null))
+  throw Error('G249 requires exclusive explicit G247 STAGING recipient opt-in');
+ if(typeof g252MerchantInboxAuthApproved!=='boolean'||
+    (g252MerchantInboxAuthApproved&&merchantStaffTrust!==null))
+  throw Error('G252 read-only merchant inbox requires exclusive explicit provider opt-in');
+ if(typeof g260AdminAal2Approved!=='boolean'||
+    (g260AdminAal2Approved&&adminF1Trust!==null))
+  throw Error('G260 Admin AAL2 requires exclusive owner-approved provider trust');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -353,6 +373,29 @@ export async function prepareQoreG4StagingRuntime({
  const auth=createClient(url,anonKey,options);
  const admin=createClient(url,serviceKey,options);
  if(!validClients(auth,admin))throw Error('Supabase Auth/SQL clients unavailable');
+ // Explicit opt-in: provider-confirmed Auth session and PostgreSQL G42 only.
+ // No trusted recipient route is enabled by default or in LIVE.
+ const resolvedRecipientTrust=g247RecipientAuthApproved?
+  createQoreG247ProviderSessionTrust({projectRef:ref,auth:auth.auth,
+   db:admin,now,allowedByOwner:true,liveEnabled:false}):recipientTrust;
+ // G252 Merchant inbox READ ONLY. Do not promote this authority to G173:
+ // order transitions still require their independently certified SAME-TX
+ // SQL G42 mutation fence. A successful inbox read cannot approve fulfillment.
+ const g252Provider=g252MerchantInboxAuthApproved?
+  createQoreG247ProviderSessionTrust({projectRef:ref,auth:auth.auth,
+   db:admin,now,allowedByOwner:true,liveEnabled:false}):null;
+ const resolvedMerchantInboxTrust=g252Provider?{
+  verifyMerchantSession:token=>g252Provider.verifyParticipantSession(token),
+  verifySessionNotRevoked:scope=>g252Provider.verifySessionNotRevoked(scope)
+ }:merchantStaffTrust;
+ // G260 native Supabase Admin AAL2 uses independently authenticated bearer
+ // plus exact G42 session + SQL G27 role. Disabled unless expressly approved;
+ // never inferred from possession of service_role, email or user_metadata.
+ const resolvedAdminF1Trust=g260AdminAal2Approved?
+  createQoreG260AdminAal2Trust({
+   projectRef:ref,auth:auth.auth,db:admin,now,
+   allowedByOwner:true,liveEnabled:false
+  }):adminF1Trust;
  const inspect=async()=>{
   const policy=await inspectStageSignup({ref,key:anonKey,request});
   if(policy.certified!==true)
@@ -385,7 +428,7 @@ export async function prepareQoreG4StagingRuntime({
   }):null;
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const driverRecoveryPersistence=driverKycTrust===null?null:createG106DriverCurrentTripRepository({db:admin});
- const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
+ const adminF1Persistence=resolvedAdminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
   createSupabaseStagingMerchantManagementRepository(admin);
@@ -459,11 +502,11 @@ export async function prepareQoreG4StagingRuntime({
  });
  // G156 private staff inbox: session is confirmed by independent IdP;
  // original order, branch and merchant membership are checked again in G42 SQL.
- const merchantInbox=merchantStaffTrust===null?null:createG156MerchantInboxGateway({
+ const merchantInbox=resolvedMerchantInboxTrust===null?null:createG156MerchantInboxGateway({
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
   verifyAccessToken:async token=>{
    const provider=await verified(token);
-   const a=await merchantStaffTrust.verifyMerchantSession(token);
+   const a=await resolvedMerchantInboxTrust.verifyMerchantSession(token);
    if(!a||typeof a!=='object'||Array.isArray(a)||
     Object.getPrototypeOf(a)!==Object.prototype||Object.keys(a).length!==5||
     !['id','sessionId','tokenIatMs','expiresAtMs','is_anonymous'].every(k=>Object.hasOwn(a,k))||
@@ -473,7 +516,7 @@ export async function prepareQoreG4StagingRuntime({
     throw Error('G156 independently verified merchant staff required');
    return a;
   },
-  verifySessionNotRevoked:x=>merchantStaffTrust.verifySessionNotRevoked(x),
+  verifySessionNotRevoked:x=>resolvedMerchantInboxTrust.verifySessionNotRevoked(x),
   allowRequest:({userId})=>allowRequest({userId}),
   loadInbox:async x=>{
    const {data,error}=await admin.rpc('mobility_stage_g156_merchant_inbox_qa',{
@@ -840,7 +883,7 @@ export async function prepareQoreG4StagingRuntime({
  // auth or privilege is inferred from unverified JWT claims.
  const verifiedAdminSession=async token=>{
   const user=await verified(token);
-  const attested=await adminF1Trust.verifyAdminSession(token);
+  const attested=await resolvedAdminF1Trust.verifyAdminSession(token);
   if(!attested||typeof attested!=='object'||attested.id!==user.id||
      attested.is_anonymous!==false||
      !(typeof user.email_confirmed_at==='string'||
@@ -856,11 +899,11 @@ export async function prepareQoreG4StagingRuntime({
   if(error)throw Error('Admin G27 exclusive role lookup unavailable');
   return data;
  };
- const verifiedAdminTrust=adminF1Trust===null?null:{
+ const verifiedAdminTrust=resolvedAdminF1Trust===null?null:{
   verifyAccessToken:verifiedAdminSession,
-  verifySessionNotRevoked:p=>adminF1Trust.verifySessionNotRevoked(p),
+  verifySessionNotRevoked:p=>resolvedAdminF1Trust.verifySessionNotRevoked(p),
   loadExclusiveBackofficeRole:adminRoleFromSql,
-  verifyBackofficeMfa:p=>adminF1Trust.verifyBackofficeMfa(p),
+  verifyBackofficeMfa:p=>resolvedAdminF1Trust.verifyBackofficeMfa(p),
   allowRequest,now
  };
  // G158 verified allegations are read-only until a separately authorized
@@ -963,6 +1006,21 @@ export async function prepareQoreG4StagingRuntime({
    return data;
   }
  });
+ // G262 reads the actual persistent STAGING G238/G239/G240 source rows.
+ // Original G138/142/145/146 disposable-only priced receipts are NOT inferred.
+ // Admin AAL2 and G27 remain mandatory, while the PG function is backend-only.
+ const adminNativeTrace=verifiedAdminTrust===null?null:
+  createG262NativeAdminTraceGateway({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+   ...verifiedAdminTrust,
+   loadNativeTrace:async({viewerId,serviceKind,serviceId})=>{
+    const {data,error}=await admin.rpc('mobility_stage_g262_admin_native_trace_qa',{
+     _viewer:viewerId,_kind:serviceKind,_source:serviceId
+    });
+    if(error)throw Error('G262 native source unavailable');
+    return data;
+   }
+  });
  const safety=createQoreSafetyGateway({
   projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
   allowRequest,
@@ -1123,10 +1181,10 @@ export async function prepareQoreG4StagingRuntime({
  })();
  // G187: original G5/G67 recipient evidence through the SAME PostgreSQL
  // authority. Every participant uses an independently revocable G42 session.
- const recipientConfirmation=recipientTrust===null?null:(()=>{
+ const recipientConfirmation=resolvedRecipientTrust===null?null:(()=>{
   const verifiedParticipant=async token=>{
    const provider=await verified(token);
-   const attested=await recipientTrust.verifyParticipantSession(token);
+   const attested=await resolvedRecipientTrust.verifyParticipantSession(token);
    if(provider?.id!==attested?.id||provider?.is_anonymous===true||
      attested?.is_anonymous!==false||
      !(typeof provider?.email_confirmed_at==='string'||
@@ -1144,7 +1202,7 @@ export async function prepareQoreG4StagingRuntime({
   return createG187RecipientConfirmationGateway({
    environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
    verifyAccessToken:verifiedParticipant,
-   verifySessionNotRevoked:p=>recipientTrust.verifySessionNotRevoked(p),
+   verifySessionNotRevoked:p=>resolvedRecipientTrust.verifySessionNotRevoked(p),
    resolveExclusiveRole:id=>singleRole(admin,id),
    allowRequest:({actorId})=>allowRequest({userId:actorId}),
    bindRecipient:p=>readSql('mobility_stage_g187_bind_recipient_qa',{
@@ -1232,6 +1290,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
+   ...(adminNativeTrace===null?{}:{adminNativeTraceHandler:guard(adminNativeTrace)}),
    deliveryHandler:guard(createG176VerifiedCourierCustodyFence({deliveryHandler:deliveries})),
    merchantHandler:guard(createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})),
    ...(buyerCommerce===null?{}:{commerceQaHandler:guard(buyerCommerce)}),

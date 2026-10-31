@@ -26,7 +26,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
  driver:'syntheticDriverBearerTokenNoRealJwt12345',
  stranger:'syntheticStrangerBearerTokenNoRealJwt12345'};
 function mockSupabase(){
- const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],
+ const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],schemaProbes:[],
    adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
    g77RegisteredRoute:null,
    g84Enabled:false,g84DispatchAttempts:0,g113BatchCalls:0,g89TripReadError:false,
@@ -84,6 +84,16 @@ function mockSupabase(){
         }
         assert.equal(options?.head,true);
         assert.equal(n,0);
+        const noId=new Set([
+         'mobility_stage_auto_demo_push_outbox',
+         'mobility_stage_delivery_offer_outbox',
+         'mobility_stage_delivery_vehicle_clearance',
+         'mobility_stage_merchant_staff',
+         'mobility_stage_merchant_order_lines'
+        ]);
+        state.schemaProbes.push({table,cols,options,n});
+        // Actual PG17 rejects "id" on these existing composite-key tables.
+        if(noId.has(table)&&cols==='id')return {error:{code:'42703'}};
         return {error:state.missing===table?{code:'42P01'}:null};
        },
        async maybeSingle(){
@@ -354,9 +364,24 @@ test('boot refuses even loopback listener when native Auth signup remains public
  await assert.rejects(prepare(m),/Auth public signup/);
  assert.equal(m.state.rpcs.length,0);
 });
+test('G272 zero-row schema probe tolerates all five real PG17 tables without id',async()=>{
+ const m=mockSupabase();
+ const runtime=await prepare(m);
+ assert.equal(runtime.commercialRidesEnabled,false);
+ const names=m.state.schemaProbes.map(x=>x.table);
+ assert.equal(names.length,29);
+ assert.equal(new Set(names).size,29);
+ for(const p of m.state.schemaProbes){
+  assert.equal(p.cols,'*');
+  assert.equal(p.options.head,true);
+  assert.equal(Object.hasOwn(p.options,'count'),false);
+  assert.equal(p.n,0);
+ }
+ assert.equal(m.state.rpcs.length,0);
+});
 test('boot refuses G3/G4 missing private SQL tables (without any remote write)',async()=>{
  const m=mockSupabase();m.state.missing='mobility_stage_auto_demo_offers';
- await assert.rejects(prepare(m),/schema not installed/);
+ await assert.rejects(prepare(m),/required table missing or unreadable/);
  assert.equal(m.state.rpcs.length,0);
 });
 test('boot rejects LIVE, old backend, unsafe env and public/foreign server role',async()=>{
@@ -2416,5 +2441,80 @@ test('G177 denied SQL cannot be presented as an acknowledged Driver arrival',asy
   assert.equal(denied.body.retrySafe,false);
   assert.equal(denied.body.serverPersisted,undefined);
   assert.equal(m.state.trip.status,'accepted');
+ });
+});
+
+test('G249 G247 recipient trust is OFF by default and cannot be double-authorized',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g247RecipientAuthApproved:'true'}),/exclusive explicit/);
+ const external={
+  verifyParticipantSession:async()=>null,verifySessionNotRevoked:async()=>false
+ };
+ await assert.rejects(prepare(m,{
+  g247RecipientAuthApproved:true,recipientTrust:external
+ }),/exclusive explicit/);
+ // No positive external session is implied by the ordinary G4 startup.
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const r=await req(base,'/v1/staging/sender/deliveries/'+deliveryId+
+   '/recipient-confirmation');
+  assert.notEqual(r.status,200);
+ });
+});
+test('G249 explicit STAGING opt-in wires provider trust; forged bearer denied before SQL',async()=>{
+ const m=mockSupabase();
+ const validProjectRef='staging1234567890abc'; // 20-character mock STAGING ref
+ const remap=url=>url.replace('https://'+validProjectRef+'.supabase.co',
+  'https://'+ref+'.supabase.co');
+ const runtime=await prepare(m,{
+  projectRef:validProjectRef,g247RecipientAuthApproved:true,
+  request:(url,options)=>m.request(remap(url),options),
+  createClient:(url,key)=>m.createClient(remap(url),key)
+ });
+ await http(runtime,async base=>{
+  const r=await req(base,'/v1/staging/sender/deliveries/'+deliveryId+
+   '/recipient-confirmation');
+  assert.equal(r.status,401);
+  assert.equal(r.body.productionEnabled,false);
+  // G187 performs its independent Supabase getUser lookup first;
+  // malformed bearer must still cause ZERO privileged G42 SQL calls.
+  assert.equal(m.state.authCalls,1);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_g42_session_active').length,0);
+ });
+});
+
+test('G252 merchant inbox is OFF by default and conflicting trust cannot be auto-enabled',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g252MerchantInboxAuthApproved:'true'}),
+  /G252 read-only merchant inbox/);
+ await assert.rejects(prepare(m,{g252MerchantInboxAuthApproved:true,
+  merchantStaffTrust:{verifyMerchantSession:async()=>null,
+   verifySessionNotRevoked:async()=>false}
+ }),/G252 read-only merchant inbox/);
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const response=await req(base,'/v1/staging/merchant/'+vehicle+'/orders/inbox');
+  assert.notEqual(response.status,200);
+ });
+});
+test('G252 true wires signed provider only to private merchant inbox, not merchant mutations',async()=>{
+ const m=mockSupabase(),project='staging1234567890abc';
+ const remap=u=>u.replace('https://'+project+'.supabase.co',
+  'https://'+ref+'.supabase.co');
+ const runtime=await prepare(m,{projectRef:project,
+  g252MerchantInboxAuthApproved:true,
+  request:(u,o)=>m.request(remap(u),o),
+  createClient:(u,k)=>m.createClient(remap(u),k)});
+ await http(runtime,async base=>{
+  const inbox=await req(base,'/v1/staging/merchant/'+vehicle+'/orders/inbox');
+  assert.equal(inbox.status,401);
+  assert.equal(inbox.body.productionEnabled,false);
+  const mutation=await req(base,'/v1/staging/merchant/orders/'+ride+
+   '/transition','rider','POST',{event:'ready',eventKey:requestKey});
+  assert.notEqual(mutation.status,200);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_g156_merchant_inbox_qa'||
+   x.name==='mobility_stage_g173_merchant_transition_qa').length,0);
  });
 });

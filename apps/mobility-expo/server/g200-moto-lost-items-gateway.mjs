@@ -68,7 +68,8 @@ export function createG200MotoLostItemsGateway({
    ||actor.is_anonymous!==false)return deny(401,'G200_UNVERIFIED_IDENTITY');
   let role;
   try{
-   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,at})!==true)
+   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at})!==true)
     return deny(401,'G200_REVOKED');
    role=await resolveExclusiveRole(actor.id);
    if(!['passenger','driver'].includes(role)||
@@ -127,7 +128,8 @@ export function createG200MotoLostItemsGateway({
   const ended=now();
   if(ended<at||ended>=actor.expiresAtMs)return deny(503,'G200_AUTH_EXPIRED_AFTER_SQL');
   try{
-   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,at:ended})!==true)
+   if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at:ended})!==true)
     return deny(503,'G200_SESSION_REVOKED_AFTER_SQL');
   }catch{return deny(503,'G200_SESSION_UNAVAILABLE_AFTER_SQL');}
   return {status:200,body:receipt};

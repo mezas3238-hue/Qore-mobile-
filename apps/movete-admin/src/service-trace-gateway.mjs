@@ -144,7 +144,7 @@ export function createServiceTraceQaOptions({
 }={}){
  const host=originOf(origin);
  if(host===null||host!==originOf(pinnedOrigin)
-  ||!/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/.test(new URL(host).hostname)
+  ||!/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com|up\.railway\.app)$/.test(new URL(host).hostname)
   ||ownerApproved!==true||externalHttpsVerified!==true
   ||contractVerified!==true||postgresVerified!==true
   ||serverMfaVerified!==true||serverRbacVerified!==true

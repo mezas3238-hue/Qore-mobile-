@@ -12,7 +12,7 @@ const safeOrigin=(raw)=>{
    ||u.port||u.search||u.hash||u.pathname!=='/'||u.hostname.endsWith('.'))
    return null;
   // Disallow LAN/IP/localhost and arbitrary domains for staging deployments.
-  if(!/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/.test(u.hostname))
+  if(!/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com|up\.railway\.app)$/.test(u.hostname))
    return null;
   return u.origin;
  }catch{return null;}

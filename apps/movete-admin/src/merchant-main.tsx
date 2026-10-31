@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {createClient} from '@supabase/supabase-js';
 import {verifyWebAdminConfig} from './web-admin-config.mjs';
 import {boundedMerchantJson} from './merchant-bounded-json.mjs';
+import {verifyMerchantStagingApiOrigin} from './merchant-staging-origin.mjs';
 import './styles.css';
 
 /** Independent merchant staff portal. No Admin/Owner login or role escalation. */
@@ -19,24 +20,18 @@ const transitions:Record<string,{event:string;label:string}|undefined>={
  ready:{event:'hand_to_courier',label:'Registrar entrega al repartidor'}
 };
 const env=import.meta.env;
-function backendOrigin(value:unknown):string|null{
- try{
-  if(typeof value!=='string'||value.includes('\\'))return null;
-  const u=new URL(value);
-  return u.protocol==='https:'&&!u.port&&!u.username&&!u.password&&
-   u.pathname==='/'&&!u.search&&!u.hash&&
-   /^[a-z0-9-]+\.onrender\.com$/.test(u.hostname)?u.origin:null;
- }catch{return null;}
-}
 const configuration=verifyWebAdminConfig({
  url:env.VITE_SUPABASE_URL,
  publishableKey:env.VITE_SUPABASE_PUBLISHABLE_KEY
 });
-const origin=backendOrigin(env.VITE_G156_MERCHANT_ORIGIN);
+const origin=verifyMerchantStagingApiOrigin({
+ origin:env.VITE_G156_MERCHANT_ORIGIN,
+ pinnedOrigin:env.VITE_G156_MERCHANT_PINNED_ORIGIN
+});
 const enabled=env.VITE_G156_MERCHANT_PORTAL_ENABLED==='true'&&
  env.VITE_G156_EXTERNAL_RUNTIME_VERIFIED==='true'&&
  env.VITE_G156_PROVIDER_REVOCATION_VERIFIED==='true'&&
- origin!==null&&origin===backendOrigin(env.VITE_G156_MERCHANT_PINNED_ORIGIN)&&
+ origin!==null&&
  configuration.ok===true;
 const ratingEnabled=enabled&&
  ['VITE_G155_OWNER_APPROVED','VITE_G155_BACKEND_CONTRACT_VERIFIED',
@@ -249,7 +244,7 @@ function MerchantApp(){
    <button type="submit" disabled={busy}>Iniciar sesión</button>
   </form>:<section>
    <div style={{display:'flex',flexWrap:'wrap',gap:12,alignItems:'center'}}>
-    <label>Comercio <select value={merchantId} onChange={e=>{
+    <label>Comercio <select value={merchantId} disabled={busy} onChange={e=>{
      setMerchantId(e.target.value);setOrders([]);pending.current.clear();
      reviewKeys.current.clear();setReviewStars({});setReviewed([]);}}>
      {identity.merchantIds.map(id=><option key={id} value={id}>{id}</option>)}

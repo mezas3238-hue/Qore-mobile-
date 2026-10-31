@@ -99,3 +99,19 @@ test('G197 HTTP G4 loopback endpoints mounted only with supplied authorities',as
  t.after(()=>new Promise(resolve=>missing.close(resolve)));
  assert.equal((await fetch(other+path,{headers:{authorization:'Bearer '+token}})).status,503);
 });
+
+test('G249 independent G247 checks receive JWT original issued-at for both pre/post SQL',async()=>{
+ const observed=[];
+ const f=fixture({verifySessionNotRevoked:async v=>{
+  observed.push(v);
+  return v.tokenIatMs===now-100;
+ }});
+ const res=await f.gateway(request('GET'));
+ assert.equal(res.status,200);
+ assert.equal(observed.length,2);
+ for(const v of observed){
+  assert.equal(v.tokenIatMs,now-100);
+  assert.equal(v.at,now);
+  assert.notEqual(v.tokenIatMs,v.at);
+ }
+});
