@@ -161,7 +161,7 @@ DECLARE j public.mobility_stage_g269_auto_dispatch_jobs%ROWTYPE;
  t public.mobility_stage_auto_demo_trips%ROWTYPE;
  candidate public.mobility_stage_g269_pickup_road_proofs%ROWTYPE;
  prior public.mobility_stage_auto_demo_offers%ROWTYPE;
- offer_id uuid; fanout integer;
+ matched_offer_id uuid; fanout integer;
 BEGIN
  IF _passenger_id IS NULL OR _booking_key IS NULL OR _trip_id IS NULL
  THEN RAISE EXCEPTION 'G269 owner booking required' USING ERRCODE='P2693'; END IF;
@@ -225,7 +225,7 @@ BEGIN
    'commercialEnabled',false,'status','EXHAUSTED','tripId',j.trip_id);
  END IF;
  -- Reconcile an existing legitimate offer/outbox before any new attempt.
- SELECT o.id INTO offer_id FROM public.mobility_stage_auto_demo_offers o
+ SELECT o.id INTO matched_offer_id FROM public.mobility_stage_auto_demo_offers o
  JOIN public.mobility_stage_auto_demo_push_outbox p
    ON p.offer_id=o.id AND p.driver_id=o.driver_id
  WHERE o.trip_id=j.trip_id AND o.status='offered' AND
@@ -249,11 +249,11 @@ BEGIN
   ORDER BY p.pickup_road_meters,p.verified_at DESC,p.id LIMIT 1;
   IF FOUND AND public.mobility_vehicle_preflight(
     candidate.driver_id,candidate.vehicle_id,t.service) IS TRUE THEN
-    offer_id:=public.mobility_stage_auto_demo_offer(
+    matched_offer_id:=public.mobility_stage_auto_demo_offer(
      j.trip_id,candidate.driver_id,candidate.vehicle_id,j.offer_key,30);
   END IF;
  END IF;
- IF offer_id IS NULL THEN
+ IF matched_offer_id IS NULL THEN
   UPDATE public.mobility_stage_g269_auto_dispatch_jobs
   SET status='WAITING',attempts=attempts+1,
    next_attempt_at=pg_catalog.clock_timestamp()+interval '30 seconds',
@@ -263,11 +263,11 @@ BEGIN
    'commercialEnabled',false,'status','WAITING','tripId',j.trip_id,'offerId',NULL);
  END IF;
  UPDATE public.mobility_stage_g269_auto_dispatch_jobs
- SET status='OFFERED',offer_id=offer_id,attempts=attempts+1,
+ SET status='OFFERED',offer_id=matched_offer_id,attempts=attempts+1,
    updated_at=pg_catalog.clock_timestamp()
  WHERE booking_key=j.booking_key;
  RETURN pg_catalog.jsonb_build_object('mode','STAGING_DEMO_ONLY',
-  'commercialEnabled',false,'status','OFFERED','tripId',j.trip_id,'offerId',offer_id);
+  'commercialEnabled',false,'status','OFFERED','tripId',j.trip_id,'offerId',matched_offer_id);
 END $f$;
 
 CREATE FUNCTION qore_stage_internal.mobility_stage_g90_passenger_dispatch_status_qa(
