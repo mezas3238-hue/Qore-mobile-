@@ -1,0 +1,50 @@
+name: QORE G262 AUTO route quote book PostgreSQL disposable
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g262_private_auto_route_quote_book_pg17.sql'
+      - 'infra/qore-staging/ci/g262_*.sql'
+      - '.github/workflows/qore-g262-auto-route-quote-book-postgres.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pg-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qore_g262_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g262_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: qore_g262_disposable
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup disposable PostgreSQL schema (CI ONLY)
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g262_minimal_schema.sql
+      - name: Install G262 implementation ONLY in disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g262_private_auto_route_quote_book_pg17.sql
+      - name: Assert end-to-end SQL and denied privileges
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g262_auto_flow_asserts.sql
+      - name: Assert expired routes/quotes and role denials
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g262_expiry_role_denials.sql
+      - name: No external deployment
+        run: echo 'CI only - no LIVE, Auth REST or real Supabase changes'
