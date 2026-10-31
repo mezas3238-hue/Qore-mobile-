@@ -2451,7 +2451,9 @@ test('G249 explicit STAGING opt-in wires provider trust; forged bearer denied be
    '/recipient-confirmation');
   assert.equal(r.status,401);
   assert.equal(r.body.productionEnabled,false);
-  assert.equal(m.state.authCalls,0);
+  // G187 performs its independent Supabase getUser lookup first;
+  // malformed bearer must still cause ZERO privileged G42 SQL calls.
+  assert.equal(m.state.authCalls,1);
   assert.equal(m.state.rpcs.filter(x=>
    x.name==='mobility_stage_g42_session_active').length,0);
  });
