@@ -12,8 +12,8 @@ import {inspectStageSignup} from './staging-auth-policy-gate.mjs';
 const REF='mrjzxftsdxzepzbcuids';
 const ORIGIN='https://'+REF+'.supabase.co';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-const EMAIL=/^[a-z0-9._+-]+@[a-z0-9.-]+\\.invalid$/i;
-const JWT=/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/;
+const EMAIL=/^[a-z0-9._+-]+@[a-z0-9.-]+\.invalid$/i;
+const JWT=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const fail=()=>new Error('G261 STAGING Auth/G42 session proof blocked; review provider sessions privately');
 const privateHeaders=key=>({
  apikey:key,Accept:'application/json',
