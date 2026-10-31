@@ -68,11 +68,16 @@ Required values at approved start: `RAILWAY_ENVIRONMENT_NAME=STAGING`
 `QORE_RAILWAY_STAGING_APPROVED=true` **only after** the project passes
 Supabase Auth and security checks, and Owner authorizes STAGING start.
 
-## Supabase persistent STAGING (no project created yet)
+## Supabase persistent STAGING (created and isolated; operational flows still blocked)
 
-The connected organization must be selected by the Owner and the project
-cost confirmed before creation. Prefer region `sa-east-1` for an initial
-Paraguay latency trial, subject to measured networking and plan availability.
+**Created 31 Oct 2026** in the connected Free organization: project ref
+`mrjzxftsdxzepzbcuids`, São Paulo `sa-east-1`, PostgreSQL 17.11,
+provider status `ACTIVE_HEALTHY`. Cost quoted by Supabase: **USD 0/month**.
+This is a brand-new test project, separate from any previous environment.
+[Open Supabase STAGING](https://supabase.com/dashboard/project/mrjzxftsdxzepzbcuids).
+
+The Owner's command to start STAGING did not authorize real payments, LIVE or
+public signup. No credentials or passwords were committed to GitHub.
 
 1. Create a **new** `qore-mobile-staging` Supabase project; keep any LIVE
    refs/keys completely separate. Disable public Auth signups, require
@@ -97,6 +102,43 @@ Paraguay latency trial, subject to measured networking and plan availability.
    Each role requires least privilege and RLS denial of cross-account access.
    Do not grant KYC, municipal permissions or paid-settlement status through
    synthetic SQL fixtures.
+
+### Verified G231–G237 implementation (31 Oct 2026)
+
+GitHub sources, in this branch under `infra/qore-staging/migrations/`:
+
+- `g231_auth_profiles_exclusive_roles_rls.sql` — profiles, exclusive primary
+  roles, self-read policies, and the Auth signup trigger (new accounts start
+  as passenger; this is NOT permission to allow public signups).
+- `g232_remove_elevated_role_helper_and_deny_location_reads.sql` — no
+  SECURITY DEFINER role lookup, no direct GPS/location access.
+- `g233_vehicle_compliance_staging_owner_only.sql` — AUTO/MOTO inventory,
+  licenses/insurance/municipal verification structures without granting approval.
+- `g234_private_vehicle_applications_only.sql` — private idempotent intake,
+  server-only mutation authority.
+- `g235_denied_kyc_compliance_data_api.sql` — explicitly deny direct
+  sensitive compliance reads in exposed Data API.
+- `g236_index_and_cache_rls_session_helpers.sql` — index review FKs and
+  optimize role/session RLS checks for PostgreSQL planner.
+- `g237_private_driver_evidence_bucket_locked.sql` — private 5-MB image
+  bucket, zero uploads and zero client Storage policies.
+
+**Provider-side verification:** seven migration-history entries, seven public
+QORE tables with RLS enabled, zero Auth users, zero uploaded documents,
+zero unexpected direct anon/authenticated write privileges, and **no Supabase
+security-advisor notices**. No simulated test users, vehicle approvals or paid
+settlements have been inserted.
+
+**Still required before enabling external G4:** dashboard Auth public
+signups must be DISABLED by an authorized operator (not togglable with the
+available connector); require a verified signup-policy gate; create real
+independent test identities through Supabase Auth (not SQL inserts into
+`auth.users`); review and apply persistent migrations for the remaining
+**29 of 32** G4 operational tables (see read-only schema preflight); certify
+Supabase PostgreSQL **17** compatibility with GitHub's PostgreSQL **16** QA;
+add provider session revocation/RLS integration, then stage Railway HTTPS
+once the separate Railway account plan blocker is resolved. A 7/7 RLS PASS
+is not a 5/5 external journey pass. Commercial remains NO-GO.
 
 ## Four application connections
 
