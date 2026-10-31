@@ -33,17 +33,18 @@ Railway is now active. Provider inventory confirms project `qore-mobile-staging`
 services were created in this staging project. Do not deploy or auto-enable
 both:
 
-- `qore-mobile-g4-staging-backend` (`57ff062d-72db-4f40-88f7-facd38b3a3ec`):
-  its pending configuration pins the audited GitHub branch
-  `agent/qore-g229-railway-supabase-staging-20261030` at reviewed
-  `932d3627caff5998cacda932532e81420664f9cc`, root
-  `/apps/mobility-expo`, start command
-  `node server/run-g4-railway-staging.mjs`, and default-closed STAGING
-  variables. A Railway staging domain exists but has **no deployed backend**.
 - `qore-mobile-backend-staging` (`c00a1f8a-4b03-4e39-9264-9aad74d0bb10`):
-  second service concurrently created; its GitHub source is also staged but
-  it is **not** the vetted backend service and has no runtime start command
-  proven. Keep unlaunched and reconcile duplicative resources before deploying.
+  the **proposed single retained backend**. A concurrent architect has
+  now staged its root `/apps/mobility-expo`, verified start command
+  `node server/run-g4-railway-staging.mjs`, QA-only environment flags,
+  and GitHub branch pinned to audited commit
+  `932d3627caff5998cacda932532e81420664f9cc`. The source is
+  staged, not yet built or deployed.
+- `qore-mobile-g4-staging-backend` (`57ff062d-72db-4f40-88f7-facd38b3a3ec`):
+  concurrently created **duplicate** with a proposed `staged-delete`
+  in the same pending patch. It was never deployed, so this is not
+  a running-service rollback. Review all pending changes before committing
+  the patch, including removal of this redundant service.
 
 All settings/source changes are **STAGED ONLY** in Railway patch
 `20f3ba98-3351-4095-b247-ec1f883d8f6e`; there are still **zero
