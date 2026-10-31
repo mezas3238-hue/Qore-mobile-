@@ -1,0 +1,27 @@
+name: QORE Supabase STAGING G238-G240 SQL contract
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/supabase/staging_sql/g238_verified_driver_preflight.sql'
+      - 'apps/mobility-expo/supabase/staging_sql/g239_private_auto_original_identity.sql'
+      - 'apps/mobility-expo/supabase/staging_sql/g240_private_auto_offer_fence.sql'
+      - 'apps/mobility-expo/scripts/g238-staging-sql-contract.test.mjs'
+      - '.github/workflows/qore-g238-supabase-staging-sql.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sql-contract:
+    name: Reviewed external STAGING SQL boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/mobility-expo/scripts/g238-staging-sql-contract.test.mjs
+      - name: No external credentials, merges or deployments
+        run: echo "STATIC ONLY - no secrets, no deployed service, no LIVE"
