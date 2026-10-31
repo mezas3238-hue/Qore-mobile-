@@ -1,0 +1,52 @@
+name: QORE G265 Owner AUTO fare PostgreSQL disposable
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g265_private_owner_auto_fare_rules_pg17.sql'
+      - 'infra/qore-staging/ci/g265_*.sql'
+      - '.github/workflows/qore-g265-owner-auto-fare-postgres.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pg-fare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_DB: qore_g265_disposable
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U postgres -d qore_g265_disposable'
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: qore_g265_disposable
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare PostgreSQL disposable fixture only
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g262_minimal_schema.sql
+      - name: Install G262 prequote/booking in disposable database
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g262_private_auto_route_quote_book_pg17.sql
+      - name: Prepare independent Owner MFA test roles and fake sessions
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g265_owner_auto_fare_fixture.sql
+      - name: Install G265 Owner fare RPC only in disposable database
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g265_private_owner_auto_fare_rules_pg17.sql
+      - name: Verify AAL2, exclusive Owner, tariff revisions and immutable G262 prequotes
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g265_owner_fare_assert.sql
+      - name: No remote Supabase writes and no deployment
+        run: echo 'G265 disposable PG only; no staging migration, no LIVE, no PSP'
