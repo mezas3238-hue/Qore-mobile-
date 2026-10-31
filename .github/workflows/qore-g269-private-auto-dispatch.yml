@@ -5,6 +5,7 @@ on:
       - 'apps/mobility-expo/server/g269-*.mjs'
       - 'infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql'
       - 'infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql'
+      - 'infra/qore-staging/ci/g275_pg17_g113_CI_ONLY.sql'
       - '.github/workflows/qore-g269-private-auto-dispatch.yml'
   workflow_dispatch:
 permissions:
@@ -29,3 +30,52 @@ jobs:
           test -s infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql
       - name: Never execute CI-only synthetic SQL against remote databases
         run: echo 'G269 tests offline only; not migrated to STAGING, no LIVE, no PSP'
+
+  pg17-disposable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: disposable-only
+          POSTGRES_USER: postgres
+          POSTGRES_DB: qore_g275_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g275_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: disposable-only
+      PGDATABASE: qore_g275_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Execute actual G113 migration function against disposable PG17 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '/^CREATE FUNCTION qore_stage_internal[.]mobility_stage_g113_run_due_auto_batch_qa[(]/,/^END [$]f[$];/' infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql > /tmp/g275_g113.sql
+          grep -q '^END [$]f[$];' /tmp/g275_g113.sql
+          grep -Fq "('mobility_stage_g113_run_due_auto_batch_qa(integer)')" infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql
+          psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g275_pg17_g113_CI_ONLY.sql
+      - name: Verify two workers claim one due booking without duplicate processing
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -c "UPDATE public.mobility_stage_g269_auto_dispatch_jobs SET next_attempt_at=clock_timestamp()-interval '1 minute' WHERE booking_key='00000000-0000-4000-8000-000000000004'::uuid AND status='PENDING'"
+          psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT (qore_stage_internal.mobility_stage_g113_run_due_auto_batch_qa(1)->>'processed')::integer" > /tmp/g275-a &
+          a=$!
+          psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT (qore_stage_internal.mobility_stage_g113_run_due_auto_batch_qa(1)->>'processed')::integer" > /tmp/g275-b &
+          b=$!
+          wait "$a"
+          wait "$b"
+          total=$(( $(cat /tmp/g275-a) + $(cat /tmp/g275-b) ))
+          test "$total" -eq 1
+          test "$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT attempts FROM qore_stage_internal.g275_mock_calls WHERE booking_key='00000000-0000-4000-8000-000000000004'::uuid")" -eq 1
+          echo 'G275 PASS: two independent database sessions, one due booking, exactly one dispatch attempt'
