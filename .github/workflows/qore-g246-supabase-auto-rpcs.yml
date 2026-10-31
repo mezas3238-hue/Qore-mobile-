@@ -1,0 +1,23 @@
+name: QORE Supabase G246 private AUTO service RPCs
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/supabase/staging_sql/g246_private_auto_service_rpcs.sql'
+      - 'apps/mobility-expo/scripts/g246-private-auto-rpcs.test.mjs'
+      - '.github/workflows/qore-g246-supabase-auto-rpcs.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g246:
+    name: Five private AUTO RPCs with no public access
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/mobility-expo/scripts/g246-private-auto-rpcs.test.mjs
