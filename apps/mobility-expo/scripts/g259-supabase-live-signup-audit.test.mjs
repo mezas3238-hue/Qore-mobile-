@@ -44,9 +44,19 @@ test('G259 explicitly blocks open signup, absent policy or unexpected API shape'
  ]){
   const r=await auditG259Signup({...defaultOptions,
    signupReader:async()=>result});
-  assert.equal(r.code,'PUBLIC_SIGNUP_NOT_DISABLED');
+  assert.equal(r.code,'PUBLIC_SIGNUP_NOT_CERTIFIED_CLOSED');
   assert.equal(r.certified,false);
  }
+});
+test('G259 reports genuinely open signup only with confirmed provider policy',async()=>{
+ const r=await auditG259Signup({...defaultOptions,
+  signupReader:async()=>({
+   certified:false,reason:'Auth admite registro público (disable_signup=false)'
+  })
+ });
+ assert.equal(r.certified,false);
+ assert.equal(r.code,'PUBLIC_SIGNUP_CONFIRMED_OPEN');
+ assert.equal(JSON.stringify(r).includes(PUBLIC),false);
 });
 test('G259 fails closed on timeout, HTTP error or provider exception, without leakage',async()=>{
  const r=await auditG259Signup({...defaultOptions,
