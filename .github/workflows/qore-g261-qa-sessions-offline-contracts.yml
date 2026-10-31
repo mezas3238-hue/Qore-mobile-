@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'apps/mobility-expo/scripts/g261-eight-real-qa-auth-sessions*'
+      - 'apps/mobility-expo/scripts/g275-staging-qa-operator*'
       - 'apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap*'
       - 'apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit*'
       - 'apps/mobility-expo/scripts/staging-auth-policy-gate*'
@@ -25,6 +26,6 @@ jobs:
       - name: Verify integrated Auth contracts against offline mocks
         working-directory: apps/mobility-expo/scripts
         run: |
-          node --test staging-auth-policy-gate.test.mjs qore-staging-qa-identity-bootstrap.test.mjs g254-eight-actor-qa-readonly-audit.test.mjs g261-eight-real-qa-auth-sessions.test.mjs
+          node --test staging-auth-policy-gate.test.mjs qore-staging-qa-identity-bootstrap.test.mjs g254-eight-actor-qa-readonly-audit.test.mjs g261-eight-real-qa-auth-sessions.test.mjs g275-staging-qa-operator.test.mjs
       - name: Prevent scope confusion
         run: echo 'NO secrets, NO external Auth creation, NO LIVE, NO commercial trips, NO E2E certificate'
