@@ -52,7 +52,11 @@ export function assertStage({ref,environment,liveTripsEnabled,publicKey,secret})
 
 async function request(fetcher,url,{method='GET',key,body,headers={}}={}){
  const res=await fetcher(url,{method,redirect:'error',signal:AbortSignal.timeout(15000),headers:{
-  apikey:key,Authorization:'Bearer '+key,Accept:'application/json',
+  apikey:key,
+  // sb_secret_ keys are opaque API keys, never Bearer JWTs. Legacy
+  // service_role JWTs still require Authorization for compatibility.
+  ...(JWT.test(key)?{Authorization:'Bearer '+key}:{}),
+  Accept:'application/json',
   ...(body===undefined?{}:{'content-type':'application/json'}),
   ...headers
  },...(body===undefined?{}:{body:JSON.stringify(body)})});
