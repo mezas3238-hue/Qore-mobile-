@@ -78,6 +78,7 @@ import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-cus
 import {createG177VerifiedAutoDriverStepGateway} from './g177-verified-auto-driver-step-gateway.mjs';
 import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-cancellation-fence.mjs';
 import {createG187RecipientConfirmationGateway} from './g187-recipient-confirmation-gateway.mjs';
+import {createG197DriverPickupGateway} from './g197-driver-pickup-gateway.mjs';
 import {createG201FiveJourneyRuntimeBridges,validG201IndependentTrust}
  from './g201-five-journey-runtime-bridges.mjs';
 import {createQoreG247ProviderSessionTrust}
@@ -203,7 +204,7 @@ export async function prepareQoreG4StagingRuntime({
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
  g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
- g260AdminAal2Approved=false,
+ g260AdminAal2Approved=false,g263DriverPickupApproved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -218,6 +219,8 @@ export async function prepareQoreG4StagingRuntime({
  if(typeof g260AdminAal2Approved!=='boolean'||
     (g260AdminAal2Approved&&adminF1Trust!==null))
   throw Error('G260 Admin AAL2 requires exclusive owner-approved provider trust');
+ if(typeof g263DriverPickupApproved!=='boolean')
+  throw Error('G263 Driver pickup requires explicit staging-only boolean opt-in');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -1228,6 +1231,48 @@ export async function prepareQoreG4StagingRuntime({
    allowRequest:({actorId})=>allowRequest({userId:actorId}),
    admin,now
   });
+ // G263: an independent, owner-opted-in private Driver preference path.
+ // No movement/road proof is inferred. G197/201 lost-item chat continues to
+ // require independent motion trust; configuring preferences cannot enable it.
+ const g263PickupTrust=g263DriverPickupApproved?
+  createQoreG247ProviderSessionTrust({
+   projectRef:ref,auth:auth.auth,db:admin,now,
+   allowedByOwner:true,liveEnabled:false
+  }):null;
+ const g263DriverPickup=g263PickupTrust===null?null:
+  createG197DriverPickupGateway({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
+   verifyAccessToken:async token=>{
+    const [provider,identity]=await Promise.all([
+     verified(token),g263PickupTrust.verifyParticipantSession(token)
+    ]);
+    if(provider?.id!==identity?.id||provider?.is_anonymous!==false||
+       identity?.is_anonymous!==false||
+       !(typeof provider.email_confirmed_at==='string'||
+         typeof provider.phone_confirmed_at==='string'))
+     throw Error('G263 independent provider session mismatch');
+    return identity;
+   },
+   verifySessionNotRevoked:scope=>g263PickupTrust.verifySessionNotRevoked(scope),
+   resolveExclusiveRole:id=>singleRole(admin,id),
+   allowRequest:({actorId})=>allowRequest({userId:actorId}),
+   readPreferences:async p=>{
+    const {data,error}=await admin.rpc('mobility_stage_g197_read_pickup_qa',{
+     _driver:p.driverId,_session:p.sessionId,_iat_ms:p.tokenIatMs
+    });
+    if(error||!data)throw Error('G263 private PostgreSQL pickup read denied');
+    return data;
+   },
+   savePreference:async p=>{
+    const {data,error}=await admin.rpc('mobility_stage_g197_save_pickup_qa',{
+     _driver:p.driverId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
+     _kind:p.serviceKind,_distance_meters:p.maximumRoadMeters,
+     _expected_revision:p.expectedRevision
+    });
+    if(error||!data)throw Error('G263 private PostgreSQL pickup save denied');
+    return data;
+   }
+  });
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -1300,9 +1345,13 @@ export async function prepareQoreG4StagingRuntime({
    ...(courierCustody===null?{}:{courierCustodyHandler:guard(courierCustody)}),
    ...(recipientConfirmation===null?{}:{recipientConfirmationHandler:guard(recipientConfirmation)}),
    ...(journeyBridges===null?{}:{
-    pickupPreferenceHandler:guard(journeyBridges.pickupPreferenceHandler),
     lostItemsHandler:guard(journeyBridges.lostItemsHandler),
     motoLostItemsHandler:guard(journeyBridges.motoLostItemsHandler)
+   }),
+   ...(g263DriverPickup!==null?{
+    pickupPreferenceHandler:guard(g263DriverPickup)
+   }:journeyBridges===null?{}:{
+    pickupPreferenceHandler:guard(journeyBridges.pickupPreferenceHandler)
    }),
    courierPollHandler:guard(courierPoll),
    driverInboxHandler:guard(driverInbox),
