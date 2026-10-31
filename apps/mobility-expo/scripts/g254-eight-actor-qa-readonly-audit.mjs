@@ -113,16 +113,15 @@ export async function inspectEightActorQa({
 }
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  try{
-  if(process.argv.length!==3||process.argv[2]!=='--audit')
-   throw fail();
+  if(process.argv.length!==3||process.argv[2]!=='--audit'||
+     process.env.LIVE_TRIPS_ENABLED!=='false')throw fail();
   const report=await inspectEightActorQa({
    ref:process.env.QORE_STAGING_PROJECT_REF,
    environment:process.env.QORE_MOBILITY_ENV,
-   liveTripsEnabled:process.env.LIVE_TRIPS_ENABLED==='true'?true:false,
+   liveTripsEnabled:false,
    publicKey:process.env.QORE_STAGING_ANON_KEY,
    serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY
   });
-  if(process.env.LIVE_TRIPS_ENABLED!=='false')throw fail();
   console.log(JSON.stringify(report));
  }catch{
   // Never log input, HTTP response, names, credentials, email or user UUIDs.
