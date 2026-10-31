@@ -182,6 +182,41 @@ Status: `SUPABASE_REAL_SCHEMA_32_OF_32_RLS_PASS` /
 `EXTERNAL_FIVE_E2E_0_OF_5` /
 `COMMERCIAL_NO_GO`. GitHub PR #47 remains DRAFT; no merge.
 
+### G247 Supabase Auth session boundary — applied and CI checked
+
+- GitHub migration `g247_supabase_g42_provider_session_lock.sql` actually
+  applied to STAGING Supabase PG17: `public.mobility_stage_g42_session_active`
+  and `public.mobility_stage_g42_lock_session`. Public wrappers are
+  `SECURITY INVOKER`; privileged reads/row locks of `auth.sessions` and
+  `auth.users` are limited to internal `qore_private` functions.
+- Only `service_role` may call these two public wrappers; `anon` and
+  `authenticated` have no EXECUTE. An unknown/NULL user or session returns
+  `false`. A SQL transaction calling the lock function can hold a row lock
+  across its own protected mutation; calling it in a separate RPC does NOT
+  lock another transaction, and must never be described as doing so.
+- `g247-supabase-provider-session-trust.mjs` requires the provider's
+  independently verified `auth.getUser(bearer)`, signed token subject and
+  session ID consistency, expiration and recheck of original provider
+  session in PostgreSQL. Its five Node test groups are included in
+  **STAGING Node contracts** / unified GitHub CI. It is **NOT automatically
+  activated** in Railway or the G187/Driver gateway before separate account,
+  G42 integration and acceptance tests. The mock provider in unit tests is
+  not proof of actual user sign-in.
+- Concurrent independently authored migrations have also appeared in this
+  same STAGING database for AUTO request/offer, courier offers and simulated
+  finance. They are **not** part of G247 and no RPC is certified for LIVE.
+  Recheck migration history, function grants and current GitHub HEAD before
+  work to avoid overwriting any parallel architect.
+- Supabase Security Advisor retains one unrelated **INFO** notice for the
+  consent table with RLS enabled/no policies; its Data API has no anonymous
+  or authenticated grants. Do not claim `0` total advisor notices.
+
+G247 therefore establishes a verified **negative security boundary** on
+actual PG17 and tests an independent provider-signature contract. Positive
+external Client/Driver/Merchant/Admin sessions and five service journeys are
+still **0/5 certified**. Railway trial/plan and Supabase Auth registration
+configuration remain external gates. No public signup, LIVE or PSP authorization.
+
 ## Four application connections
 
 Use the **same** approved Railway HTTPS origin and independent pin for
