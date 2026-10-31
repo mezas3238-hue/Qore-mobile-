@@ -28,6 +28,7 @@ const g189DriverMotoCurrent='/v1/staging/driver/moto/current';
 const g169DriverMotoGet=/^\/v1\/staging\/driver\/moto\/bookings\/[0-9a-f-]{36}\/status$/i;
 const g169DriverMotoPost=/^\/v1\/staging\/driver\/moto\/bookings\/[0-9a-f-]{36}\/advance$/i;
 const ownerCommissionRoute=/^\/v1\/staging\/owner\/commissions\/(AUTO_RIDE|MOTO_RIDE|DELIVERY_AUTO|DELIVERY_MOTO|COMMERCE)$/;
+const ownerAutoFareRoute=/^\/v1\/staging\/owner\/auto-fares\/[A-Z_]{3,40}$/;
 const ownerCargoRateRoute=/^\/v1\/staging\/owner\/delivery-rates\/(AUTO|MOTO)\/[A-Z_]{3,20}$/;
 const adminF1AuditRoute=/^\/v1\/staging\/admin\/rides\/[0-9a-f-]{36}\/f1-verification$/i;
 const adminServiceTraceRoute=/^\/v1\/staging\/admin\/services\/AUTO_RIDE\/[0-9a-f-]{36}\/trace$/i;
@@ -104,7 +105,7 @@ export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
  financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
  courierCustodyHandler,recipientConfirmationHandler,pickupPreferenceHandler,lostItemsHandler,motoLostItemsHandler,merchantInboxHandler,
- f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,adminNativeTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
+ f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,adminNativeTraceHandler,ownerCommissionHandler,ownerAutoFareHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,driverCurrentTripHandler,
 }){
@@ -122,6 +123,7 @@ export function createQoreRadarLoopbackTransport({
    (adminCommerceTraceHandler!==undefined&&typeof adminCommerceTraceHandler!=='function')||
    (adminNativeTraceHandler!==undefined&&typeof adminNativeTraceHandler!=='function')||
    (ownerCommissionHandler!==undefined&&typeof ownerCommissionHandler!=='function')||
+   (ownerAutoFareHandler!==undefined&&typeof ownerAutoFareHandler!=='function')||
    (ownerCargoRateHandler!==undefined&&typeof ownerCargoRateHandler!=='function')||
    (commerceQaHandler!==undefined&&typeof commerceQaHandler!=='function')||
    (ratingHandler!==undefined&&typeof ratingHandler!=='function')||
@@ -176,6 +178,7 @@ export function createQoreRadarLoopbackTransport({
   const adminNativeTraceGet=req.method==='GET'&&adminNativeTraceRoute.test(path);
   const ownerCommissionGet=req.method==='GET'&&ownerCommissionRoute.test(path);
   const ownerCommissionPost=req.method==='POST'&&ownerCommissionRoute.test(path);
+  const ownerAutoFarePost=req.method==='POST'&&ownerAutoFareRoute.test(path);
    const ownerCargoRateGet=req.method==='GET'&&ownerCargoRateRoute.test(path);
    const ownerCargoRatePost=req.method==='POST'&&ownerCargoRateRoute.test(path);
   const f1AutoPost=req.method==='POST'&&
@@ -229,7 +232,7 @@ export function createQoreRadarLoopbackTransport({
   const courierPollGet=req.method==='GET'&&courierPollRoute.test(path);
   const deliveryOfferGet=req.method==='GET'&&deliveryOfferReadRoute.test(path);
   const deliveryOfferPost=req.method==='POST'&&deliveryOfferDecisionRoute.test(path);
-  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!driverMotoGet&&!driverMotoPost&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!adminNativeTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
+  if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!driverMotoGet&&!driverMotoPost&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!adminNativeTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerAutoFarePost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!recipientConfirmationGet&&!recipientConfirmationPost&&!pickupPreferenceGet&&!pickupPreferencePut&&!lostItemsGet&&!lostItemsPost&&!motoLostItemsGet&&!motoLostItemsPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
@@ -252,7 +255,7 @@ export function createQoreRadarLoopbackTransport({
   }
   let body;
   if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost||motoLostItemsPost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerAutoFarePost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost||motoLostItemsPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -277,6 +280,7 @@ export function createQoreRadarLoopbackTransport({
     (f1AutoGet||f1AutoPost||f1AutoSubsidyPost)?(f1AutoHandler??(()=>({status:503,body:{error:'F1 Auto not configured'}}))):
     (motoGet||motoPost)?(motoHandler??(()=>({status:503,body:{error:'F1 MOTO passenger not configured'}}))):
     (driverMotoGet||driverMotoPost)?(driverMotoJourneyHandler??(()=>({status:503,body:{error:'G169 MOTO Driver original SQL not authorized'}}))):
+    ownerAutoFarePost?(ownerAutoFareHandler??(()=>({status:503,body:{error:'G268 Owner AUTO tariff disabled'}}))):
     (ownerCommissionGet||ownerCommissionPost)?(ownerCommissionHandler??(()=>({status:503,body:{error:'G116 Owner unavailable'}}))):
      (ownerCargoRateGet||ownerCargoRatePost)?(ownerCargoRateHandler??(()=>({status:503,body:{error:'G124 Owner cargo rate unavailable'}}))):
     adminF1AuditGet?(adminF1AuditHandler??(()=>({status:503,body:{error:'G75 IdP MFA unavailable'}}))):
