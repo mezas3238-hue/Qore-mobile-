@@ -30,13 +30,11 @@ function fixture({role='admin',aal='aal2',factors=1,verified=true,confirmed=true
     }
    }
   },
-  from:table=>{events.push(['from',table]);return {
-   select:()=>({eq:()=>({limit:async n=>{
-    events.push(['limit',n]);return {data:role===null?[]:
-     (Array.isArray(role)?role:[role]).map(role=>({role})),
-     error:roleError};
-   }})})
-  };}
+  rpc:async (name,args)=>{
+   events.push(['rpc',name,args]);
+   return {data:role,error:roleError};
+  },
+  from:()=>{throw Error('G27 forbids native user_roles role lookup');}
  };
  return {auth:createWebAdminAuth({supabase,now:()=>now}),events};
 }
@@ -50,21 +48,21 @@ test('Admin browser refuses HTTP, arbitrary hosts, secret/service role, URL cred
  assert.equal(verifyWebAdminConfig({url:'https://staging1234567890abcd.supabase.co',
   publishableKey:'sb_publishable_abcdefghijklmnopqrst'}).ok,true);
 });
-test('G75 Admin session requires real getUser, verified TOTP, AAL2 and single RLS admin role',async()=>{
+test('G264 Admin session requires IdP MFA and exclusive self-only backoffice role',async()=>{
  const f=fixture(),identity=await f.auth.readSession();
  assert.equal(identity.role,'admin');assert.equal(identity.subject,admin);
  assert.equal(identity.mfaVerified,true);
- assert.deepEqual(f.events.at(-1),['limit',3]);
+ assert.deepEqual(f.events.at(-1),['rpc','mobility_stage_g264_my_backoffice_role',undefined]);
  assert.equal(JSON.stringify(identity).includes('password'),false);
 });
 test('Owner can read own finance but cannot inherit Admin role',async()=>{
  const f=fixture({role:'owner'}),session=await f.auth.readSession();
  assert.equal(session.role,'owner');
 });
-test('Password or browser role without AAL2 never unlocks Admin; no TOTP/dual role/IdP means no data',async()=>{
+test('Password or browser role without AAL2 never unlocks Admin; invalid G264/IdP means no data',async()=>{
  for(const settings of [
   {aal:'aal1'},{factors:0},{factors:2},{role:'driver'},
-  {role:'passenger'},{role:['admin','owner']},{confirmed:false},
+  {role:'passenger'},{role:['admin','owner']},{role:null},{confirmed:false},
   {verified:false},{roleError:{code:'42501'}}
  ]){
   const f=fixture(settings);
@@ -87,6 +85,14 @@ test('Missing TOTP enrollment rejects and revokes browser identity; bad code nev
  const v=fixture();
  assert.equal((await v.auth.verifyTotp('000000000')).code,'INVALID_TOTP');
  assert.equal(v.events.length,0);
+});
+test('G264 role lookup never queries the RLS native user_roles table',async()=>{
+ const f=fixture();
+ const s=await f.auth.readSession();
+ assert.equal(s.role,'admin');
+ assert.equal(f.events.some(x=>Array.isArray(x)&&x[0]==='rpc'&&
+  x[1]==='mobility_stage_g264_my_backoffice_role'),true);
+ assert.equal(f.events.some(x=>Array.isArray(x)&&x[0]==='from'),false);
 });
 test('Remote logout must run, never persist browser token',async()=>{
  const f=fixture();
