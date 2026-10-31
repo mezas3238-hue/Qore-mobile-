@@ -84,6 +84,8 @@ import {createQoreG247ProviderSessionTrust}
  from './g247-supabase-provider-session-trust.mjs';
 import {createQoreG260AdminAal2Trust}
  from './g260-supabase-admin-aal2-trust.mjs';
+import {createG262NativeAdminTraceGateway}
+ from './g262-native-admin-trace-gateway.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -1001,6 +1003,21 @@ export async function prepareQoreG4StagingRuntime({
    return data;
   }
  });
+ // G262 reads the actual persistent STAGING G238/G239/G240 source rows.
+ // Original G138/142/145/146 disposable-only priced receipts are NOT inferred.
+ // Admin AAL2 and G27 remain mandatory, while the PG function is backend-only.
+ const adminNativeTrace=verifiedAdminTrust===null?null:
+  createG262NativeAdminTraceGateway({
+   environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+   ...verifiedAdminTrust,
+   loadNativeTrace:async({viewerId,serviceKind,serviceId})=>{
+    const {data,error}=await admin.rpc('mobility_stage_g262_admin_native_trace_qa',{
+     _viewer:viewerId,_kind:serviceKind,_source:serviceId
+    });
+    if(error)throw Error('G262 native source unavailable');
+    return data;
+   }
+  });
  const safety=createQoreSafetyGateway({
   projectRef:ref,verifyAccessToken:verified,authorizeAdmin:id=>adminRole(admin,id),
   allowRequest,
@@ -1270,6 +1287,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminMotoTrace===null?{}:{adminMotoTraceHandler:guard(adminMotoTrace)}),
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
+   ...(adminNativeTrace===null?{}:{adminNativeTraceHandler:guard(adminNativeTrace)}),
    deliveryHandler:guard(createG176VerifiedCourierCustodyFence({deliveryHandler:deliveries})),
    merchantHandler:guard(createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})),
    ...(buyerCommerce===null?{}:{commerceQaHandler:guard(buyerCommerce)}),
