@@ -21,7 +21,7 @@ CREATE FUNCTION qore_stage_internal.mobility_stage_g265_publish_auto_fare(
 DECLARE
  existing public.mobility_stage_fare_rules%ROWTYPE;
  fresh public.mobility_stage_fare_rules%ROWTYPE;
- rule_key text;
+ new_rule_key text;
  stamp timestamptz;
 BEGIN
  IF _owner IS NULL OR _session IS NULL OR _iat_ms IS NULL
@@ -49,9 +49,9 @@ BEGIN
  -- Serialize all publications in a zone; no overlapping active rules.
  PERFORM pg_catalog.pg_advisory_xact_lock(
    pg_catalog.hashtextextended('QORE_G265_AUTO_FARE:'||_zone_tag,265));
- rule_key:='G265_'||replace(_request_key::text,'-','');
+ new_rule_key:='G265_'||replace(_request_key::text,'-','');
  SELECT * INTO existing FROM public.mobility_stage_fare_rules fr
- WHERE fr.rule_key=rule_key FOR UPDATE;
+ WHERE fr.rule_key=new_rule_key FOR UPDATE;
  IF FOUND THEN
   IF existing.mode<>'AUTO'::public.mobility_stage_fare_mode
    OR existing.zone_tag<>_zone_tag OR existing.approved_by<>_owner
@@ -77,7 +77,7 @@ BEGIN
   minimum_pyg,commission_bps,valid_from,valid_until,active,
   approved_by,approved_at
  ) VALUES(
-  rule_key,'AUTO'::public.mobility_stage_fare_mode,_zone_tag,
+  new_rule_key,'AUTO'::public.mobility_stage_fare_mode,_zone_tag,
   _base_pyg,_per_km_pyg,_per_minute_pyg,
   _minimum_pyg,_commission_bps,stamp,stamp+interval '30 days',true,
   _owner,stamp
