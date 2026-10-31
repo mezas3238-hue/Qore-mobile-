@@ -60,26 +60,41 @@ export async function inspectEightActorQa({
  const root='https://'+ref+'.supabase.co';
  const usersResponse=await getJson(fetcher,
   root+'/auth/v1/admin/users?per_page=50&page=1',serviceKey);
+ // Eight real QA actors AND one independently provisioned Owner approver.
+ // The Owner identity is NOT a synthetic ninth QA actor, but does count as
+ // a ninth Auth identity. Without it any QA passenger could approve Admin.
  if(!plain(usersResponse)||!Array.isArray(usersResponse.users)||
-    usersResponse.users.length!==8)throw fail();
+    usersResponse.users.length!==9)throw fail();
 
  const found=new Map(),ids=new Set(),emails=new Set();
  const allowed=new Map(G254_QA_SLOTS.map(({slot,role})=>[slot,role]));
+ let ownerApprover=null;
  for(const user of usersResponse.users){
   if(!plain(user)||!UUID.test(user.id??'')||
-     !QA_EMAIL.test(user.email??'')||user.is_anonymous!==false||
+     typeof user.email!=='string'||user.email.length>254||
+     !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(user.email)||
+     user.is_anonymous!==false||
      (typeof user.email_confirmed_at!=='string'&&
       typeof user.confirmed_at!=='string')||
-     user.app_metadata?.qore_stage_qa!==true||
+     ids.has(user.id)||emails.has(user.email.toLowerCase()))
+   throw fail();
+  ids.add(user.id);emails.add(user.email.toLowerCase());
+  if(user.app_metadata?.qore_stage_qa!==true){
+   if(ownerApprover!==null||
+      user.app_metadata?.qore_stage_owner_approver!==true||
+      user.app_metadata?.qore_qa_slot!==undefined)
+    throw fail();
+   ownerApprover={id:user.id};
+   continue;
+  }
+  if(!QA_EMAIL.test(user.email)||
      typeof user.app_metadata?.qore_qa_slot!=='string')
    throw fail();
   const slot=user.app_metadata.qore_qa_slot;
-  if(!allowed.has(slot)||found.has(slot)||ids.has(user.id)||
-     emails.has(user.email.toLowerCase()))throw fail();
+  if(!allowed.has(slot)||found.has(slot))throw fail();
   found.set(slot,{id:user.id,role:allowed.get(slot)});
-  ids.add(user.id);emails.add(user.email.toLowerCase());
  }
- if(found.size!==8)throw fail();
+ if(found.size!==8||ownerApprover===null)throw fail();
 
  // CRITICAL G264/G27: auth.users triggers default passenger in user_roles,
  // but exclusive Admin MUST NOT retain a native user_roles row. The private
@@ -104,14 +119,20 @@ export async function inspectEightActorQa({
  const backoffice=await getJson(fetcher,
   root+'/rest/v1/mobility_stage_backoffice_roles?select=user_id,role,status,approved_by,revision',
   serviceKey);
- if(!Array.isArray(backoffice)||backoffice.length!==1)throw fail();
- const approved=backoffice[0];
- if(!plain(approved)||approved.user_id!==adminIdentity||
+ if(!Array.isArray(backoffice)||backoffice.length!==2)throw fail();
+ const approved=backoffice.find(x=>x?.user_id===adminIdentity);
+ const ownerRow=backoffice.find(x=>x?.user_id===ownerApprover.id);
+ if(!plain(approved)||!plain(ownerRow)||
+    approved.user_id!==adminIdentity||
     approved.role!=='admin'||approved.status!=='active'||
-    !UUID.test(approved.approved_by??'')||
-    approved.approved_by===adminIdentity||
-    !ids.has(approved.approved_by)||
-    !Number.isSafeInteger(approved.revision)||approved.revision<1)
+    approved.approved_by!==ownerApprover.id||
+    ownerRow.role!=='owner'||ownerRow.status!=='active'||
+    !UUID.test(ownerRow.approved_by??'')||
+    ownerRow.approved_by===ownerApprover.id||
+    ownerRow.approved_by===adminIdentity||
+    roleMap.has(ownerApprover.id)||
+    !Number.isSafeInteger(approved.revision)||approved.revision<1||
+    !Number.isSafeInteger(ownerRow.revision)||ownerRow.revision<1)
   throw fail();
 
  // This evidence proves registration and exclusive roles ONLY.
@@ -124,7 +145,8 @@ export async function inspectEightActorQa({
   qaAuthAccounts:8,
   exclusiveQaRoles:8,
   privateBackofficeAdminActors:1,nativeQaRoles:7,
-  independentOwnerApprovalVerified:false,
+  distinctBackofficeOwnerApprover:1,
+  ownerBootstrapIndependentlyCertified:false,
   roleCounts:Object.freeze({admin:1,driver:4,passenger:3}),
   verifiedPasswordLogin:false,
   verifiedG42Sessions:0,
