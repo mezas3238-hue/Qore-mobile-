@@ -28,6 +28,9 @@ export function createG269VerifiedPickupProofRepository({
     evidence.fallbackUsed!==false||evidence.trafficAware!==true||
     !['GEOAPIFY','GOOGLE_MAPS'].includes(evidence.provider)||
     evidence.passengerId!==scope.passengerId||
+    // Route evidence must bind to the exact original G262 booking and proof request.
+    evidence.bookingKey!==scope.bookingKey||
+    evidence.proofKey!==scope.proofKey||
     evidence.tripId!==scope.tripId||
     evidence.driverId!==scope.driverId||
     evidence.vehicleId!==scope.vehicleId||
