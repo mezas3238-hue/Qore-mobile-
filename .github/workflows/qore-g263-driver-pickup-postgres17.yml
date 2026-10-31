@@ -1,0 +1,43 @@
+name: QORE G263 Driver pickup PG17 isolated contracts
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g263_driver_pickup_preferences_private_pg17.sql'
+      - 'infra/qore-staging/ci/g263_pg17_*'
+      - '.github/workflows/qore-g263-driver-pickup-postgres17.yml'
+permissions:
+  contents: read
+jobs:
+  g263-postgres17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: g263_disposable_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGDATABASE: postgres
+      PGPASSWORD: g263_disposable_only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Create ephemeral Auth and G42 without external identities
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g263_pg17_private_driver_pickup_fixture.sql
+      - name: Apply exact proposed STAGING SQL to disposable PostgreSQL17
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g263_driver_pickup_preferences_private_pg17.sql
+      - name: Verify four categories, revision, service-role ACL, revocation and negative tests
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g263_pg17_private_driver_pickup_assert.sql
