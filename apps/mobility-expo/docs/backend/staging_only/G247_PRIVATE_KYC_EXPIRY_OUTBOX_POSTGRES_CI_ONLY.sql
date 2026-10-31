@@ -153,11 +153,14 @@ BEGIN
    AND ((alert.band='EXPIRED' AND e.valid_until<=pg_catalog.clock_timestamp())
     OR (alert.band='D01' AND e.valid_until>pg_catalog.clock_timestamp()
       AND e.valid_until<=pg_catalog.clock_timestamp()+interval '1 day')
-    OR (alert.band='D07' AND e.valid_until>pg_catalog.clock_timestamp()
+    OR (alert.band='D07'
+      AND e.valid_until>pg_catalog.clock_timestamp()+interval '1 day'
       AND e.valid_until<=pg_catalog.clock_timestamp()+interval '7 days')
-    OR (alert.band='D15' AND e.valid_until>pg_catalog.clock_timestamp()
+    OR (alert.band='D15'
+      AND e.valid_until>pg_catalog.clock_timestamp()+interval '7 days'
       AND e.valid_until<=pg_catalog.clock_timestamp()+interval '15 days')
-    OR (alert.band='D30' AND e.valid_until>pg_catalog.clock_timestamp()
+    OR (alert.band='D30'
+      AND e.valid_until>pg_catalog.clock_timestamp()+interval '15 days'
       AND e.valid_until<=pg_catalog.clock_timestamp()+interval '30 days'))
   ORDER BY alert.id
   LIMIT _limit;
