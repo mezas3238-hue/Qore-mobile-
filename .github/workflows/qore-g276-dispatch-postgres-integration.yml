@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'infra/qore-staging/ci/g276_*.sql'
+      - 'infra/qore-staging/ci/g277_*.sql'
+      - 'infra/qore-staging/migrations/g277_private_bounded_auto_dispatch_batch_pg17.sql'
       - 'infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql'
       - 'infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql'
       - '.github/workflows/qore-g276-dispatch-postgres-integration.yml'
@@ -53,5 +55,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql
       - name: Verify G262 booking queues G269 and creates one eligible driver offer and outbox
         run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g276_dispatch_positive_and_negative_asserts.sql
+      - name: Install bounded G277 G113 SQL only in disposable database
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g277_private_bounded_auto_dispatch_batch_pg17.sql
+      - name: Assert bounded automatic retries, no duplicates, and accepted-state closure
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g277_due_dispatch_positive_and_negative_asserts.sql
       - name: Confirm isolation boundary
         run: echo 'PG16/17 disposable only; no external identity, KYC, routing, Supabase migrations, Railway deploy or commercial trips'
