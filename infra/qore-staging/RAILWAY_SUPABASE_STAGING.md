@@ -217,6 +217,41 @@ external Client/Driver/Merchant/Admin sessions and five service journeys are
 still **0/5 certified**. Railway trial/plan and Supabase Auth registration
 configuration remain external gates. No public signup, LIVE or PSP authorization.
 
+### G251–G252 — real Merchant inbox, session-bound and read-only (31 Oct 2026)
+
+- G251 repairs TWO original HTTP gateways in-place: `G156` merchant inbox
+  and `G173` mutation check. Every pre/post-operation G42 revocation now
+  receives **the original signed JWT `tokenIatMs`** as well as `at`; tests
+  reject missing/mismatched values, revoked pre-operation access and
+  mid-operation revoke being misreported as successful completion.
+- G252 adds `g252_private_merchant_inbox_provider_session.sql`, committed
+  first to this draft branch and applied to the existing Supabase project.
+  It installs exactly ONE `SECURITY INVOKER` public RPC
+  `mobility_stage_g156_merchant_inbox_qa(uuid,uuid,uuid,bigint)`.
+  Only `service_role` may EXECUTE. RLS and the existing G244 locked
+  commerce table privileges remain unchanged: no direct anonymous/member
+  table writes or public merchant-data reads.
+- The read-only RPC checks the ACTUAL provider-backed G247 `auth.sessions`,
+  the actor's active merchant staff association and an approved merchant;
+  returns at most 20 original orders, with existing immutable order IDs,
+  authoritative status/revision/totals/line quantity. It never returns
+  buyer contact information, creates orders, or changes status.
+- Verified against Supabase PG17: public function is `SECURITY INVOKER`,
+  `service_role` EXECUTE true, anon/authenticated EXECUTE false,
+  nonexistent session rejected with `G252 merchant inbox not authorized`,
+  zero Auth users and zero Commerce orders. A positive independent
+  real-authenticated Merchant test is **not yet possible**.
+- `g4-staging-runtime.mjs` and Railway STAGING entrypoint have a second
+  opt-in flag `QORE_G252_MERCHANT_INBOX_APPROVED=true` (default false).
+  On opt-in the original G156 gateway uses the SAME G247 Supabase Auth
+  `getUser` plus PG session check. It **DOES NOT** enable the G173
+  merchant mutation flow, which retains its independently required
+  session/permission/transaction fence. This is strictly read-only.
+- **No provisioning / no external 5/5:** Auth public signup still needs
+  owner-side disablement, real independent accounts do not yet exist,
+  and Railway external STAGING is not running. PR47 remains DRAFT;
+  no merge, LIVE ride, production PSP or automatic deployment.
+
 ## Four application connections
 
 Use the **same** approved Railway HTTPS origin and independent pin for
