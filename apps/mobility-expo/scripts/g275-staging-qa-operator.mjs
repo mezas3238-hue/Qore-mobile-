@@ -58,6 +58,10 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
    console.log('G275 plan: 8 QA slots, Auth bootstrap -> G254 audit -> G261 sessions/revocation.');
    console.log('No network or credentials loaded. No Owner approval, no LIVE, no E2E certificate.');
   }else if(process.argv.length===3&&process.argv[2]==='--apply'){
+   // Even if secrets are accidentally injected into CI or a deployed service,
+   // never create QA users outside an explicit private operator host.
+   if(process.env.CI==='true'||process.env.GITHUB_ACTIONS==='true'||
+      typeof process.env.RAILWAY_ENVIRONMENT==='string')throw Error(BLOCKED);
    if(process.env.QORE_QA_EXPLICIT_APPLY!=='CONFIRM_STAGING_ONLY'||
       process.env.QORE_QA_SESSION_VERIFY_APPROVED!=='CONFIRM_STAGING_ONLY'||
       process.env.LIVE_TRIPS_ENABLED!=='false')throw Error(BLOCKED);
