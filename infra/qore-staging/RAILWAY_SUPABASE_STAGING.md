@@ -103,42 +103,74 @@ public signup. No credentials or passwords were committed to GitHub.
    Do not grant KYC, municipal permissions or paid-settlement status through
    synthetic SQL fixtures.
 
-### Verified G231–G237 implementation (31 Oct 2026)
+### Verified G231–G245 implementation in provider STAGING (31 Oct 2026)
 
-GitHub sources, in this branch under `infra/qore-staging/migrations/`:
+Source-controlled migrations: `infra/qore-staging/migrations/`, all committed
+first to [PR #47](https://github.com/mezas3238-hue/Qore-mobile-/pull/47),
+then applied by Supabase migration tools to project
+`mrjzxftsdxzepzbcuids`, PostgreSQL **17.11**.
 
-- `g231_auth_profiles_exclusive_roles_rls.sql` — profiles, exclusive primary
-  roles, self-read policies, and the Auth signup trigger (new accounts start
-  as passenger; this is NOT permission to allow public signups).
-- `g232_remove_elevated_role_helper_and_deny_location_reads.sql` — no
-  SECURITY DEFINER role lookup, no direct GPS/location access.
-- `g233_vehicle_compliance_staging_owner_only.sql` — AUTO/MOTO inventory,
-  licenses/insurance/municipal verification structures without granting approval.
-- `g234_private_vehicle_applications_only.sql` — private idempotent intake,
-  server-only mutation authority.
-- `g235_denied_kyc_compliance_data_api.sql` — explicitly deny direct
-  sensitive compliance reads in exposed Data API.
-- `g236_index_and_cache_rls_session_helpers.sql` — index review FKs and
-  optimize role/session RLS checks for PostgreSQL planner.
-- `g237_private_driver_evidence_bucket_locked.sql` — private 5-MB image
-  bucket, zero uploads and zero client Storage policies.
+- **G231–G237:** Auth profiles, exclusive native roles, owner-scoped reads,
+  vehicle applications/compliance, denied GPS and sensitive KYC reads,
+  provider performance indexes; private KYC Storage bucket locked.
+- **G238:** original AUTO passenger G3 / private offer G4 **structural DDL**
+  (4 tables: trip, events, offers, push outbox).
+- **G239:** original delivery G5 / courier private offer G10 structure
+  (5 tables: clearance, delivery, events, offers and push outbox).
+- **G240:** commerce G6 / G9 catalog, independent staff, merchant branches,
+  original orders, lines, events and merchant management (8 tables).
+- **G241:** G7 pricing, customer quotes, *simulated-only* payment statuses,
+  operations and immutable ledger structure (5 tables; NO real PSP).
+- **G242:** G8 safety incidents, events, suspensions and suspension audit
+  (4 tables; no real emergency responder integrations).
+- **G243:** G17/G18 private driver document registry, decisions and enrollment
+  (3 tables; no actual approved licenses).
+- **G244:** preserves the stronger G46 deny-by-default fence: generic
+  `service_role` loses commerce INSERT/UPDATE/DELETE; authenticated merchant
+  may SELECT only OWN active staff association. No unsafe G6/G9 RPCs installed.
+- **G245:** separate Admin vs Owner backoffice authority registry with RLS,
+  service-role read only, no self-approval and no bootstrapped privileged user.
 
-**Provider-side verification:** seven migration-history entries, seven public
-QORE tables with RLS enabled, zero Auth users, zero uploaded documents,
-zero unexpected direct anon/authenticated write privileges, and **no Supabase
-security-advisor notices**. No simulated test users, vehicle approvals or paid
-settlements have been inserted.
+These files extract **only table/type/index structures** from the disposable
+GitHub SQL definitions. They intentionally exclude CI-only guards, functions,
+synthetic Auth identities, temporary roles, and synthetic service fixtures.
+No write path is declared certified by this schema-only migration.
 
-**Still required before enabling external G4:** dashboard Auth public
-signups must be DISABLED by an authorized operator (not togglable with the
-available connector); require a verified signup-policy gate; create real
-independent test identities through Supabase Auth (not SQL inserts into
-`auth.users`); review and apply persistent migrations for the remaining
-**29 of 32** G4 operational tables (see read-only schema preflight); certify
-Supabase PostgreSQL **17** compatibility with GitHub's PostgreSQL **16** QA;
-add provider session revocation/RLS integration, then stage Railway HTTPS
-once the separate Railway account plan blocker is resolved. A 7/7 RLS PASS
-is not a 5/5 external journey pass. Commercial remains NO-GO.
+**Supabase verification from committed read-only `g246_core_schema_security_readiness_readonly.sql`:**
+`32/32` G4 required tables present, `32/32` RLS enabled,
+`0` anonymous access grants, `0` direct authenticated write grants,
+`0` commerce generic server write grants, `0` real Auth users,
+`0` sensitive Storage upload policies and `0` operational G3/G4/G5/G6/G7
+transactional RPCs from the inspected key list. All **15 migrations** in
+Supabase history; **37 tables total** including compliance and separate
+backoffice roles; Supabase **Security Advisor 0 notices**.
+
+**Outstanding P0 items for external five-service E2E:**
+
+1. Owner to disable public self-signup in Supabase Auth dashboard and verify
+   the resulting provider setting before provisioning independent test accounts;
+   this connector does not expose Auth configuration or Admin create-user.
+   The Auth signup trigger currently defaults to passenger; Admin and Owner
+   accounts must remain distinct from native passenger/Driver roles and require
+   a reviewed privileged provisioning path. Do NOT write directly into
+   `auth.users`, self-grant admin, or use synthetic OAuth sessions.
+2. Implement, migrate and test **real G42 provider-backed session revocation,
+   admission gates, signed offer acceptance, custody proof G67/G187,
+   merchant transaction G150, immutable finance G93 and Admin G138/G146**
+   using the existing code. CI functions have synthetic identities/guards:
+   do NOT transplant them wholesale as privileged Supabase RPCs.
+3. Retest actual PostgreSQL **17** semantics separately from existing
+   GitHub PostgreSQL **16** disposable CI; run true independent Auth/RLS
+   positive and negative session checks, original ID tracing and financial
+   reconciliation. Structural `32/32` is NOT functional 5/5.
+4. Railway STAGING new project cannot yet be started: Railway trial expired,
+   and a plan change requires Owner authorization. No automatic deployment,
+   LIVE trips or PSP charges are permitted.
+
+Status: `SUPABASE_REAL_SCHEMA_32_OF_32_RLS_PASS` /
+`REMOTE_OPERATIONAL_RPCS_NOT_INSTALLED` /
+`EXTERNAL_FIVE_E2E_0_OF_5` /
+`COMMERCIAL_NO_GO`. GitHub PR #47 remains DRAFT; no merge.
 
 ## Four application connections
 
