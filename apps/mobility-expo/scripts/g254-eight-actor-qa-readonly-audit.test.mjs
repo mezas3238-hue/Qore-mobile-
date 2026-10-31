@@ -31,14 +31,25 @@ const users=G254_QA_SLOTS.map(({slot},i)=>({
  email_confirmed_at:'2026-10-31T12:00:00Z',
  app_metadata:{qore_stage_qa:true,qore_qa_slot:slot}
 }));
+const approvingOwner={
+ id:'26900000-0000-4269-8269-000000000001',
+ email:'owner-approver@example.invalid',is_anonymous:false,
+ email_confirmed_at:'2026-10-31T12:00:00Z',
+ app_metadata:{qore_stage_owner_approver:true}
+};
+const allUsers=[...users,approvingOwner];
 const roles=users.slice(1).map((u,i)=>({
  user_id:u.id,role:G254_QA_SLOTS[i+1].role
 }));
-const backoffice=[{user_id:users[0].id,role:'admin',
- status:'active',approved_by:users[1].id,revision:1}];
+const backoffice=[
+ {user_id:users[0].id,role:'admin',
+  status:'active',approved_by:approvingOwner.id,revision:1},
+ {user_id:approvingOwner.id,role:'owner',
+  status:'active',approved_by:users[1].id,revision:1}
+];
 const defaults={ref:G254_STAGING_REF,environment:'staging',
  liveTripsEnabled:false,publicKey,serviceKey};
-function simulated({returnedUsers=users,returnedRoles=roles,
+function simulated({returnedUsers=allUsers,returnedRoles=roles,
  returnedBackoffice=backoffice,
  signupDisabled=true,authFail=false,roleFail=false,backofficeFail=false}={}){
  const paths=[];
@@ -84,7 +95,8 @@ test('G254 eight distinct QA actor registrations and roles: read-only, no login 
   mode:'STAGING_READ_ONLY',projectPinned:true,signupDisabled:true,
   qaAuthAccounts:8,exclusiveQaRoles:8,
   privateBackofficeAdminActors:1,nativeQaRoles:7,
-  independentOwnerApprovalVerified:false,
+  distinctBackofficeOwnerApprover:1,
+  ownerBootstrapIndependentlyCertified:false,
   roleCounts:{admin:1,driver:4,passenger:3},
   verifiedPasswordLogin:false,verifiedG42Sessions:0,
   externalJourneysCertified:0,commercialLaunchAllowed:false
@@ -119,14 +131,16 @@ test('G254 cannot be pointed to production, LIVE or mixed credentials',async()=>
 });
 test('G254 wrong slot, extra person, unconfirmed user and duplicate UUID fail closed',async()=>{
  for(const changed of [
-  [...users,{...users[0],id:'99999999-2510-4251-8251-999999999999'}],
-  users.slice(1),
-  users.map((u,i)=>i===2?{...u,
+  [...allUsers,{...users[0],id:'99999999-2510-4251-8251-999999999999'}],
+  allUsers.slice(1),
+  allUsers.map((u,i)=>i===2?{...u,
    app_metadata:{qore_stage_qa:true,qore_qa_slot:'foreign'}}:u),
-  users.map((u,i)=>i===4?{...u,id:users[0].id}:u),
-  users.map((u,i)=>i===3?{...u,email_confirmed_at:null}:u),
-  users.map((u,i)=>i===5?{...u,email:'real@gmail.com'}:u),
-  users.map((u,i)=>i===6?{...u,is_anonymous:true}:u)
+  allUsers.map((u,i)=>i===4?{...u,id:users[0].id}:u),
+  allUsers.map((u,i)=>i===3?{...u,email_confirmed_at:null}:u),
+  allUsers.map((u,i)=>i===5?{...u,email:'real@gmail.com'}:u),
+  allUsers.map((u,i)=>i===6?{...u,is_anonymous:true}:u),
+  allUsers.map((u,i)=>i===8?{...u,app_metadata:{qore_stage_qa:true,qore_qa_slot:'passenger'}}:u),
+  allUsers.map((u,i)=>i===8?{...u,app_metadata:{qore_stage_owner_approver:false}}:u)
  ]){
   const x=simulated({returnedUsers:changed});
   await assert.rejects(x.inspect(),/G254 STAGING independent/);
@@ -148,15 +162,21 @@ test('G254 extra, missing, duplicated, mixed or forged role cannot pass',async()
   assert.deepEqual(x.paths,['/auth/v1/admin/users','/rest/v1/user_roles']);
  }
 });
-test('G266 rejects forged, inactive, self-approved or missing private Admin registry',async()=>{
+test('G269 requires a distinct Owner approver, not any passenger/driver QA user',async()=>{
  for(const bad of [
-  [],[{...backoffice[0],role:'owner'}],
-  [{...backoffice[0],status:'pending'}],
-  [{...backoffice[0],approved_by:users[0].id}],
-  [{...backoffice[0],approved_by:'26666666-2666-4266-8266-266666666666'}],
-  [{...backoffice[0],revision:0}],
-  [{...backoffice[0],user_id:users[1].id}],
-  [...backoffice,...backoffice]
+  [],[backoffice[0]],
+  [{...backoffice[0],role:'owner'},backoffice[1]],
+  [{...backoffice[0],status:'pending'},backoffice[1]],
+  [{...backoffice[0],approved_by:users[1].id},backoffice[1]],
+  [{...backoffice[0],approved_by:users[0].id},backoffice[1]],
+  [{...backoffice[0],approved_by:'26666666-2666-4266-8266-266666666666'},backoffice[1]],
+  [{...backoffice[0],revision:0},backoffice[1]],
+  [{...backoffice[0],user_id:users[1].id},backoffice[1]],
+  [backoffice[0],{...backoffice[1],role:'admin'}],
+  [backoffice[0],{...backoffice[1],status:'suspended'}],
+  [backoffice[0],{...backoffice[1],approved_by:users[0].id}],
+  [backoffice[0],{...backoffice[1],revision:0}],
+  [...backoffice,backoffice[0]]
  ]){
   const x=simulated({returnedBackoffice:bad});
   await assert.rejects(x.inspect(),/G254 STAGING independent/);
