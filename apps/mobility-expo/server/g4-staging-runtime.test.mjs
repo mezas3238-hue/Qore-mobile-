@@ -82,7 +82,11 @@ function mockSupabase(){
           filter.user_id===driver?(state.dualRoleDriver?['driver','admin']:['driver']):[];
          return {data:roles.map(role=>({role})),error:null};
         }
+        // G272: zero-row HEAD startup probes must work on composite-key
+        // tables without id and never perform an expensive exact count.
+        assert.equal(cols,'*');
         assert.equal(options?.head,true);
+        assert.equal(options?.count,undefined);
         assert.equal(n,0);
         return {error:state.missing===table?{code:'42P01'}:null};
        },
