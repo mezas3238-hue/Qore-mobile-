@@ -8,8 +8,8 @@ test('G238 stage-only preflight requires genuine compliance and revocable GPS co
  for(const term of ['CREATE TABLE public.mobility_location_consents','mobility_driver_compliance','mobility_vehicle_compliance','mobility_location_consents','license_valid_through','municipal_authorization_valid_through','paid_passenger_insurance_covered=true','loc.updated_at >= now()-interval \'120 seconds\'','lc.revoked_at IS NULL'])
   assert(s.includes(term),term);
  assert(s.includes("OR (false AND v.vehicle_kind='MOTO'"),'passenger MOTO remains blocked');
- assert.match(s,/REVOKE ALL ON FUNCTION public\.mobility_vehicle_preflight/[\s\S]*FROM PUBLIC,anon,authenticated/);
- assert.match(s,/GRANT EXECUTE ON FUNCTION public\.mobility_vehicle_preflight/[\s\S]*TO service_role/);
+ assert.match(s,/REVOKE ALL ON FUNCTION public\.mobility_vehicle_preflight[\s\S]*FROM PUBLIC,anon,authenticated/);
+ assert.match(s,/GRANT EXECUTE ON FUNCTION public\.mobility_vehicle_preflight[\s\S]*TO service_role/);
 });
 test('G239 original trip IDs cannot bypass driver offers',()=>{
  const s=sql[1];
