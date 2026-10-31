@@ -19,6 +19,7 @@ const env={
 const run=(patch={},extra={})=>verifyG256RailwayLaunch({
  env:{...env,...patch},
  checkSignup:async()=>({certified:true,reason:'No public registration'}),
+ checkServiceKey:async()=>({validated:true,mode:'STAGING_ONLY'}),
  ...extra
 });
 test('G256 predeploy accepts only closed independent staging and does not certify 5 trips',async()=>{
@@ -88,6 +89,44 @@ test('G256 fails closed when Auth settings missing, signup open or provider unav
   assert.match(r.code,/SUPABASE_AUTH_STATUS_UNVERIFIED|PUBLIC_SIGNUP_NOT_CERTIFIED_CLOSED/);
  }
  assert.equal(times,3);
+});
+test('G271 independent service key acceptance must return true before Railway launches',async()=>{
+ let attempts=0;
+ const valid=await run({},{
+  checkServiceKey:async ({ref,key})=>{
+   attempts++;
+   assert.equal(ref,REF);
+   assert.equal(key,secret);
+   return {validated:true,mode:'STAGING_ONLY'};
+  }
+ });
+ assert.equal(valid.ok,true);
+ assert.equal(attempts,1);
+ for(const checkServiceKey of [
+  async()=>({validated:false}),
+  async()=>({}),
+  async()=>null,
+  async()=>{throw Error('provider exception containing '+secret);}
+ ]){
+  const r=await run({},{checkServiceKey});
+  assert.equal(r.ok,false);
+  assert.equal(r.code,'STAGING_SERVICE_KEY_NOT_VERIFIED');
+  assert.equal(JSON.stringify(r).includes(secret),false);
+ }
+});
+test('G271 service key probe never runs if owner gate, key or Auth policy fails',async()=>{
+ let tries=0;
+ const probe=async()=>{tries++;return {validated:true};};
+ await run({QORE_RAILWAY_STAGING_APPROVED:'false'},{
+  checkServiceKey:probe
+ });
+ await run({QORE_STAGING_SERVICE_ROLE_KEY:undefined},{
+  checkServiceKey:probe
+ });
+ await run({},{checkServiceKey:probe,
+  checkSignup:async()=>({certified:false})
+ });
+ assert.equal(tries,0);
 });
 test('G256 cannot mistake an empty Auth project for disabled public signup',async()=>{
  const r=await run({},{checkSignup:async()=>null});
