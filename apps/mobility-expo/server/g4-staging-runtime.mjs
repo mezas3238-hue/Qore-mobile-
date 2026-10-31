@@ -82,6 +82,8 @@ import {createG201FiveJourneyRuntimeBridges,validG201IndependentTrust}
  from './g201-five-journey-runtime-bridges.mjs';
 import {createQoreG247ProviderSessionTrust}
  from './g247-supabase-provider-session-trust.mjs';
+import {createQoreG260AdminAal2Trust}
+ from './g260-supabase-admin-aal2-trust.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -199,6 +201,7 @@ export async function prepareQoreG4StagingRuntime({
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
  g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
+ g260AdminAal2Approved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -210,6 +213,9 @@ export async function prepareQoreG4StagingRuntime({
  if(typeof g252MerchantInboxAuthApproved!=='boolean'||
     (g252MerchantInboxAuthApproved&&merchantStaffTrust!==null))
   throw Error('G252 read-only merchant inbox requires exclusive explicit provider opt-in');
+ if(typeof g260AdminAal2Approved!=='boolean'||
+    (g260AdminAal2Approved&&adminF1Trust!==null))
+  throw Error('G260 Admin AAL2 requires exclusive owner-approved provider trust');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -377,6 +383,14 @@ export async function prepareQoreG4StagingRuntime({
   verifyMerchantSession:token=>g252Provider.verifyParticipantSession(token),
   verifySessionNotRevoked:scope=>g252Provider.verifySessionNotRevoked(scope)
  }:merchantStaffTrust;
+ // G260 native Supabase Admin AAL2 uses independently authenticated bearer
+ // plus exact G42 session + SQL G27 role. Disabled unless expressly approved;
+ // never inferred from possession of service_role, email or user_metadata.
+ const resolvedAdminF1Trust=g260AdminAal2Approved?
+  createQoreG260AdminAal2Trust({
+   projectRef:ref,auth:auth.auth,db:admin,now,
+   allowedByOwner:true,liveEnabled:false
+  }):adminF1Trust;
  const inspect=async()=>{
   const policy=await inspectStageSignup({ref,key:anonKey,request});
   if(policy.certified!==true)
@@ -409,7 +423,7 @@ export async function prepareQoreG4StagingRuntime({
   }):null;
  const driverTripStatusPersistence=createG65DriverTripStatusRepository(admin);
  const driverRecoveryPersistence=driverKycTrust===null?null:createG106DriverCurrentTripRepository({db:admin});
- const adminF1Persistence=adminF1Trust===null?null:createG75AdminF1Repository(admin);
+ const adminF1Persistence=resolvedAdminF1Trust===null?null:createG75AdminF1Repository(admin);
  const safetyPersistence=createSupabaseStagingSafetyRepository(admin);
  const merchantManagementPersistence=
   createSupabaseStagingMerchantManagementRepository(admin);
@@ -864,7 +878,7 @@ export async function prepareQoreG4StagingRuntime({
  // auth or privilege is inferred from unverified JWT claims.
  const verifiedAdminSession=async token=>{
   const user=await verified(token);
-  const attested=await adminF1Trust.verifyAdminSession(token);
+  const attested=await resolvedAdminF1Trust.verifyAdminSession(token);
   if(!attested||typeof attested!=='object'||attested.id!==user.id||
      attested.is_anonymous!==false||
      !(typeof user.email_confirmed_at==='string'||
@@ -880,11 +894,11 @@ export async function prepareQoreG4StagingRuntime({
   if(error)throw Error('Admin G27 exclusive role lookup unavailable');
   return data;
  };
- const verifiedAdminTrust=adminF1Trust===null?null:{
+ const verifiedAdminTrust=resolvedAdminF1Trust===null?null:{
   verifyAccessToken:verifiedAdminSession,
-  verifySessionNotRevoked:p=>adminF1Trust.verifySessionNotRevoked(p),
+  verifySessionNotRevoked:p=>resolvedAdminF1Trust.verifySessionNotRevoked(p),
   loadExclusiveBackofficeRole:adminRoleFromSql,
-  verifyBackofficeMfa:p=>adminF1Trust.verifyBackofficeMfa(p),
+  verifyBackofficeMfa:p=>resolvedAdminF1Trust.verifyBackofficeMfa(p),
   allowRequest,now
  };
  // G158 verified allegations are read-only until a separately authorized
