@@ -1,0 +1,33 @@
+name: QORE G275 QA bootstrap + audit + independent Auth sessions (offline)
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g261-eight-real-qa-auth-sessions*'
+      - 'apps/mobility-expo/scripts/g275-staging-qa-operator*'
+      - 'apps/mobility-expo/scripts/g263-private-qa-manifest*'
+      - 'apps/mobility-expo/scripts/g263-backoffice-authority-audit*'
+      - 'apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap*'
+      - 'apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit*'
+      - 'apps/mobility-expo/scripts/staging-auth-policy-gate*'
+      - '.github/workflows/qore-g261-qa-sessions-offline-contracts.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa-auth-integrated-no-network:
+    name: Eight-actor bootstrap, roles, provider sessions, revocation
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify integrated Auth contracts against offline mocks
+        working-directory: apps/mobility-expo/scripts
+        run: |
+          node --test staging-auth-policy-gate.test.mjs qore-staging-qa-identity-bootstrap.test.mjs g254-eight-actor-qa-readonly-audit.test.mjs g261-eight-real-qa-auth-sessions.test.mjs g275-staging-qa-operator.test.mjs g263-private-qa-manifest.test.mjs g263-backoffice-authority-audit.test.mjs
+      - name: Prevent scope confusion
+        run: echo 'NO secrets, NO external Auth creation, NO LIVE, NO commercial trips, NO E2E certificate'

@@ -25,7 +25,14 @@ function mock({signup=true,users=[],wrongTrigger=false,failedAt=null,expectedKey
   }
   if(u.pathname==='/rest/v1/user_roles'&&method==='GET'){
    const id=u.searchParams.get('user_id').slice(3);
-   return {ok:true,status:200,json:async()=>[{user_id:id,role:roles.get(id)}]};
+   return {ok:true,status:200,json:async()=>roles.has(id)?[{user_id:id,role:roles.get(id)}]:[]};
+  }
+  if(u.pathname==='/rest/v1/user_roles'&&method==='DELETE'){
+   const id=u.searchParams.get('user_id').slice(3);
+   if(u.searchParams.get('role')!=='eq.passenger'||
+      roles.get(id)!=='passenger')throw Error('Admin role separation not fenced');
+   roles.delete(id);
+   return {ok:true,status:200,json:async()=>[{user_id:id,role:'passenger'}]};
   }
   if(u.pathname==='/rest/v1/user_roles'&&method==='PATCH'){
    const id=u.searchParams.get('user_id').slice(3);
@@ -67,7 +74,10 @@ test('eight identities created with confirmed email and audited role transitions
  const m=mock(),r=await run(m);
  assert.equal(r.count,8);
  assert.equal(m.calls.filter(c=>c.method==='POST').length,8);
- assert.equal(m.calls.filter(c=>c.method==='PATCH').length,5);
+ assert.equal(m.calls.filter(c=>c.method==='PATCH').length,4);
+ assert.equal(m.calls.filter(c=>c.method==='DELETE').length,1);
+ assert.equal(r.adminBackofficeAuthorized,false);
+ assert.equal(r.roles[0],'PENDING_BACKOFFICE_APPROVAL');
  assert.equal(m.saved.size,8);
  assert(m.calls.every(c=>c.path.startsWith('/auth/v1/admin/users')||c.path==='/rest/v1/user_roles'));
 });

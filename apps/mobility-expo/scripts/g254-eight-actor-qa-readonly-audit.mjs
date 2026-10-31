@@ -87,7 +87,8 @@ export async function inspectEightActorQa({
 
  const rolesResponse=await getJson(fetcher,
   root+'/rest/v1/user_roles?select=user_id,role',serviceKey);
- if(!Array.isArray(rolesResponse)||rolesResponse.length!==8)throw fail();
+ // G263: Admin slot intentionally has NO native role pending G27 approval.
+ if(!Array.isArray(rolesResponse)||rolesResponse.length!==7)throw fail();
  const roleMap=new Map();
  for(const row of rolesResponse){
   if(!plain(row)||!UUID.test(row.user_id??'')||
@@ -96,8 +97,13 @@ export async function inspectEightActorQa({
    throw fail();
   roleMap.set(row.user_id,row.role);
  }
- for(const {id,role} of found.values())
-  if(roleMap.get(id)!==role)throw fail();
+ for(const [slot,{id,role}] of found.entries()){
+  if(slot==='owner_admin'){
+   if(roleMap.has(id))throw fail();
+  }else if(roleMap.get(id)!==role)throw fail();
+ }
+ // Exactly seven non-Admin, exclusively assigned native roles.
+ if(roleMap.size!==7)throw fail();
 
  // This evidence proves registration and exclusive roles ONLY.
  // No password-based login, independent JWT, G42 session, KYC, GPS,
@@ -107,8 +113,10 @@ export async function inspectEightActorQa({
   projectPinned:true,
   signupDisabled:true,
   qaAuthAccounts:8,
-  exclusiveQaRoles:8,
-  roleCounts:Object.freeze({admin:1,driver:4,passenger:3}),
+  exclusiveQaRoles:7,
+  roleCounts:Object.freeze({admin:0,driver:4,passenger:3}),
+  pendingBackofficeApproval:1,
+  adminBackofficeAuthorized:false,
   verifiedPasswordLogin:false,
   verifiedG42Sessions:0,
   externalJourneysCertified:0,
