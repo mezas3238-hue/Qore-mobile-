@@ -11,8 +11,8 @@ const users=G254_QA_SLOTS.map(({slot},i)=>({
  email_confirmed_at:'2026-10-31T12:00:00Z',
  app_metadata:{qore_stage_qa:true,qore_qa_slot:slot}
 }));
-const roles=users.map((u,i)=>({
- user_id:u.id,role:G254_QA_SLOTS[i].role
+const roles=users.slice(1).map((u,i)=>({
+ user_id:u.id,role:G254_QA_SLOTS[i+1].role
 }));
 const defaults={ref:G254_STAGING_REF,environment:'staging',
  liveTripsEnabled:false,publicKey,serviceKey};
@@ -55,8 +55,9 @@ test('G254 eight distinct QA actor registrations and roles: read-only, no login 
  const result=await x.inspect();
  assert.deepEqual(result,{
   mode:'STAGING_READ_ONLY',projectPinned:true,signupDisabled:true,
-  qaAuthAccounts:8,exclusiveQaRoles:8,
-  roleCounts:{admin:1,driver:4,passenger:3},
+  qaAuthAccounts:8,exclusiveQaRoles:7,
+  roleCounts:{admin:0,driver:4,passenger:3},
+  pendingBackofficeApproval:1,adminBackofficeAuthorized:false,
   verifiedPasswordLogin:false,verifiedG42Sessions:0,
   externalJourneysCertified:0,commercialLaunchAllowed:false
  });
