@@ -97,3 +97,19 @@ test('G200 G4 loopback defaults closed and honors original Passenger private cas
  t.after(()=>new Promise(resolve=>unmounted.close(resolve)));
  assert.equal((await fetch(other+casePath,{headers:{authorization:'Bearer '+token}})).status,503);
 });
+
+test('G249 independent G247 checks receive JWT original issued-at for both pre/post SQL',async()=>{
+ const observed=[];
+ const f=fixture({verifySessionNotRevoked:async v=>{
+  observed.push(v);
+  return v.tokenIatMs===at-100;
+ }});
+ const res=await f.gateway(rq('POST',openPath,{}));
+ assert.equal(res.status,200);
+ assert.equal(observed.length,2);
+ for(const v of observed){
+  assert.equal(v.tokenIatMs,at-100);
+  assert.equal(v.at,at);
+  assert.notEqual(v.tokenIatMs,v.at);
+ }
+});
