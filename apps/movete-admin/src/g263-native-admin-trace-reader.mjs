@@ -19,7 +19,7 @@ function actor(s,now){
  return plain(s)&&s.role==='admin'&&s.mfaVerified===true&&
   ID.test(s.subject??'')&&typeof s.token==='string'&&
   /^[A-Za-z0-9._~-]{20,7900}$/.test(s.token)&&
-  Number.isSafeInteger(s.expiresAt)&&s.expiresAt>now()+1000;
+  Number.isSafeInteger(s.expiresAt)&&s.expiresAt>now+1000;
 }
 const same=(a,b)=>a.subject===b.subject&&a.token===b.token&&
  a.role===b.role&&a.expiresAt===b.expiresAt&&
