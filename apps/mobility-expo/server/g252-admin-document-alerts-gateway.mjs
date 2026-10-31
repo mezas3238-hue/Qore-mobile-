@@ -82,10 +82,35 @@ export function createG252AdminDocumentAlertsGateway({
    if(seen.has(k))return error(503,'G252_DUPLICATE_RECORD');
    seen.add(k);rows.push(Object.freeze({...item}));
   }
+  // G254: user can lose Admin role, AAL2 or session while SQL is reading.
+  // Revalidate independently AFTER the sensitive read, before any response.
+  const finalAt=now();
+  if(!Number.isSafeInteger(finalAt)||finalAt<at||
+   finalAt>=user.expiresAtMs)return error(401,'G252_SESSION_EXPIRED');
+  let finalRole,finalMfa,finalSession;
+  try{
+   finalSession=await verifySessionNotRevoked({
+    userId:user.id,sessionId:user.sessionId,at:finalAt
+   });
+   finalRole=await resolveExclusiveRole(user.id);
+   finalMfa=await verifyProviderAal2({
+    userId:user.id,sessionId:user.sessionId,token:raw[1],at:finalAt
+   });
+  }catch{return error(503,'G252_POSTREAD_AUTHORITY_UNAVAILABLE');}
+  if(finalSession!==true)return error(401,'G252_SESSION_REVOKED_AFTER_READ');
+  if(finalRole!=='admin')return error(403,'G252_ADMIN_REVOKED_AFTER_READ');
+  if(!exact(finalMfa,['userId','sessionId','assuranceLevel',
+    'providerVerified','expiresAtMs'])||
+   finalMfa.userId!==user.id||finalMfa.sessionId!==user.sessionId||
+   finalMfa.assuranceLevel!=='aal2'||finalMfa.providerVerified!==true||
+   !Number.isSafeInteger(finalMfa.expiresAtMs)||
+   finalMfa.expiresAtMs<=finalAt||finalMfa.expiresAtMs>user.expiresAtMs)
+   return error(403,'G252_AAL2_REVOKED_AFTER_READ');
   return Object.freeze({status:200,body:Object.freeze({
    mode:'STAGING_DEMO_ONLY',scope:'admin.compliance.document_alerts.read',
    viewerId:user.id,items:Object.freeze(rows),hasMore:records.hasMore,
-   observedAt:records.persistedAtMs,expiresAt:at+30000,
+   observedAt:records.persistedAtMs,
+   expiresAt:Math.min(finalAt+30000,finalMfa.expiresAtMs,user.expiresAtMs),
    serverPersisted:true,documentFilesExposed:false,
    automaticApproval:false,adminDispatchControl:false,
    qaOnly:true,productionEnabled:false
