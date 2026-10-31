@@ -270,6 +270,53 @@ BEGIN
   'commercialEnabled',false,'status','OFFERED','tripId',j.trip_id,'offerId',matched_offer_id);
 END $f$;
 
+-- G113: service_role-only due batch, no global Passenger/Driver/Admin API.
+-- Locks each due queue row and delegates the original G262 booking scope to G112.
+-- Concurrent workers skip locked rows; return aggregate counts without identities.
+CREATE FUNCTION qore_stage_internal.mobility_stage_g113_run_due_auto_batch_qa(
+ _limit integer
+) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
+DECLARE
+ job record;
+ receipt jsonb;
+ state text;
+ processed integer:=0; waiting integer:=0; offered integer:=0;
+ closed integer:=0; exhausted integer:=0;
+BEGIN
+ IF _limit IS NULL OR _limit NOT BETWEEN 1 AND 10
+ THEN RAISE EXCEPTION 'G113 bounded budget required' USING ERRCODE='P2694'; END IF;
+ FOR job IN
+  SELECT j.passenger_id,j.booking_key,j.trip_id
+  FROM public.mobility_stage_g269_auto_dispatch_jobs j
+  WHERE j.status IN ('PENDING','WAITING')
+   AND j.next_attempt_at<=pg_catalog.clock_timestamp()
+  ORDER BY j.next_attempt_at,j.created_at,j.booking_key
+  LIMIT _limit FOR UPDATE OF j SKIP LOCKED
+ LOOP
+  receipt:=qore_stage_internal.mobility_stage_g112_run_booked_auto_dispatch_qa(
+   job.passenger_id,job.booking_key,job.trip_id);
+  state:=receipt->>'status';
+  IF receipt->>'mode' IS DISTINCT FROM 'STAGING_DEMO_ONLY'
+   OR receipt->>'commercialEnabled' IS DISTINCT FROM 'false'
+   OR state IS NULL OR state NOT IN ('IDLE','WAITING','OFFERED','CLOSED','EXHAUSTED')
+   OR (state='IDLE' AND receipt ? 'tripId')
+   OR (state<>'IDLE' AND receipt->>'tripId' IS DISTINCT FROM job.trip_id::text)
+  THEN RAISE EXCEPTION 'G113 invalid scoped worker receipt' USING ERRCODE='P2694'; END IF;
+  processed:=processed+1;
+  CASE state
+   WHEN 'IDLE' THEN waiting:=waiting+1;
+   WHEN 'WAITING' THEN waiting:=waiting+1;
+   WHEN 'OFFERED' THEN offered:=offered+1;
+   WHEN 'CLOSED' THEN closed:=closed+1;
+   WHEN 'EXHAUSTED' THEN exhausted:=exhausted+1;
+  END CASE;
+ END LOOP;
+ RETURN pg_catalog.jsonb_build_object(
+  'mode','STAGING_DEMO_ONLY','commercialEnabled',false,
+  'processed',processed,'waiting',waiting,'offered',offered,
+  'closed',closed,'exhausted',exhausted);
+END $f$;
+
 CREATE FUNCTION qore_stage_internal.mobility_stage_g90_passenger_dispatch_status_qa(
  _passenger_id uuid,_booking_key uuid
 ) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
@@ -322,6 +369,11 @@ CREATE FUNCTION public.mobility_stage_g112_run_booked_auto_dispatch_qa(
 ) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY INVOKER SET search_path='' AS $f$
  SELECT qore_stage_internal.mobility_stage_g112_run_booked_auto_dispatch_qa($1,$2,$3)
 $f$;
+CREATE FUNCTION public.mobility_stage_g113_run_due_auto_batch_qa(
+ _limit integer
+) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY INVOKER SET search_path='' AS $f$
+ SELECT qore_stage_internal.mobility_stage_g113_run_due_auto_batch_qa($1)
+$f$;
 CREATE FUNCTION public.mobility_stage_g90_passenger_dispatch_status_qa(
  _passenger_id uuid,_booking_key uuid
 ) RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $f$
@@ -333,6 +385,7 @@ BEGIN
  FOR x IN SELECT s FROM (VALUES
   ('mobility_stage_g269_register_pickup_road_proof(uuid,uuid,uuid,uuid,uuid,uuid,text,integer,timestamp with time zone)'),
   ('mobility_stage_g112_run_booked_auto_dispatch_qa(uuid,uuid,uuid)'),
+  ('mobility_stage_g113_run_due_auto_batch_qa(integer)'),
   ('mobility_stage_g90_passenger_dispatch_status_qa(uuid,uuid)')
  ) AS v(s) LOOP
   EXECUTE 'REVOKE ALL ON FUNCTION public.'||x||' FROM PUBLIC,anon,authenticated,service_role';
