@@ -50,7 +50,7 @@ const backoffice=[
 const defaults={ref:G254_STAGING_REF,environment:'staging',
  liveTripsEnabled:false,publicKey,serviceKey};
 function simulated({returnedUsers=allUsers,returnedRoles=roles,
- returnedBackoffice=backoffice,
+ returnedBackoffice=backoffice,secret=serviceKey,
  signupDisabled=true,authFail=false,roleFail=false,backofficeFail=false}={}){
  const paths=[];
  const fetcher=async (url,options)=>{
@@ -58,8 +58,10 @@ function simulated({returnedUsers=allUsers,returnedRoles=roles,
   assert.equal(u.hostname,G254_STAGING_REF+'.supabase.co');
   assert.equal(options.method,'GET');
   assert.equal(options.redirect,'error');
-  assert.equal(options.headers.apikey,serviceKey);
-  assert.equal(options.headers.Authorization,'Bearer '+serviceKey);
+  assert.equal(options.headers.apikey,secret);
+  if(secret.startsWith('sb_secret_'))
+   assert.equal(Object.hasOwn(options.headers,'Authorization'),false);
+  else assert.equal(options.headers.Authorization,'Bearer '+secret);
   paths.push(u.pathname);
   if(u.pathname==='/auth/v1/admin/users'){
    assert.equal(u.searchParams.get('per_page'),'50');
@@ -79,10 +81,23 @@ function simulated({returnedUsers=allUsers,returnedRoles=roles,
   }
   throw Error('Unexpected privileged endpoint');
  };
- const inspect=()=>inspectEightActorQa({...defaults,fetcher,
-  signupGate:async()=>({certified:signupDisabled})});
+ const inspect=()=>inspectEightActorQa({...defaults,serviceKey:secret,
+  fetcher,signupGate:async()=>({certified:signupDisabled})});
  return {inspect,paths};
 }
+test('G270 opaque secret on apikey only, legacy JWT service_role uses Bearer',async()=>{
+ const modern=simulated();
+ assert.equal((await modern.inspect()).qaAuthAccounts,8);
+ const jwt=[
+  Buffer.from(JSON.stringify({typ:'JWT',alg:'HS256'})).toString('base64url'),
+  Buffer.from(JSON.stringify({role:'service_role',ref:G254_STAGING_REF})).toString('base64url'),
+  'a'.repeat(43)
+ ].join('.');
+ const old=simulated({secret:jwt});
+ const result=await old.inspect();
+ assert.equal(result.qaAuthAccounts,8);
+ assert.equal(result.distinctBackofficeOwnerApprover,1);
+});
 test('G254 empty Auth STAGING refuses to certify accounts; no role reads',async()=>{
  const x=simulated({returnedUsers:[]});
  await assert.rejects(x.inspect(),/G254 STAGING independent/);
