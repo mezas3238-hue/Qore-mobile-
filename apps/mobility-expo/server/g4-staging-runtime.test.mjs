@@ -2504,7 +2504,13 @@ test('G263 Driver pickup is OFF by default and requires verified G42 provider id
   const closed=await req(base,'/v1/staging/driver/pickup-preferences','driver');
   assert.equal(closed.status,503);
  });
- const opted=await prepare(m,{g263DriverPickupApproved:true});
+ const validProviderRef='staging123456789abcd'; // 20-character STAGING mock ref
+ assert.equal(validProviderRef.length,20);
+ const opted=await prepare(m,{
+  projectRef:validProviderRef,g263DriverPickupApproved:true,
+  request:(url,args)=>m.request(url.replace(validProviderRef,ref),args),
+  createClient:(url,key)=>m.createClient(url.replace(validProviderRef,ref),key)
+ });
  await http(opted,async base=>{
   const unverified=await req(base,'/v1/staging/driver/pickup-preferences','driver');
   assert.equal(unverified.status,401);
