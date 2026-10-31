@@ -8,6 +8,8 @@
 import {fileURLToPath} from 'node:url';
 import {inspectStageSignup,safeStageRef,assertPublishableKey}
  from './staging-auth-policy-gate.mjs';
+import {probeG271StagingServiceKey}
+ from './g271-supabase-service-key-readonly-probe.mjs';
 const TARGET_REF='mrjzxftsdxzepzbcuids';
 const DOMAIN=/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.up\.railway\.app$/;
 const key64=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{43,256}$/.test(x)
@@ -25,9 +27,11 @@ function serverRole(x,ref){
 const denied=reason=>Object.freeze({ok:false,code:reason,stageOnly:true,
  commercialRidesEnabled:false});
 export async function verifyG256RailwayLaunch({
- env={},checkSignup=inspectStageSignup
+ env={},checkSignup=inspectStageSignup,
+ checkServiceKey=probeG271StagingServiceKey
 }={}){
- if(typeof checkSignup!=='function')return denied('INVALID_PREFLIGHT_ADAPTER');
+ if(typeof checkSignup!=='function'||typeof checkServiceKey!=='function')
+  return denied('INVALID_PREFLIGHT_ADAPTER');
  if(env.QORE_MOBILITY_ENV!=='staging'||
   env.RAILWAY_ENVIRONMENT_NAME?.toLowerCase()!=='staging'||
   env.LIVE_TRIPS_ENABLED!=='false'||
@@ -62,6 +66,15 @@ export async function verifyG256RailwayLaunch({
  }catch{return denied('SUPABASE_AUTH_STATUS_UNVERIFIED');}
  if(policy?.certified!==true)
   return denied('PUBLIC_SIGNUP_NOT_CERTIFIED_CLOSED');
+ // G271 checks the real provider accepts the exact private key BEFORE
+ // starting a listener. A syntactically plausible but invalid sb_secret
+ // never opens the backend to the network; errors are code-only.
+ let realKey;
+ try{realKey=await checkServiceKey({
+  ref:TARGET_REF,key:env.QORE_STAGING_SERVICE_ROLE_KEY
+ });}catch{return denied('STAGING_SERVICE_KEY_NOT_VERIFIED');}
+ if(realKey?.validated!==true)
+  return denied('STAGING_SERVICE_KEY_NOT_VERIFIED');
  return Object.freeze({ok:true,code:'STAGING_PREDEPLOY_GATES_PASS',
   projectRef:TARGET_REF,stageOnly:true,commercialRidesEnabled:false,
   fiveExternalJourneysCertified:false});
