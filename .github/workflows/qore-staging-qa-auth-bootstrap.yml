@@ -1,0 +1,25 @@
+name: QORE STAGING isolated Auth QA bootstrap offline contracts
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap.mjs'
+      - 'apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap.test.mjs'
+      - '.github/workflows/qore-staging-qa-auth-bootstrap.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    name: Identity role gates and NO LIVE contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap.test.mjs
+      - name: No external staging API calls in CI
+        run: echo "Offline tests only; never load service role into CI"
