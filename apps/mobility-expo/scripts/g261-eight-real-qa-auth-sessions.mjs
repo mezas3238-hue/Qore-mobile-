@@ -163,7 +163,12 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
   if(process.argv.length!==3||process.argv[2]!=='--verify'||
      process.env.QORE_QA_SESSION_VERIFY_APPROVED!=='CONFIRM_STAGING_ONLY'||
      process.env.LIVE_TRIPS_ENABLED!=='false')throw fail();
-  const manifest=JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');
+  if(process.env.QORE_QA_MANIFEST_FILE&&process.env.QORE_QA_ACTORS_JSON)
+   throw fail();
+  const manifest=process.env.QORE_QA_MANIFEST_FILE
+   ? await (await import('./g263-private-qa-manifest.mjs'))
+    .readPrivateQaManifest(process.env.QORE_QA_MANIFEST_FILE)
+   :JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');
   const result=await verifyEightQaSessions({
    ref:process.env.QORE_STAGING_PROJECT_REF,
    environment:process.env.QORE_MOBILITY_ENV,
