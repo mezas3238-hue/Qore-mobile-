@@ -4,6 +4,8 @@ on:
     paths:
       - 'apps/mobility-expo/scripts/g263-*.mjs'
       - 'apps/mobility-expo/scripts/qore-staging-qa-identity-bootstrap.mjs'
+      - 'apps/mobility-expo/scripts/g254-eight-actor-qa-readonly-audit*.mjs'
+      - 'apps/mobility-expo/scripts/g261-eight-real-qa-auth-sessions*.mjs'
       - '.github/workflows/qore-g263-private-qa-auth-gates.yml'
   workflow_dispatch:
 permissions:
