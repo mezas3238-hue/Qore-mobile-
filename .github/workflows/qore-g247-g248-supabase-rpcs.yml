@@ -1,0 +1,23 @@
+name: QORE G247-G248 Supabase external STAGING RPC contract
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/supabase/staging_sql/g247_delivery_private_offer_rpcs.sql'
+      - 'apps/mobility-expo/supabase/staging_sql/g248_simulated_finance_rpcs.sql'
+      - 'apps/mobility-expo/scripts/g247-g248-staging-contract.test.mjs'
+      - '.github/workflows/qore-g247-g248-supabase-rpcs.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/mobility-expo/scripts/g247-g248-staging-contract.test.mjs
