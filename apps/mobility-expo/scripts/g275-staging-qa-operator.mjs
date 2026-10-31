@@ -15,7 +15,7 @@ export async function stageAndProveEightQa({
  ref,environment,liveTripsEnabled,publicKey,secret,manifest,
  provision=bootstrapQa,audit=inspectEightActorQa,verifySessions=verifyEightQaSessions
 }={}){
- // Validate the entire manifest and environment BEFORE touching the provider.
+ // Strictly validate all eight actors before creating any identity.
  assertStage({ref,environment,liveTripsEnabled,publicKey,secret});
  verifyManifest(manifest);
  if(typeof provision!=='function'||typeof audit!=='function'||typeof verifySessions!=='function')
@@ -24,7 +24,19 @@ export async function stageAndProveEightQa({
  if(created?.mode!=='STAGING_ONLY'||created.count!==8||
     created.commercialEnabled!==false||!Array.isArray(created.roles)||
     created.roles.join('|')!==QA_SLOTS.map(x=>x[1]).join('|'))throw Error(BLOCKED);
+ return verifyExistingEightQa({ref,environment,liveTripsEnabled,
+  publicKey,secret,manifest,audit,verifySessions});
+}
 
+export async function verifyExistingEightQa({
+ ref,environment,liveTripsEnabled,publicKey,secret,manifest,
+ audit=inspectEightActorQa,verifySessions=verifyEightQaSessions
+}={}){
+ // No creation or role mutation: safe to rerun after a completed bootstrap.
+ assertStage({ref,environment,liveTripsEnabled,publicKey,secret});
+ verifyManifest(manifest);
+ if(typeof audit!=='function'||typeof verifySessions!=='function')
+  throw Error(BLOCKED);
  const observed=await audit({ref,environment,liveTripsEnabled:false,
   publicKey,serviceKey:secret});
  if(observed?.mode!=='STAGING_READ_ONLY'||observed.qaAuthAccounts!==8||
@@ -56,19 +68,20 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  try{
   if(process.argv.length===3&&process.argv[2]==='--plan'){
    console.log('G275 plan: 8 QA slots, Auth bootstrap -> G254 audit -> G261 sessions/revocation.');
-   console.log('No network or credentials loaded. No Owner approval, no LIVE, no E2E certificate.');
-  }else if(process.argv.length===3&&process.argv[2]==='--apply'){
+   console.log('No network or credentials loaded. Use --verify for eight existing accounts; no Owner approval, LIVE or E2E certificate.');
+  }else if(process.argv.length===3&&['--apply','--verify'].includes(process.argv[2])){
+   const createUsers=process.argv[2]==='--apply';
    // Even if secrets are accidentally injected into CI or a deployed service,
    // never create QA users outside an explicit private operator host.
    if(process.env.CI==='true'||process.env.GITHUB_ACTIONS==='true'||
       typeof process.env.RAILWAY_ENVIRONMENT==='string')throw Error(BLOCKED);
-   if(process.env.QORE_QA_EXPLICIT_APPLY!=='CONFIRM_STAGING_ONLY'||
+   if(createUsers&&process.env.QORE_QA_EXPLICIT_APPLY!=='CONFIRM_STAGING_ONLY'||
       process.env.QORE_QA_SESSION_VERIFY_APPROVED!=='CONFIRM_STAGING_ONLY'||
       process.env.LIVE_TRIPS_ENABLED!=='false')throw Error(BLOCKED);
    let manifest;
    try{manifest=JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');}
    catch{throw Error(BLOCKED);}
-   const result=await stageAndProveEightQa({
+   const result=await (createUsers?stageAndProveEightQa:verifyExistingEightQa)({
     ref:process.env.QORE_STAGING_PROJECT_REF,
     environment:process.env.QORE_MOBILITY_ENV,
     liveTripsEnabled:process.env.LIVE_TRIPS_ENABLED,
