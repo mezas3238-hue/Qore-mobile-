@@ -132,17 +132,23 @@ export async function inspectEightActorQa({
   commercialLaunchAllowed:false
  });
 }
+// G268 matches the actual Railway G256 preflight key names. Do not silently
+// use the deprecated QORE_STAGING_ANON_KEY or substitute any privileged key.
+export function g254ReadOnlyCliConfig(env={}){
+ return Object.freeze({
+  ref:env.QORE_STAGING_PROJECT_REF,
+  environment:env.QORE_MOBILITY_ENV,
+  liveTripsEnabled:false,
+  publicKey:env.QORE_STAGING_PUBLISHABLE_KEY,
+  serviceKey:env.QORE_STAGING_SERVICE_ROLE_KEY
+ });
+}
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  try{
   if(process.argv.length!==3||process.argv[2]!=='--audit'||
      process.env.LIVE_TRIPS_ENABLED!=='false')throw fail();
-  const report=await inspectEightActorQa({
-   ref:process.env.QORE_STAGING_PROJECT_REF,
-   environment:process.env.QORE_MOBILITY_ENV,
-   liveTripsEnabled:false,
-   publicKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
-   serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY
-  });
+  const report=await inspectEightActorQa(
+   g254ReadOnlyCliConfig(process.env));
   console.log(JSON.stringify(report));
  }catch{
   // Never log input, HTTP response, names, credentials, email or user UUIDs.
