@@ -23,7 +23,8 @@ export async function stageAndProveEightQa({
  const created=await provision({ref,environment,liveTripsEnabled,publicKey,secret,manifest});
  if(created?.mode!=='STAGING_ONLY'||created.count!==8||
     created.commercialEnabled!==false||!Array.isArray(created.roles)||
-    created.roles.join('|')!==QA_SLOTS.map(x=>x[1]).join('|'))throw Error(BLOCKED);
+    created.roles.join('|')!==QA_SLOTS.map(([slot,role])=>slot==='owner_admin'?'PENDING_BACKOFFICE_APPROVAL':role).join('|')||
+    created.adminBackofficeAuthorized!==false)throw Error(BLOCKED);
  return verifyExistingEightQa({ref,environment,liveTripsEnabled,
   publicKey,secret,manifest,audit,verifySessions});
 }
@@ -40,10 +41,12 @@ export async function verifyExistingEightQa({
  const observed=await audit({ref,environment,liveTripsEnabled:false,
   publicKey,serviceKey:secret});
  if(observed?.mode!=='STAGING_READ_ONLY'||observed.qaAuthAccounts!==8||
-    observed.exclusiveQaRoles!==8||observed.signupDisabled!==true||
+    observed.exclusiveQaRoles!==7||observed.signupDisabled!==true||
     observed.projectPinned!==true||
-    observed.roleCounts?.admin!==1||observed.roleCounts?.driver!==4||
+    observed.roleCounts?.admin!==0||observed.roleCounts?.driver!==4||
     observed.roleCounts?.passenger!==3||
+    observed.pendingBackofficeApproval!==1||
+    observed.adminBackofficeAuthorized!==false||
     observed.externalJourneysCertified!==0)throw Error(BLOCKED);
 
  const verified=await verifySessions({ref,environment,liveTripsEnabled:false,
@@ -56,7 +59,8 @@ export async function verifyExistingEightQa({
     verified.externalJourneysCertified!==0)throw Error(BLOCKED);
 
  return Object.freeze({
-  mode:'STAGING_QA_ONLY',authAccounts:8,exclusiveRoles:8,
+  mode:'STAGING_QA_ONLY',authAccounts:8,exclusiveRoles:7,
+  pendingBackofficeApproval:1,adminBackofficeAuthorized:false,
   independentSessionsVerified:8,revokedLocalSessionsVerified:8,
   backofficeOwnerApprovalCertified:false,
   driverKycApproved:false,externalJourneysCertified:0,
@@ -78,9 +82,15 @@ if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
    if(createUsers&&process.env.QORE_QA_EXPLICIT_APPLY!=='CONFIRM_STAGING_ONLY'||
       process.env.QORE_QA_SESSION_VERIFY_APPROVED!=='CONFIRM_STAGING_ONLY'||
       process.env.LIVE_TRIPS_ENABLED!=='false')throw Error(BLOCKED);
+   if(process.env.QORE_QA_MANIFEST_FILE&&process.env.QORE_QA_ACTORS_JSON)
+    throw Error(BLOCKED);
    let manifest;
-   try{manifest=JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');}
-   catch{throw Error(BLOCKED);}
+   try{
+    manifest=process.env.QORE_QA_MANIFEST_FILE
+     ?await (await import('./g263-private-qa-manifest.mjs'))
+       .readPrivateQaManifest(process.env.QORE_QA_MANIFEST_FILE)
+     :JSON.parse(process.env.QORE_QA_ACTORS_JSON??'');
+   }catch{throw Error(BLOCKED);}
    const result=await (createUsers?stageAndProveEightQa:verifyExistingEightQa)({
     ref:process.env.QORE_STAGING_PROJECT_REF,
     environment:process.env.QORE_MOBILITY_ENV,

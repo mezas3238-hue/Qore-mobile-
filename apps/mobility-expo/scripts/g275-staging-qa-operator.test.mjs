@@ -13,10 +13,11 @@ const conf={ref:STAGING_REF,environment:'staging',liveTripsEnabled:'false',
 function spies({createCount=8,auditCount=8,revoked=8,auditMode='STAGING_READ_ONLY'}={}){
  const calls=[];
  const provision=async()=>{calls.push('provision');return {mode:'STAGING_ONLY',
-  count:createCount,roles:QA_SLOTS.map(x=>x[1]),commercialEnabled:false};};
+  count:createCount,roles:QA_SLOTS.map(([slot,role])=>slot==='owner_admin'?'PENDING_BACKOFFICE_APPROVAL':role),adminBackofficeAuthorized:false,commercialEnabled:false};};
  const audit=async()=>{calls.push('audit');return {mode:auditMode,qaAuthAccounts:auditCount,
-  exclusiveQaRoles:8,signupDisabled:true,projectPinned:true,
-  externalJourneysCertified:0,roleCounts:{admin:1,driver:4,passenger:3}};};
+  exclusiveQaRoles:7,signupDisabled:true,projectPinned:true,
+  pendingBackofficeApproval:1,adminBackofficeAuthorized:false,
+  externalJourneysCertified:0,roleCounts:{admin:0,driver:4,passenger:3}};};
  const verifySessions=async()=>{calls.push('sessions');return {
   mode:'PROVIDER_AUTH_SESSION_ONLY',
   eightIndependentPasswordSessionsVerified:8,crossIdentitySessionDenied:1,
@@ -84,4 +85,14 @@ test('G276 verify-only refuses fake session evidence or incomplete logout',async
  const s=spies({revoked:7});
  await assert.rejects(verifyExistingEightQa({...conf,...s}));
  assert.deepEqual(s.calls,['audit','sessions']);
+});
+
+test('G277 Admin stays pending G27: eight users, seven native roles, no elevated Admin',async()=>{
+ const s=spies();
+ const result=await stageAndProveEightQa({...conf,...s});
+ assert.equal(result.authAccounts,8);
+ assert.equal(result.exclusiveRoles,7);
+ assert.equal(result.pendingBackofficeApproval,1);
+ assert.equal(result.adminBackofficeAuthorized,false);
+ assert.equal(result.backofficeOwnerApprovalCertified,false);
 });

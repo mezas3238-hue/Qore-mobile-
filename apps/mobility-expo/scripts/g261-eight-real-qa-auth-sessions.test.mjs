@@ -15,7 +15,8 @@ const actorManifest=G254_QA_SLOTS.map(({slot,role},i)=>({
 }));
 const uuid=(i,prefix)=>String(i+1).padStart(8,'0')+
  '-'+prefix+'111-4111-8111-'+String(i+1).padStart(12,'0');
-function actorAudit(){return {qaAuthAccounts:8,exclusiveQaRoles:8,
+function actorAudit(){return {qaAuthAccounts:8,exclusiveQaRoles:7,
+ adminBackofficeAuthorized:false,pendingBackofficeApproval:1,
  signupDisabled:true,projectPinned:true};}
 function stub({wrongProfile=false,expired=false,badSession=false,
  deniedLoginIndex=-1,logoutFailure=false}={}){
@@ -121,7 +122,8 @@ test('G261 never certifies cleanup when the sign-out endpoint cannot revoke sess
 test('G261 independent actor audit must certify closed signup and eight exact roles',async()=>{
  const m=stub();
  await assert.rejects(run(m,{actorAudit:async()=>({
-  qaAuthAccounts:7,exclusiveQaRoles:7,signupDisabled:true,projectPinned:true
+  qaAuthAccounts:7,exclusiveQaRoles:7,adminBackofficeAuthorized:false,
+  pendingBackofficeApproval:1,signupDisabled:true,projectPinned:true
  })}),/G261 STAGING/);
  assert.equal(m.calls.length,0);
 });
