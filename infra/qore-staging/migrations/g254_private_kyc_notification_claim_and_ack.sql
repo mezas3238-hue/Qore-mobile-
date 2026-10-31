@@ -79,7 +79,7 @@ BEGIN
     AND a.valid_until<=pg_catalog.clock_timestamp()+interval '15 days')
    OR (o.band='D30' AND a.valid_until>pg_catalog.clock_timestamp()+interval '15 days'
     AND a.valid_until<=pg_catalog.clock_timestamp()+interval '30 days'))
- ORDER BY o.id FOR UPDATE OF o SKIP LOCKED LIMIT 1;
+ ORDER BY o.id LIMIT 1 FOR UPDATE OF o SKIP LOCKED;
  IF NOT FOUND THEN
   RETURN pg_catalog.jsonb_build_object('mode','STAGING_DEMO_ONLY',
    'status','IDLE','qaOnly',true,'productionEnabled',false);
