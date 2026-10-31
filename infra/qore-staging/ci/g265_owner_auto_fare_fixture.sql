@@ -1,6 +1,6 @@
 -- G265 ephemeral-only fixture. Never run against real STAGING or production.
 -- Follows g262_minimal_schema.sql and its generated PG16/17 temporary DB.
-TRUNCATE public.mobility_stage_fare_rules;
+DELETE FROM public.mobility_stage_fare_rules;
 ALTER TABLE public.mobility_stage_fare_rules
  ADD COLUMN approved_by uuid NOT NULL REFERENCES auth.users(id),
  ADD COLUMN approved_at timestamptz NOT NULL;
