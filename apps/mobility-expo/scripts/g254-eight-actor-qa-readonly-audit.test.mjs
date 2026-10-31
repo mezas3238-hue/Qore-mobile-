@@ -11,13 +11,16 @@ const users=G254_QA_SLOTS.map(({slot},i)=>({
  email_confirmed_at:'2026-10-31T12:00:00Z',
  app_metadata:{qore_stage_qa:true,qore_qa_slot:slot}
 }));
-const roles=users.map((u,i)=>({
- user_id:u.id,role:G254_QA_SLOTS[i].role
+const roles=users.slice(1).map((u,i)=>({
+ user_id:u.id,role:G254_QA_SLOTS[i+1].role
 }));
+const backoffice=[{user_id:users[0].id,role:'admin',
+ status:'active',approved_by:users[1].id,revision:1}];
 const defaults={ref:G254_STAGING_REF,environment:'staging',
  liveTripsEnabled:false,publicKey,serviceKey};
 function simulated({returnedUsers=users,returnedRoles=roles,
- signupDisabled=true,authFail=false,roleFail=false}={}){
+ returnedBackoffice=backoffice,
+ signupDisabled=true,authFail=false,roleFail=false,backofficeFail=false}={}){
  const paths=[];
  const fetcher=async (url,options)=>{
   const u=new URL(url);
@@ -38,6 +41,11 @@ function simulated({returnedUsers=users,returnedRoles=roles,
    return {ok:!roleFail,status:roleFail?503:200,
     json:async()=>returnedRoles};
   }
+  if(u.pathname==='/rest/v1/mobility_stage_backoffice_roles'){
+   assert.equal(u.searchParams.get('select'),'user_id,role,status,approved_by,revision');
+   return {ok:!backofficeFail,status:backofficeFail?503:200,
+    json:async()=>returnedBackoffice};
+  }
   throw Error('Unexpected privileged endpoint');
  };
  const inspect=()=>inspectEightActorQa({...defaults,fetcher,
@@ -55,11 +63,14 @@ test('G254 eight distinct QA actor registrations and roles: read-only, no login 
  assert.deepEqual(result,{
   mode:'STAGING_READ_ONLY',projectPinned:true,signupDisabled:true,
   qaAuthAccounts:8,exclusiveQaRoles:8,
+  privateBackofficeAdminActors:1,nativeQaRoles:7,
+  independentOwnerApprovalVerified:false,
   roleCounts:{admin:1,driver:4,passenger:3},
   verifiedPasswordLogin:false,verifiedG42Sessions:0,
   externalJourneysCertified:0,commercialLaunchAllowed:false
  });
- assert.deepEqual(x.paths,['/auth/v1/admin/users','/rest/v1/user_roles']);
+ assert.deepEqual(x.paths,['/auth/v1/admin/users','/rest/v1/user_roles',
+  '/rest/v1/mobility_stage_backoffice_roles']);
  assert(!JSON.stringify(result).includes('@example.invalid'));
  assert(!JSON.stringify(result).includes(users[0].id));
 });
@@ -107,20 +118,37 @@ test('G254 extra, missing, duplicated, mixed or forged role cannot pass',async()
   roles.slice(1),
   [...roles,roles[0]],
   roles.map((r,i)=>i===2?{...r,role:'passenger'}:r),
+  [...roles,{user_id:users[0].id,role:'passenger'}],
   roles.map((r,i)=>i===4?{...r,user_id:roles[0].user_id}:r),
   roles.map((r,i)=>i===5?{...r,user_id:'99999999-2510-4251-8251-999999999999'}:r),
-  roles.map((r,i)=>i===7?{...r,role:'owner'}:r)
+  roles.map((r,i)=>i===6?{...r,role:'owner'}:r)
  ]){
   const x=simulated({returnedRoles:changed});
   await assert.rejects(x.inspect(),/G254 STAGING independent/);
   assert.deepEqual(x.paths,['/auth/v1/admin/users','/rest/v1/user_roles']);
  }
 });
+test('G266 rejects forged, inactive, self-approved or missing private Admin registry',async()=>{
+ for(const bad of [
+  [],[{...backoffice[0],role:'owner'}],
+  [{...backoffice[0],status:'pending'}],
+  [{...backoffice[0],approved_by:users[0].id}],
+  [{...backoffice[0],approved_by:'26666666-2666-4266-8266-266666666666'}],
+  [{...backoffice[0],revision:0}],
+  [{...backoffice[0],user_id:users[1].id}],
+  [...backoffice,...backoffice]
+ ]){
+  const x=simulated({returnedBackoffice:bad});
+  await assert.rejects(x.inspect(),/G254 STAGING independent/);
+  assert.deepEqual(x.paths,['/auth/v1/admin/users','/rest/v1/user_roles',
+   '/rest/v1/mobility_stage_backoffice_roles']);
+ }
+});
 test('G254 Auth or PostgREST outage denies readiness, never attempts creation or writes',async()=>{
- for(const opts of [{authFail:true},{roleFail:true}]){
+ for(const opts of [{authFail:true},{roleFail:true},{backofficeFail:true}]){
   const x=simulated(opts);
   await assert.rejects(x.inspect(),/G254 STAGING independent/);
   assert(x.paths.every(v=>v==='/auth/v1/admin/users'||
-   v==='/rest/v1/user_roles'));
+   v==='/rest/v1/user_roles'||v==='/rest/v1/mobility_stage_backoffice_roles'));
  }
 });
