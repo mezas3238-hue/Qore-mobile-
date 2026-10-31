@@ -71,7 +71,7 @@ BEGIN
  UPDATE public.mobility_stage_fare_rules
  SET active=false WHERE mode='AUTO'::public.mobility_stage_fare_mode
   AND zone_tag=_zone_tag AND active=true;
- stamp:=pg_catalog.clock_timestamp();
+ stamp:=pg_catalog.statement_timestamp();
  INSERT INTO public.mobility_stage_fare_rules(
   rule_key,mode,zone_tag,base_pyg,per_km_pyg,per_minute_pyg,
   minimum_pyg,commission_bps,valid_from,valid_until,active,
