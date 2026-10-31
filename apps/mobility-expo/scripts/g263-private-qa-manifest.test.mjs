@@ -39,7 +39,7 @@ test('G263 detects tampered manifest before using any provider credentials',asyn
  const x=await writePrivateQaManifest();
  t.after(()=>rm(dirname(x.path),{recursive:true,force:true}));
  const m=await readPrivateQaManifest(x.path);
- m[7].password=m[0].password;
+ m[7]={...m[7],password:m[0].password};
  await writeFile(x.path,JSON.stringify(m));
  await assert.rejects(readPrivateQaManifest(x.path),/G263 private/);
 });
