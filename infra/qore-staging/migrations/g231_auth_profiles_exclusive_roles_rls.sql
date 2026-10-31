@@ -6,7 +6,6 @@
 -- Intended ONLY for a newly-provisioned, separately verified Supabase project.
 -- Supabase provides auth.users and auth.uid(); never create auth.users in LIVE.
 -- No paid trips, no maps, no payment tables and NO seeded administrator.
-BEGIN;
 DO $guard$
 BEGIN
  IF (SELECT count(*) FROM auth.users)<>0 OR
@@ -77,4 +76,3 @@ REVOKE ALL ON FUNCTION public.mobility_staging_handle_signup() FROM PUBLIC,anon,
 CREATE TRIGGER mobility_staging_new_signup
  AFTER INSERT ON auth.users FOR EACH ROW
  EXECUTE FUNCTION public.mobility_staging_handle_signup();
-COMMIT;
