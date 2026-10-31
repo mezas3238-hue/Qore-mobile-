@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {request as httpRequest} from 'node:http';
 import {createQoreRadarLoopbackTransport,listenQoreRadarLoopback}
  from './g4-loopback-http-transport.mjs';
 const ORIGINAL='26200000-0000-4262-8262-000000000003';
@@ -70,13 +71,15 @@ test('G262 rejects unauthorized methods and forged URL path before handler',asyn
     headers:{authorization:'Bearer '+TOKEN}});
    assert.equal(r.status,404);
   }
-  const withBody=await fetch(base+path('AUTO_RIDE'),{
-   method:'GET',headers:{
-    authorization:'Bearer '+TOKEN,
-    'content-length':'3'
-   }
+  const withBody=await new Promise((resolve,reject)=>{
+   const req=httpRequest(base+path('AUTO_RIDE'),{
+    method:'GET',headers:{authorization:'Bearer '+TOKEN,
+     'content-length':'3'}
+   },res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});
+   req.on('error',reject);
+   req.end('bad');
   });
-  assert.equal(withBody.status,400);
+  assert.equal(withBody,400);
  });
  assert.equal(count,0);
 });
