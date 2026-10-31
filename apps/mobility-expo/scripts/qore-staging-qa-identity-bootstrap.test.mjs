@@ -6,11 +6,13 @@ const secret='sb_secret_'+('b'.repeat(45));
 const uuids=QA_SLOTS.map((_,i)=>String(i+1).padStart(8,'0')+'-1111-4111-8111-'+String(i+1).padStart(12,'0'));
 const manifest=QA_SLOTS.map(([slot,role],i)=>({slot,role,email:'qa-'+slot+'@example.invalid',password:'strong-synthetic-only-passphrase-'+i+'-XXXX'}));
 const ctx={ref:STAGING_REF,environment:'staging',liveTripsEnabled:'false',publicKey,secret,manifest};
-function mock({signup=true,users=[],wrongTrigger=false,failedAt=null}={}){
+function mock({signup=true,users=[],wrongTrigger=false,failedAt=null,expectedKey=secret}={}){
  const saved=new Map(),roles=new Map(),calls=[];
  const fetcher=async(url,options)=>{
   const u=new URL(url),method=options.method;
-  calls.push({path:u.pathname,method,query:u.search});
+  calls.push({path:u.pathname,method,query:u.search,
+   apiKeyMatches:options.headers.apikey===expectedKey,
+   authorization:options.headers.Authorization??null});
   if(failedAt===u.pathname)return {ok:false,status:503};
   if(u.pathname==='/auth/v1/admin/users'&&method==='GET')
    return {ok:true,status:200,json:async()=>({users})};
@@ -72,4 +74,22 @@ test('eight identities created with confirmed email and audited role transitions
 test('unexpected signup trigger role or API failure fail closed',async()=>{
  await assert.rejects(run(mock({wrongTrigger:true})),/Unexpected trigger/);
  await assert.rejects(run(mock({failedAt:'/auth/v1/admin/users'})),/STAGING QA API failed/);
+});
+
+test('G257 modern sb_secret sends apikey only, never an invalid Bearer header',async()=>{
+ const m=mock();
+ const result=await run(m);
+ assert.equal(result.count,8);
+ assert(m.calls.length>0);
+ assert(m.calls.every(c=>c.apiKeyMatches&&c.authorization===null));
+});
+test('G257 legacy service_role JWT retains Bearer compatibility',async()=>{
+ const header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+ const claims=Buffer.from(JSON.stringify({role:'service_role',ref:STAGING_REF})).toString('base64url');
+ const jwt=header+'.'+claims+'.'+'a'.repeat(43);
+ const m=mock({expectedKey:jwt});
+ const result=await run(m,{secret:jwt});
+ assert.equal(result.count,8);
+ assert(m.calls.length>0);
+ assert(m.calls.every(c=>c.apiKeyMatches&&c.authorization==='Bearer '+jwt));
 });
