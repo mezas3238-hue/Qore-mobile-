@@ -100,3 +100,44 @@ test('G229 Railway runner refuses LIVE, production environment, invalid budgets,
  const missing=run(safe);assert.notEqual(missing.status,0);
  assert.doesNotMatch(missing.stdout,/transport ready/);
 });
+
+test('G230 C/D independent synthetic JWT actors reach one service ID without cross-role access',async()=>{
+ const id='23000000-0000-4230-8230-000000000001';
+ const roles=[
+  ['passenger','/v1/staging/rider/history'],
+  ['driver','/v1/staging/driver/inbox'],
+  ['merchant','/v1/staging/merchant/23000000-0000-4230-8230-000000000002/orders/inbox'],
+  ['admin','/v1/staging/admin/services/AUTO_RIDE/'+id+'/trace']
+ ];
+ const token=role=>'g230_test_actor_'+role.padEnd(28,'x');
+ const upstream=createServer((req,res)=>{
+  const role=roles.find(([name])=>req.headers.authorization==='Bearer '+token(name))?.[0];
+  const allowed=roles.find(([_,path])=>path===req.url)?.[0];
+  const status=role===allowed?200:403;
+  res.writeHead(status,{'content-type':'application/json'});
+  res.end(JSON.stringify(status===200?{
+   serviceId:id,productionEnabled:false,serverPersisted:false,
+   actorRole:role,qaOnly:true
+  }:{error:'SYNTHETIC_ROLE_FORBIDDEN',productionEnabled:false}));
+ });
+ const local=await listen(upstream);
+ const edge=createRailwayStagingIngress({
+  loopbackOrigin:local,expectedHost:HOST,adminOrigin:ADMIN
+ });
+ const url=await listen(edge);
+ try{
+  for(const [role,path] of roles){
+   const own=await call(url,path,{auth:token(role)});
+   assert.equal(own.status,200,role);
+   assert.deepEqual(await own.json(),{
+    serviceId:id,productionEnabled:false,serverPersisted:false,
+    actorRole:role,qaOnly:true
+   });
+   const foreign=await call(url,path,{auth:token(role==='driver'?'admin':'driver')});
+   assert.equal(foreign.status,403,'wrong actor '+role);
+  }
+ }finally{
+  await new Promise(done=>edge.close(done));
+  await new Promise(done=>upstream.close(done));
+ }
+});
