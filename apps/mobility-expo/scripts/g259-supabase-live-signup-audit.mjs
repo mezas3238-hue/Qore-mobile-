@@ -25,8 +25,13 @@ export async function auditG259Signup({
  try{actual=await signupReader({
   ref:G259_REF,key:publishableKey,request
  });}catch{return deny('PROVIDER_SETTINGS_UNAVAILABLE');}
- if(actual?.certified!==true)
-  return deny('PUBLIC_SIGNUP_NOT_DISABLED');
+ if(actual?.certified!==true){
+  // Distinguish an actual provider response of disable_signup=false from
+  // an absent/unrecognized setting. Neither permits Railway deployment.
+  return deny(actual?.reason==='Auth admite registro público (disable_signup=false)'
+   ?'PUBLIC_SIGNUP_CONFIRMED_OPEN'
+   :'PUBLIC_SIGNUP_NOT_CERTIFIED_CLOSED');
+ }
  return Object.freeze({certified:true,code:'REAL_PROVIDER_SIGNUP_DISABLED',
   providerReadOnly:true,stage:'staging',
   commercialReady:false,externalJourneysCertified:0});
