@@ -54,18 +54,16 @@ UPDATE public.mobility_stage_g262_auto_prequotes
  SET quoted_at=pg_catalog.clock_timestamp()-interval '2 hours',
      expires_at=pg_catalog.clock_timestamp()-interval '1 hour'
  WHERE request_key='00000000-0000-4000-8000-000000000305';
+SELECT pg_catalog.set_config('qore.test_quote_id',id::text,false)
+ FROM public.mobility_stage_g262_auto_prequotes
+ WHERE request_key='00000000-0000-4000-8000-000000000305';
 SET ROLE service_role;
 DO $expired_quote$
 DECLARE
  who uuid:='00000000-0000-4000-8000-000000000102';
  qid uuid; rejected boolean:=false;
 BEGIN
- -- Only this disposable test looks up the known quote ID via its owner-scoped receipt.
- SELECT (public.mobility_stage_g73_quote_receipt(who,q.id)->>'quoteId')::uuid INTO qid
- FROM (SELECT public.mobility_stage_g73_quote_receipt(who,
-  (SELECT id FROM public.mobility_stage_g262_auto_prequotes
-  WHERE request_key='00000000-0000-4000-8000-000000000305')) AS receipt) c,
- LATERAL (SELECT (c.receipt->>'quoteId')::uuid AS id) q;
+ qid:=pg_catalog.current_setting('qore.test_quote_id')::uuid;
  BEGIN
   PERFORM public.mobility_stage_g73_book(who,qid,
    '00000000-0000-4000-8000-000000000306');
