@@ -1,9 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {G254_QA_SLOTS,G254_STAGING_REF,inspectEightActorQa}
+import {G254_QA_SLOTS,G254_STAGING_REF,inspectEightActorQa,g254ReadOnlyCliConfig}
  from './g254-eight-actor-qa-readonly-audit.mjs';
 
 const publicKey='sb_publishable_'+('p'.repeat(40));
+test('G268 CLI maps actual Railway publishable key and never uses old anon var',()=>{
+ const env={QORE_STAGING_PROJECT_REF:G254_STAGING_REF,
+  QORE_MOBILITY_ENV:'staging',
+  QORE_STAGING_PUBLISHABLE_KEY:publicKey,
+  QORE_STAGING_SERVICE_ROLE_KEY:serviceKey,
+  QORE_STAGING_ANON_KEY:'wrong-legacy-key-value',
+  LIVE_TRIPS_ENABLED:'false'};
+ const result=g254ReadOnlyCliConfig(env);
+ assert.deepEqual(result,{
+  ref:G254_STAGING_REF,environment:'staging',
+  liveTripsEnabled:false,publicKey,serviceKey
+ });
+ assert.equal(Object.isFrozen(result),true);
+ assert.notEqual(result.publicKey,env.QORE_STAGING_ANON_KEY);
+ const missing=g254ReadOnlyCliConfig({
+  ...env,QORE_STAGING_PUBLISHABLE_KEY:undefined
+ });
+ assert.equal(missing.publicKey,undefined);
+});
+
 const serviceKey='sb_secret_'+('s'.repeat(40));
 const users=G254_QA_SLOTS.map(({slot},i)=>({
  id:String(i+1).padStart(8,'0')+'-2510-4251-8251-'+String(i+1).padStart(12,'0'),
