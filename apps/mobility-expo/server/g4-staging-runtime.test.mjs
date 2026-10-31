@@ -2418,3 +2418,41 @@ test('G177 denied SQL cannot be presented as an acknowledged Driver arrival',asy
   assert.equal(m.state.trip.status,'accepted');
  });
 });
+
+test('G249 G247 recipient trust is OFF by default and cannot be double-authorized',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g247RecipientAuthApproved:'true'}),/exclusive explicit/);
+ const external={
+  verifyParticipantSession:async()=>null,verifySessionNotRevoked:async()=>false
+ };
+ await assert.rejects(prepare(m,{
+  g247RecipientAuthApproved:true,recipientTrust:external
+ }),/exclusive explicit/);
+ // No positive external session is implied by the ordinary G4 startup.
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const r=await req(base,'/v1/staging/sender/deliveries/'+deliveryId+
+   '/recipient-confirmation');
+  assert.notEqual(r.status,200);
+ });
+});
+test('G249 explicit STAGING opt-in wires provider trust; forged bearer denied before SQL',async()=>{
+ const m=mockSupabase();
+ const validProjectRef='staging1234567890abc'; // 20-character mock STAGING ref
+ const remap=url=>url.replace('https://'+validProjectRef+'.supabase.co',
+  'https://'+ref+'.supabase.co');
+ const runtime=await prepare(m,{
+  projectRef:validProjectRef,g247RecipientAuthApproved:true,
+  request:(url,options)=>m.request(remap(url),options),
+  createClient:(url,key)=>m.createClient(remap(url),key)
+ });
+ await http(runtime,async base=>{
+  const r=await req(base,'/v1/staging/sender/deliveries/'+deliveryId+
+   '/recipient-confirmation');
+  assert.equal(r.status,401);
+  assert.equal(r.body.productionEnabled,false);
+  assert.equal(m.state.authCalls,0);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_g42_session_active').length,0);
+ });
+});
