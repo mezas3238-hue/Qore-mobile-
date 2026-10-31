@@ -80,6 +80,8 @@ import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-ca
 import {createG187RecipientConfirmationGateway} from './g187-recipient-confirmation-gateway.mjs';
 import {createG201FiveJourneyRuntimeBridges,validG201IndependentTrust}
  from './g201-five-journey-runtime-bridges.mjs';
+import {createQoreG247ProviderSessionTrust}
+ from './g247-supabase-provider-session-trust.mjs';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROLE_NAMES=new Set(['service_role']);
@@ -196,11 +198,15 @@ export async function prepareQoreG4StagingRuntime({
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
+ g247RecipientAuthApproved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
  if(environment!=='staging'||liveTripsEnabled!==false||allowQa!==true)
   throw Error('G4 requires isolated staging, no LIVE, and explicit local QA authorization');
+ if(typeof g247RecipientAuthApproved!=='boolean'||
+    (g247RecipientAuthApproved&&recipientTrust!==null))
+  throw Error('G249 requires exclusive explicit G247 STAGING recipient opt-in');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -353,6 +359,11 @@ export async function prepareQoreG4StagingRuntime({
  const auth=createClient(url,anonKey,options);
  const admin=createClient(url,serviceKey,options);
  if(!validClients(auth,admin))throw Error('Supabase Auth/SQL clients unavailable');
+ // Explicit opt-in: provider-confirmed Auth session and PostgreSQL G42 only.
+ // No trusted recipient route is enabled by default or in LIVE.
+ const resolvedRecipientTrust=g247RecipientAuthApproved?
+  createQoreG247ProviderSessionTrust({projectRef:ref,auth:auth.auth,
+   db:admin,now,allowedByOwner:true,liveEnabled:false}):recipientTrust;
  const inspect=async()=>{
   const policy=await inspectStageSignup({ref,key:anonKey,request});
   if(policy.certified!==true)
@@ -1123,10 +1134,10 @@ export async function prepareQoreG4StagingRuntime({
  })();
  // G187: original G5/G67 recipient evidence through the SAME PostgreSQL
  // authority. Every participant uses an independently revocable G42 session.
- const recipientConfirmation=recipientTrust===null?null:(()=>{
+ const recipientConfirmation=resolvedRecipientTrust===null?null:(()=>{
   const verifiedParticipant=async token=>{
    const provider=await verified(token);
-   const attested=await recipientTrust.verifyParticipantSession(token);
+   const attested=await resolvedRecipientTrust.verifyParticipantSession(token);
    if(provider?.id!==attested?.id||provider?.is_anonymous===true||
      attested?.is_anonymous!==false||
      !(typeof provider?.email_confirmed_at==='string'||
@@ -1144,7 +1155,7 @@ export async function prepareQoreG4StagingRuntime({
   return createG187RecipientConfirmationGateway({
    environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
    verifyAccessToken:verifiedParticipant,
-   verifySessionNotRevoked:p=>recipientTrust.verifySessionNotRevoked(p),
+   verifySessionNotRevoked:p=>resolvedRecipientTrust.verifySessionNotRevoked(p),
    resolveExclusiveRole:id=>singleRole(admin,id),
    allowRequest:({actorId})=>allowRequest({userId:actorId}),
    bindRecipient:p=>readSql('mobility_stage_g187_bind_recipient_qa',{
