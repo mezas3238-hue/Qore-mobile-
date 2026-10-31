@@ -12,7 +12,7 @@ const pinned=raw=>{
   const u=new URL(raw);
   return u.protocol==='https:'&&u.origin===raw&&!u.username&&!u.password
    &&!u.port&&!u.search&&!u.hash&&u.pathname==='/'
-   &&/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/.test(u.hostname)
+   &&/^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com|up\.railway\.app)$/.test(u.hostname)
    ?u.origin:null;
  }catch{return null;}
 };

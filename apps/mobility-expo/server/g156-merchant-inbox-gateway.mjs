@@ -31,7 +31,8 @@ export function createG156MerchantInboxGateway({
    !Number.isSafeInteger(user.expiresAtMs)||user.expiresAtMs<=at||
    user.is_anonymous!==false)return fail(401,'G156_UNVERIFIED');
   try{if(await verifySessionNotRevoked({
-   userId:user.id,sessionId:user.sessionId,at})!==true)
+   userId:user.id,sessionId:user.sessionId,
+    tokenIatMs:user.tokenIatMs,at})!==true)
    return fail(401,'G156_REVOKED');
   }catch{return fail(503,'G156_REVOCATION_DOWN');}
   try{if(allowRequest({userId:user.id,operation:'merchant.inbox'})!==true)
@@ -57,7 +58,8 @@ export function createG156MerchantInboxGateway({
      return fail(503,'G156_INVALID_RECEIPT');
   }
   try{if(await verifySessionNotRevoked({
-    userId:user.id,sessionId:user.sessionId,at:now()})!==true)
+    userId:user.id,sessionId:user.sessionId,
+    tokenIatMs:user.tokenIatMs,at:now()})!==true)
     return fail(401,'G156_REVOKED');}
   catch{return fail(503,'G156_REVOCATION_DOWN');}
   return {status:200,body:{mode:'STAGING_DEMO_ONLY',liveCommerceEnabled:false,

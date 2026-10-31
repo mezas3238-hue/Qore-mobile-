@@ -1,0 +1,35 @@
+# G259: PROVE REAL SUPABASE STAGING PUBLIC SIGNUP IS DISABLED.
+# Public project-scoped publishable key only (browser-public, not secret).
+# No service_role, JWTs, logins, Auth users, trips, charges or writes.
+# If policy is open/unavailable this action FAILS BY DESIGN: do not deploy.
+name: QORE G259 actual Supabase STAGING signup gate
+on:
+  push:
+    branches:
+      - agent/qore-g229-railway-supabase-staging-20261030
+    paths:
+      - 'apps/mobility-expo/scripts/g259-supabase-live-signup-audit*.mjs'
+      - '.github/workflows/qore-g259-provider-signup-gate.yml'
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g259-supabase-live-signup-audit*.mjs'
+      - '.github/workflows/qore-g259-provider-signup-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-external-provider-settings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify G259 isolated contracts offline
+        run: node --test apps/mobility-expo/scripts/g259-supabase-live-signup-audit.test.mjs
+      - name: Query REAL STAGING Supabase Auth provider (read-only; no secrets)
+        env:
+          QORE_STAGING_PROJECT_REF: mrjzxftsdxzepzbcuids
+          QORE_STAGING_PUBLISHABLE_KEY: sb_publishable_-ADP4CVJEvFbAePjGYbRYw_IVrN4U-T
+        run: node apps/mobility-expo/scripts/g259-supabase-live-signup-audit.mjs

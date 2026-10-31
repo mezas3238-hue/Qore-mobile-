@@ -188,3 +188,19 @@ test('G187 original G4 loopback routes all recipient events; unconfigured author
   headers:{authorization:'Bearer '+token}});
  assert.equal(res.status,503);
 });
+
+test('G249 independent G247 checks receive JWT original issued-at for both pre/post SQL',async()=>{
+ const observed=[];
+ const f=fixture({verifySessionNotRevoked:async v=>{
+  observed.push(v);
+  return v.tokenIatMs===at-1000;
+ }});
+ const res=await f.gateway(req('GET',path('sender')+'/recipient-confirmation'));
+ assert.equal(res.status,200);
+ assert.equal(observed.length,2);
+ for(const v of observed){
+  assert.equal(v.tokenIatMs,at-1000);
+  assert.equal(v.at,at);
+  assert.notEqual(v.tokenIatMs,v.at);
+ }
+});

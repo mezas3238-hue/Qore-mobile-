@@ -49,7 +49,8 @@ export function createG173MerchantVerifiedMutationGateway({
    !Number.isSafeInteger(actor.tokenIatMs)||actor.tokenIatMs<0||actor.tokenIatMs>at||
    !Number.isSafeInteger(actor.expiresAtMs)||actor.expiresAtMs<=at||
    actor.is_anonymous!==false)return deny(401,'G173_IDP_UNVERIFIED');
-  try{if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,at})!==true)
+  try{if(await verifySessionNotRevoked({userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at})!==true)
     return deny(401,'G173_REVOKED');}
   catch{return deny(503,'G173_IDP_UNAVAILABLE');}
   try{if(allowRequest({userId:actor.id,operation:'merchant.verified.mutation'})!==true)
@@ -66,7 +67,8 @@ export function createG173MerchantVerifiedMutationGateway({
   // original PostgreSQL response is in flight. SQL G42 already held the
   // grant row lock during the real mutation.
   try{if(await verifySessionNotRevoked({
-    userId:actor.id,sessionId:actor.sessionId,at:now()})!==true)
+    userId:actor.id,sessionId:actor.sessionId,
+    tokenIatMs:actor.tokenIatMs,at:now()})!==true)
     return deny(401,'G173_REVOKED');}
   catch{return deny(503,'G173_IDP_UNAVAILABLE');}
   return {status:200,body:{mode:'STAGING_DEMO_ONLY',liveCommerceEnabled:false,

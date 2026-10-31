@@ -86,3 +86,13 @@ test('Cliente serializes check and never treats network exception as success',as
   fetchImpl:async()=>{throw Error('offline');}});
  assert.equal((await broken.check()).code,'STAGING_NETWORK_UNAVAILABLE');
 });
+
+test('G229 Cliente Railway liveness remains process-only and requires independent HTTPS pin',async()=>{
+ const railway='https://qore-mobile-staging.up.railway.app';
+ const good=createF1StagingConnectivityProbe({origin:railway,pinnedOrigin:railway,
+  fetchImpl:async()=>json(processOnly)});
+ assert.equal(good.isConfigured(),true);
+ assert.equal((await good.check()).commercialReady,false);
+ const wrong=createF1StagingConnectivityProbe({origin:railway,pinnedOrigin:ORIGIN});
+ assert.equal(wrong.isConfigured(),false);
+});

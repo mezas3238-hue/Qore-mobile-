@@ -17,7 +17,7 @@ function pinned(url){
   const u=new URL(url);
   return u.protocol==='https:'&&u.origin===url&&u.pathname==='/'&&
    !u.username&&!u.password&&!u.port&&!u.hash&&!u.search&&
-   /^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.onrender\.com$/.test(u.hostname)
+   /^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.(?:onrender\.com|up\.railway\.app)$/.test(u.hostname)
    ?u.origin:null;
  }catch{return null;}
 }

@@ -2418,3 +2418,78 @@ test('G177 denied SQL cannot be presented as an acknowledged Driver arrival',asy
   assert.equal(m.state.trip.status,'accepted');
  });
 });
+
+test('G249 G247 recipient trust is OFF by default and cannot be double-authorized',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g247RecipientAuthApproved:'true'}),/exclusive explicit/);
+ const external={
+  verifyParticipantSession:async()=>null,verifySessionNotRevoked:async()=>false
+ };
+ await assert.rejects(prepare(m,{
+  g247RecipientAuthApproved:true,recipientTrust:external
+ }),/exclusive explicit/);
+ // No positive external session is implied by the ordinary G4 startup.
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const r=await req(base,'/v1/staging/sender/deliveries/'+deliveryId+
+   '/recipient-confirmation');
+  assert.notEqual(r.status,200);
+ });
+});
+test('G249 explicit STAGING opt-in wires provider trust; forged bearer denied before SQL',async()=>{
+ const m=mockSupabase();
+ const validProjectRef='staging1234567890abc'; // 20-character mock STAGING ref
+ const remap=url=>url.replace('https://'+validProjectRef+'.supabase.co',
+  'https://'+ref+'.supabase.co');
+ const runtime=await prepare(m,{
+  projectRef:validProjectRef,g247RecipientAuthApproved:true,
+  request:(url,options)=>m.request(remap(url),options),
+  createClient:(url,key)=>m.createClient(remap(url),key)
+ });
+ await http(runtime,async base=>{
+  const r=await req(base,'/v1/staging/sender/deliveries/'+deliveryId+
+   '/recipient-confirmation');
+  assert.equal(r.status,401);
+  assert.equal(r.body.productionEnabled,false);
+  // G187 performs its independent Supabase getUser lookup first;
+  // malformed bearer must still cause ZERO privileged G42 SQL calls.
+  assert.equal(m.state.authCalls,1);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_g42_session_active').length,0);
+ });
+});
+
+test('G252 merchant inbox is OFF by default and conflicting trust cannot be auto-enabled',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g252MerchantInboxAuthApproved:'true'}),
+  /G252 read-only merchant inbox/);
+ await assert.rejects(prepare(m,{g252MerchantInboxAuthApproved:true,
+  merchantStaffTrust:{verifyMerchantSession:async()=>null,
+   verifySessionNotRevoked:async()=>false}
+ }),/G252 read-only merchant inbox/);
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const response=await req(base,'/v1/staging/merchant/'+vehicle+'/orders/inbox');
+  assert.notEqual(response.status,200);
+ });
+});
+test('G252 true wires signed provider only to private merchant inbox, not merchant mutations',async()=>{
+ const m=mockSupabase(),project='staging1234567890abc';
+ const remap=u=>u.replace('https://'+project+'.supabase.co',
+  'https://'+ref+'.supabase.co');
+ const runtime=await prepare(m,{projectRef:project,
+  g252MerchantInboxAuthApproved:true,
+  request:(u,o)=>m.request(remap(u),o),
+  createClient:(u,k)=>m.createClient(remap(u),k)});
+ await http(runtime,async base=>{
+  const inbox=await req(base,'/v1/staging/merchant/'+vehicle+'/orders/inbox');
+  assert.equal(inbox.status,401);
+  assert.equal(inbox.body.productionEnabled,false);
+  const mutation=await req(base,'/v1/staging/merchant/orders/'+ride+
+   '/transition','rider','POST',{event:'ready',eventKey:requestKey});
+  assert.notEqual(mutation.status,200);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_g156_merchant_inbox_qa'||
+   x.name==='mobility_stage_g173_merchant_transition_qa').length,0);
+ });
+});
