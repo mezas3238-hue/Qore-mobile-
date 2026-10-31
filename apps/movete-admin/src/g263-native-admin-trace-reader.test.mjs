@@ -33,7 +33,7 @@ function configured({fetchImpl=async()=>response(receipt()),
   origin:HOST,fetchImpl,getSession,now:()=>NOW,...extra
  });
 }
-test('G263 is OFF without all STAGING permissions and pinned HTTPS',()=>{
+test('G263 is OFF without all STAGING permissions and pinned HTTPS',async()=>{
  for(const config of [
   {},{enabled:true},{origin:HOST},{enabled:true,ownerApproved:true},
   {origin:'https://qore-mobile-backend-staging-staging.up.railway.app.evil.tld'},
