@@ -64,7 +64,6 @@ test('G247 malformed unsigned/wrong-issuer JWT rejected BEFORE any provider/SQL 
  for(const token of [
   '', 'garbage',jwt().replace(/\.A+$/,'.'),
   jwt({iss:'https://attacker.example.org/auth/v1'}),
-  jwt({sub:'24700000-0000-4247-8247-000000000003'}),
   jwt({role:'service_role'}),jwt({aud:'anon'}),
   jwt({exp:Math.floor(NOW/1000)-1}),
   jwt({session_id:'broken'}),
@@ -85,6 +84,13 @@ test('G247 even syntactically acceptable JWT cannot bypass getUser or revoked SQ
   await assert.rejects(()=>p.create().verifyParticipantSession(jwt()),
    /G247 provider session not verified/);
  }
+});
+test('G247 valid-looking JWT with another subject is rejected after independent provider verification',async()=>{
+ const p=providers();
+ await assert.rejects(()=>p.create().verifyParticipantSession(jwt({
+  sub:'24700000-0000-4247-8247-000000000003'
+ })),/G247 provider session not verified/);
+ assert.deepEqual(p.calls(),{read:0,authCalls:1});
 });
 test('G247 session revocation preflight fails closed and never reports success on missing actor fields',async()=>{
  const p=providers({allow:false});
