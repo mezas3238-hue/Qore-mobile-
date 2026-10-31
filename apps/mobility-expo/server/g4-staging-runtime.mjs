@@ -198,7 +198,7 @@ export async function prepareQoreG4StagingRuntime({
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
- g247RecipientAuthApproved=false,
+ g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -207,6 +207,9 @@ export async function prepareQoreG4StagingRuntime({
  if(typeof g247RecipientAuthApproved!=='boolean'||
     (g247RecipientAuthApproved&&recipientTrust!==null))
   throw Error('G249 requires exclusive explicit G247 STAGING recipient opt-in');
+ if(typeof g252MerchantInboxAuthApproved!=='boolean'||
+    (g252MerchantInboxAuthApproved&&merchantStaffTrust!==null))
+  throw Error('G252 read-only merchant inbox requires exclusive explicit provider opt-in');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -364,6 +367,16 @@ export async function prepareQoreG4StagingRuntime({
  const resolvedRecipientTrust=g247RecipientAuthApproved?
   createQoreG247ProviderSessionTrust({projectRef:ref,auth:auth.auth,
    db:admin,now,allowedByOwner:true,liveEnabled:false}):recipientTrust;
+ // G252 Merchant inbox READ ONLY. Do not promote this authority to G173:
+ // order transitions still require their independently certified SAME-TX
+ // SQL G42 mutation fence. A successful inbox read cannot approve fulfillment.
+ const g252Provider=g252MerchantInboxAuthApproved?
+  createQoreG247ProviderSessionTrust({projectRef:ref,auth:auth.auth,
+   db:admin,now,allowedByOwner:true,liveEnabled:false}):null;
+ const resolvedMerchantInboxTrust=g252Provider?{
+  verifyMerchantSession:token=>g252Provider.verifyParticipantSession(token),
+  verifySessionNotRevoked:scope=>g252Provider.verifySessionNotRevoked(scope)
+ }:merchantStaffTrust;
  const inspect=async()=>{
   const policy=await inspectStageSignup({ref,key:anonKey,request});
   if(policy.certified!==true)
@@ -470,11 +483,11 @@ export async function prepareQoreG4StagingRuntime({
  });
  // G156 private staff inbox: session is confirmed by independent IdP;
  // original order, branch and merchant membership are checked again in G42 SQL.
- const merchantInbox=merchantStaffTrust===null?null:createG156MerchantInboxGateway({
+ const merchantInbox=resolvedMerchantInboxTrust===null?null:createG156MerchantInboxGateway({
   environment:'isolated_staging',qaOnly:true,liveEnabled:false,now,
   verifyAccessToken:async token=>{
    const provider=await verified(token);
-   const a=await merchantStaffTrust.verifyMerchantSession(token);
+   const a=await resolvedMerchantInboxTrust.verifyMerchantSession(token);
    if(!a||typeof a!=='object'||Array.isArray(a)||
     Object.getPrototypeOf(a)!==Object.prototype||Object.keys(a).length!==5||
     !['id','sessionId','tokenIatMs','expiresAtMs','is_anonymous'].every(k=>Object.hasOwn(a,k))||
@@ -484,7 +497,7 @@ export async function prepareQoreG4StagingRuntime({
     throw Error('G156 independently verified merchant staff required');
    return a;
   },
-  verifySessionNotRevoked:x=>merchantStaffTrust.verifySessionNotRevoked(x),
+  verifySessionNotRevoked:x=>resolvedMerchantInboxTrust.verifySessionNotRevoked(x),
   allowRequest:({userId})=>allowRequest({userId}),
   loadInbox:async x=>{
    const {data,error}=await admin.rpc('mobility_stage_g156_merchant_inbox_qa',{
