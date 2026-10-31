@@ -2458,3 +2458,38 @@ test('G249 explicit STAGING opt-in wires provider trust; forged bearer denied be
    x.name==='mobility_stage_g42_session_active').length,0);
  });
 });
+
+test('G252 merchant inbox is OFF by default and conflicting trust cannot be auto-enabled',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g252MerchantInboxAuthApproved:'true'}),
+  /G252 read-only merchant inbox/);
+ await assert.rejects(prepare(m,{g252MerchantInboxAuthApproved:true,
+  merchantStaffTrust:{verifyMerchantSession:async()=>null,
+   verifySessionNotRevoked:async()=>false}
+ }),/G252 read-only merchant inbox/);
+ const runtime=await prepare(m);
+ await http(runtime,async base=>{
+  const response=await req(base,'/v1/staging/merchant/'+vehicle+'/orders/inbox');
+  assert.notEqual(response.status,200);
+ });
+});
+test('G252 true wires signed provider only to private merchant inbox, not merchant mutations',async()=>{
+ const m=mockSupabase(),project='staging1234567890abc';
+ const remap=u=>u.replace('https://'+project+'.supabase.co',
+  'https://'+ref+'.supabase.co');
+ const runtime=await prepare(m,{projectRef:project,
+  g252MerchantInboxAuthApproved:true,
+  request:(u,o)=>m.request(remap(u),o),
+  createClient:(u,k)=>m.createClient(remap(u),k)});
+ await http(runtime,async base=>{
+  const inbox=await req(base,'/v1/staging/merchant/'+vehicle+'/orders/inbox');
+  assert.equal(inbox.status,401);
+  assert.equal(inbox.body.productionEnabled,false);
+  const mutation=await req(base,'/v1/staging/merchant/orders/'+ride+
+   '/transition','rider','POST',{event:'ready',eventKey:requestKey});
+  assert.notEqual(mutation.status,200);
+  assert.equal(m.state.rpcs.filter(x=>
+   x.name==='mobility_stage_g156_merchant_inbox_qa'||
+   x.name==='mobility_stage_g173_merchant_transition_qa').length,0);
+ });
+});
