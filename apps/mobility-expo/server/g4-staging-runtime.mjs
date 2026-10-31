@@ -144,10 +144,13 @@ function validClients(auth,admin){
 }
 async function assertDatabaseG4(admin){
  for(const table of STAGE_TABLES){
-  // Head-only, SELECT id, zero returned rows; strictly no writes or fixtures.
-  const q=admin.from(table).select('id',{head:true,count:'exact'}).limit(0);
+  // G272: persistent PG17 has composite-key tables without an "id"
+  // column (clearance, outboxes, merchant staff/lines). Discover each
+  // table with HEAD SELECT * LIMIT 0: no rows, no count, no writes.
+  // An actual missing/unreadable table still blocks startup.
+  const q=admin.from(table).select('*',{head:true}).limit(0);
   const {error}=await q;
-  if(error)throw Error('G4/G5 ephemeral-only schema not installed in target staging');
+  if(error)throw Error('G4 STAGING required table missing or unreadable: '+table);
  }
 }
 async function singleRole(admin,id){
