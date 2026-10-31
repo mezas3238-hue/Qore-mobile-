@@ -236,6 +236,8 @@ on:
       - 'apps/mobility-expo/docs/backend/staging_only/G16_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G17_*'
       - 'apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G247_*'
+      - 'apps/mobility-expo/docs/backend/staging_only/G248_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G18_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G20_*'
       - 'apps/mobility-expo/docs/backend/staging_only/G26_*'
@@ -774,6 +776,14 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_EXPIRY_RENEWAL_STATUS_POSTGRES_CI_ONLY.sql
       - name: Driver KYC expiry/renewal test with owner-only SQL, suspension and advance warning
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/DRIVER_KYC_EXPIRY_RENEWAL_STATUS_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G247 install private durable Driver document expiry outbox in isolated PG16
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G247_PRIVATE_KYC_EXPIRY_OUTBOX_POSTGRES_CI_ONLY.sql
+      - name: G247 prove exact advance windows, pagination, idempotency, renewal suppression and private grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G247_PRIVATE_KYC_EXPIRY_OUTBOX_ASSERT_POSTGRES_CI_ONLY.sql
+      - name: G248 install durable progress and multi-replica KYC monitor ownership in PG16
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G248_DURABLE_KYC_EXPIRY_BATCH_POSTGRES_CI_ONLY.sql
+      - name: G248 verify restart-safe cursor, duplicate suppression and closed database grants
+        run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G248_DURABLE_KYC_EXPIRY_BATCH_ASSERT_POSTGRES_CI_ONLY.sql
       - name: G71 enforce current KYC at AUTO and delivery offer and acceptance inside SQL
         run: psql -v ON_ERROR_STOP=1 -f apps/mobility-expo/docs/backend/staging_only/G71_KYC_DISPATCH_ATOMIC_FENCE_POSTGRES_CI_ONLY.sql
       - name: G71 verify SQL guard, expiry, renewal, suspension, pending replacement and grants
