@@ -43,7 +43,7 @@ BEGIN
  BEGIN PERFORM public.mobility_stage_g265_publish_auto_fare(owner,session2,iat,key1,
    'ASUNCION_FIXTURE',8000,1000,200,10000,4000);
  EXCEPTION WHEN SQLSTATE 'P2651' THEN rejected:=true; END;
- IF NOT rejected THEN RAISE EXCEPTION 'G265 unauthorized 40% commission'; END IF;
+ IF NOT rejected THEN RAISE EXCEPTION 'G265 unauthorized 40%% commission'; END IF;
 
  fare:=public.mobility_stage_g265_publish_auto_fare(owner,session2,iat,key1,
    'ASUNCION_FIXTURE',8000,1000,200,10000,1800);
