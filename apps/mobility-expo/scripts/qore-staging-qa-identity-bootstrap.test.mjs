@@ -65,7 +65,7 @@ test('eight identities created with confirmed email and audited role transitions
  const m=mock(),r=await run(m);
  assert.equal(r.count,8);
  assert.equal(m.calls.filter(c=>c.method==='POST').length,8);
- assert.equal(m.calls.filter(c=>c.method==='PATCH').length,4);
+ assert.equal(m.calls.filter(c=>c.method==='PATCH').length,5);
  assert.equal(m.saved.size,8);
  assert(m.calls.every(c=>c.path.startsWith('/auth/v1/admin/users')||c.path==='/rest/v1/user_roles'));
 });
