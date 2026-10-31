@@ -111,7 +111,7 @@ test('G254 extra, missing, duplicated, mixed or forged role cannot pass',async()
   roles.map((r,i)=>i===2?{...r,role:'passenger'}:r),
   roles.map((r,i)=>i===4?{...r,user_id:roles[0].user_id}:r),
   roles.map((r,i)=>i===5?{...r,user_id:'99999999-2510-4251-8251-999999999999'}:r),
-  roles.map((r,i)=>i===7?{...r,role:'owner'}:r)
+  roles.map((r,i)=>i===6?{...r,role:'owner'}:r)
  ]){
   const x=simulated({returnedRoles:changed});
   await assert.rejects(x.inspect(),/G254 STAGING independent/);
