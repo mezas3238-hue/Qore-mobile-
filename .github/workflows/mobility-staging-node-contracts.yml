@@ -11,6 +11,8 @@ on:
   pull_request:
     paths:
       - 'apps/mobility-expo/server/**'
+      - 'apps/mobility-expo/supabase/staging_sql/**'
+      - 'apps/mobility-expo/scripts/qore-staging-sql-contract.test.mjs'
       - '.github/workflows/mobility-staging-node-contracts.yml'
 permissions:
   contents: read
