@@ -26,6 +26,9 @@ function assertRailwayEnvironment(env){
  if(![undefined,'true','false'].includes(env.QORE_G260_ADMIN_AAL2_APPROVED))
   throw Error('G260 Admin AAL2 trust opt-in must be explicit boolean');
  const g260AdminAal2Approved=env.QORE_G260_ADMIN_AAL2_APPROVED==='true';
+ if(![undefined,'true','false'].includes(env.QORE_G263_DRIVER_PICKUP_APPROVED))
+  throw Error('G263 Driver pickup opt-in must be explicit boolean');
+ const g263DriverPickupApproved=env.QORE_G263_DRIVER_PICKUP_APPROVED==='true';
  const port=Number(env.PORT);
  if(!Number.isInteger(port)||port<1024||port>65535)
   throw Error('Railway STAGING requires a valid PORT');
@@ -49,10 +52,12 @@ function assertRailwayEnvironment(env){
   adminOrigin,...admission
  });
  return {port,hostname,adminOrigin,admission,
-  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved};
+  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,
+  g263DriverPickupApproved};
 }
 const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,
- g252MerchantInboxAuthApproved,g260AdminAal2Approved}=assertRailwayEnvironment(process.env);
+ g252MerchantInboxAuthApproved,g260AdminAal2Approved,
+ g263DriverPickupApproved}=assertRailwayEnvironment(process.env);
 // Repeat the G256 read-only checks at process start: a missing Railway
 // pre-deploy hook must never bypass STAGING ownership or public-signup fence.
 const g256=await verifyG256RailwayLaunch({env:process.env});
@@ -61,6 +66,7 @@ const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,
+ g263DriverPickupApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
