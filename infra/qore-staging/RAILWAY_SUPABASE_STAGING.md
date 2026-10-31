@@ -141,9 +141,19 @@ No write path is declared certified by this schema-only migration.
 `0` anonymous access grants, `0` direct authenticated write grants,
 `0` commerce generic server write grants, `0` real Auth users,
 `0` sensitive Storage upload policies and `0` operational G3/G4/G5/G6/G7
-transactional RPCs from the inspected key list. All **15 migrations** in
-Supabase history; **37 tables total** including compliance and separate
-backoffice roles; Supabase **Security Advisor 0 notices**.
+transactional RPCs from the inspected key list. **15 migrations created by this PR**, with **37 tables in its original scope**
+including compliance and backoffice roles. During the final verification,
+a separate concurrent migration `qore_private_driver_consent_preflight_20261031`
+created `public.mobility_location_consents` (zero rows, RLS enabled,
+no `anon` or `authenticated` grants). The provider therefore currently
+reports **16 total migration entries and 38 tables**. This separate change was
+not overwritten or adopted as our migration.
+
+Security Advisor's newly observed single **INFO** finding is
+`rls_enabled_no_policy` for that concurrent consent table; absence of
+client grants and RLS means it is closed to anonymous/authenticated clients,
+but the other author should document/verify intended policies before enabling
+its API. Our own G231–G245 tables have no Security Advisor findings.
 
 **Outstanding P0 items for external five-service E2E:**
 
