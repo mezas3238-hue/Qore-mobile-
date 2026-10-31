@@ -1,0 +1,23 @@
+name: QORE Supabase G244 private Driver preflight
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/supabase/staging_sql/g244_driver_eligibility_preflight.sql'
+      - 'apps/mobility-expo/scripts/g244-staging-preflight.test.mjs'
+      - '.github/workflows/qore-g244-supabase-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Driver compliance, consent and no-LIVE SQL contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/mobility-expo/scripts/g244-staging-preflight.test.mjs
