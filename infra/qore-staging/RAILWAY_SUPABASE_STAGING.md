@@ -22,13 +22,43 @@ hosted database.
   Auth, role, session and PostgreSQL checks.
 - G221 five original QA closures remain CI-only, not a deployment permit.
 
-## Railway (intentionally no deployment)
+## Railway — isolated STAGING exists, NOT DEPLOYED (31 Oct 2026)
 
-The linked Railway account currently reports an expired trial; creating the
-new STAGING project is blocked pending an account plan decision. Do **not**
-change the existing `qore-mobile-gateway` production environment.
+Railway is now active. Provider inventory confirms project `qore-mobile-staging`
+(`f0afe535-a398-41bf-b8cc-918dcf108667`), environment `staging`
+(`19682286-3b2f-40ec-8768-65faeefe6cc8`). The original
+`qore-mobile-gateway` project has **not** been touched.
 
-Once the Owner approves an eligible non-enterprise plan:
+**Concurrent configuration warning:** two different empty Railway backend
+services were created in this staging project. Do not deploy or auto-enable
+both:
+
+- `qore-mobile-g4-staging-backend` (`57ff062d-72db-4f40-88f7-facd38b3a3ec`):
+  its pending configuration pins the audited GitHub branch
+  `agent/qore-g229-railway-supabase-staging-20261030` at reviewed
+  `932d3627caff5998cacda932532e81420664f9cc`, root
+  `/apps/mobility-expo`, start command
+  `node server/run-g4-railway-staging.mjs`, and default-closed STAGING
+  variables. A Railway staging domain exists but has **no deployed backend**.
+- `qore-mobile-backend-staging` (`c00a1f8a-4b03-4e39-9264-9aad74d0bb10`):
+  second service concurrently created; its GitHub source is also staged but
+  it is **not** the vetted backend service and has no runtime start command
+  proven. Keep unlaunched and reconcile duplicative resources before deploying.
+
+All settings/source changes are **STAGED ONLY** in Railway patch
+`20f3ba98-3351-4095-b247-ec1f883d8f6e`; there are still **zero
+backend deployments**. Do not call accept-deploy yet. This patch is shared
+with other architects and must be re-inspected immediately before approval.
+
+Remaining P0 before STAGING boot: independently disable/verify Supabase
+Auth public signup; provision and validate 8 Auth QA accounts via PR #55;
+configure private `QORE_STAGING_SERVICE_ROLE_KEY` and a unique private
+`QORE_HISTORY_CURSOR_SIGNING_KEY` inside the **server environment only**;
+review pinned hostname/HTTPS, PORT and health; keep
+`QORE_RAILWAY_STAGING_APPROVED=false` until positive security gates.
+**No automatic deployments, LIVE dispatch, real PSP, or production merge**.
+
+Earlier planning steps, now partially complete:
 
 1. Create a **private**, isolated `qore-mobile-staging` project with its
    first environment named `STAGING`; PR environments OFF.
