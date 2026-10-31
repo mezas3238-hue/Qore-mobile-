@@ -64,11 +64,13 @@ async function request(fetcher,url,{method='GET',key,body,headers={}}={}){
  if(res.status===204)return null;
  return res.json();
 }
-async function ownRole({fetcher,root,secret,id}){
+async function ownRole({fetcher,root,secret,id,allowNone=false}){
  const u=new URL(root+'/rest/v1/user_roles');
  u.searchParams.set('select','user_id,role');u.searchParams.set('user_id','eq.'+id);
  const rows=await request(fetcher,u.toString(),{key:secret});
- if(!Array.isArray(rows)||rows.length!==1||rows[0].user_id!==id)
+ if(!Array.isArray(rows))throw Error('Untrusted Auth role response');
+ if(allowNone&&rows.length===0)return null;
+ if(rows.length!==1||rows[0].user_id!==id)
   throw Error('Auth trigger did not provision unique role');
  return rows[0].role;
 }
@@ -96,23 +98,40 @@ export async function bootstrapQa({ref,environment,liveTripsEnabled,publicKey,se
    throw Error('Auth admin create did not confirm distinct QA identity');
   if(await ownRole({fetcher,root,secret,id:user.id})!=='passenger')
    throw Error('Unexpected trigger role after QA user creation');
-  if(actor.role!=='passenger'){
+  if(actor.slot==='owner_admin'){
+   // G27 Backoffice requires no native user_roles row whatsoever.
+   // Remove only this QA user's trigger-created passenger role. Never
+   // grant Admin/Owner: independently signed G27 approval comes later.
    const url=new URL(root+'/rest/v1/user_roles');
    url.searchParams.set('user_id','eq.'+user.id);
    url.searchParams.set('role','eq.passenger');
-   const updated=await request(fetcher,url.toString(),{
-    method:'PATCH',key:secret,body:{role:actor.role},
-    headers:{Prefer:'return=representation'}
+   const removed=await request(fetcher,url.toString(),{
+    method:'DELETE',key:secret,headers:{Prefer:'return=representation'}
    });
-   if(!Array.isArray(updated)||updated.length!==1||
-      updated[0].user_id!==user.id||updated[0].role!==actor.role)
-    throw Error('Role transition not atomically confirmed');
+   if(!Array.isArray(removed)||removed.length!==1||
+      removed[0].user_id!==user.id||removed[0].role!=='passenger')
+    throw Error('G263 Admin QA native role separation not confirmed');
+   if(await ownRole({fetcher,root,secret,id:user.id,allowNone:true})!==null)
+    throw Error('G263 Admin QA native role still present');
+  }else{
+   if(actor.role!=='passenger'){
+    const url=new URL(root+'/rest/v1/user_roles');
+    url.searchParams.set('user_id','eq.'+user.id);
+    url.searchParams.set('role','eq.passenger');
+    const updated=await request(fetcher,url.toString(),{
+     method:'PATCH',key:secret,body:{role:actor.role},
+     headers:{Prefer:'return=representation'}
+    });
+    if(!Array.isArray(updated)||updated.length!==1||
+       updated[0].user_id!==user.id||updated[0].role!==actor.role)
+     throw Error('Role transition not atomically confirmed');
+   }
+   if(await ownRole({fetcher,root,secret,id:user.id})!==actor.role)
+    throw Error('Final actor role mismatch');
   }
-  if(await ownRole({fetcher,root,secret,id:user.id})!==actor.role)
-   throw Error('Final actor role mismatch');
   created++;
  }
- return {mode:'STAGING_ONLY',count:created,roles:QA_SLOTS.map(x=>x[1]),commercialEnabled:false};
+ return {mode:'STAGING_ONLY',count:created,roles:QA_SLOTS.map(([slot,role])=>slot==='owner_admin'?'PENDING_BACKOFFICE_APPROVAL':role),adminBackofficeAuthorized:false,commercialEnabled:false};
 }
 
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
