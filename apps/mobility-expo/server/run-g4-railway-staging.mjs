@@ -15,6 +15,10 @@ function assertRailwayEnvironment(env){
     env.QORE_RAILWAY_NO_COMMERCIAL_TRIPS!=='true'||
     !/^(staging)$/i.test(env.RAILWAY_ENVIRONMENT_NAME??''))
   throw Error('Railway STAGING requires non-commercial Owner authorization');
+ // Never infer recipient session deployment from a plain STAGING flag.
+ if(![undefined,'true','false'].includes(env.QORE_G247_RECIPIENT_AUTH_APPROVED))
+  throw Error('G249 opt-in must be an explicit boolean string');
+ const g247RecipientAuthApproved=env.QORE_G247_RECIPIENT_AUTH_APPROVED==='true';
  const port=Number(env.PORT);
  if(!Number.isInteger(port)||port<1024||port>65535)
   throw Error('Railway STAGING requires a valid PORT');
@@ -37,12 +41,13 @@ function assertRailwayEnvironment(env){
   loopbackOrigin:'http://127.0.0.1:4242',expectedHost:hostname,
   adminOrigin,...admission
  });
- return {port,hostname,adminOrigin,admission};
+ return {port,hostname,adminOrigin,admission,g247RecipientAuthApproved};
 }
-const {port,hostname,adminOrigin,admission}=assertRailwayEnvironment(process.env);
+const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved}=assertRailwayEnvironment(process.env);
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
+ g247RecipientAuthApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
