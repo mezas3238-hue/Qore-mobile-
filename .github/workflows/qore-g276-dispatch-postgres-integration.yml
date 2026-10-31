@@ -1,0 +1,57 @@
+name: QORE G276 G262 to G269 disposable PostgreSQL dispatch integration
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/ci/g276_*.sql'
+      - 'infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql'
+      - 'infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql'
+      - '.github/workflows/qore-g276-dispatch-postgres-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-pg-dispatch:
+    name: G276 PostgreSQL ${{ matrix.pg }} isolated transaction path
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_DB: qore_g276_disposable
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g276_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: qore_g276_disposable
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGOPTIONS: '-c statement_timeout=20000'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install disposable G262 schema and genuine G262 migration
+        run: |
+          psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g262_minimal_schema.sql
+          psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g262_private_auto_route_quote_book_pg17.sql
+      - name: Install ONLY isolated G276 fixture and genuine G269 migration
+        run: |
+          psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g276_dispatch_disposable_fixture.sql
+          psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql
+      - name: Verify G269 ACL and negative safeguards inside disposable database
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql
+      - name: Verify G262 booking queues G269 and creates one eligible driver offer and outbox
+        run: psql -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g276_dispatch_positive_and_negative_asserts.sql
+      - name: Confirm isolation boundary
+        run: echo 'PG16/17 disposable only; no external identity, KYC, routing, Supabase migrations, Railway deploy or commercial trips'
