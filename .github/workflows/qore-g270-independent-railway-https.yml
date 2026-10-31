@@ -1,0 +1,24 @@
+name: QORE G270 independent Railway STAGING HTTPS read-only boundary
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g270-independent-railway-https.yml'
+      - 'apps/mobility-expo/scripts/g258-railway-https-boundary-smoke.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-staging-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe exact pinned Railway HTTPS liveness 200 and unauthenticated Driver inbox 401
+        run: node apps/mobility-expo/scripts/g258-railway-https-boundary-smoke.mjs
+      - name: State scope of evidence
+        run: echo 'G270 HTTP-only; 0 external completed journeys; no signup, JWT, DB writes or LIVE'

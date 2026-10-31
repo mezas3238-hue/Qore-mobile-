@@ -1,0 +1,31 @@
+name: QORE G269 private AUTO dispatch and trusted pickup evidence
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g269-*.mjs'
+      - 'infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql'
+      - 'infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql'
+      - '.github/workflows/qore-g269-private-auto-dispatch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test independent road routing evidence and identity fences
+        run: node --test apps/mobility-expo/server/g269-verified-pickup-proof-repository.test.mjs
+      - name: G269 route adapter and migration static safety boundaries
+        run: |
+          node --check apps/mobility-expo/server/g269-verified-pickup-proof-repository.mjs
+          test -s infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql
+          test -s infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql
+      - name: Never execute CI-only synthetic SQL against remote databases
+        run: echo 'G269 tests offline only; not migrated to STAGING, no LIVE, no PSP'
