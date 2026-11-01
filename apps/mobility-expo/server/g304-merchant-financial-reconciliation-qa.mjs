@@ -1,5 +1,6 @@
 /**
  * G304 revised by Owner: ALL purchases of merchant goods PREPAID DIGITAL.
+ * Courier is assigned after the checkout; do not require courier ID for payment.
  * No cash checkout or cash-on-delivery, regardless of Driver or merchant.
  * QA-only, never an external PSP call or production financial transfer.
  */
@@ -35,14 +36,14 @@ export function validCommerceEntries(entries){
  return Number.isSafeInteger(debit)&&Number.isSafeInteger(credit)&&debit>0&&debit===credit;
 }
 export function verifyCommerceCheckoutQA(quote){
- if(!exact(quote,['orderId','customerId','merchantId','courierId',
+ if(!exact(quote,['orderId','customerId','merchantId',
   'catalogRevision','fareVersion','merchandisePyg','deliveryPyg','totalPyg',
   'merchantCommissionBps','deliveryCommissionBps',
   'merchantCommissionPyg','deliveryCommissionPyg','merchantNetPyg',
   'courierNetPyg','platformCommissionPyg','serverPersisted']))return false;
- if(![quote.orderId,quote.customerId,quote.merchantId,quote.courierId]
+ if(![quote.orderId,quote.customerId,quote.merchantId]
   .every(v=>UUID.test(v??''))||
-  new Set([quote.customerId,quote.merchantId,quote.courierId]).size!==3||
+  quote.customerId===quote.merchantId||
   !REF.test(quote.catalogRevision??'')||!REF.test(quote.fareVersion??'')||
   quote.serverPersisted!==true||
   !integer(quote.merchandisePyg)||quote.merchandisePyg===0||
@@ -111,9 +112,11 @@ export function prepareCommercePrepaidFulfillmentGateQA(input){
   payoutAllowed:false,processorFundsSettled:payment.status==='SETTLED'});
 }
 function verifiedDelivery(quote,delivery){
- return exact(delivery,['orderId','status','merchantPrepared',
+ return exact(delivery,['orderId','courierId','status','merchantPrepared',
   'courierCompleted','buyerAcknowledged','verifiedByServer'])&&
-  delivery.orderId===quote.orderId&&delivery.status==='DELIVERED'&&
+  delivery.orderId===quote.orderId&&UUID.test(delivery.courierId??'')&&
+  delivery.courierId!==quote.customerId&&delivery.courierId!==quote.merchantId&&
+  delivery.status==='DELIVERED'&&
   delivery.merchantPrepared===true&&delivery.courierCompleted===true&&
   delivery.buyerAcknowledged===true&&delivery.verifiedByServer===true;
 }
@@ -144,7 +147,7 @@ export function prepareCommercePrepaidSplitQA(input){
  if(!validCommerceEntries(entries))return fail('UNBALANCED_PREPAID_SPLIT');
  return Object.freeze({ok:true,mode:'PREPAID_RECONCILIATION_QA',
   live:false,orderId:quote.orderId,
-  merchantId:quote.merchantId,courierId:quote.courierId,
+  merchantId:quote.merchantId,courierId:delivery.courierId,
   idempotencyKey:'MERCHANT_SETTLEMENT:'+quote.orderId,
   paidByCustomerPyg:quote.totalPyg,
   merchantPayablePyg:quote.merchantNetPyg,
