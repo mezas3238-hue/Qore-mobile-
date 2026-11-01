@@ -87,10 +87,15 @@ export async function launchDriverSosPhone():Promise<'PHONE_OPENED'|'FAILED'>{
    }
    // For ordinary numbers ACTION_CALL starts a direct outgoing call. For 911,
    // Android requires ACTION_DIAL and user confirmation in the system dialer.
-   // Launch activity on direct user tap; OS still controls in-call UI.
-   void IntentLauncher.startActivityAsync(plan.intentAction,{data:plan.uri})
-    .catch(async()=>{try{await Linking.openURL(plan.uri);}catch{/* no false ACK */}});
-   return 'PHONE_OPENED'; // Intent attempted; not proof that anyone answered.
+   // Android controls the telephone UI; ACTION_CALL does not indicate
+   // whether the recipient answered, only that handoff was attempted.
+   try{
+    await IntentLauncher.startActivityAsync(plan.intentAction,{data:plan.uri});
+   }catch{
+    // If direct calling is blocked by device policy, open the dialer instead.
+    await IntentLauncher.startActivityAsync('android.intent.action.DIAL',{data:plan.uri});
+   }
+   return 'PHONE_OPENED'; // No claim that a call connected or was answered.
   }
   await Linking.openURL(plan.uri); // iOS fallback to phone UI
   return 'PHONE_OPENED';
