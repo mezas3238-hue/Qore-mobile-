@@ -6,6 +6,8 @@ on:
       - 'infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql'
       - 'infra/qore-staging/ci/g269_pg17_ephemeral_negative_asserts.sql'
       - 'infra/qore-staging/ci/g275_pg17_g113_CI_ONLY.sql'
+      - 'infra/qore-staging/ci/g277_full_dispatch_fixture_CI_ONLY.sql'
+      - 'infra/qore-staging/ci/g277_full_dispatch_assert_CI_ONLY.sql'
       - '.github/workflows/qore-g269-private-auto-dispatch.yml'
   workflow_dispatch:
 permissions:
@@ -79,3 +81,41 @@ jobs:
           test "$total" -eq 1
           test "$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT attempts FROM qore_stage_internal.g275_mock_calls WHERE booking_key='00000000-0000-4000-8000-000000000004'::uuid")" -eq 1
           echo 'G275 PASS: two independent database sessions, one due booking, exactly one dispatch attempt'
+
+  pg17-g277-integrated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: disposable-only
+          POSTGRES_USER: postgres
+          POSTGRES_DB: qore_g277_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g277_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: disposable-only
+      PGDATABASE: qore_g277_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Bootstrap G262 disposable schema, never external STAGING
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g262_minimal_schema.sql
+      - name: Apply exact G262 SQL to disposable PostgreSQL 17
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g262_private_auto_route_quote_book_pg17.sql
+      - name: Add G277 simulated legal/road prerequisites ONLY in CI
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g277_full_dispatch_fixture_CI_ONLY.sql
+      - name: Apply exact G269 and G113 SQL to disposable PostgreSQL 17
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g269_private_scoped_auto_dispatch_pg17.sql
+      - name: Verify G262 booking, G269 trigger/proof/offer, G113 expiry and ACL
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g277_full_dispatch_assert_CI_ONLY.sql
+      - name: Protect external identities, LIVE and Railway
+        run: echo 'G277 disposable PostgreSQL only; no Supabase changes, no authentic KYC, no LIVE or PSP'
