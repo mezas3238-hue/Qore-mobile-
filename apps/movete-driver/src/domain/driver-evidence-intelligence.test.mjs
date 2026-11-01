@@ -33,7 +33,7 @@ test('Uncertain OCR and missing evidence must fail closed',()=>{
   {registration:read('ABCD123')},
   {registration:read('ABCD123',0.85),vehicle:read('ABCD123')},
   {registration:read('ABCD123'),vehicle:read('ABCD123',NaN)},
-  {registration:read('ABCD123'),vehicle:read('O0O0O0')},
+  {registration:read('ABCD123'),vehicle:read('000000')},
   {registration:read('ABCD123'),vehicle:read('ABCD123'),ownerApproval:true},
   null
  ])assert.equal(compareDriverPlateEvidence(x).state,'uncertain');
@@ -41,7 +41,7 @@ test('Uncertain OCR and missing evidence must fail closed',()=>{
 function photo(kind='sharp'){
  const width=64,height=64,luma=new Uint8Array(width*height);
  for(let y=0;y<height;y++)for(let x=0;x<width;x++)
-  luma[y*width+x]=kind==='sharp'?((x+y)%2?175:85):
+  luma[y*width+x]=kind==='sharp'?(70+((x*73+y*131+x*y*17)%120)):
    kind==='dark'?15:120;
  return {width,height,luma,motionRms:0.015,
   subjectBox:{x:0.1,y:0.1,width:0.8,height:0.8,confidence:0.99}};
