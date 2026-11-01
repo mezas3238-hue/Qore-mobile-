@@ -13,7 +13,8 @@ const bearer=headers=>{
  return /^Bearer ([A-Za-z0-9._~-]{20,7900})$/.exec(value)?.[1]??null;
 };
 export function createG282PendingVehicleGateway({
- projectRef,verifyDriverSession,authorizeDriver,allowRequest,submitPending
+ projectRef,verifyDriverSession,authorizeDriver,allowRequest,submitPending,
+ trustedMunicipalityCode=null
 }={}){
  assertStagingRef(projectRef);
  if(![verifyDriverSession,authorizeDriver,allowRequest,submitPending]
@@ -22,7 +23,18 @@ export function createG282PendingVehicleGateway({
  return async({method,path,headers,body}={})=>{
   if(method!=='POST'||path!==PATH)
    return reply(404,{error:'Not found'});
-  const validated=parseDraft(body);
+  // Client no longer supplies an unverified municipal code. The staging
+  // operator must explicitly configure its verified service jurisdiction.
+  // Never infer it from plate, device GPS, client claims, or a fallback.
+  const noMunicipality=body!==null&&typeof body==='object'&&
+   !Array.isArray(body)&&Object.getPrototypeOf(body)===Object.prototype&&
+   Object.keys(body).length===8&&!Object.hasOwn(body,'municipalityCode');
+  const validTrusted=typeof trustedMunicipalityCode==='string'&&
+   /^[A-Z0-9_-]{2,60}$/.test(trustedMunicipalityCode);
+  const validated=noMunicipality&&validTrusted?
+   parseDraft({...body,municipalityCode:trustedMunicipalityCode}):null;
+  if(!noMunicipality)return reply(400,{error:'Invalid vehicle pending draft'});
+  if(!validTrusted)return reply(503,{error:'Verified staging municipality not configured'});
   if(!validated)return reply(400,{error:'Invalid vehicle pending draft'});
   const token=bearer(headers);
   if(!token)return reply(401,{error:'Verified Driver session required'});
