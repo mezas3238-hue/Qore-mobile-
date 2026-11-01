@@ -98,6 +98,25 @@ BEGIN
 END $approved$;
 RESET ROLE;
 
+-- A later rejection on the SAME document revokes an older approval,
+-- even if an application forgot to update a cached document status.
+INSERT INTO public.mobility_stage_driver_document_reviews
+ (document_id,reviewer_id,status,reviewed_at)
+ VALUES ('00000000-0000-4000-8000-000000000202',
+ '00000000-0000-4000-8000-000000000104',
+ 'rejected',now()-interval '1 second');
+SET ROLE service_role;
+DO $later_rejected$
+BEGIN
+ IF public.mobility_stage_driver_current_license_approved(
+ '00000000-0000-4000-8000-000000000101') IS DISTINCT FROM false
+ THEN RAISE EXCEPTION 'G280 later rejection did not cancel earlier license approval'; END IF;
+END $later_rejected$;
+RESET ROLE;
+DELETE FROM public.mobility_stage_driver_document_reviews
+ WHERE document_id='00000000-0000-4000-8000-000000000202'
+   AND status='rejected';
+
 UPDATE public.mobility_stage_backoffice_roles
  SET status='suspended' WHERE user_id='00000000-0000-4000-8000-000000000104';
 SET ROLE service_role;
