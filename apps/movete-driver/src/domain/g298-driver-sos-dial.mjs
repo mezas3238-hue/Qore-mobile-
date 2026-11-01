@@ -34,3 +34,25 @@ export function planDriverSosDial(destination,trustedNumber){
   mayOverlayMap:true
  });
 }
+
+/** G299: decode encrypted local setting; migration from G298 is always OFF.
+ * Only the explicit boolean true enables the icon, never an absent/malformed flag.
+ */
+export function normalizeStoredSosPreference(row){
+ const off=()=>Object.freeze({
+  enabled:false,destination:'EMERGENCY_911',trustedNumber:''
+ });
+ if(row===null||typeof row!=='object'||Array.isArray(row))
+  return off();
+ const enabled=row.enabled===true;
+ if(row.destination==='TRUSTED_CONTACT'){
+  const number=normalizeTrustedNumber(row.trustedNumber);
+  return Object.freeze({
+   enabled:enabled&&number!==null,
+   destination:'TRUSTED_CONTACT',trustedNumber:number??''
+  });
+ }
+ if(row.destination==='EMERGENCY_911')
+  return Object.freeze({enabled,destination:'EMERGENCY_911',trustedNumber:''});
+ return off();
+}
