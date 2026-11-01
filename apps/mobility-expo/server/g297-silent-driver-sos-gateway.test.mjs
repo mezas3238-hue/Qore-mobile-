@@ -19,7 +19,7 @@ const setup=(patch={})=>{
  const deps={
   projectRef:PROJECT,environment:'isolated_staging',liveEnabled:false,qaApproved:true,
   verifyDriverSession:async()=>({
-   userId:DRIVER,sessionId:SESSION,role:'driver',providerVerified:true,sessionActive:true
+   userId:DRIVER,sessionId:SESSION,tokenIatMs:1760000000000,role:'driver',providerVerified:true,sessionActive:true
   }),
   lookupAssignedTrip:async request=>{
    calls.trip.push(request);
@@ -58,7 +58,7 @@ test('G297 valid driver SOS atomically stores verified receipt but returns no PI
  assert.deepEqual(calls.trip,[{driverId:DRIVER,sessionId:SESSION}]);
  assert.deepEqual(calls.identity,[{passengerId:PASSENGER,tripId:TRIP}]);
  assert.deepEqual(calls.store,[{
-  actorId:DRIVER,sessionId:SESSION,requestKey:REQUEST,tripId:TRIP,
+  actorId:DRIVER,sessionId:SESSION,tokenIatMs:1760000000000,requestKey:REQUEST,tripId:TRIP,
   passengerId:PASSENGER,vehicleKind:'AUTO',verificationStatus:'VERIFIED',
   identityReceiptId:RECEIPT
  }]);
@@ -88,7 +88,8 @@ test('G297 rejects forged/missing bearer and non-driver or unverified session',a
   {role:'passenger'},
   {providerVerified:false},
   {sessionActive:false},
-  {sessionId:null}
+  {sessionId:null},
+  {tokenIatMs:null}
  ]){
   const {gateway:forged}=setup({
    verifyDriverSession:async()=>({
@@ -99,7 +100,7 @@ test('G297 rejects forged/missing bearer and non-driver or unverified session',a
   assert.equal((await forged(input())).status,403);
  }
  const {gateway:otherUser}=setup({verifyDriverSession:async()=>({
-  userId:PASSENGER,sessionId:SESSION,role:'driver',providerVerified:true,sessionActive:true
+  userId:PASSENGER,sessionId:SESSION,tokenIatMs:1760000000000,role:'driver',providerVerified:true,sessionActive:true
  })});
  // A valid but different Driver cannot own the requested active ride.
  assert.equal((await otherUser(input())).status,409);
