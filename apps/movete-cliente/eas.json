@@ -4,6 +4,15 @@
     "appVersionSource": "local"
   },
   "build": {
+    "qa-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false"
+      }
+    },
     "store-review": {
       "distribution": "store",
       "android": {
