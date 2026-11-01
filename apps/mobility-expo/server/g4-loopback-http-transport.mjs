@@ -70,6 +70,7 @@ const driverLicenseReadinessRoute=/^\/v1\/staging\/driver\/license-readiness$/;
 const driverKycValidityRoute=/^\/v1\/staging\/driver\/kyc\/validity$/;
 const driverTripStatusRoute=/^\/v1\/staging\/driver\/trips\/[0-9a-f-]{36}\/status$/i;
 const driverEnrollmentRoute=/^\/v1\/staging\/driver\/enrollment$/;
+const g282VehicleDraftRoute=/^\/v1\/staging\/vehicle-applications$/;
 const driverDocumentReadRoute=/^\/v1\/staging\/driver\/documents$/;
 const driverDocumentObserveRoute=/^\/v1\/staging\/driver\/documents\/observe$/;
 const adminDocumentReviewRoute=/^\/v1\/staging\/admin\/driver-documents\/review$/;
@@ -106,6 +107,7 @@ export function createQoreRadarLoopbackTransport({
  f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,ownerCommissionHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
  driverLicenseReadinessHandler,driverKycValidityHandler,driverTripStatusHandler,driverCurrentTripHandler,
+ g282VehicleDraftHandler,
 }){
  if(typeof riderHandler!=='function'||
    (riderHistoryHandler!==undefined&&typeof riderHistoryHandler!=='function')||
@@ -139,6 +141,7 @@ export function createQoreRadarLoopbackTransport({
    (driverInboxHandler!==undefined&&typeof driverInboxHandler!=='function')||
    (driverDocumentHandler!==undefined&&typeof driverDocumentHandler!=='function')||
    (driverEnrollmentHandler!==undefined&&typeof driverEnrollmentHandler!=='function')||
+   (g282VehicleDraftHandler!==undefined&&typeof g282VehicleDraftHandler!=='function')||
    (driverLicenseReadinessHandler!==undefined&&typeof driverLicenseReadinessHandler!=='function')||
    (driverKycValidityHandler!==undefined&&typeof driverKycValidityHandler!=='function')||
    (driverTripStatusHandler!==undefined&&typeof driverTripStatusHandler!=='function')||
@@ -217,6 +220,7 @@ export function createQoreRadarLoopbackTransport({
   const driverLicenseReadinessGet=req.method==='GET'&&driverLicenseReadinessRoute.test(path);
   const driverKycValidityGet=req.method==='GET'&&driverKycValidityRoute.test(path);
   const driverEnrollmentPost=req.method==='POST'&&driverEnrollmentRoute.test(path);
+  const g282VehicleDraftPost=req.method==='POST'&&g282VehicleDraftRoute.test(path);
   const driverDocumentGet=req.method==='GET'&&driverDocumentReadRoute.test(path);
   const driverDocumentPost=req.method==='POST'&&
    (driverDocumentObserveRoute.test(path)||adminDocumentReviewRoute.test(path));
@@ -231,7 +235,7 @@ export function createQoreRadarLoopbackTransport({
     !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!recipientConfirmationGet&&!recipientConfirmationPost&&!pickupPreferenceGet&&!pickupPreferencePut&&!lostItemsGet&&!lostItemsPost&&!motoLostItemsGet&&!motoLostItemsPost&&!financeGet&&!financePost&&
     !safetyGet&&!safetyPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
-    !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&
+    !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&!g282VehicleDraftPost&&
     !driverLicenseReadinessGet&&!driverKycValidityGet&&!driverTripStatusGet&&
     !driverCurrentTripGet){
    send(res,404,{error:'Not found'});return;
@@ -249,7 +253,7 @@ export function createQoreRadarLoopbackTransport({
   }
   let body;
   if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||
-    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost||motoLostItemsPost){
+    merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||g282VehicleDraftPost||ownerCommissionPost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost||motoLostItemsPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
    }
@@ -303,6 +307,7 @@ export function createQoreRadarLoopbackTransport({
     driverLicenseReadinessGet?
      (driverLicenseReadinessHandler??(()=>({status:503,body:{error:'Driver KYC readiness not configured'}}))):
     driverEnrollmentPost?(driverEnrollmentHandler??(()=>({status:503,body:{error:'Driver enrollment not configured'}}))):
+    g282VehicleDraftPost?(g282VehicleDraftHandler??(()=>({status:503,body:{error:'G282 private vehicle intake not authorized'}}))):
     (driverDocumentGet||driverDocumentPost)?
      (driverDocumentHandler??(()=>({status:503,body:{error:'Private Driver documents not configured'}}))):
     driverInboxGet?(driverInboxHandler??(()=>({status:503,body:{error:'Driver inbox not configured'}}))):
