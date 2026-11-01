@@ -1,0 +1,40 @@
+name: QORE G294 external Railway STAGING privacy smoke (read-only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g294-staging-https-privacy-smoke.yml'
+      - 'apps/mobility-expo/server/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Validate HTTPS process-only state and deny commercial mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://qore-mobile-backend-staging-staging.up.railway.app'
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 20 --output "$body" --write-out '%{http_code}' --proto '=https' --tlsv1.2 "$base/_qore/liveness")"
+          test "$code" = '200' || { echo "Liveness expected 200, got $code"; exit 1; }
+          node -e '
+            const p=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));
+            if(p.state!=="PROCESS_UP_ONLY" || p.commercialRidesEnabled!==false)process.exit(1);
+          ' "$body"
+          echo 'PASS: G292/G293 staging liveness PROCESS_UP_ONLY, commercialRidesEnabled=false'
+      - name: Assert private Passenger and Driver reads deny anonymous callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://qore-mobile-backend-staging-staging.up.railway.app'
+          for path in '/v1/staging/rider/history' '/v1/staging/driver/documents' '/v1/staging/driver/license-readiness'; do
+            status="$(curl --silent --show-error --max-time 20 --proto '=https' --tlsv1.2 --output /dev/null --write-out '%{http_code}' "$base$path")"
+            test "$status" = '401' || { echo "Privacy boundary $path: expected 401, got $status"; exit 1; }
+            echo "PASS: private GET path rejects anonymous with 401"
+          done
+      - name: Record explicit evidence limit
+        run: echo 'Only external anonymous/readonly HTTPS gates. No QA account login, no personal data, no price publication, no writes, no E2E journey certification.'

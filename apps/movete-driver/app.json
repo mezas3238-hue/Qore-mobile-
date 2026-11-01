@@ -28,6 +28,13 @@
           "cameraPermission": "Movete Fácil usa la cámara para capturar documentos y verificar tu rostro con consentimiento.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Movete Fácil Driver usa la cámara para capturas voluntarias de documentos en STAGING.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "extra": {
