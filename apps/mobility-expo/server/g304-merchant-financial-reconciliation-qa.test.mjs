@@ -14,7 +14,7 @@ const ids={
  courier:'44444444-4444-4444-8444-444444444444'
 };
 const quote=()=>({
- orderId:ids.order,customerId:ids.buyer,merchantId:ids.merchant,courierId:ids.courier,
+ orderId:ids.order,customerId:ids.buyer,merchantId:ids.merchant,
  catalogRevision:'CATALOG_VERSION_3',fareVersion:'DELIVERY_FARE_VERSION_3',
  merchandisePyg:100000,deliveryPyg:15000,totalPyg:115000,
  merchantCommissionBps:1000,deliveryCommissionBps:2000,
@@ -34,7 +34,7 @@ const gate=()=>({
  payment:payment(),
  policy:{digitalOnly:true,approvedByOwner:true,ruleVersion:'OWNER_POLICY_V3'}
 });
-const delivery=()=>({orderId:ids.order,status:'DELIVERED',
+const delivery=()=>({orderId:ids.order,courierId:ids.courier,status:'DELIVERED',
  merchantPrepared:true,courierCompleted:true,
  buyerAcknowledged:true,verifiedByServer:true});
 const split=()=>({quote:quote(),delivery:delivery(),dispute:false,
@@ -114,6 +114,12 @@ test('Frozen catalogue and fares cannot be changed by client or Driver',()=>{
  }
  assert.equal(verifyCommerceCheckoutQA(quote()),true);
 });
+test('Checkout works before courier assignment; only later delivery binds verified Courier',()=>{
+ const q=quote();assert.equal(Object.hasOwn(q,'courierId'),false);
+ assert.equal(dispatch(gate()).ok,true);
+ const x=split();x.delivery.courierId=ids.buyer;
+ assert.equal(settle(x).code,'ORDER_NOT_VERIFIED_DELIVERED');
+});
 test('100k goods + 15k delivery -> Merchant90 Courier12 QORE13',()=>{
  const x=settle(split());
  assert.equal(x.ok,true);assert.equal(x.paidByCustomerPyg,115000);
@@ -136,6 +142,7 @@ test('Prepaid payout waits for confirmed delivery and no disputes',()=>{
   x=>x.delivery.status='IN_TRANSIT',
   x=>x.delivery.merchantPrepared=false,
   x=>x.delivery.courierCompleted=false,
+  x=>x.delivery.courierId=ids.merchant,
   x=>x.delivery.buyerAcknowledged=false,
   x=>x.delivery.verifiedByServer=false,
   x=>x.dispute=true
