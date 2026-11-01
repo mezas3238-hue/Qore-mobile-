@@ -35,7 +35,10 @@ export function createG306CommercePrepayVerifier({
  if(environment!=='isolated_staging'||qaOnly!==true||liveEnabled!==false||
   [getOriginalOrder,getTrustedProviderReceipt,now].some(x=>typeof x!=='function'))
   throw Error('G306 requires isolated server-only order + PSP verification adapters');
- return async ({orderId,paymentReference}={})=>{
+ return async input=>{
+  if(!exact(input,['orderId','paymentReference']))
+   return rejected('INVALID_PREPAYMENT_REFERENCE');
+  const {orderId,paymentReference}=input;
   if(!UUID.test(orderId??'')||!REF.test(paymentReference??''))
    return rejected('INVALID_PREPAYMENT_REFERENCE');
   const at=now();
