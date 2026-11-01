@@ -1,0 +1,50 @@
+name: QORE G285 deployed G284 HTTPS safety smoke (read-only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g285-postdeploy-railway-staging-http.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deployed-railway-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require HTTPS STAGING process-only liveness and zero commercial enablement
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://qore-mobile-backend-staging-staging.up.railway.app'
+          output=$(mktemp)
+          trap 'rm -f "$output"' EXIT
+          code=$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 20 --output "$output" --write-out '%{http_code}' --proto '=https' --tlsv1.2 "$base/_qore/liveness")
+          test "$code" = 200 || { echo "G285 liveness HTTP $code"; exit 1; }
+          node -e '
+            const fs=require("node:fs");
+            const payload=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(payload.state!=="PROCESS_UP_ONLY"||
+               payload.commercialRidesEnabled!==false)
+              throw Error("G285 Railway did not attest STAGING process-only");
+          ' "$output"
+          echo 'G285 process liveness 200: PROCESS_UP_ONLY, commercialRidesEnabled=false'
+      - name: Confirm Passenger private history rejects a request with no credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://qore-mobile-backend-staging-staging.up.railway.app'
+          code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 --proto '=https' --tlsv1.2 "$base/v1/staging/rider/history")
+          test "$code" = 401 || { echo "G285 Passenger private history HTTP $code (expected 401)"; exit 1; }
+          echo 'G285 Passenger history rejects anonymous GET (401)'
+      - name: Confirm Driver document and license reads reject anonymous requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://qore-mobile-backend-staging-staging.up.railway.app'
+          for path in '/v1/staging/driver/documents' '/v1/staging/driver/license-readiness'; do
+            code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 --proto '=https' --tlsv1.2 "$base$path")
+            test "$code" = 401 || { echo "G285 Driver private GET $path HTTP $code (expected 401)"; exit 1; }
+            echo "G285 Driver private GET $path anonymous HTTP 401"
+          done
+      - name: State the proof boundary
+        run: echo 'Read-only external HTTPS smoke. Does not certify signed-in QA, KYC, real road routing, commercial dispatch or five external E2E.'
