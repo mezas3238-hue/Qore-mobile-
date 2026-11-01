@@ -73,3 +73,29 @@ export function startG282RailwayRetryWorker({worker,enabled}={}){
   }
  });
 }
+
+/**
+ * Read actual Owner fare and Driver legal preflight from the privileged
+ * read-only G283 PostgreSQL RPC. An environment variable is NEVER proof.
+ * Do not expose the response to any client endpoint or public logs.
+ */
+export async function assertG283VerifiedDatabaseReadiness(rpc){
+ if(typeof rpc!=='function')throw fail();
+ let receipt;
+ try{
+  const {data,error}=await rpc('mobility_stage_g283_auto_retry_readiness_qa',{});
+  if(error||!data||typeof data!=='object'||Array.isArray(data))throw fail();
+  receipt=data;
+ }catch{throw fail();}
+ const keys=['mode','commercialEnabled','ownerAutoFareVerified',
+  'eligibleAutoDriverVerified','databaseReady'];
+ if(Object.keys(receipt).length!==keys.length||
+  !keys.every(k=>Object.hasOwn(receipt,k))||
+  receipt.mode!=='STAGING_DEMO_ONLY'||
+  receipt.commercialEnabled!==false||
+  receipt.ownerAutoFareVerified!==true||
+  receipt.eligibleAutoDriverVerified!==true||
+  receipt.databaseReady!==true)
+  throw fail();
+ return true;
+}
