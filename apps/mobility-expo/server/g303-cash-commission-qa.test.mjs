@@ -23,7 +23,8 @@ const offset=()=>({
   ledgerVersion:'LEDGER_VERSION_1',verifiedByServer:true,onHold:false},
  digitalEarnings:{driverId:driver,settlementId:settlement,payablePyg:40000,
   fundsAvailable:true,verifiedByServer:true,paymentMethod:'CARD',payoutPending:true},
- policy:{allowAutomaticOffset:true,approvedByOwner:true,version:'OWNER_POLICY_1'}
+ policy:{allowAutomaticOffset:true,approvedByOwner:true,version:'OWNER_POLICY_1',
+  maxOffsetBps:5000,minimumDriverPayoutPyg:10000}
 });
 test('Cash Driver holds all bills, only commission owed to platform: Gs 50k / 20%',()=>{
  const r=prepareCashCommissionQA(cash());
@@ -91,8 +92,8 @@ test('Digital payout can pay commission debt automatically, rest goes to Driver'
 test('Only available digital Driver earnings can be offset: never negative payout',()=>{
  const x=offset();x.receivable.outstandingPyg=70000;
  const r=prepareCashDebtOffsetQA(x);
- assert.equal(r.ok,true);assert.equal(r.offsetPyg,40000);
- assert.equal(r.driverPayoutPyg,0);assert.equal(r.cashDebtRemainingPyg,30000);
+ assert.equal(r.ok,true);assert.equal(r.offsetPyg,20000);
+ assert.equal(r.driverPayoutPyg,20000);assert.equal(r.cashDebtRemainingPyg,50000);
  const y=offset();y.receivable.outstandingPyg=0;
  const z=prepareCashDebtOffsetQA(y);
  assert.equal(z.offsetPyg,0);assert.equal(z.driverPayoutPyg,40000);
@@ -102,11 +103,20 @@ test('Disputed debts, not-funded payout and missing Owner policy cannot offset',
   x=>x.receivable.onHold=true,x=>x.receivable.verifiedByServer=false,
   x=>x.digitalEarnings.fundsAvailable=false,x=>x.digitalEarnings.payoutPending=false,
   x=>x.digitalEarnings.driverId=customer,x=>x.policy.allowAutomaticOffset=false,
-  x=>x.policy.approvedByOwner=false,x=>x.digitalEarnings.paymentMethod='CASH'
+  x=>x.policy.approvedByOwner=false,x=>x.digitalEarnings.paymentMethod='CASH',
+  x=>x.policy.maxOffsetBps=20000,x=>x.policy.minimumDriverPayoutPyg=-5
  ]){
   const x=offset();f(x);
   assert.equal(prepareCashDebtOffsetQA(x).ok,false);
  }
+});
+test('Owner may require minimum next payout even when debt is high',()=>{
+ const x=offset();x.receivable.outstandingPyg=70000;
+ x.policy.minimumDriverPayoutPyg=35000;
+ const r=prepareCashDebtOffsetQA(x);
+ assert.equal(r.ok,true);assert.equal(r.offsetPyg,5000);
+ assert.equal(r.driverPayoutPyg,35000);
+ assert.equal(r.cashDebtRemainingPyg,65000);
 });
 test('Offset reference is bound to specific digital settlement, not a bank debit',()=>{
  const a=prepareCashDebtOffsetQA(offset()),b=prepareCashDebtOffsetQA(offset());
