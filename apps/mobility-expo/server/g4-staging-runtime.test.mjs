@@ -29,7 +29,7 @@ function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],schemaProbes:[],
    adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
    g77RegisteredRoute:null,
-   g84Enabled:false,g84DispatchAttempts:0,g113BatchCalls:0,g89TripReadError:false,
+   g84Enabled:false,g84DispatchAttempts:0,g113BatchCalls:0,g283Ready:true,g283ReadinessChecks:0,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
    origin_tag:'PANTEON',destination_tag:'SHOPPING'},
@@ -163,6 +163,14 @@ function mockSupabase(){
     }
     if(state.g84Enabled&&name==='mobility_stage_poll_courier_delivery_offers'){
      return {data:[],error:null};
+    }
+    if(name==='mobility_stage_g283_auto_retry_readiness_qa'){
+     assert.deepEqual(params,{});
+     state.g283ReadinessChecks++;
+     return {data:{mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+      ownerAutoFareVerified:state.g283Ready,
+      eligibleAutoDriverVerified:state.g283Ready,
+      databaseReady:state.g283Ready},error:null};
     }
     if(name==='mobility_stage_g113_run_due_auto_batch_qa'){
      assert.deepEqual(params,{_limit:5});
@@ -1632,6 +1640,15 @@ test('G162 opted-in G113 bounded retry uses PostgreSQL and stops on Auth gate fa
  assert.equal(m.state.g113BatchCalls,1);
  assert.equal((await worker.tick()).ok,true);
  assert.equal(m.state.g113BatchCalls,2);
+ assert.ok(m.state.g283ReadinessChecks>=2);
+ // Revocation of Owner tariff or Driver eligibility must block next tick.
+ m.state.g283Ready=false;
+ const revoked=await worker.tick();
+ assert.equal(revoked.ok,false);
+ assert.equal(revoked.reason,'SQL_UNAVAILABLE');
+ assert.equal(m.state.g113BatchCalls,2,
+  'G284 revalidated G283 before any new G113 due jobs');
+ m.state.g283Ready=true;
  m.state.policy=false;
  const denied=await worker.tick();
  assert.equal(denied.ok,false);
