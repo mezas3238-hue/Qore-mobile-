@@ -35,6 +35,8 @@ import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-disp
 import {createG112ScopedAutoDispatchRepository} from './g112-scoped-auto-dispatch-repository.mjs';
 import {createG113AutoDispatchRetryWorker,createG113AutoDispatchBatchRepository}
  from './g113-auto-dispatch-retry-worker.mjs';
+import {assertG283VerifiedDatabaseReadiness}
+ from './g282-railway-private-auto-retry-gate.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -428,6 +430,10 @@ export async function prepareQoreG4StagingRuntime({
    environment:'isolated_staging',qaOnly:true,liveEnabled:false,
    runDueBatch:async ({limit})=>{
     await inspect();
+    // G284: a tariff/Driver can be revoked after the worker starts.
+    // Reverify the private authoritative G283 snapshot BEFORE every batch.
+    // Missing/false readiness rejects the entire tick, no jobs processed.
+    await assertG283VerifiedDatabaseReadiness((name,args)=>admin.rpc(name,args));
     return createG113AutoDispatchBatchRepository(admin).runDueBatch({limit});
    },intervalMs:30000,maxJobs:5
   }):null;
