@@ -1,0 +1,29 @@
+name: "G297 manual SOS confidential dossier — isolated Node QA"
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "feature/qore-g297-driver-manual-sos-identity-dossier-lab-20261101"
+  pull_request:
+    paths:
+      - "apps/mobility-expo/server/g297-*"
+      - "apps/mobility-expo/server/g4-loopback-http-transport.mjs"
+      - ".github/workflows/qore-g297-silent-driver-sos.yml"
+permissions:
+  contents: read
+jobs:
+  g297-internal-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check G297 module and transport syntax
+        run: |
+          node --check apps/mobility-expo/server/g297-silent-driver-sos-gateway.mjs
+          node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
+      - name: Verify manual-only, session fence, no PII leaks and fail-closed HTTP
+        run: |
+          node --test apps/mobility-expo/server/g297-silent-driver-sos-gateway.test.mjs apps/mobility-expo/server/g297-silent-driver-sos-http.test.mjs
