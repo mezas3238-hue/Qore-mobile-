@@ -9,11 +9,11 @@ import {getNativeDriverAuth} from './NativeDriverAuth';
 import {planDriverSosDial,normalizeTrustedNumber} from './domain/g298-driver-sos-dial.mjs';
 
 type Destination='EMERGENCY_911'|'TRUSTED_CONTACT';
-type Preference={destination:Destination;trustedNumber:string};
+export type Preference={enabled:boolean;destination:Destination;trustedNumber:string};
 const KEY_PREFIX='qore-driver-sos-choice-v1-';
 const ACTIVE_KEY='qore-driver-sos-current-user-v1';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-const defaultChoice:Preference={destination:'EMERGENCY_911',trustedNumber:''};
+const defaultChoice:Preference={enabled:false,destination:'EMERGENCY_911',trustedNumber:''};
 function storageKey(userId:string){return KEY_PREFIX+userId;}
 async function verifiedUser(){
  try{return (await getNativeDriverAuth()?.getSession())?.userId??null;}
@@ -40,23 +40,31 @@ export async function readDriverSosPreference():Promise<Preference>{
   if(parsed===null||typeof parsed!=='object'||Array.isArray(parsed))
    return defaultChoice;
   const row=parsed as Record<string,unknown>;
+  // G299: earlier versions saved a phone destination but had no enable flag.
+  // Never auto-enable SOS on upgrade or while SecureStore is loading.
+  const enabled=row.enabled===true;
   if(row.destination==='TRUSTED_CONTACT'){
    const phone=normalizeTrustedNumber(row.trustedNumber);
-   return phone?{destination:'TRUSTED_CONTACT',trustedNumber:phone}:defaultChoice;
+   return {enabled:enabled&&phone!==null,destination:'TRUSTED_CONTACT',
+    trustedNumber:phone??''};
   }
-  return defaultChoice;
+  return row.destination==='EMERGENCY_911'
+   ?{enabled,destination:'EMERGENCY_911',trustedNumber:''}
+   :defaultChoice;
  }catch{return defaultChoice;}
 }
 export async function saveDriverSosPreference(next:Preference):Promise<boolean>{
- const userId=await verifiedUser();
- if(!userId)return false;
+ // Only an account previously authenticated as Driver can be selected.
+ // This preference is local and must remain editable without mobile data.
+ const userId=await SecureStore.getItemAsync(ACTIVE_KEY);
+ if(!userId||!UUID.test(userId)||typeof next.enabled!=='boolean')return false;
  if(next.destination!=='EMERGENCY_911'&&next.destination!=='TRUSTED_CONTACT')
   return false;
  const normalized=next.destination==='TRUSTED_CONTACT'?
   normalizeTrustedNumber(next.trustedNumber):'';
- if(next.destination==='TRUSTED_CONTACT'&&!normalized)return false;
+ if(next.enabled&&next.destination==='TRUSTED_CONTACT'&&!normalized)return false;
  await SecureStore.setItemAsync(storageKey(userId),
-  JSON.stringify({destination:next.destination,trustedNumber:normalized??''}),{
+  JSON.stringify({enabled:next.enabled,destination:next.destination,trustedNumber:normalized??''}),{
    keychainAccessible:SecureStore.WHEN_UNLOCKED
   });
  await SecureStore.setItemAsync(ACTIVE_KEY,userId);
@@ -72,6 +80,8 @@ export async function requestTrustedContactCallPermission(){
 }
 export async function launchDriverSosPhone():Promise<'PHONE_OPENED'|'FAILED'>{
  const choice=await readDriverSosPreference();
+ // Defense in depth: even a stale/cached UI must never call when SOS is OFF.
+ if(choice.enabled!==true)return 'FAILED';
  const plan=planDriverSosDial(choice.destination,choice.trustedNumber);
  if(!plan)return 'FAILED';
  try{
