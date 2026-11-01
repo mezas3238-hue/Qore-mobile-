@@ -33,10 +33,12 @@ export default function DriverPlateOcrLab(){
  const [ready,setReady]=useState(false);
  const [busy,setBusy]=useState(false);
  const lock=useRef(false);
+ const generation=useRef(0);
  const [source,setSource]=useState<DriverPlateOcrSource>('registration');
  const [samples,setSamples]=useState<DriverOcrSamples>({});
  const [notice,setNotice]=useState('Solo laboratorio local: utilizá chapas inventadas sobre una hoja de papel.');
  const reset=useCallback(()=>{
+  generation.current+=1;
   setSamples({});setSource('registration');setNotice('Muestras descartadas. Ningún archivo fue enviado.');
  },[]);
  useEffect(()=>{
@@ -55,6 +57,7 @@ export default function DriverPlateOcrLab(){
    permission?.granted!==true||lock.current||
    (samples[source]?.length??0)>=2)return;
   lock.current=true;setBusy(true);
+  const epoch=generation.current;
   let uri:string|undefined;
   try{
    const shot=await camera.current.takePictureAsync({
@@ -63,6 +66,7 @@ export default function DriverPlateOcrLab(){
    if(!shot?.uri)throw Error('CAMERA_IMAGE_MISSING');
    uri=shot.uri;
    const raw=await recognizeDriverPlatePhoto(uri);
+   if(epoch!==generation.current)return; // Discard late OCR after logout/background.
    const candidates=extractDriverPlateCandidates(raw);
    const next=addDriverPlateOcrSample(samples,source,candidates);
    setSamples(next.samples);
@@ -75,6 +79,7 @@ export default function DriverPlateOcrLab(){
      :'No hay una única matrícula claramente legible. Cambiá encuadre e intentá otra vez.');
    }
   }catch{
+   if(epoch!==generation.current)return;
    setNotice('OCR nativo no disponible o captura fallida. Requiere una APK de desarrollo con ML Kit. No se envió ninguna imagen.');
   }finally{
    discardDriverCameraCache(uri);
