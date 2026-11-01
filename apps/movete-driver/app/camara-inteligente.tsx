@@ -8,10 +8,12 @@ import {inspectNativeDriverDocumentPhoto,discardDriverCameraCache}
  from '../src/native/driver-camera-qa-frame';
 import {nextDriverAutoCaptureGate}
  from '../src/domain/driver-evidence-intelligence.mjs';
+import {OFFLINE_DRIVER_OCR_QA} from '../src/native/driver-offline-ocr-qa';
 
-const authorized=process.env.EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED==='true'&&
+const authorized=OFFLINE_DRIVER_OCR_QA||(
+ process.env.EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED==='true'&&
  process.env.EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED==='true'&&
- process.env.EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED!=='true';
+ process.env.EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED!=='true');
 const messages:Record<string,string>={
  TOO_DARK:'Agregá luz.',TOO_BRIGHT:'Reducí la luz directa.',
  GLARE:'Evitá reflejos.',SHADOW:'Evitá sombras sobre el documento.',
@@ -106,7 +108,7 @@ export default function DriverSmartCameraLab(){
  if(!authorized||Platform.OS==='web')return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <Panel>
    <Text style={styles.heading}>Cámara inteligente — laboratorio</Text>
-   <Text style={styles.text}>La cámara está deshabilitada en esta compilación. Requiere Android/iOS, STAGING autorizado y EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED=true. No funciona en Web.</Text>
+   <Text style={styles.text}>La cámara está deshabilitada. Requiere STAGING autorizado o la APK independiente de laboratorio G299, sin cuentas ni servidores. No funciona en Web.</Text>
    <Action secondary label="Volver a mis documentos" onPress={()=>router.back()}/>
   </Panel>
  </ScrollView>;
