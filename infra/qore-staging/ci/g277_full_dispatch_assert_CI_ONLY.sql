@@ -28,41 +28,41 @@ DECLARE
  qk uuid:='00000000-0000-4000-8000-000000000402';
  bk uuid:='00000000-0000-4000-8000-000000000403';
  pk uuid:='00000000-0000-4000-8000-000000000404';
- route_id uuid; quote_id uuid; trip_id uuid; proof_id uuid;
+ route_id uuid; quote_id uuid; current_trip uuid; proof_id uuid;
  receipt jsonb; refused boolean;
 BEGIN
  route_id:=public.mobility_stage_g73_route(passenger,rk,'economico',
   'PANTEON','AEROPUERTO','ASUNCION_FIXTURE',5000,600,0);
  quote_id:=public.mobility_stage_g73_quote(passenger,route_id,qk);
- trip_id:=public.mobility_stage_g73_book(passenger,quote_id,bk);
- IF public.mobility_stage_g73_book(passenger,quote_id,bk)<>trip_id
+ current_trip:=public.mobility_stage_g73_book(passenger,quote_id,bk);
+ IF public.mobility_stage_g73_book(passenger,quote_id,bk)<>current_trip
   OR (SELECT count(*) FROM public.mobility_stage_g269_auto_dispatch_jobs j
-   WHERE j.trip_id=trip_id AND j.booking_key=bk AND passenger_id=passenger)<>1
+   WHERE j.trip_id=current_trip AND j.booking_key=bk AND passenger_id=passenger)<>1
  THEN RAISE EXCEPTION 'G277 original trip booking not exactly once queued'; END IF;
  receipt:=public.mobility_stage_g90_passenger_dispatch_status_qa(passenger,bk);
  IF receipt->>'dispatchState'<>'SEARCHING_DRIVER'
-  OR receipt->>'tripId'<>trip_id::text
+  OR receipt->>'tripId'<>current_trip::text
   OR public.mobility_stage_g90_passenger_dispatch_status_qa(other_passenger,bk) IS NOT NULL
  THEN RAISE EXCEPTION 'G277 G90 wrong passenger scope or dispatch state: %',receipt; END IF;
  refused:=false;
  BEGIN
   PERFORM public.mobility_stage_g269_register_pickup_road_proof(
-   other_passenger,bk,trip_id,driver,vehicle,pk,
+   other_passenger,bk,current_trip,driver,vehicle,pk,
    'GEOAPIFY',2300,pg_catalog.clock_timestamp());
  EXCEPTION WHEN SQLSTATE 'P2692' THEN refused:=true; END;
  IF NOT refused THEN RAISE EXCEPTION 'G277 cross-owner provider proof admitted'; END IF;
  refused:=false;
  BEGIN
   PERFORM public.mobility_stage_g269_register_pickup_road_proof(
-   passenger,bk,trip_id,driver,vehicle,pk,
+   passenger,bk,current_trip,driver,vehicle,pk,
    'GEOAPIFY',7000,pg_catalog.clock_timestamp());
  EXCEPTION WHEN SQLSTATE 'P2692' THEN refused:=true; END;
  IF NOT refused THEN RAISE EXCEPTION 'G277 out-of-radius Driver admitted'; END IF;
  proof_id:=public.mobility_stage_g269_register_pickup_road_proof(
-  passenger,bk,trip_id,driver,vehicle,pk,
+  passenger,bk,current_trip,driver,vehicle,pk,
   'GEOAPIFY',2300,pg_catalog.clock_timestamp());
  IF proof_id IS NULL THEN RAISE EXCEPTION 'G277 verified proof not persisted'; END IF;
- receipt:=public.mobility_stage_g112_run_booked_auto_dispatch_qa(passenger,bk,trip_id);
+ receipt:=public.mobility_stage_g112_run_booked_auto_dispatch_qa(passenger,bk,current_trip);
  IF receipt->>'status'<>'OFFERED'
   OR (SELECT count(*) FROM public.mobility_stage_auto_demo_push_outbox)<>1
   OR (SELECT status FROM public.mobility_stage_g269_auto_dispatch_jobs
@@ -83,7 +83,7 @@ BEGIN
  -- Simulate expiration ONLY in disposable PG17. Never change real offers.
  UPDATE public.mobility_stage_auto_demo_offers o
  SET expires_at=pg_catalog.clock_timestamp()-interval '2 seconds',
-  status='expired' WHERE o.trip_id=trip_id;
+  status='expired' WHERE o.trip_id=current_trip;
  UPDATE public.mobility_stage_g269_auto_dispatch_jobs
  SET next_attempt_at=pg_catalog.clock_timestamp()-interval '2 seconds'
  WHERE booking_key=bk;
