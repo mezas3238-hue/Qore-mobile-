@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'apps/mobility-expo/server/g282-*'
+      - 'apps/mobility-expo/server/g283-*'
       - 'apps/mobility-expo/server/g2-staging-vehicle-gateway.mjs'
       - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
       - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
@@ -29,6 +30,8 @@ jobs:
       - run: node --check apps/mobility-expo/server/g4-staging-runtime.mjs
       - run: node --check apps/mobility-expo/server/run-g4-railway-staging.mjs
       - run: node --test apps/mobility-expo/server/g282-private-driver-vehicle-gateway.test.mjs
+      - name: G283 protect deployed G260/G272 baseline and local HTTP route
+        run: node --test apps/mobility-expo/server/g283-safe-backport-regression.test.mjs
   pg-contract:
     name: G282 PostgreSQL ${{ matrix.pg }} transaction and ACL
     runs-on: ubuntu-latest
