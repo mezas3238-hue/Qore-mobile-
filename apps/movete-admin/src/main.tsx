@@ -6,6 +6,7 @@ import {NativeAdminTracePanel} from './NativeAdminTracePanel';
 import {AdminAuthPanel} from './AdminAuthPanel';
 import {OwnerCommissionEditor} from './OwnerCommissionEditor';
 import {OwnerCargoRateEditor} from './OwnerCargoRateEditor';
+import {OwnerAutoFareEditor} from './OwnerAutoFareEditor';
 import {G158FraudReportsPanel} from './G158FraudReportsPanel';
 import type {AdminExperience,AdminKycRecord,AdminSnapshot} from './admin-experience.mjs';
 import {projectKycPageView} from './kyc-page-view.mjs';
@@ -157,6 +158,7 @@ function OwnerPanel({finance,authorized,ownerSubject}:{finance:OwnerFinance|null
    </div>
    <p className="training-disclaimer">Un guion indica dato no verificado, no cero. No se accede a cuentas bancarias ni información personal de conductores.</p>
   </Panel>
+  <OwnerAutoFareEditor key={'auto-fare-'+(ownerSubject??'no-owner')} authorized={authorized}/>
   <OwnerCommissionEditor key={ownerSubject??'no-owner'} authorized={authorized}/>
   <OwnerCargoRateEditor key={'cargo-'+(ownerSubject??'no-owner')} authorized={authorized}/>
   <Panel><h2>Control estratégico</h2>
