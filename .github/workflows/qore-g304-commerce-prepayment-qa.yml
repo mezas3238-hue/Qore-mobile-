@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'apps/mobility-expo/server/g304-*'
+      - 'apps/movete-cliente/src/domain/g304-payment-choice-policy*'
       - 'apps/mobility-expo/docs/g304-*'
       - '.github/workflows/qore-g304-commerce-prepayment-qa.yml'
   workflow_dispatch:
@@ -30,6 +31,8 @@ jobs:
           node --check apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs
       - name: Prepayment before goods and post-delivery reconciliation
         run: node --test apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs
+      - name: Client options: merchants prepaid, passengers cash or card
+        run: node --test apps/movete-cliente/src/domain/g304-payment-choice-policy.test.mjs
       - name: Existing G302/G303 digital and trip cash settlement regressions
         run: node --test apps/mobility-expo/server/g302-auto-settlement-qa.test.mjs apps/mobility-expo/server/g303-cash-commission-qa.test.mjs
       - name: Verify all production and merchant-cash flags OFF
