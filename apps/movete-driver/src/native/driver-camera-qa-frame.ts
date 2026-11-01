@@ -24,6 +24,8 @@ export async function inspectNativeDriverDocumentPhoto(
  const downsized=await ctx.renderAsync();
  let saved:{uri:string;base64?:string|null}|undefined;
  let bytes:Uint8Array|undefined;
+ let imageData:Uint8Array|undefined;
+ let luma:Uint8Array|undefined;
  try{
   saved=await downsized.saveAsync({format:SaveFormat.JPEG,compress:0.82,base64:true});
   bytes=decodePrivateImageBase64(saved.base64??'',524288);
@@ -33,7 +35,8 @@ export async function inspectNativeDriverDocumentPhoto(
    image.width*image.height>100000||
    image.data.length!==image.width*image.height*4)
    throw Error('CAMERA_IMAGE_DIMENSIONS_INVALID');
-  const luma=new Uint8Array(image.width*image.height);
+  imageData=image.data;
+  luma=new Uint8Array(image.width*image.height);
   for(let k=0;k<luma.length;k++){
    const idx=k*4;
    luma[k]=Math.round((77*image.data[idx]+
@@ -46,6 +49,9 @@ export async function inspectNativeDriverDocumentPhoto(
    width:image.width,height:image.height,luma,motionRms,subjectBox
   });
  }finally{
+  // Best-effort zeroization of decoded PII pixels before GC.
+  luma?.fill(0);
+  imageData?.fill(0);
   bytes?.fill(0);
   if(saved?.uri!==fileUri)discardDriverCameraCache(saved?.uri);
  }
