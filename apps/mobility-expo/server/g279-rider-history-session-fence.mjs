@@ -9,12 +9,12 @@
  * Never expose JWTs, credentials, session IDs or service keys in receipts.
  * STAGING-only; no LIVE trips, payments, user creation or public SQL grants.
  */
-const REF='mrjzxftsdxzepzbcuids';
+import {safeStageRef} from '../scripts/staging-auth-policy-gate.mjs';
 const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const JWT=/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const fail=()=>new Error('G279 private Passenger session unavailable');
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
-function verifiedClaims(token,providerUser,now){
+function verifiedClaims(token,providerUser,now,ref){
  let claims;
  try{
   if(typeof token!=='string'||token.length<80||token.length>8192||
@@ -30,7 +30,7 @@ function verifiedClaims(token,providerUser,now){
  if(!plain(claims)||!Number.isSafeInteger(at)||at<=0||
     !UUID.test(claims.sub??'')||!UUID.test(claims.session_id??'')||
     claims.sub!==providerUser.id||
-    claims.iss!=='https://'+REF+'.supabase.co/auth/v1'||
+    claims.iss!=='https://'+ref+'.supabase.co/auth/v1'||
     claims.role!=='authenticated'||
     !(claims.aud==='authenticated'||
       Array.isArray(claims.aud)&&claims.aud.length===1&&
@@ -47,15 +47,17 @@ function verifiedClaims(token,providerUser,now){
 export function createG279RiderHistorySessionVerifier({
  projectRef,verifyProviderUser,readProviderSession,now=Date.now
 }={}){
- if(projectRef!==REF||typeof verifyProviderUser!=='function'||
+ if(typeof verifyProviderUser!=='function'||
     typeof readProviderSession!=='function'||typeof now!=='function')
   throw fail();
+ let ref;
+ try{ref=safeStageRef(projectRef);}catch{throw fail();}
  return async token=>{
   let user;
   try{
    // The identity must first be validated by Supabase Auth itself.
    user=await verifyProviderUser(token);
-   const scope=verifiedClaims(token,user,now);
+   const scope=verifiedClaims(token,user,now,ref);
    // G42 reads real auth.sessions.  This is NEVER a JWT-only shortcut.
    const active=await readProviderSession(scope);
    if(active!==true)throw fail();
