@@ -57,7 +57,9 @@ CREATE FUNCTION qore_stage_internal.mobility_stage_driver_current_license_approv
    ON review.document_id=d.id
      AND review.reviewer_id=d.reviewer_id
      AND review.status='approved'::public.mobility_stage_driver_document_status
-     AND review.reviewed_at=d.reviewed_at
+     AND review.reviewed_at=(SELECT pg_catalog.max(r2.reviewed_at)
+       FROM public.mobility_stage_driver_document_reviews r2
+       WHERE r2.document_id=d.id)
  JOIN public.mobility_stage_backoffice_roles reviewer_role
    ON reviewer_role.user_id=review.reviewer_id
      AND reviewer_role.status='active'
@@ -76,6 +78,14 @@ CREATE FUNCTION qore_stage_internal.mobility_stage_driver_current_license_approv
    AND c.license_verified_at<=pg_catalog.clock_timestamp()
    AND c.license_verified_at>=review.reviewed_at
    AND d.submitted_at<=review.reviewed_at
+   AND d.reviewed_at>=d.submitted_at
+   AND review.reviewed_at<=pg_catalog.clock_timestamp()
+   AND NOT EXISTS (
+      SELECT 1 FROM public.mobility_stage_driver_document_reviews contradictory
+      WHERE contradictory.document_id=d.id
+      AND contradictory.status<>'approved'::public.mobility_stage_driver_document_status
+      AND contradictory.reviewed_at>=review.reviewed_at
+   )
    AND review.reviewer_id<>c.driver_id
    AND c.license_verified_by<>c.driver_id
  )
