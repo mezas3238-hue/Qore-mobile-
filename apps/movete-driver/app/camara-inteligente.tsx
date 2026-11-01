@@ -133,7 +133,7 @@ export default function DriverSmartCameraLab(){
     <>
      {!done&&<View style={{height:340,borderRadius:14,overflow:'hidden',backgroundColor:'#18383E'}}>
       <CameraView ref={camera} style={{flex:1}} facing="back"
-       autoFocus="off"
+       autofocus="off"
        onCameraReady={()=>{cameraReadyAt.current=Date.now();setReady(true);}}
        onMountError={()=>{stop();setReady(false);setNotice('Cámara no disponible en este dispositivo.');}}/>
       <View pointerEvents="none" style={{position:'absolute',left:'8%',top:'17%',
