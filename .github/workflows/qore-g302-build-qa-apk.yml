@@ -1,0 +1,85 @@
+name: G302 Android QA APK builds — internal only
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/qore-g300-store-distribution-eas-client-driver-20261101
+    paths:
+      - .github/workflows/qore-g302-build-qa-apk.yml
+permissions:
+  contents: read
+concurrency:
+  group: g302-qa-apk-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-internal-qa-apk:
+    name: Android QA APK — ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [movete-cliente, movete-driver]
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      QORE_QA_BUILD: "true"
+      EXPO_PUBLIC_QORE_LIVE_OPERATIONS: "false"
+      EXPO_PUBLIC_SUPABASE_URL: ""
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ""
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - name: Fetch QA source — never production
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android 36 platform SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Expo dependencies — no secrets
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify exact isolated QA Android application ID
+        shell: bash
+        run: |
+          npx expo config --json > "$RUNNER_TEMP/g302-config.json"
+          expected="com.movetefacil.${{ matrix.app == 'movete-driver' && 'driver' || 'cliente' }}.qa"
+          node - "$RUNNER_TEMP/g302-config.json" "$expected" <<'NODE'
+          const fs=require('node:fs');
+          const config=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(config.android?.package!==process.argv[3]||
+             config.extra?.qaBuild!==true||
+             config.extra?.liveOperationsEnabled!==false){
+            process.stderr.write('QA application identity or LIVE OFF contract invalid\n');
+            process.exit(1);
+          }
+          process.stdout.write('Verified isolated QA package '+config.android.package+'\n');
+          NODE
+      - name: Generate Android native project from Expo config
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Assemble installable standalone Android APK — QA only
+        shell: bash
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+      - name: Verify APK file and SHA256
+        shell: bash
+        run: |
+          file="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$file"
+          sha256sum "$file"
+          ls -lh "$file"
+      - name: Upload tester APK as private-to-repo Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: g302-${{ matrix.app }}-qa-apk
+          path: apps/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 3
