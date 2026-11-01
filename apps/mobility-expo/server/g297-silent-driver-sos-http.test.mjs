@@ -32,7 +32,7 @@ test('G297 HTTP forwards exactly one JSON request to private authenticated gatew
  const privateGateway=createG297SilentDriverSosGateway({
   projectRef:'mrjzxftsdxzepzbcuids',environment:'isolated_staging',
   liveEnabled:false,qaApproved:true,
-  verifyDriverSession:async()=>({userId:uuid(1),sessionId:uuid(2),role:'driver',
+  verifyDriverSession:async()=>({userId:uuid(1),sessionId:uuid(2),tokenIatMs:1760000000000,role:'driver',
    providerVerified:true,sessionActive:true}),
   lookupAssignedTrip:async()=>({tripId:uuid(3),driverId:uuid(1),
    passengerId:uuid(4),status:'in_progress',vehicleKind:'AUTO'}),
