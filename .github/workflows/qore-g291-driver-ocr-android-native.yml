@@ -1,0 +1,55 @@
+name: QORE G291 Driver OCR native Android compile
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-driver/**'
+      - '.github/workflows/qore-g291-driver-ocr-android-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: g291-driver-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android-native-compile:
+    name: Native ML Kit Android compile (no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: '1'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_QORE_G291_OCR_LAB_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Check preinstalled Android SDK
+        run: | 
+          test -n "$ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+          echo 'Android SDK is available on runner'
+      - name: Install Driver dependencies (no lifecycle scripts)
+        working-directory: apps/movete-driver
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Generate Android native project locally
+        working-directory: apps/movete-driver
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Compile native Android OCR integration without distribution
+        working-directory: apps/movete-driver/android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify QA remains OFF
+        run: |
+          test "$EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED" = false
+          test "$EXPO_PUBLIC_QORE_G291_OCR_LAB_APPROVED" = false
+          echo 'Native compile only; no certified APK is distributed.'
