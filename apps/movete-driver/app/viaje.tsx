@@ -2,6 +2,7 @@ import React,{useCallback,useEffect} from 'react';
 import {AppState,ScrollView,Text,View} from 'react-native';
 import {router,useFocusEffect,useLocalSearchParams} from 'expo-router';
 import {Action,Panel,styles} from '../src/DriverUI';
+import {DriverSosFloatingControl} from '../src/DriverSosFloatingControl';
 import {useDriverTrip} from '../src/DriverTripProvider';
 
 const verbs:Record<string,string>={
@@ -45,7 +46,7 @@ export default function DriverTripScreen(){
  const loaded=state.tripId===tripId;
  const canAct=enabled&&loaded&&state.phase==='active'&&
   state.nextEvent!==null&&!state.uncertain;
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+ return <View style={{flex:1}}><ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Mi viaje de prueba</Text>
    <Text style={styles.heroSub}>Solo seguimiento de AUTO asignado a una sesión Driver verificada.</Text>
@@ -86,5 +87,5 @@ export default function DriverTripScreen(){
    <Text style={styles.small}>No usar el teléfono mientras conducís. En una aplicación operativa estas interacciones necesitarán controles de seguridad vial y pruebas en dispositivos físicos.</Text>
   </Panel>
   <Action label="Volver a ofertas" secondary onPress={()=>router.back()}/>
- </ScrollView>;
+ </ScrollView><DriverSosFloatingControl/></View>;
 }
