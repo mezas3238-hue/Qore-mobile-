@@ -156,27 +156,64 @@ export async function verifyG281DriverReadOnly({
  }catch{return deny('REVOKED_DRIVER_DENIAL_UNVERIFIED');}
  return Object.freeze({...outcome,revocationVerified:true});
 }
+/**
+ * Safe operator diagnostics. Return only constant codes, never values, paths,
+ * identities, credentials, tokens or private manifest contents.
+ * A Codespaces terminal restart often drops its exported environment.
+ */
+export function g281OperatorPreflight(env={},argv=[]){
+ if(argv.length!==3||argv[2]!=='--verify')return 'G281_VERIFY_ONLY_REQUIRED';
+ if(env.CI==='true'||env.GITHUB_ACTIONS==='true'||
+   typeof env.RAILWAY_ENVIRONMENT==='string')
+  return 'G281_PRIVATE_OPERATOR_HOST_REQUIRED';
+ if(env.QORE_QA_DRIVER_READONLY_APPROVED!=='CONFIRM_READ_ONLY_STAGING')
+  return 'G281_EXPLICIT_READONLY_APPROVAL_MISSING';
+ if(env.QORE_QA_ACTORS_JSON!==undefined)
+  return 'G281_INLINE_CREDENTIALS_FORBIDDEN';
+ if(typeof env.QORE_QA_MANIFEST_FILE!=='string'||
+    env.QORE_QA_MANIFEST_FILE.length===0)
+  return 'G281_PRIVATE_MANIFEST_PATH_MISSING';
+ if(env.QORE_STAGING_PROJECT_REF!==STAGING_REF)
+  return 'G281_STAGING_PROJECT_REF_MISSING_OR_DIFFERENT';
+ if(env.QORE_MOBILITY_ENV!=='staging')
+  return 'G281_STAGING_ENVIRONMENT_REQUIRED';
+ if(env.LIVE_TRIPS_ENABLED!=='false')
+  return 'G281_LIVE_TRIPS_MUST_BE_DISABLED';
+ try{assertPublishableKey(env.QORE_STAGING_ANON_KEY,STAGING_REF);}
+ catch{return 'G281_PUBLIC_KEY_MISSING_OR_INVALID';}
+ return null;
+}
+
 const main=process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url;
 if(main){
- try{
-  if(process.argv.length!==3||process.argv[2]!=='--verify'||
-    process.env.CI==='true'||process.env.GITHUB_ACTIONS==='true'||
-    typeof process.env.RAILWAY_ENVIRONMENT==='string'||
-    process.env.QORE_QA_DRIVER_READONLY_APPROVED!=='CONFIRM_READ_ONLY_STAGING'||
-    !process.env.QORE_QA_MANIFEST_FILE||process.env.QORE_QA_ACTORS_JSON)
-   throw Error('Operator opt-in and private manifest required');
-  const {readPrivateQaManifest}=await import('./g263-private-qa-manifest.mjs');
-  const manifest=await readPrivateQaManifest(process.env.QORE_QA_MANIFEST_FILE);
-  const result=await verifyG281DriverReadOnly({
-   ref:process.env.QORE_STAGING_PROJECT_REF,
-   environment:process.env.QORE_MOBILITY_ENV,
-   liveTripsEnabled:process.env.LIVE_TRIPS_ENABLED,
-   publicKey:process.env.QORE_STAGING_ANON_KEY,manifest
-  });
-  console.log(JSON.stringify(result));
-  if(!result.ok)process.exitCode=1;
- }catch{
-  console.error('G281 BLOCKED: inspect private Driver/Auth/Railway boundary');
+ const diagnostic=g281OperatorPreflight(process.env,process.argv);
+ if(diagnostic){
+  console.error(diagnostic);
   process.exitCode=1;
+ }else{
+  let manifest;
+  try{
+   const {readPrivateQaManifest}=await import('./g263-private-qa-manifest.mjs');
+   manifest=await readPrivateQaManifest(process.env.QORE_QA_MANIFEST_FILE);
+  }catch{
+   // Deliberately no filename, raw parse exception or credential disclosure.
+   console.error('G281_PRIVATE_MANIFEST_UNREADABLE_OR_INVALID');
+   process.exitCode=1;
+  }
+  if(manifest){
+   try{
+    const result=await verifyG281DriverReadOnly({
+     ref:process.env.QORE_STAGING_PROJECT_REF,
+     environment:process.env.QORE_MOBILITY_ENV,
+     liveTripsEnabled:process.env.LIVE_TRIPS_ENABLED,
+     publicKey:process.env.QORE_STAGING_ANON_KEY,manifest
+    });
+    console.log(JSON.stringify(result));
+    if(!result.ok)process.exitCode=1;
+   }catch{
+    console.error('G281_PRIVATE_DRIVER_BRIDGE_RUNTIME_FAILURE');
+    process.exitCode=1;
+   }
+  }
  }
 }
