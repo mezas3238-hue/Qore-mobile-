@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
-const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const read=path=>JSON.parse(readFileSync(resolve(root,path),'utf8'));
 const nativeApps=[
  {dir:'movete-cliente',id:'com.movetefacil.cliente',audience:'CLIENT'},
