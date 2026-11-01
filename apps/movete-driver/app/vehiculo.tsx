@@ -30,7 +30,6 @@ export default function DriverVehiclePending(){
  const {state:workspace}=useDriverWorkspace();
  const [kind,setKind]=useState<DriverPendingVehicleKind>('AUTO');
  const [service,setService]=useState<DriverPendingVehicleService>('economico');
- const [municipality,setMunicipality]=useState('');
  const [plate,setPlate]=useState('');
  const [brand,setBrand]=useState('');
  const [model,setModel]=useState('');
@@ -52,12 +51,12 @@ export default function DriverVehiclePending(){
    generation.current+=1;
    key.current=null;
    setNotice('');setReceived(false);
-   setPlate('');setBrand('');setModel('');setMunicipality('');
+   setPlate('');setBrand('');setModel('');
   });
   return ()=>{generation.current++;unsub?.();};
  },[auth]);
  const draft={
-  kind,service,municipalityCode:municipality.trim().toUpperCase(),
+  kind,service,
   plate:plate.trim().toUpperCase(),brand:brand.trim(),model:model.trim(),
   year:Number(year),passengerCapacity:Number(capacity)
  };
@@ -130,7 +129,6 @@ export default function DriverVehiclePending(){
        onPress={()=>{clearReceipt();setService(option);setCapacity(option==='xl'?'6':'4');}}/></View>)}
     </View>
    </>}
-   {field('Código de municipio',municipality,setMunicipality,{max:60,uppercase:true})}
    {field('Matrícula real',plate,setPlate,{max:12,uppercase:true})}
    {field('Marca',brand,setBrand,{max:80})}
    {field('Modelo',model,setModel,{max:80})}
