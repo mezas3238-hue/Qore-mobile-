@@ -23,6 +23,9 @@ function assertRailwayEnvironment(env){
  if(![undefined,'true','false'].includes(env.QORE_G252_MERCHANT_INBOX_APPROVED))
   throw Error('G252 merchant read-only inbox opt-in must be explicit boolean');
  const g252MerchantInboxAuthApproved=env.QORE_G252_MERCHANT_INBOX_APPROVED==='true';
+ if(![undefined,'true','false'].includes(env.QORE_G282_VEHICLE_DRAFT_APPROVED))
+  throw Error('G282 vehicle draft opt-in must be explicit boolean');
+ const g282VehicleDraftApproved=env.QORE_G282_VEHICLE_DRAFT_APPROVED==='true';
  if(![undefined,'true','false'].includes(env.QORE_G260_ADMIN_AAL2_APPROVED))
   throw Error('G260 Admin AAL2 trust opt-in must be explicit boolean');
  const g260AdminAal2Approved=env.QORE_G260_ADMIN_AAL2_APPROVED==='true';
@@ -54,10 +57,10 @@ function assertRailwayEnvironment(env){
   adminOrigin,...admission
  });
  return {port,hostname,adminOrigin,admission,
-  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved};
+  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved};
 }
 const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,
- g252MerchantInboxAuthApproved,g260AdminAal2Approved}=assertRailwayEnvironment(process.env);
+ g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved}=assertRailwayEnvironment(process.env);
 // Repeat the G256 read-only checks at process start: a missing Railway
 // pre-deploy hook must never bypass STAGING ownership or public-signup fence.
 const g256=await verifyG256RailwayLaunch({env:process.env});
@@ -65,7 +68,7 @@ if(!g256.ok)throw Error('G256 staging startup blocked: '+g256.code);
 const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
- g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,
+ g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
