@@ -36,3 +36,7 @@ La ejecución automatizada verifica **compilación**, no prueba en hardware. Nin
 G299 agrega vista read-only del conjunto de 8 documentos al estado privado del conductor previamente validado por G17: licencia, CI frente/dorso, cédula verde, habilitación, seguro, inspección y selfie. No permite que el Driver apruebe estos estados, no transmite nuevos documentos y **8/8 aprobados en texto no bastan para habilitación comercial**.
 
 El próximo bloqueo real es habilitar en backend, bajo auditoría independiente, un escáner auténtico de evidencias con verificación de bytes/versiones (G19), autorización de sesiones de Storage y revisión de Admin antes de conectar la subida con imágenes legales. Mantener uploads OFF.
+
+## G301 — pantalla inicial dedicada de pruebas
+
+La APK compilada en la rama G301 inicia directamente en **Movete Driver OCR QA**. Sus botones llevan a cámara inteligente y OCR nativo; no se requiere iniciar sesión. El checklist de seis observaciones es local, efímero, sin imágenes ni identificadores, no produce una certificación y no es enviado al servidor. Los datos desaparecen al cerrar el proceso; no utilizar capturas de pantallas con datos reales para reportar errores.
