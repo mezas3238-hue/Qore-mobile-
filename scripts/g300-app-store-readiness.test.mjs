@@ -31,6 +31,7 @@ for(const {dir,id,audience} of nativeApps){
   assert.equal(qa.distribution,'internal','APK must never be presented as store release');
   assert.equal(qa.android.buildType,'apk','QA only needs an Android installable APK');
   assert.equal(qa.env.EXPO_PUBLIC_QORE_LIVE_OPERATIONS,'false');
+  assert.equal(qa.env.QORE_QA_BUILD,'true');
   assert.equal(qa.autoSubmit,undefined,'No automatic QA publication');
   assert.equal(qa.developmentClient,undefined,'Use standalone test app without dev tooling');
   assert.equal(qa.ios,undefined,'iOS tests must use TestFlight or separately signed builds');
@@ -40,6 +41,7 @@ for(const {dir,id,audience} of nativeApps){
    assert.equal(p.android.buildType,'app-bundle');
    assert.equal(p.ios.simulator,false);
    assert.equal(p.env.EXPO_PUBLIC_QORE_LIVE_OPERATIONS,'false');
+   assert.equal(p.env.QORE_QA_BUILD,'false');
    assert.equal(p.autoSubmit,undefined);
    assert.equal(p.channel,undefined);
   }
