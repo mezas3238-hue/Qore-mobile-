@@ -9,7 +9,8 @@ import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createRailwayStagingIngress} from './railway-staging-ingress.mjs';
 import {verifyG256RailwayLaunch} from '../scripts/g256-railway-launch-preflight.mjs';
 import {readG282RailwayAutoRetryOptIn,assertG282PrivateBatchInstalled,
- startG282RailwayRetryWorker} from './g282-railway-private-auto-retry-gate.mjs';
+ assertG283VerifiedDatabaseReadiness,startG282RailwayRetryWorker}
+ from './g282-railway-private-auto-retry-gate.mjs';
 
 function assertRailwayEnvironment(env){
  if(env.QORE_RAILWAY_STAGING_APPROVED!=='true'||
@@ -65,6 +66,8 @@ if(g113RetryApproved){
   {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}
  );
  await assertG282PrivateBatchInstalled((name,args)=>db.rpc(name,args));
+ // G283 database-backed gate: no tariff/real Driver, no retry scheduler.
+ await assertG283VerifiedDatabaseReadiness((name,args)=>db.rpc(name,args));
 }
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
