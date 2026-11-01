@@ -1,0 +1,24 @@
+name: QORE G281 Driver Auth Railway read-only bridge contracts
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g281-real-driver-railway-readonly*.mjs'
+      - '.github/workflows/qore-g281-driver-qa-railway-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  driver-qa-readonly-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: G281 offline role and revocation contract, no STAGING credentials
+        run: node --test apps/mobility-expo/scripts/g281-real-driver-railway-readonly.test.mjs
+      - name: Confirm no remote QA login or mutations in CI
+        run: echo 'No Supabase credentials, Driver KYC uploads, live Railway requests or commercial writes'
