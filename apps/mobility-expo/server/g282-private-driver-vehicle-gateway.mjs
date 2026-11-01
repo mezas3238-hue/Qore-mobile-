@@ -4,7 +4,7 @@
  * No KYC, GPS consent, Admin review, materialization, payment or LIVE ride.
  */
 import {parseDraft,assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const PATH='/v1/staging/vehicle-applications';
 const reply=(status,body)=>({status,body});
 const bearer=headers=>{
