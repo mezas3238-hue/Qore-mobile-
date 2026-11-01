@@ -8,7 +8,7 @@ const session='00000000-0000-4000-8000-000000000201';
 const application='00000000-0000-4000-8000-000000000301';
 const request='00000000-0000-4000-8000-000000000401';
 const vehicle={
- requestKey:request,kind:'AUTO',service:'economico',municipalityCode:'ASUNCION',
+ requestKey:request,kind:'AUTO',service:'economico',
  plate:'QAONLY123',brand:'CI ONLY',model:'Contract',year:2024,passengerCapacity:4
 };
 const bearer='Bearer '+ 'a'.repeat(25)+'.'+'b'.repeat(25)+'.'+'c'.repeat(25);
@@ -16,6 +16,7 @@ function setup({authorized=true,revoked=false,dbFail=false}={}){
  const calls=[];
  const gateway=createG282PendingVehicleGateway({
   projectRef:'mrjzxftsdxzepzbcuids',
+  trustedMunicipalityCode:'ASUNCION',
   verifyDriverSession:async()=>{if(revoked)throw Error('revoked');return {
    id:authorized?driver:passenger,sessionId:session,tokenIatMs:1793400000000,
    is_anonymous:false
@@ -60,6 +61,7 @@ test('G282: rejects forged Owner, Driver, KYC and idempotency fields',async()=>{
  const t=setup();
  const bad=[
   {...vehicle,driverId:driver},{...vehicle,approved:true},
+  {...vehicle,municipalityCode:'ASUNCION'},
   {...vehicle,kycApproved:true},{...vehicle,sessionId:session},
   {...vehicle,kind:'MOTO',service:'economico'},
   {...vehicle,year:1980},{...vehicle,passengerCapacity:0},
@@ -86,10 +88,31 @@ test('G282: scope and transport method route remain explicit',async()=>{
  assert.equal((await send(null)).status,400);
  const g=createG282PendingVehicleGateway({
   projectRef:'mrjzxftsdxzepzbcuids',
+  trustedMunicipalityCode:'ASUNCION',
   verifyDriverSession:async()=>{throw Error('no')},
   authorizeDriver:async()=>true,allowRequest:()=>true,submitPending:async()=>application
  });
  assert.equal((await g({method:'GET',path:'/v1/staging/vehicle-applications'})).status,404);
  assert.equal((await g({method:'POST',path:'/v1/staging/admin/vehicle-reviews'})).status,404);
  assert.equal(calls.length,0);
+});
+
+test('G302: municipal code never originates from mobile body',async()=>{
+ const x=setup();
+ const response=await x.send();
+ assert.equal(response.status,202);
+ assert.equal(Object.hasOwn(vehicle,'municipalityCode'),false);
+ assert.equal(x.calls[0]._municipality,'ASUNCION');
+ assert.equal((await x.send({...vehicle,municipalityCode:'CLIENT_FORGED'})).status,400);
+});
+test('G302: no trusted service-region configuration means fail closed',async()=>{
+ const gateway=createG282PendingVehicleGateway({
+  projectRef:'mrjzxftsdxzepzbcuids',
+  verifyDriverSession:async()=>{throw Error('must not verify');},
+  authorizeDriver:async()=>true,allowRequest:()=>true,
+  submitPending:async()=>{throw Error('must not write')}
+ });
+ const response=await gateway({method:'POST',path:'/v1/staging/vehicle-applications',
+  body:vehicle,headers:{authorization:bearer}});
+ assert.equal(response.status,503);
 });
