@@ -29,6 +29,12 @@ function assertRailwayEnvironment(env){
  if(![undefined,'true','false'].includes(env.QORE_G282_VEHICLE_DRAFT_APPROVED))
   throw Error('G282 vehicle draft opt-in must be explicit boolean');
  const g282VehicleDraftApproved=env.QORE_G282_VEHICLE_DRAFT_APPROVED==='true';
+ // Explicit STAGING jurisdiction set by operator only. Never default to
+ // Asunción or infer location from client. Absence keeps draft intake closed.
+ const g302TrustedMunicipalityCode=env.QORE_G302_STAGING_MUNICIPALITY_CODE??null;
+ if(g302TrustedMunicipalityCode!==null&&
+    !/^[A-Z0-9_-]{2,60}$/.test(g302TrustedMunicipalityCode))
+  throw Error('G302 invalid staging municipality authority');
  if(![undefined,'true','false'].includes(env.QORE_G260_ADMIN_AAL2_APPROVED))
   throw Error('G260 Admin AAL2 trust opt-in must be explicit boolean');
  const g260AdminAal2Approved=env.QORE_G260_ADMIN_AAL2_APPROVED==='true';
@@ -66,10 +72,10 @@ function assertRailwayEnvironment(env){
   adminOrigin,...admission
  });
  return {port,hostname,adminOrigin,admission,
-  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g268OwnerFareApproved};
+  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g302TrustedMunicipalityCode,g268OwnerFareApproved};
 }
 const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,
- g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g268OwnerFareApproved}=assertRailwayEnvironment(process.env);
+ g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g302TrustedMunicipalityCode,g268OwnerFareApproved}=assertRailwayEnvironment(process.env);
 // Repeat the G256 read-only checks at process start: a missing Railway
 // pre-deploy hook must never bypass STAGING ownership or public-signup fence.
 const g113RetryApproved=readG282RailwayAutoRetryOptIn(process.env);
@@ -90,7 +96,7 @@ if(g113RetryApproved){
 }
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
- g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g268OwnerFareApproved,
+ g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g302TrustedMunicipalityCode,g268OwnerFareApproved,
  autoDispatchRetryQa:g113RetryApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
