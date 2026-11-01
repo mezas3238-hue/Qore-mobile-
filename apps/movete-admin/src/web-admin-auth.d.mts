@@ -2,6 +2,8 @@ export type WebAdminSession={role:'admin'|'owner';subject:string;token:string;mf
 export type WebAdminAuth={
  readSession:()=>Promise<WebAdminSession|null>;
  signIn:(email:string,password:string)=>Promise<{ok:boolean;code?:string;role?:'admin'|'owner'}>;
+ beginTotpEnrollment:()=>Promise<{ok:boolean;code?:string;secret?:string}>;
+ verifyEnrolledTotp:(code:string)=>Promise<{ok:boolean;code?:string;role?:'admin'|'owner'}>;
  verifyTotp:(code:string)=>Promise<{ok:boolean;code?:string;role?:'admin'|'owner'}>;
  signOut:()=>Promise<void>;
 };
