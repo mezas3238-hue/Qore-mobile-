@@ -209,7 +209,7 @@ export async function prepareQoreG4StagingRuntime({
  recipientTrust=null,journeyTrust=null,
  g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
  g282VehicleDraftApproved=false,
- g260AdminAal2Approved=false,
+ g260AdminAal2Approved=false,g268OwnerFareApproved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
 }){
@@ -226,6 +226,9 @@ export async function prepareQoreG4StagingRuntime({
  if(typeof g260AdminAal2Approved!=='boolean'||
     (g260AdminAal2Approved&&adminF1Trust!==null))
   throw Error('G260 Admin AAL2 requires exclusive owner-approved provider trust');
+ if(typeof g268OwnerFareApproved!=='boolean'||
+    (g268OwnerFareApproved&&!g260AdminAal2Approved))
+  throw Error('G268 Owner fares need independent G260 AAL2 and explicit STAGING opt-in');
  const ref=safeStageRef(projectRef);
  assertPublishableKey(anonKey,ref);
  parseServiceRole(serviceKey,ref);
@@ -917,7 +920,7 @@ export async function prepareQoreG4StagingRuntime({
  // G268: use the ALREADY independent G260 IdP + G42 + G27/AAL2
  // trust, never a request-supplied user/session/iat or server key in Client.
  // Disabled with 503 when Owner has not approved G260 STAGING AAL2 trust.
- const ownerAutoFare=verifiedAdminTrust===null?null:createG268OwnerAutoFareGateway({
+ const ownerAutoFare=!g268OwnerFareApproved||verifiedAdminTrust===null?null:createG268OwnerAutoFareGateway({
   projectRef:ref,environment:'isolated_staging',qaOnly:true,liveEnabled:false,
   ...verifiedAdminTrust,
   publishFare:async p=>{
