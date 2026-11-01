@@ -11,16 +11,29 @@ import {planDriverSosDial,normalizeTrustedNumber} from './domain/g298-driver-sos
 type Destination='EMERGENCY_911'|'TRUSTED_CONTACT';
 type Preference={destination:Destination;trustedNumber:string};
 const KEY_PREFIX='qore-driver-sos-choice-v1-';
+const ACTIVE_KEY='qore-driver-sos-current-user-v1';
+const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const defaultChoice:Preference={destination:'EMERGENCY_911',trustedNumber:''};
 function storageKey(userId:string){return KEY_PREFIX+userId;}
 async function verifiedUser(){
  try{return (await getNativeDriverAuth()?.getSession())?.userId??null;}
  catch{return null;}
 }
-export async function readDriverSosPreference():Promise<Preference>{
+/** Driver's current account is restored after authenticated login, but SOS
+ * reads ONLY local secure storage: never wait for internet in an emergency. */
+export async function restoreDriverSosActiveSession():Promise<void>{
  const userId=await verifiedUser();
- if(!userId)return defaultChoice; // Even offline: a direct 911 fallback is available.
+ if(userId&&UUID.test(userId))
+  await SecureStore.setItemAsync(ACTIVE_KEY,userId);
+ else await SecureStore.deleteItemAsync(ACTIVE_KEY);
+}
+export async function clearDriverSosActiveSession():Promise<void>{
+ await SecureStore.deleteItemAsync(ACTIVE_KEY);
+}
+export async function readDriverSosPreference():Promise<Preference>{
  try{
+  const userId=await SecureStore.getItemAsync(ACTIVE_KEY);
+  if(!userId||!UUID.test(userId))return defaultChoice;
   const stored=await SecureStore.getItemAsync(storageKey(userId));
   if(!stored)return defaultChoice;
   const parsed:unknown=JSON.parse(stored);
@@ -46,6 +59,7 @@ export async function saveDriverSosPreference(next:Preference):Promise<boolean>{
   JSON.stringify({destination:next.destination,trustedNumber:normalized??''}),{
    keychainAccessible:SecureStore.WHEN_UNLOCKED
   });
+ await SecureStore.setItemAsync(ACTIVE_KEY,userId);
  return true;
 }
 export async function requestTrustedContactCallPermission(){
@@ -73,9 +87,10 @@ export async function launchDriverSosPhone():Promise<'PHONE_OPENED'|'FAILED'>{
    }
    // For ordinary numbers ACTION_CALL starts a direct outgoing call. For 911,
    // Android requires ACTION_DIAL and user confirmation in the system dialer.
+   // Launch activity on direct user tap; OS still controls in-call UI.
    void IntentLauncher.startActivityAsync(plan.intentAction,{data:plan.uri})
-    .catch(()=>{}); // OS call UI is allowed to interrupt foreground map.
-   return 'PHONE_OPENED'; // Handoff attempted, not proof that anyone answered.
+    .catch(async()=>{try{await Linking.openURL(plan.uri);}catch{/* no false ACK */}});
+   return 'PHONE_OPENED'; // Intent attempted; not proof that anyone answered.
   }
   await Linking.openURL(plan.uri); // iOS fallback to phone UI
   return 'PHONE_OPENED';
