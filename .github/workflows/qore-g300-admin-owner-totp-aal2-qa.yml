@@ -1,0 +1,40 @@
+name: QORE G300 Admin Owner TOTP AAL2 enrollment (no privilege grant)
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-admin/src/web-admin-auth.*'
+      - 'apps/movete-admin/src/AdminAuthPanel.tsx'
+      - '.github/workflows/qore-g300-admin-owner-totp-aal2-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-owner-totp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    defaults:
+      run:
+        working-directory: apps/movete-admin
+    env:
+      CI: 'true'
+      VITE_G285_OWNER_AUTO_FARE_ENABLED: 'false'
+      VITE_G116_OWNER_COMMISSION_ENABLED: 'false'
+      VITE_F1_OWNER_APPROVED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove AAL1 never elevates and MFA cannot grant Owner
+        run: node --test src/web-admin-auth.test.mjs
+      - name: Install Admin package without lifecycle scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Typecheck Admin and run complete QA suite
+        run: npm run check
+      - name: Build Admin web with Owner/ride/payment flags OFF
+        run: |
+          npm run build
+          test -f dist/index.html
+          echo 'MFA enrollment QA only. No real roles, credentials, commercial writes or deployments.'
