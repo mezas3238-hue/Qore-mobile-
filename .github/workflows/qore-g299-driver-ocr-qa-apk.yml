@@ -1,0 +1,81 @@
+name: QORE G299 Driver OCR offline QA APK
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-driver/**'
+      - '.github/workflows/qore-g299-driver-ocr-qa-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qore-g299-offline-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  offline-apk:
+    name: Android offline OCR QA APK (test-card only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: '1'
+      EXPO_PUBLIC_QORE_G299_OFFLINE_OCR_QA_APPROVED: 'true'
+      EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_G291_OCR_LAB_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED: 'false'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_SUPABASE_URL: ''
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+      EXPO_PUBLIC_QORE_STAGING_API_ORIGIN: ''
+      EXPO_PUBLIC_QORE_STAGING_API_HOST: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Assert credential-free, no-network QORE environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$EXPO_PUBLIC_QORE_G299_OFFLINE_OCR_QA_APPROVED" = true
+          test "$EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED" = false
+          test "$EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED" = false
+          test -z "$EXPO_PUBLIC_SUPABASE_URL"
+          test -z "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          test -z "$EXPO_PUBLIC_QORE_STAGING_API_ORIGIN"
+          test -z "$EXPO_PUBLIC_QORE_STAGING_API_HOST"
+          test -d "$ANDROID_HOME"
+      - name: Install native dependencies (no lifecycle scripts)
+        working-directory: apps/movete-driver
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Select distinct QA package name in the runner only
+        working-directory: apps/movete-driver
+        run: |
+          node -e 'const fs=require("fs"); const p="app.json"; const j=JSON.parse(fs.readFileSync(p,"utf8")); j.expo.name="Movete Driver OCR QA"; j.expo.android.package="com.movetefacil.driver.ocrqa"; j.expo.ios.bundleIdentifier="com.movetefacil.driver.ocrqa"; fs.writeFileSync(p,JSON.stringify(j,null,2));'
+      - name: Expo Android prebuild (ephemeral generated files)
+        working-directory: apps/movete-driver
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Bundle JavaScript and assemble self-contained QA APK
+        working-directory: apps/movete-driver/android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+      - name: Verify generated APK and no credential injection
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s apps/movete-driver/android/app/build/outputs/apk/release/app-release.apk
+          test "$EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED" = false
+          test -z "$EXPO_PUBLIC_SUPABASE_URL"
+          echo 'APK is offline laboratory only; not commercially signed or certified.'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QORE-G299-Driver-OCR-QA-Android-offline
+          path: apps/movete-driver/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 5
+          if-no-files-found: error
+          compression-level: 0
