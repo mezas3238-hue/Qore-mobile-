@@ -68,6 +68,7 @@ export async function submitDriverPendingVehicle({
   if(response?.status===403)return failed('DRIVER_ROLE_DENIED');
   if(response?.status===400)return failed('VEHICLE_FIELDS_REJECTED');
   if(response?.status===429)return failed('VEHICLE_RATE_LIMIT');
+  if(response?.status===503)return failed('STAGING_MUNICIPALITY_UNCONFIGURED');
   if(response?.status===409)return failed('VEHICLE_PENDING_CONFLICT');
   if(response?.status!==202)return failed('VEHICLE_RECEIPT_UNCONFIRMED');
   const type=response.headers?.get?.('content-type');
