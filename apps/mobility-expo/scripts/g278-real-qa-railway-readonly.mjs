@@ -50,7 +50,7 @@ async function json(response){
  return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(
   Buffer.concat(chunks,bytes)));
 }
-async function providerLogin(request,key,actor){
+async function providerLogin(request,key,actor,rememberToken){
  const login=await call(request,PROVIDER+'/auth/v1/token?grant_type=password',
   'POST',{...headers(key),'Content-Type':'application/json'},
   {email:actor.email,password:actor.password});
@@ -60,6 +60,8 @@ async function providerLogin(request,key,actor){
     typeof r.access_token!=='string'||r.access_token.length>8192||
     !JWT.test(r.access_token))throw Error('untrusted login receipt');
  const token=r.access_token;
+ // On network failure after login, this token MUST still be logged out.
+ rememberToken(token);
  const u=await call(request,PROVIDER+'/auth/v1/user','GET',
   {...headers(key),Authorization:'Bearer '+token});
  if(u.status!==200)throw Error('provider user denied');
@@ -109,8 +111,11 @@ export async function verifyG278RealQaRailway({
     const actor=actors.find(x=>x.slot===slot);
     if(!actor)throw Error('missing QA slot');
     // Retain the JWT immediately to revoke it even if later checks fail.
-    const identity=await providerLogin(request,publicKey,actor);
-    sessions.push({slot,...identity});
+    const pending={slot,token:null,userId:null};
+    const identity=await providerLogin(request,publicKey,actor,token=>{
+     pending.token=token;sessions.push(pending);
+    });
+    pending.userId=identity.userId;
    }
    if(new Set(sessions.map(x=>x.userId)).size!==3)
     throw Error('QA identity aliasing');
