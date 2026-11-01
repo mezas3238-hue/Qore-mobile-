@@ -1,0 +1,68 @@
+name: QORE G282 Driver vehicle pending G42 SQL and gateway
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g282-*'
+      - 'apps/mobility-expo/server/g2-staging-vehicle-gateway.mjs'
+      - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/server/run-g4-railway-staging.mjs'
+      - 'infra/qore-staging/migrations/g282_*'
+      - 'infra/qore-staging/ci/g282_*'
+      - '.github/workflows/qore-g282-vehicle-pending-g42.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gateway:
+    name: G282 Node 22 pending only and trusted scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
+      - run: node --check apps/mobility-expo/server/g4-staging-runtime.mjs
+      - run: node --check apps/mobility-expo/server/run-g4-railway-staging.mjs
+      - run: node --test apps/mobility-expo/server/g282-private-driver-vehicle-gateway.test.mjs
+  pg-contract:
+    name: G282 PostgreSQL ${{ matrix.pg }} transaction and ACL
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['16','17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_DB: qore_g282_disposable
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g282_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: qore_g282_disposable
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGOPTIONS: '-c statement_timeout=20000'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Disposable G42 and G2 fixtures ONLY
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g282_disposable_schema.sql
+      - name: Exact G282 migration under review
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g282_private_driver_vehicle_draft_g42_pg17.sql
+      - name: Verify G42 session, Driver role and pending-only SQL side effects
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g282_private_vehicle_draft_asserts.sql
