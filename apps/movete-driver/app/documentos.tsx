@@ -7,6 +7,7 @@ import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverDocumentUpload} from '../src/DriverDocumentUploadProvider';
 import type {DriverKycUploadKind} from '../src/domain/driver-document-upload.mjs';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
+import {buildPrivateDriverDocumentDossier} from '../src/domain/driver-document-dossier.mjs';
 export default function DriverDocuments(){
  const [fullName,setFullName]=useState('');
  const [plate,setPlate]=useState('');
@@ -16,6 +17,9 @@ export default function DriverDocuments(){
  const upload=useDriverDocumentUpload();
  const kyc=useDriverKycExpiry();
  const [consent,setConsent]=useState(false);
+ const dossier=buildPrivateDriverDocumentDossier({
+  connected:state.phase==='connected',documents:state.documents
+ });
  const kindLabels:Record<string,string>={
   licencia:'Licencia de conducir',identidad_frente:'Identidad — frente',
   identidad_dorso:'Identidad — dorso',cedula_verde:'Cédula verde',
@@ -77,14 +81,15 @@ export default function DriverDocuments(){
    <Text style={styles.small}>Expediente obligatorio: licencia, cédula de identidad de ambos lados, cédula verde, habilitación, seguro, inspección y selfie actual con consentimiento y verificación facial. Una foto subida no basta para aprobar la cuenta.</Text>
    {state.phase==='connected'?<>
     <Text style={styles.text}>Último estado del servidor STAGING. No se muestran archivos ni identificaciones personales.</Text>
-    {state.documents.length===0?
-     <Text style={styles.small}>Aún no hay documentación registrada y comprobada para esta cuenta de prueba.</Text>:
-     state.documents.map(doc=>
-      <View key={doc.kind} style={{gap:4}}>
-       <Text style={styles.text}>{kindLabels[doc.kind]??'Documento'}: {statusLabels[doc.status]??'Sin verificar'}</Text>
-      </View>
-     )
-    }
+    <Text style={styles.small}>Expediente de ocho requisitos; solo se muestran los estados privados de esta sesión, nunca los archivos.</Text>
+    {dossier.entries.map(doc=>
+     <View key={doc.kind} style={{gap:4,paddingVertical:4}}>
+      <Text style={styles.text}>{kindLabels[doc.kind]??'Documento'}: {
+       doc.state==='missing'?'No presentado':
+       doc.state==='unknown'?'Sin verificación':
+       statusLabels[doc.state]??'Sin verificar'}</Text>
+     </View>
+    )}
     <Text style={styles.small}>Licencia actual revisada: {state.currentLicenseApproved?'Sí':'No'}. Se verifican por separado vehículo, vencimientos, seguro y autorizaciones; la aprobación documental no permite operar.</Text>
    </>:<Text style={styles.text}>No se ha confirmado una sesión Driver de STAGING. Por privacidad, no se muestran estados previos ni documentos locales. Estado: {state.phase}.</Text>}
    <Action label="Actualizar estado privado" secondary
@@ -94,6 +99,7 @@ export default function DriverDocuments(){
    <Text style={styles.heading}>Cámara inteligente — prueba local</Text>
    <Text style={styles.small}>Captura nativa opt-in, sin enviar datos. Usá solo documentos de prueba hasta que se habilite la subida privada y la revisión del servidor.</Text>
    <Action label="Abrir cámara inteligente de prueba" secondary onPress={()=>router.push('/camara-inteligente')}/>
+   <Action label="Probar OCR de matrículas (local)" secondary onPress={()=>router.push('/ocr-matriculas')}/>
    <Text style={styles.heading}>Presentar mi expediente</Text>
    {upload.enabled&&state.phase==='connected'?<>
     {Object.entries(kindLabels).map(([documentKind,label])=>

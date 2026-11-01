@@ -1,0 +1,26 @@
+/**
+ * G299 Android-only offline QA mode. Every variable is a static Metro
+ * EXPO_PUBLIC_ reference so Expo can inline the inspected compile-time value.
+ * Without an empty credentials/endpoint config, refuse the laboratory mode.
+ */
+import {canRunOfflineDriverOcrQa} from '../domain/driver-offline-ocr-qa.mjs';
+export const OFFLINE_DRIVER_OCR_QA=canRunOfflineDriverOcrQa({
+ EXPO_PUBLIC_QORE_G299_OFFLINE_OCR_QA_APPROVED:
+  process.env.EXPO_PUBLIC_QORE_G299_OFFLINE_OCR_QA_APPROVED,
+ EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED:
+  process.env.EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED,
+ EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED:
+  process.env.EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED,
+ EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED:
+  process.env.EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED,
+ EXPO_PUBLIC_QORE_G291_OCR_LAB_APPROVED:
+  process.env.EXPO_PUBLIC_QORE_G291_OCR_LAB_APPROVED,
+ EXPO_PUBLIC_QORE_STAGING_API_ORIGIN:
+  process.env.EXPO_PUBLIC_QORE_STAGING_API_ORIGIN,
+ EXPO_PUBLIC_QORE_STAGING_API_HOST:
+  process.env.EXPO_PUBLIC_QORE_STAGING_API_HOST,
+ EXPO_PUBLIC_SUPABASE_URL:
+  process.env.EXPO_PUBLIC_SUPABASE_URL,
+ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+});
