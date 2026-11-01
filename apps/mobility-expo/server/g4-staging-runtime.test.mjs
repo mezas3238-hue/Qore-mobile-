@@ -2518,3 +2518,32 @@ test('G252 true wires signed provider only to private merchant inbox, not mercha
    x.name==='mobility_stage_g173_merchant_transition_qa').length,0);
  });
 });
+
+
+test('G263 Driver pickup is OFF by default and requires verified G42 provider identity when opted in',async()=>{
+ const m=mockSupabase();
+ await assert.rejects(prepare(m,{g263DriverPickupApproved:'true'}),
+  /G263 Driver pickup requires explicit staging-only boolean opt-in/);
+ const defaultRuntime=await prepare(m);
+ await http(defaultRuntime,async base=>{
+  const closed=await req(base,'/v1/staging/driver/pickup-preferences','driver');
+  assert.equal(closed.status,503);
+ });
+ const validProviderRef='staging123456789abcd'; // 20-character STAGING mock ref
+ assert.equal(validProviderRef.length,20);
+ const opted=await prepare(m,{
+  projectRef:validProviderRef,g263DriverPickupApproved:true,
+  request:(url,args)=>m.request(url.replace(validProviderRef,ref),args),
+  createClient:(url,key)=>m.createClient(url.replace(validProviderRef,ref),key)
+ });
+ await http(opted,async base=>{
+  const unverified=await req(base,'/v1/staging/driver/pickup-preferences','driver');
+  assert.equal(unverified.status,401);
+  assert.equal(unverified.body.code,'G197_IDP_UNAVAILABLE');
+  const attemptedMutation=await req(base,'/v1/staging/driver/pickup-preferences',
+   'driver','PUT',{serviceKind:'RIDE',maximumRoadMeters:5000,expectedRevision:0});
+  assert.equal(attemptedMutation.status,401);
+  assert.equal(attemptedMutation.body.code,'G197_IDP_UNAVAILABLE');
+ });
+ assert.equal(m.state.rpcs.some(x=>x.name.startsWith('mobility_stage_g197_')),false);
+});
