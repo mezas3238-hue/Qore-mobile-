@@ -59,7 +59,7 @@ export function AdminAuthPanel(){
    const outcome=await auth.beginTotpEnrollment();
    if(outcome.ok&&outcome.secret){
     setSetupSecret(outcome.secret);
-    setMessage('Introducí esta clave en tu aplicación autenticadora y después confirmá el código de seis dígitos. La clave no se guarda en el navegador.');
+    setMessage('Introducí esta clave en tu aplicación autenticadora y después confirmá el código de seis dígitos. La clave solo permanece temporalmente en memoria de esta pantalla, nunca en localStorage ni en el servidor de QORE.');
    }else setMessage('No se pudo iniciar la configuración. Cerrá la sesión y comprobá los permisos del proveedor.');
   }catch{setMessage('No se pudo comunicar con el proveedor MFA.');}
   finally{setBusy(false);}
