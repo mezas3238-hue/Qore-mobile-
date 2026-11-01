@@ -211,7 +211,7 @@ export async function prepareQoreG4StagingRuntime({
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
  g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
- g282VehicleDraftApproved=false,
+ g282VehicleDraftApproved=false,g302TrustedMunicipalityCode=null,
  g260AdminAal2Approved=false,g268OwnerFareApproved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
@@ -1284,6 +1284,7 @@ export async function prepareQoreG4StagingRuntime({
  const g282VehicleDraft=g282VehicleTrust===null?null:
   createG282PendingVehicleGateway({
    projectRef:ref,
+   trustedMunicipalityCode:g302TrustedMunicipalityCode,
    verifyDriverSession:token=>g282VehicleTrust.verifyParticipantSession(token),
    authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
    submitPending:async params=>{

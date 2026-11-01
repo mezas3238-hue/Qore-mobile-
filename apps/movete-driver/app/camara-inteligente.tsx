@@ -35,6 +35,7 @@ export default function DriverSmartCameraLab(){
  const lastAcc=useRef<{x:number;y:number;z:number}|null>(null);
  const motion=useRef(1);
  const lastShot=useRef(0);
+ const cameraReadyAt=useRef(0);
  const count=useRef(0);
  const lock=useRef(false);
  const stop=()=>{
@@ -63,6 +64,12 @@ export default function DriverSmartCameraLab(){
  const shoot=useCallback(async(manual:boolean)=>{
   if(lock.current||!authorized||!ready||permission?.granted!==true||
    !camera.current||done)return;
+  // CameraView onCameraReady does not signal autofocus lock. Allow the
+  // continuous AF system time to settle before inspecting any sample.
+  if(Date.now()-cameraReadyAt.current<1800){
+   setNotice('Esperando enfoque automático. Mantené el teléfono quieto.');
+   return;
+  }
   lock.current=true;setBusy(true);
   const since=Date.now()-lastShot.current;
   lastShot.current=Date.now();
@@ -79,17 +86,17 @@ export default function DriverSmartCameraLab(){
    });
    count.current=gate.nextCount;
    setPasses(gate.nextCount);
-   if(gate.takePhoto||manual){
+   // Manual shutter is a fallback for framing, not a bypass for focus.
+   // Every candidate must pass full-image AND interior sharpness checks.
+   if(quality.ready&&(gate.takePhoto||manual)){
     setAuto(false);setDone(true);
     setNotice(gate.takePhoto
      ?'Autocaptura local realizada tras tres muestras válidas. La fotografía se descartó; no se envió ni aprobó ningún documento.'
-     :quality.ready
-     ?'Captura manual válida en prueba local. La fotografía se descartó y no fue enviada.'
-     :'Captura manual realizada con advertencias de calidad: '+quality.reasons.map(x=>messages[x]??x).join(' ')+
-       ' No se enviaron imágenes.');
+     :'Captura manual nítida en prueba local. La fotografía se descartó y no fue enviada.');
    }else{
-    setNotice(quality.ready?'Buen encuadre. Mantené el teléfono estable ('+
-     gate.nextCount+'/3).':quality.reasons.map(x=>messages[x]??x).join(' '));
+    setNotice(quality.ready?'Enfoque aceptable. Mantené el teléfono estable ('+
+     gate.nextCount+'/3).':
+     'Foto rechazada, no aceptada: '+quality.reasons.map(x=>messages[x]??x).join(' '));
    }
   }catch{
    count.current=0;setPasses(0);
@@ -126,7 +133,8 @@ export default function DriverSmartCameraLab(){
     <>
      {!done&&<View style={{height:340,borderRadius:14,overflow:'hidden',backgroundColor:'#18383E'}}>
       <CameraView ref={camera} style={{flex:1}} facing="back"
-       onCameraReady={()=>setReady(true)}
+       autofocus="off"
+       onCameraReady={()=>{cameraReadyAt.current=Date.now();setReady(true);}}
        onMountError={()=>{stop();setReady(false);setNotice('Cámara no disponible en este dispositivo.');}}/>
       <View pointerEvents="none" style={{position:'absolute',left:'8%',top:'17%',
        width:'84%',height:'66%',borderWidth:3,borderColor:'#FFF',
@@ -134,18 +142,18 @@ export default function DriverSmartCameraLab(){
      </View>}
      <Text style={styles.text} accessibilityRole="alert">{notice}</Text>
      {!done&&<>
-      <Text style={styles.small}>Colocá el documento entero sobre un fondo contrastado. Se verifican píxeles reales, bordes, estabilidad, luz y nitidez antes de la autocaptura. La detección no certifica identidad ni autenticidad.</Text>
+      <Text style={styles.small}>Esperá a que enfoque. La foto se rechaza si el interior está borroso, aunque sus bordes se vean nítidos. Se requieren tres muestras consecutivas nítidas y estables. Ninguna captura se acepta sin comprobar calidad.</Text>
       <Text style={styles.small}>Muestras aceptadas: {passes}/3.</Text>
       <Action label={auto?'Detener análisis automático':'Comenzar autocaptura'}
        disabled={!ready||busy} onPress={()=>auto?stop():(
         count.current=0,setPasses(0),setAuto(true)
        )}/>
-      <Action label={busy?'Analizando…':'Captura manual de respaldo'}
+      <Action label={busy?'Analizando enfoque…':'Comprobar nitidez y capturar manualmente'}
        secondary disabled={!ready||busy}
        onPress={()=>{stop();void shoot(true);}}/>
      </>}
      {done&&<Action label="Repetir prueba" secondary onPress={()=>{
-      count.current=0;setPasses(0);setDone(false);setReady(false);
+      count.current=0;setPasses(0);setDone(false);setReady(false);cameraReadyAt.current=0;
       setNotice('Preparando nueva prueba local.');setAuto(false);
      }}/>}
     </>

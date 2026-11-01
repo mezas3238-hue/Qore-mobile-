@@ -16,12 +16,11 @@ const exact=(o,names)=>validObject(o)&&Object.keys(o).length===names.length&&
  names.every(k=>Object.hasOwn(o,k));
 const failed=code=>Object.freeze({ok:false,code,commercialEnabled:false});
 export function validateDriverPendingVehicleDraft(draft){
- const names=['kind','service','municipalityCode','plate','brand','model',
+ const names=['kind','service','plate','brand','model',
   'year','passengerCapacity'];
  if(!exact(draft,names))return false;
- const {kind,service,municipalityCode,plate,brand,model,year,passengerCapacity}=draft;
+ const {kind,service,plate,brand,model,year,passengerCapacity}=draft;
  if(!Object.hasOwn(SERVICES,kind)||!SERVICES[kind].has(service)||
-  typeof municipalityCode!=='string'||!/^[A-Z0-9_-]{2,60}$/.test(municipalityCode)||
   typeof plate!=='string'||!/^[A-Z0-9-]{4,12}$/.test(plate)||
   typeof brand!=='string'||brand.trim()!==brand||brand.length<2||brand.length>80||
   typeof model!=='string'||model.trim()!==model||model.length<1||model.length>80||
@@ -69,6 +68,7 @@ export async function submitDriverPendingVehicle({
   if(response?.status===403)return failed('DRIVER_ROLE_DENIED');
   if(response?.status===400)return failed('VEHICLE_FIELDS_REJECTED');
   if(response?.status===429)return failed('VEHICLE_RATE_LIMIT');
+  if(response?.status===503)return failed('STAGING_MUNICIPALITY_UNCONFIGURED');
   if(response?.status===409)return failed('VEHICLE_PENDING_CONFLICT');
   if(response?.status!==202)return failed('VEHICLE_RECEIPT_UNCONFIRMED');
   const type=response.headers?.get?.('content-type');

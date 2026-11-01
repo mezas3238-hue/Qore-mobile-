@@ -77,20 +77,46 @@ export function assessDriverCaptureFrame(frame){
   rect.x>=0.025&&rect.y>=0.025&&rect.width>=0.55&&
   rect.height>=0.35&&rect.x+rect.width<=0.975&&
   rect.y+rect.height<=0.975;
+ // A sharp rectangular BORDER can falsely raise whole-image Laplacian
+ // while the text in the middle is blurred. Measure detail INSIDE the
+ // detected subject, excluding its outer contour and the UI overlay.
+ let interiorSharpness=0,interiorEdgeRatio=0;
+ if(validBox){
+  const x0=Math.max(1,Math.floor((rect.x+rect.width*.2)*w));
+  const x1=Math.min(w-2,Math.floor((rect.x+rect.width*.8)*w));
+  const y0=Math.max(1,Math.floor((rect.y+rect.height*.2)*h));
+  const y1=Math.min(h-2,Math.floor((rect.y+rect.height*.8)*h));
+  let count=0,lapTotal=0,lapSq=0,edges=0;
+  for(let y=y0;y<=y1;y+=2)for(let x=x0;x<=x1;x+=2){
+   const k=y*w+x;
+   const lap=4*luma[k]-luma[k-1]-luma[k+1]-luma[k-w]-luma[k+w];
+   lapTotal+=lap;lapSq+=lap*lap;count++;
+   if(Math.abs(lap)>=20)edges++;
+  }
+  if(count>0){
+   interiorSharpness=lapSq/count-(lapTotal/count)**2;
+   interiorEdgeRatio=edges/count;
+  }
+ }
  const reasons=[];
  if(mean<65)reasons.push('TOO_DARK');
  if(mean>205)reasons.push('TOO_BRIGHT');
  if(bright/luma.length>0.12)reasons.push('GLARE');
  if(dark/luma.length>0.25)reasons.push('SHADOW');
  if(contrast<22)reasons.push('LOW_CONTRAST');
- if(sharpness<180)reasons.push('OUT_OF_FOCUS');
+ // Both whole image AND interior need real detail. These conservative
+ // thresholds are lab-only; physical-device calibration is still required.
+ if(sharpness<180||interiorSharpness<420||interiorEdgeRatio<0.055)
+  reasons.push('OUT_OF_FOCUS');
  if(frame.motionRms>0.085)reasons.push('CAMERA_MOVING');
  // Bounding box MUST be from an image-based detector; overlays are NOT evidence.
  if(!validBox)reasons.push('SUBJECT_NOT_VERIFIED_IN_FRAME');
  return Object.freeze({
   ready:reasons.length===0,reasons:Object.freeze(reasons),
   metrics:Object.freeze({brightness:Math.round(mean),contrast:Math.round(contrast),
-   sharpness:Math.round(sharpness),glareRatio:bright/luma.length}),
+   sharpness:Math.round(sharpness),interiorSharpness:Math.round(interiorSharpness),
+   interiorEdgeRatio:Math.round(interiorEdgeRatio*1000)/1000,
+   glareRatio:bright/luma.length}),
   mayApprove:false
  });
 }

@@ -20,7 +20,9 @@ export async function inspectNativeDriverDocumentPhoto(
   !Number.isFinite(motionRms)||motionRms<0)
   throw Error('CAMERA_IMAGE_SOURCE_INVALID');
  const ctx=ImageManipulator.manipulate(fileUri);
- ctx.resize({width:160});
+ // 160px downsampling concealed blurred glyphs behind crisp document
+ // borders; retain more original detail for interior focus inspection.
+ ctx.resize({width:256});
  const downsized=await ctx.renderAsync();
  let saved:{uri:string;base64?:string|null}|undefined;
  let bytes:Uint8Array|undefined;

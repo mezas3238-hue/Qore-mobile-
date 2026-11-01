@@ -21,6 +21,7 @@ const errors:Record<string,string>={
  DRIVER_ROLE_DENIED:'Esta cuenta no está autorizada para registrar vehículos.',
  VEHICLE_FIELDS_REJECTED:'El servidor rechazó uno o más datos del vehículo.',
  VEHICLE_RATE_LIMIT:'Se alcanzó el límite temporal de solicitudes.',
+ STAGING_MUNICIPALITY_UNCONFIGURED:'El área de servicio aún no está configurada en el servidor STAGING. No tenés que ingresar códigos de municipio.',
  VEHICLE_PENDING_CONFLICT:'La solicitud no fue aceptada. Revisá los datos y no crees una nueva solicitud automáticamente.',
  VEHICLE_RECEIPT_INVALID:'No pudimos comprobar el comprobante de recepción.',
  VEHICLE_RECEIPT_UNCONFIRMED:'No se pudo confirmar la recepción. Conservamos la misma clave para un reintento manual.'
@@ -30,7 +31,6 @@ export default function DriverVehiclePending(){
  const {state:workspace}=useDriverWorkspace();
  const [kind,setKind]=useState<DriverPendingVehicleKind>('AUTO');
  const [service,setService]=useState<DriverPendingVehicleService>('economico');
- const [municipality,setMunicipality]=useState('');
  const [plate,setPlate]=useState('');
  const [brand,setBrand]=useState('');
  const [model,setModel]=useState('');
@@ -52,12 +52,12 @@ export default function DriverVehiclePending(){
    generation.current+=1;
    key.current=null;
    setNotice('');setReceived(false);
-   setPlate('');setBrand('');setModel('');setMunicipality('');
+   setPlate('');setBrand('');setModel('');
   });
   return ()=>{generation.current++;unsub?.();};
  },[auth]);
  const draft={
-  kind,service,municipalityCode:municipality.trim().toUpperCase(),
+  kind,service,
   plate:plate.trim().toUpperCase(),brand:brand.trim(),model:model.trim(),
   year:Number(year),passengerCapacity:Number(capacity)
  };
@@ -130,7 +130,6 @@ export default function DriverVehiclePending(){
        onPress={()=>{clearReceipt();setService(option);setCapacity(option==='xl'?'6':'4');}}/></View>)}
     </View>
    </>}
-   {field('Código de municipio',municipality,setMunicipality,{max:60,uppercase:true})}
    {field('Matrícula real',plate,setPlate,{max:12,uppercase:true})}
    {field('Marca',brand,setBrand,{max:80})}
    {field('Modelo',model,setModel,{max:80})}

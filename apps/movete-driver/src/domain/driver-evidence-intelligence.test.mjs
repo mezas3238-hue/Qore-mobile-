@@ -66,3 +66,29 @@ test('Three separate valid frames needed, any failure resets gate',()=>{
  assert.equal(nextDriverAutoCaptureGate({quality:bad,elapsedMs:650,previousCount:2}).nextCount,0);
  assert.equal(nextDriverAutoCaptureGate({quality:good,elapsedMs:100,previousCount:2}).takePhoto,false);
 });
+
+test('G302 blurred interior is rejected even if document border remains sharp',()=>{
+ const f=photo(),{luma,width,height}=f;
+ // Preserve high-frequency image outside centre, but erase all glyph
+ // detail in the subject interior to simulate missed autofocus.
+ for(let y=Math.floor(height*.22);y<height*.78;y++)
+  for(let x=Math.floor(width*.22);x<width*.78;x++)
+   luma[y*width+x]=120;
+ const result=assessDriverCaptureFrame(f);
+ assert.equal(result.ready,false);
+ assert(result.reasons.includes('OUT_OF_FOCUS'));
+ assert(result.metrics.interiorSharpness<420);
+ assert.equal(result.mayApprove,false);
+});
+test('G302 three frames with any blurred interior cannot trigger shutter',()=>{
+ let prev=0;
+ for(const frame of [photo(),photo('blurred'),photo(),photo()]){
+  const gate=nextDriverAutoCaptureGate({
+   previousCount:prev,quality:assessDriverCaptureFrame(frame),
+   elapsedMs:1200,minimumGapMs:450
+  });
+  assert.equal(gate.takePhoto,false);
+  prev=gate.nextCount;
+ }
+ assert.equal(prev,2);
+});
