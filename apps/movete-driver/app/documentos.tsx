@@ -91,6 +91,9 @@ export default function DriverDocuments(){
     disabled={state.phase==='not-configured'||state.phase==='loading'}
     onPress={()=>{void refresh();}}/>
    <Text style={styles.small}>Cada archivo queda pendiente hasta la verificación oficial. La autorización de motos para paquetes no habilita viajes con pasajeros.</Text>
+   <Text style={styles.heading}>Cámara inteligente — prueba local</Text>
+   <Text style={styles.small}>Captura nativa opt-in, sin enviar datos. Usá solo documentos de prueba hasta que se habilite la subida privada y la revisión del servidor.</Text>
+   <Action label="Abrir cámara inteligente de prueba" secondary onPress={()=>router.push('/camara-inteligente')}/>
    <Text style={styles.heading}>Presentar mi expediente</Text>
    {upload.enabled&&state.phase==='connected'?<>
     {Object.entries(kindLabels).map(([documentKind,label])=>
