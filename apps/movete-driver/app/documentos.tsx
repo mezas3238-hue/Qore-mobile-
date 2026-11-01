@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {router} from 'expo-router';
 import {ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {validateDriverDraft} from '../src/domain/capabilities.mjs';
@@ -48,6 +49,11 @@ export default function DriverDocuments(){
     setResult(checked.ok?'Borrador válido. No se enviaron documentos ni se aprobó el vehículo.':checked.reason);
    }}/>
    {result!==''&&<Text accessibilityRole="alert" style={[styles.text,{color:palette.teal}]}>{result}</Text>}
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>Presentar solicitud de vehículo</Text>
+   <Text style={styles.small}>El borrador de arriba se valida solo en tu dispositivo. Para presentar los datos reales del vehículo al backend STAGING, usá el formulario independiente; ninguna solicitud se aprueba automáticamente.</Text>
+   <Action label="Abrir registro pendiente de vehículo" secondary onPress={()=>router.push('/vehiculo')}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Vencimientos y estado de la cuenta</Text>
