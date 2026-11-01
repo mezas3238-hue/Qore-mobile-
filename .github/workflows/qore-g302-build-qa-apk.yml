@@ -43,9 +43,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android 36 platform SDK
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Use preinstalled Android SDK on GitHub Ubuntu runner
+        shell: bash
+        run: |
+          test -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "Android SDK: ${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/platforms/android-* | tail -5
+          ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | tail -5
       - name: Install Expo dependencies — no secrets
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Verify exact isolated QA Android application ID
