@@ -1,5 +1,5 @@
 /**
- * G300: static App Store distribution guard for two native Expo apps.
+ * G300/G301: Android APK internal QA first, then AAB/IPA store releases.
  * No Apple/Google/Expo credentials, no builds, no uploads, no LIVE.
  */
 import test from 'node:test';
@@ -22,11 +22,18 @@ for(const {dir,id,audience} of nativeApps){
   assert.equal(config.extra.liveOperationsEnabled,false);
   assert.ok(/^Movete Fácil /.test(config.name));
  });
- test('G300 '+dir+' EAS profiles build AAB and iOS store archives only',()=>{
+ test('G301 '+dir+' EAS profiles build internal QA APK plus separate AAB and iOS store archives',()=>{
   const eas=read('apps/'+dir+'/eas.json');
   assert.equal(eas.cli.appVersionSource,'local');
   assert.equal(eas.submit,undefined,'Never submit or publish automatically');
-  assert.equal(eas.build.development,undefined,'No APK sideloading profile');
+  assert.equal(eas.build.development,undefined,'No production-adjacent developer tooling');
+  const qa=eas.build['qa-apk'];
+  assert.equal(qa.distribution,'internal','APK must never be presented as store release');
+  assert.equal(qa.android.buildType,'apk','QA only needs an Android installable APK');
+  assert.equal(qa.env.EXPO_PUBLIC_QORE_LIVE_OPERATIONS,'false');
+  assert.equal(qa.autoSubmit,undefined,'No automatic QA publication');
+  assert.equal(qa.developmentClient,undefined,'Use standalone test app without dev tooling');
+  assert.equal(qa.ios,undefined,'iOS tests must use TestFlight or separately signed builds');
   for(const profile of ['store-review','production']){
    const p=eas.build[profile];
    assert.equal(p.distribution,'store');
@@ -36,6 +43,8 @@ for(const {dir,id,audience} of nativeApps){
    assert.equal(p.autoSubmit,undefined);
    assert.equal(p.channel,undefined);
   }
+  assert.notEqual(eas.build['qa-apk'].distribution,eas.build.production.distribution);
+  assert.notEqual(eas.build['qa-apk'].android.buildType,eas.build.production.android.buildType);
   const text=JSON.stringify(eas);
   assert.doesNotMatch(text,/service_role|sb_secret_|private_key|api[_-]?token|password/i);
  });
