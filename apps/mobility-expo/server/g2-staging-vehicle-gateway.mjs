@@ -25,7 +25,7 @@ function eligibleIdentity(user) {
   user.is_anonymous!==true&&
   (typeof user.email_confirmed_at==='string'||typeof user.phone_confirmed_at==='string');
 }
-function parseDraft(data) {
+export function parseDraft(data) {
  const keys=['requestKey','kind','service','municipalityCode','plate','brand','model','year','passengerCapacity'];
  if(!exact(data,keys)||typeof data.requestKey!=='string'||!UUID.test(data.requestKey))
   return null;
