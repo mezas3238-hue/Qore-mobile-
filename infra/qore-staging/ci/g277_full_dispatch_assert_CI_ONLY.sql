@@ -36,8 +36,8 @@ BEGIN
  quote_id:=public.mobility_stage_g73_quote(passenger,route_id,qk);
  trip_id:=public.mobility_stage_g73_book(passenger,quote_id,bk);
  IF public.mobility_stage_g73_book(passenger,quote_id,bk)<>trip_id
-  OR (SELECT count(*) FROM public.mobility_stage_g269_auto_dispatch_jobs
-   WHERE trip_id=trip_id AND booking_key=bk AND passenger_id=passenger)<>1
+  OR (SELECT count(*) FROM public.mobility_stage_g269_auto_dispatch_jobs j
+   WHERE j.trip_id=trip_id AND j.booking_key=bk AND passenger_id=passenger)<>1
  THEN RAISE EXCEPTION 'G277 original trip booking not exactly once queued'; END IF;
  receipt:=public.mobility_stage_g90_passenger_dispatch_status_qa(passenger,bk);
  IF receipt->>'dispatchState'<>'SEARCHING_DRIVER'
@@ -81,9 +81,9 @@ BEGIN
  IF receipt->>'processed'<>'0'
  THEN RAISE EXCEPTION 'G277 G113 touched offer before expiry: %',receipt; END IF;
  -- Simulate expiration ONLY in disposable PG17. Never change real offers.
- UPDATE public.mobility_stage_auto_demo_offers
+ UPDATE public.mobility_stage_auto_demo_offers o
  SET expires_at=pg_catalog.clock_timestamp()-interval '2 seconds',
-  status='expired' WHERE trip_id=trip_id;
+  status='expired' WHERE o.trip_id=trip_id;
  UPDATE public.mobility_stage_g269_auto_dispatch_jobs
  SET next_attempt_at=pg_catalog.clock_timestamp()-interval '2 seconds'
  WHERE booking_key=bk;
