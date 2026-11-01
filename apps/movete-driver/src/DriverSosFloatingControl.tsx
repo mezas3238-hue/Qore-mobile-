@@ -17,7 +17,7 @@ export function DriverSosFloatingControl(){
    setFailed((await launchDriverSosPhone())==='FAILED');
   }finally{lock.current=false;}
  };
- return <View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
+ return <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
   <Pressable accessibilityRole="button"
    accessibilityLabel="SOS: llamar al número de emergencia o contacto configurado"
    accessibilityHint="Una pulsación inicia la llamada configurada mediante Android. El sistema telefónico puede cubrir el mapa."
