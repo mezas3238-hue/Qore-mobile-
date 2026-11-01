@@ -94,6 +94,7 @@ export default function DriverDocuments(){
    <Text style={styles.heading}>Cámara inteligente — prueba local</Text>
    <Text style={styles.small}>Captura nativa opt-in, sin enviar datos. Usá solo documentos de prueba hasta que se habilite la subida privada y la revisión del servidor.</Text>
    <Action label="Abrir cámara inteligente de prueba" secondary onPress={()=>router.push('/camara-inteligente')}/>
+   <Action label="Probar OCR de matrículas (local)" secondary onPress={()=>router.push('/ocr-matriculas')}/>
    <Text style={styles.heading}>Presentar mi expediente</Text>
    {upload.enabled&&state.phase==='connected'?<>
     {Object.entries(kindLabels).map(([documentKind,label])=>
