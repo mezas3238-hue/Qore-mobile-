@@ -24,7 +24,7 @@ function fixture({role='support',aal='aal2',verified=true,factors=1,
   calls.push('columns:'+columns);return {order:()=>({limit:async()=>({
    data:[tooMuchData?{...caseItem,customer_phone:'NOPE'}:caseItem],error:null
   })})};
- }}};
+ }}}};
  return {db,calls};
 }
 test('Support role + AAL2 + verified factor is necessary to see own tickets',async()=>{
