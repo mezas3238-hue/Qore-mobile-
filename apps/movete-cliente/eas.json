@@ -10,7 +10,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false"
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false",
+        "QORE_QA_BUILD": "true"
       }
     },
     "store-review": {
@@ -22,7 +23,8 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false"
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false",
+        "QORE_QA_BUILD": "false"
       }
     },
     "production": {
@@ -34,7 +36,8 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false"
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false",
+        "QORE_QA_BUILD": "false"
       }
     }
   }
