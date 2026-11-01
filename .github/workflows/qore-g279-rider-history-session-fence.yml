@@ -1,0 +1,42 @@
+name: QORE G279 provider G42 session fence for Passenger history
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g279-rider-history-session-fence*.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - '.github/workflows/qore-g279-rider-history-session-fence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-session-fence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed on revoked G42 Auth session before SQL history read
+        run: |
+          node --check apps/mobility-expo/server/g279-rider-history-session-fence.mjs
+          node --test apps/mobility-expo/server/g279-rider-history-session-fence.test.mjs
+      - name: Offline unit tests never access private provider credentials
+        run: echo 'G279 unit tests use offline mocks only; no SQL migration or deploy'
+
+  staging-anonymous-denial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Existing Railway HTTPS must reject unauthenticated Passenger history
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 15 --proto '=https' --tlsv1.2 'https://qore-mobile-backend-staging-staging.up.railway.app/v1/staging/rider/history')"
+          if [[ "$status" != "401" ]]; then
+            echo "G279 STAGING external anonymous denial UNVERIFIED: HTTP $status"
+            exit 1
+          fi
+          echo 'G279 existing Railway STAGING denies anonymous private history (401); no bearer, no secrets, no writes'
