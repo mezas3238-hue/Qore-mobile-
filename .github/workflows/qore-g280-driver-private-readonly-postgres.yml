@@ -1,0 +1,50 @@
+name: QORE G280 private Driver readiness PostgreSQL 16 and 17
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g280-driver-private-readonly-postgres.yml'
+      - 'infra/qore-staging/migrations/g280_driver_private_readonly_kyc_pg17.sql'
+      - 'infra/qore-staging/ci/g280_*.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  driver-private-readonly:
+    name: G280 PostgreSQL ${{ matrix.pg }} KYC read-only contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qore_g280_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g280_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: qore_g280_disposable
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGOPTIONS: '-c statement_timeout=20000'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install disposable schema ONLY
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g280_disposable_schema.sql
+      - name: Install genuine G280 function migration into disposable PG
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g280_driver_private_readonly_kyc_pg17.sql
+      - name: Verify private ACL and license-review legal gates, negatives and expiry
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g280_driver_private_readonly_asserts.sql
+      - name: Confirm no external writes
+        run: echo 'Disposable CI only - NO Supabase Auth writes, KYC approval, QA seed, Railway deployment or LIVE'
