@@ -2,6 +2,7 @@ import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {AppState,ScrollView,Text,View} from 'react-native';
 import {router,useFocusEffect,useLocalSearchParams} from 'expo-router';
 import {Action,Panel,styles} from '../src/DriverUI';
+import {DriverSosFloatingControl} from '../src/DriverSosFloatingControl';
 import {useDriverMotoJourney} from '../src/DriverMotoJourneyProvider';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
@@ -68,7 +69,7 @@ export default function DriverMotoTripScreen(){
    setNotice('No se confirmó el paso. Consultá el estado original; no se repetirá automáticamente.');
   }finally{lock.current=false;setBusy(false);}
  }
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+ return <View style={{flex:1}}><ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Viaje MOTO · Driver</Text>
    <Text style={styles.heroSub}>Solo reserva original autorizada por el servidor de pruebas.</Text>
@@ -109,5 +110,5 @@ export default function DriverMotoTripScreen(){
     Nunca se inventan GPS, distancia, ingresos ni cobros.</Text>
   </Panel>
   <Action label="Volver al panel Driver" secondary onPress={()=>router.back()}/>
- </ScrollView>;
+ </ScrollView><DriverSosFloatingControl/></View>;
 }
