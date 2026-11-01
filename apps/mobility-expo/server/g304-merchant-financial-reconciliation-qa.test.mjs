@@ -163,7 +163,7 @@ test('Partial, unverified, duplicate or wrong recipient receipt never closes COD
   x=>x.platformReceipt.verifiedByProvider=false,
   x=>x.platformReceipt.bankOrCollectorRef=x.merchantReceipt.bankOrCollectorRef,
   x=>x.merchantReceipt.orderId=ids.buyer,
-  x=>x.allocation.courierCustodialDebtPyg=90000
+  x=>x.allocation={...x.allocation,courierCustodialDebtPyg:90000}
  ]){
   const x=receipts();mutate(x);
   assert.equal(co(x).ok,false);
