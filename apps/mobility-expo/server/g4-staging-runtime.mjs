@@ -85,6 +85,7 @@ import {createQoreG247ProviderSessionTrust}
  from './g247-supabase-provider-session-trust.mjs';
 import {createQoreG260AdminAal2Trust}
  from './g260-supabase-admin-aal2-trust.mjs';
+import {createG268OwnerAutoFareGateway} from './g268-owner-auto-fare-gateway.mjs';
 import {createG262NativeAdminTraceGateway}
  from './g262-native-admin-trace-gateway.mjs';
 
@@ -913,6 +914,24 @@ export async function prepareQoreG4StagingRuntime({
   verifyBackofficeMfa:p=>resolvedAdminF1Trust.verifyBackofficeMfa(p),
   allowRequest,now
  };
+ // G268: use the ALREADY independent G260 IdP + G42 + G27/AAL2
+ // trust, never a request-supplied user/session/iat or server key in Client.
+ // Disabled with 503 when Owner has not approved G260 STAGING AAL2 trust.
+ const ownerAutoFare=verifiedAdminTrust===null?null:createG268OwnerAutoFareGateway({
+  projectRef:ref,environment:'isolated_staging',qaOnly:true,liveEnabled:false,
+  ...verifiedAdminTrust,
+  publishFare:async p=>{
+   const {data,error}=await admin.rpc('mobility_stage_g265_publish_auto_fare',{
+    _owner:p.ownerId,_session:p.sessionId,_iat_ms:p.tokenIatMs,
+    _request_key:p.requestKey,_zone_tag:p.zoneTag,
+    _base_pyg:p.basePyg,_per_km_pyg:p.perKmPyg,
+    _per_minute_pyg:p.perMinutePyg,_minimum_pyg:p.minimumPyg,
+    _commission_bps:p.commissionBps
+   });
+   if(error)throw Error('G268 private Owner fare RPC unavailable');
+   return data;
+  }
+ });
  // G158 verified allegations are read-only until a separately authorized
  // human investigation. G27 and provider AAL2 must both grant access.
  const adminFraud=verifiedAdminTrust===null?null:createG158AdminFraudQaGateway({
@@ -1310,6 +1329,7 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminCargoTrace===null?{}:{adminCargoTraceHandler:guard(adminCargoTrace)}),
    ...(adminCommerceTrace===null?{}:{adminCommerceTraceHandler:guard(adminCommerceTrace)}),
    ...(adminNativeTrace===null?{}:{adminNativeTraceHandler:guard(adminNativeTrace)}),
+   ...(ownerAutoFare===null?{}:{ownerAutoFareHandler:guard(ownerAutoFare)}),
    deliveryHandler:guard(createG176VerifiedCourierCustodyFence({deliveryHandler:deliveries})),
    merchantHandler:guard(createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})),
    ...(buyerCommerce===null?{}:{commerceQaHandler:guard(buyerCommerce)}),
