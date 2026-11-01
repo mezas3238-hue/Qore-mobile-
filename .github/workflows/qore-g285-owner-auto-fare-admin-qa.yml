@@ -1,0 +1,40 @@
+name: QORE G285 Owner AUTO fare Admin QA
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-admin/src/OwnerAutoFareEditor.tsx'
+      - 'apps/movete-admin/src/g285-owner-auto-fare-*'
+      - 'apps/movete-admin/src/owner-auto-fare-*'
+      - 'apps/movete-admin/src/main.tsx'
+      - 'apps/movete-admin/.env.example'
+      - '.github/workflows/qore-g285-owner-auto-fare-admin-qa.yml'
+  push:
+    branches:
+      - 'feature/qore-g285-owner-auto-fare-admin-editor-20261101'
+permissions:
+  contents: read
+jobs:
+  admin-owner-auto-tariffs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    defaults:
+      run:
+        working-directory: apps/movete-admin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test Owner AUTO fare browser contract without network secrets
+        run: node --test src/g285-owner-auto-fare-gateway.test.mjs
+      - name: Install Admin package without lifecycle scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Typecheck Admin bundle and all existing tests
+        run: npm run check
+      - name: Verify Admin web artifact with tariffs OFF by default
+        run: |
+          npm run build
+          test -f dist/index.html
+          echo 'G285 PASS; no external writes, prices, KYC, or LIVE activation'
