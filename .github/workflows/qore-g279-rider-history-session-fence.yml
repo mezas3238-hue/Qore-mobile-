@@ -1,0 +1,27 @@
+name: QORE G279 provider G42 session fence for Passenger history
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g279-rider-history-session-fence*.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - '.github/workflows/qore-g279-rider-history-session-fence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-session-fence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed on revoked G42 Auth session before SQL history read
+        run: |
+          node --check apps/mobility-expo/server/g279-rider-history-session-fence.mjs
+          node --test apps/mobility-expo/server/g279-rider-history-session-fence.test.mjs
+      - name: No credentials or external provider network in CI
+        run: echo 'G279 CI uses offline Auth mocks; no STAGING migration or deployment'
