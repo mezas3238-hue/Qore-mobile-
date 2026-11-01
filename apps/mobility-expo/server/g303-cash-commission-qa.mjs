@@ -66,9 +66,10 @@ export function prepareCashDebtOffsetQA(input){
  if(!exact(input,keys)||!UUID.test(input.driverId??''))
   return denied('INVALID_OFFSET_INPUT');
  const {driverId,receivable,digitalEarnings,policy}=input;
- if(!exact(policy,['allowAutomaticOffset','approvedByOwner','version'])||
+ if(!exact(policy,['allowAutomaticOffset','approvedByOwner','version','maxOffsetBps','minimumDriverPayoutPyg'])||
   policy.allowAutomaticOffset!==true||policy.approvedByOwner!==true||
-  !REF.test(policy.version??''))return denied('OFFSET_POLICY_NOT_APPROVED');
+  !REF.test(policy.version??'')||!pyg(policy.maxOffsetBps,10000)||
+  !pyg(policy.minimumDriverPayoutPyg))return denied('OFFSET_POLICY_NOT_APPROVED');
  if(!exact(receivable,['driverId','outstandingPyg','ledgerVersion','verifiedByServer','onHold'])||
   receivable.driverId!==driverId||!pyg(receivable.outstandingPyg)||
   !REF.test(receivable.ledgerVersion??'')||receivable.verifiedByServer!==true||
@@ -81,7 +82,12 @@ export function prepareCashDebtOffsetQA(input){
   !['CARD','WALLET','SPI'].includes(digitalEarnings.paymentMethod)||
   digitalEarnings.payoutPending!==true)
   return denied('DIGITAL_FUNDS_NOT_AVAILABLE');
- const offsetPyg=Math.min(receivable.outstandingPyg,digitalEarnings.payablePyg);
+ // Preserve a configured portion of the next earned digital fare for Driver.
+ // The policy is frozen and Owner-approved, not a rate supplied by the app.
+ const capByPercent=Math.floor(digitalEarnings.payablePyg*policy.maxOffsetBps/10000);
+ const capByMinimum=Math.max(0,digitalEarnings.payablePyg-policy.minimumDriverPayoutPyg);
+ const offsetPyg=Math.min(receivable.outstandingPyg,digitalEarnings.payablePyg,
+  capByPercent,capByMinimum);
  const driverPayoutPyg=digitalEarnings.payablePyg-offsetPyg;
  const cashDebtRemainingPyg=receivable.outstandingPyg-offsetPyg;
  if(!pyg(driverPayoutPyg)||!pyg(cashDebtRemainingPyg)||
