@@ -1,55 +1,50 @@
-# G304 — Pagos de Cliente y conciliación de Comercios, Repartidores y Movete Fácil
+# G304 — Comercio PREPAGO DIGITAL OBLIGATORIO (decisión Owner, 1 noviembre 2026)
 
-## Contratos de producto propuestos
+## Regla de producto no negociable
 
-Cliente: la pantalla de confirmación muestra **EFECTIVO** y **TARJETA**, total y moneda antes de aceptar. La disponibilidad de efectivo depende de la política por servicio, zona, comercio, riesgo y aceptación previa del Driver. No permitir cambiar el medio de pago después de completar el servicio sin consentimiento/registro seguro.
+**Toda compra de mercaderías en un Comercio de Movete Fácil debe pagarse digitalmente y quedar verificada antes de permitir la preparación y entrega.** NO existe efectivo ni pago contraentrega para pedidos de comercios. Esta regla prevalece sobre los borradores anteriores de G304.
 
-Los pedidos de Comercio contienen DOS partidas económicas independientes: productos y envío. Una tarifa versionada, calculada por servidor y aprobada por Owner, asigna comisión sobre productos y sobre envío por separado. Las ganancias pertenecen a TRES beneficiarios: Comercio, Repartidor y Movete Fácil. La comisión no se calcula sobre propinas ni tributos de forma no pactada; políticas de impuestos y arancel PSP deben validarse legal/contablemente.
+El Cliente tendrá métodos de pago distintos por tipo de servicio:
+- Viajes AUTO/MOTO y envíos particulares: EFECTIVO o TARJETA, sujetos a política operativa y Driver.
+- **Carrito/compra a Comercio: exclusivamente medios digitales prepago** (tarjeta; transferencia/QR únicamente cuando un proveedor permite comprobar su acreditación de forma confiable). No mostrar ni aceptar EFECTIVO ni pago al repartidor.
 
-Ejemplo en guaraníes (tasas DEMO):
-- Productos: Gs. 100.000; costo entrega: Gs. 15.000; cliente paga: Gs. 115.000.
-- Comisión QORE por productos: 10% de 100.000 = 10.000; Comercio neto: 90.000.
-- Comisión QORE por reparto: 20% de 15.000 = 3.000; Repartidor neto: 12.000.
-- Comisión bruta QORE: 13.000; **90000 + 12000 + 13000 = 115000**.
-- Arancel del procesador, si corresponde a plataforma por contrato, se contabiliza aparte y reduce solo su neto; nunca reducir silenciosamente el valor de los productos o el pago del repartidor.
+## Máquina de estados obligatoria
 
-## A. TARJETA — cobro digital
+1. `CART_CONFIRMED`: Cliente selecciona mercadería, cantidades y dirección. Servidor comprueba catálogo, stock, comercio, zona, precios y costo del envío. Cotización con versión de comisión Owner **congelada**.
+2. `AWAITING_PAYMENT`: Se crea orden pendiente y se retiene stock con plazo de vencimiento. El botón «Pagar antes de pedir» inicia el cobro mediante PSP autorizado. No se debe preparar ni despachar mercadería.
+3. `PAYMENT_VERIFIED`: El servidor comprueba evento PSP auténtico, cobro correspondiente a ese pedido, mismo cliente, importe completo PYG, método permitido y ausencia de reembolso/reversión. Tarjeta necesita **CAPTURED** (no solamente AUTHORIZED); transferencia/QR debe estar **SETTLED**. Se revisa el estado actual de pago en cada transición relevante y se impiden replays mediante identificadores únicos.
+4. `PREPARING`: Solo tras pago confirmado se permite el aviso al Comercio y comienzo de preparación.
+5. `READY_FOR_PICKUP` → `IN_TRANSIT` → `DELIVERED`: Preparación y entrega siguen flujo verificado; ningún repartidor recibe dinero del comprador por la mercadería.
+6. `SETTLEMENT_PENDING`: Tras entrega confirmada y **fondos disponibles/liquidados del PSP**, el motor separa dinero para Comercio, Repartidor y comisión plataforma.
+7. `MERCHANT_PAID` / `COURIER_PAID`: Cada beneficiario se marca como pagado solamente al recibir recibo del proveedor de desembolsos, no por mera solicitud. Si hay devolución, disputa, falta de entrega o contracargo, se retienen o corrigen las liquidaciones.
 
-1. Cliente acepta un checkout con reserva, stock y tarifa congelada. El proveedor de cobros autorizado tokeniza la tarjeta y confirma mediante eventos autenticados.
-2. Pedidos cancelados, no entregados o discutidos NO se liquidan automáticamente.
-3. Con pedido confirmado entregado y **fondos liquidados/disponibles**, el ledger crea UNA asignación por pedido: Comercio 90.000, Repartidor 12.000, plataforma 13.000, más costo PSP a descontar de la comisión si la política lo permite.
-4. Un PSP apto para marketplace puede administrar split/subcomercios y payouts; si no lo ofrece **no** hay liquidación automática de terceros: no se debe asumir que `Tpago` la tiene ni usar las cuentas de Movete Fácil para custodiar fondos sin acuerdo legal.
-5. Cada pago y destino debe quedar conciliado mediante comprobante independiente: `CAPTURED` o `PAYOUT_SENT` no equivale a `SETTLED` / `PAID`.
-6. Un reembolso o contracargo exige asientos inversos auditables y gestión de saldos, no edición del registro original.
+**Cobro confirmado antes de entregar** es diferente a **liquidación bancaria a Comercio y Repartidor después de entregar**.
 
-## B. EFECTIVO CONTRAENTREGA — el repartidor cobra al cliente
+## Ejemplo de distribución con dinero digital, no efectivo
 
-**Riesgo distinto de los viajes:** el Repartidor recibe físicamente Gs. 115.000, pero **solo Gs. 12.000 son su ingreso económico**. Queda una obligación de rendición por Gs. 103.000: Gs. 90.000 al Comercio + Gs. 13.000 a Movete Fácil. No registrar Gs. 115.000 como cobro bancario o caja física de Movete Fácil.
+Pedido: productos Gs. 100.000 + reparto Gs. 15.000 = Cliente paga digitalmente Gs. 115.000 antes de preparación.
+- Comisión productos 10 % (solo ejemplo): Gs. 10.000. Comercio Gs. 90.000.
+- Comisión reparto 20 % (solo ejemplo): Gs. 3.000. Repartidor Gs. 12.000.
+- Movete Fácil: Gs. 13.000 de comisión bruta, menos aranceles PSP si así se acordó.
+- Debe cerrar exactamente: `115000 = 90000 + 12000 + 13000`.
 
-1. Solo habilitar contraentrega cuando Comercio y Owner aprobaron la política, Driver posee documentación vigente, acepta custodiar ese importe, el pedido es de una zona habilitada, el total es menor al tope Owner y no hay restricción por riesgo.
-2. A la entrega, Cliente y Repartidor ratifican monto; prueba independiente de recepción y resolución de desacuerdo. **No crear obligación definitiva ante un cobro no confirmado o parcial.**
-3. El sistema registra **saldo de efectivo por rendir** del Repartidor, separado de su ganancia por el envío y de las comisiones de viajes de pasajeros.
-4. El Repartidor rinde Gs. 90.000 al Comercio y Gs. 13.000 al canal de cobranza de Movete Fácil (o la forma contractual autorizada). Los dos pagos se identifican con la ID de pedido. El Comercio ve `PENDIENTE DE RENDICIÓN`, `PARCIAL` o `ACREDITADO` según comprobantes conciliados, jamás por una mera pulsación.
-5. **Para primera salida comercial: recomendamos DESACTIVAR el efectivo contraentrega de productos** hasta certificar cobro, límites, seguro/garantías y depósitos. Permitir tarjeta para pedidos de Comercios; mantener efectivo para viajes solamente con comisiones compensables y política Owner.
-6. Alternativa futura de menor riesgo: al pagar por QR/transferencia, el comprador envía productos al Comercio y entrega al Repartidor solo el precio del envío (cuando el proveedor y producto lo permitan); se necesitará constancia dual y conciliación de dos operaciones sin duplicados.
-7. Para producto de alta cuantía, artículos sensibles o comercios nuevos, tarjeta/transferencia directa es preferible. No ofrecer contraentrega a cuenta nueva sin política aprobada.
+No asumir porcentaje de comisión antes de que el Owner lo configure en servidor ni modificar retroactivamente reglas congeladas. Los impuestos, propinas y aranceles se desglosan según contrato antes de operar realmente.
 
-## C. Conciliación administrativa
+## Seguridad y conciliación
 
-- Libro contable con `order_id`, versión de catálogo, tarifa y comisiones, líneas productos/envío, pago y custodia, referencias del proveedor, beneficiarios, estado y eventos de reembolso; **no números de tarjeta ni claves**.
-- Restricciones `UNIQUE(order_id,method,charge_id)` y `UNIQUE(provider_event_id)`; subcuentas por Comercio, Repartidor y plataforma; escritor transaccional con bloqueo por pedido, RLS y roles de servicio mínimos.
-- No asentar dos veces contra webhooks repetidos, reintentos, entrega parcial o cierres de pedido. Resolver pagos PSP con estado desconocido por consulta al procesador, no reenvío ciego.
-- Conciliación por pedido, por día y por periodo de liquidación: asignado / pendiente / confirmado / retenido / disputado. El Dashboard del Comercio solo puede ver SUS pedidos y comprobantes, el del Repartidor SUS importes y entregas.
-- **Soporte** puede inspeccionar un ticket autorizado y escalar una anomalía. No puede autorizar reembolsos, cambiar beneficiarios, porcentajes, rendir efectivo ajeno o transferir.
-- **Owner con MFA AAL2** establece porcentajes y topes futuros; cada pedido mantiene la versión congelada original, que no cambia retroactivamente.
-- Reembolsos por cancelación, devoluciones y mercancía defectuosa requieren flujo formal (quién responde y quién recibe contracargo), antes de LIVE.
+El backend final necesita un único escritor transaccional para cobro confirmado, stock reservado y autorización de preparación. `UNIQUE(order_id,psp_payment_ref)` / `UNIQUE(provider_event_ref)`, RLS, bloqueos y caducidad del pedido evitan despacho sin pago y cargos duplicados. Proveedor debe autenticar webhooks y permitir consultar el pago ante timeout. No confiar en capturas de pantalla, SMS, QR presentado por cliente ni estado local de app.
 
-## Estado del repositorio
+Conciliar por pedido y por lote: (a) cobro de Cliente, (b) venta y producto, (c) tarifa de entrega, (d) comisión Comercio, (e) comisión Repartidor, (f) arancel PSP, (g) liquidación Comercio, (h) liquidación Driver, (i) devolución/reclamación. Mantener pruebas de auditoría sin PAN/CVV ni datos innecesarios.
 
-`server/g304-merchant-financial-reconciliation-qa.mjs` añade prototipos offline para tarjeta, efectivo contraentrega y dos comprobantes de rendición; con tests automatizados. **LIVE = OFF.** No hay pagos reales, transferencias, cuenta bancaria, integraciones PSP ni base de datos para G304; todo está en PR DRAFT. Los cinco E2E STAGING externos siguen sin certificación.
+Accesos:
+- Comercio ve solo SUS pedidos, cobros confirmados, netos, desembolsos y devoluciones.
+- Repartidor ve solo sus entregas/ganancias y **no recibe pagos de mercadería**.
+- Owner con MFA AAL2 configura comisiones y consulta conciliación; Soporte solo atiende incidencias, sin pagos, reembolsos ni cambios de tarifas.
 
-## Opciones bancarias paraguayas por investigar, no comprometidas
+## Estado de código (QA, aún NO LIVE)
 
-- Banco Central: SPI 24/7, hasta ₲10 millones por operación entre participantes habilitados. No garantiza liquidación de adquirencia de tarjeta: https://www.bcp.gov.py/es/web/institucional/sistemas-de-pago-y-tesoreria
-- Bancard Tpago: ofrece cobro con tarjetas/QR, API y sandbox. La documentación **no acredita por sí sola** split 3 beneficiarios ni payout a terceros: https://tpagodocs.bancard.com.py/
-- Contratar formalmente proveedor capaz de marketplace/split, pagos a terceros, KYB de comercios, KYC de Drivers, reporte y manejo de contracargos; asesoría legal y BCP antes de activar operaciones.
+- `server/g304-merchant-financial-reconciliation-qa.mjs` incluye `prepareCommercePrepaidFulfillmentGateQA` para bloquear preparación antes de cobro autenticado y `prepareCommercePrepaidSplitQA` para calcular reparto **solo después de entrega + PSP SETTLED**.
+- `prepareCommerceCODReceivableQA` y `verifyCommerceCODRemittanceQA` permanecen como interfaces de compatibilidad que **rechazan siempre** con `MERCHANT_CASH_PROHIBITED`. No generan dinero adeudado ni custodia por repartidor.
+- Pruebas automatizadas verifican tanto pago previo como liquidación posterior, rechazos de efectivo, importe equivocado, método no permitido, evento falso, tarifa adulterada y entrega no certificada.
+- NO se ha integrado PSP real, no se ha instalado esquema G304 en PG17, no se ha desplegado en Railway, no se han hecho cobros ni payout bancario real. Todos los flags LIVE y COD permanecen OFF.
+- Los 5 recorridos externos completos todavía requieren certificación.
