@@ -29,6 +29,12 @@ function assertRailwayEnvironment(env){
  if(![undefined,'true','false'].includes(env.QORE_G260_ADMIN_AAL2_APPROVED))
   throw Error('G260 Admin AAL2 trust opt-in must be explicit boolean');
  const g260AdminAal2Approved=env.QORE_G260_ADMIN_AAL2_APPROVED==='true';
+ // Explicit independent Owner authorization: Admin read access is not fare write access.
+ if(![undefined,'true','false'].includes(env.QORE_G268_OWNER_FARE_APPROVED))
+  throw Error('G268 Owner fare opt-in must be an explicit boolean string');
+ const g268OwnerFareApproved=env.QORE_G268_OWNER_FARE_APPROVED==='true';
+ if(g268OwnerFareApproved&&!g260AdminAal2Approved)
+  throw Error('G268 Owner fare requires independently approved G260 AAL2');
  const port=Number(env.PORT);
  if(!Number.isInteger(port)||port<1024||port>65535)
   throw Error('Railway STAGING requires a valid PORT');
@@ -57,10 +63,10 @@ function assertRailwayEnvironment(env){
   adminOrigin,...admission
  });
  return {port,hostname,adminOrigin,admission,
-  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved};
+  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g268OwnerFareApproved};
 }
 const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,
- g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved}=assertRailwayEnvironment(process.env);
+ g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,g268OwnerFareApproved}=assertRailwayEnvironment(process.env);
 // Repeat the G256 read-only checks at process start: a missing Railway
 // pre-deploy hook must never bypass STAGING ownership or public-signup fence.
 const g256=await verifyG256RailwayLaunch({env:process.env});
@@ -69,6 +75,7 @@ const {createClient}=await import('@supabase/supabase-js');
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,
+ g268OwnerFareApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
