@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {ScrollView,Switch,Text,TextInput,View} from 'react-native';
-import {router} from 'expo-router';
+import {Redirect,router} from 'expo-router';
+import {OFFLINE_DRIVER_OCR_QA} from '../src/native/driver-offline-ocr-qa';
 import {Action,Panel,palette,styles} from '../src/DriverUI';
 import {useDriverKycExpiry} from '../src/DriverKycExpiryProvider';
 import {useDriverCurrentTrip} from '../src/DriverCurrentTripProvider';
@@ -124,6 +125,7 @@ export default function DriverHome(){
    else setResumeNotice('La asignación cambió o no pudo volver a verificarse. No se abrirá un viaje sin autorización del servidor.');
   }finally{resumeLock.current=false;setResuming(false);}
  }
+ if(OFFLINE_DRIVER_OCR_QA)return <Redirect href="/laboratorio-qa"/>;
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Movete Fácil Driver</Text>
