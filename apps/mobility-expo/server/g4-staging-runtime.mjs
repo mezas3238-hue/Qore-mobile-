@@ -78,6 +78,8 @@ import {createG173MerchantVerifiedMutationGateway} from './g173-merchant-verifie
 import {createG45BuyerOrderReservationQa} from './g45-buyer-order-reservation-qa.mjs';
 import {createG139CommerceQaHttpBridge} from './g139-commerce-qa-http-bridge.mjs';
 import {createG175SovereignBuyerCommerceFence} from './g175-sovereign-buyer-commerce-fence.mjs';
+import {createG305MerchantPrepaymentMutationFence}
+ from './g305-merchant-prepayment-mutation-fence.mjs';
 import {createG176VerifiedCourierCustodyFence} from './g176-verified-courier-custody-fence.mjs';
 import {createG177VerifiedAutoDriverStepGateway} from './g177-verified-auto-driver-step-gateway.mjs';
 import {createG184SovereignAutoCancellationFence} from './g184-sovereign-auto-cancellation-fence.mjs';
@@ -1355,7 +1357,12 @@ export async function prepareQoreG4StagingRuntime({
    ...(adminNativeTrace===null?{}:{adminNativeTraceHandler:guard(adminNativeTrace)}),
    ...(ownerAutoFare===null?{}:{ownerAutoFareHandler:guard(ownerAutoFare)}),
    deliveryHandler:guard(createG176VerifiedCourierCustodyFence({deliveryHandler:deliveries})),
-   merchantHandler:guard(createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})),
+   // G305: STAGING must not prepare/dispatch real merchant stock without
+   // an atomic, PSP-verified prepaid payment gate. Original synthetic PG16
+   // tests are independent; this runtime deliberately fails closed.
+   merchantHandler:guard(createG305MerchantPrepaymentMutationFence({
+    merchantHandler:createG175SovereignBuyerCommerceFence({merchantHandler:merchantMutations})
+   })),
    ...(buyerCommerce===null?{}:{commerceQaHandler:guard(buyerCommerce)}),
    financeHandler:guard(finance),
    safetyHandler:guard(safety),
