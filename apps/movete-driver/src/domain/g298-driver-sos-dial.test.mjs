@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeTrustedNumber,planDriverSosDial,SOS_DESTINATIONS} from './g298-driver-sos-dial.mjs';
+import {normalizeTrustedNumber,planDriverSosDial,SOS_DESTINATIONS,normalizeStoredSosPreference} from './g298-driver-sos-dial.mjs';
 test('G298 emergency always hands off to system dialer, never calls 911 via ACTION_CALL',()=>{
  for(const stored of [null,'','+595981123456','unsafe;tel:xyz']){
   assert.deepEqual(planDriverSosDial(SOS_DESTINATIONS.EMERGENCY_911,stored),{
@@ -35,4 +35,41 @@ test('G298 never claims telephone connection, operator acknowledgment or map vis
    'passengerId','identityReceiptId','mapRemainsVisible'])
   assert.equal(Object.hasOwn(plan,key),false);
  assert.equal(plan.mayOverlayMap,true);
+});
+
+test('G299 SOS defaults OFF even if previous version saved an emergency or contact',()=>{
+ for(const input of [
+  undefined,null,[],{}, {destination:'EMERGENCY_911'},
+  {destination:'TRUSTED_CONTACT',trustedNumber:'0981123456'},
+  {enabled:'true',destination:'EMERGENCY_911'},
+  {enabled:1,destination:'EMERGENCY_911'},
+  {enabled:false,destination:'EMERGENCY_911'}
+ ]){
+  const normalized=normalizeStoredSosPreference(input);
+  assert.equal(normalized.enabled,false,JSON.stringify(input));
+ }
+});
+test('G299 only explicit opt-in true reveals SOS for a valid destination',()=>{
+ assert.deepEqual(normalizeStoredSosPreference({
+  enabled:true,destination:'EMERGENCY_911',trustedNumber:'untrusted'
+ }),{enabled:true,destination:'EMERGENCY_911',trustedNumber:''});
+ assert.deepEqual(normalizeStoredSosPreference({
+  enabled:true,destination:'TRUSTED_CONTACT',trustedNumber:'0981 123 456'
+ }),{enabled:true,destination:'TRUSTED_CONTACT',trustedNumber:'0981123456'});
+});
+test('G299 corrupt trusted number or unknown destination cannot activate SOS',()=>{
+ for(const input of [
+  {enabled:true,destination:'TRUSTED_CONTACT',trustedNumber:'bad'},
+  {enabled:true,destination:'TRUSTED_CONTACT',trustedNumber:'tel:911'},
+  {enabled:true,destination:'INJECT',trustedNumber:'0981123456'}
+ ]){
+  assert.equal(normalizeStoredSosPreference(input).enabled,false);
+ }
+});
+test('G299 disabled choice can retain safe trusted number for a later explicit opt-in',()=>{
+ assert.deepEqual(normalizeStoredSosPreference({
+  enabled:false,destination:'TRUSTED_CONTACT',trustedNumber:'+595 981 123 456'
+ }),{
+  enabled:false,destination:'TRUSTED_CONTACT',trustedNumber:'+595981123456'
+ });
 });
