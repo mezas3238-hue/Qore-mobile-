@@ -230,6 +230,7 @@ export default function DriverHome(){
    <Text style={styles.heading}>Mi cuenta de conductor</Text>
    <Text style={styles.text}>Registrá tus datos y revisá los requisitos antes de solicitar una aprobación administrativa.</Text>
    <Action label="Documentación y vehículo" onPress={()=>router.push('/documentos')}/>
+   <Action label="Registrar vehículo pendiente" secondary onPress={()=>router.push('/vehiculo')}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Viajes y envíos</Text>
