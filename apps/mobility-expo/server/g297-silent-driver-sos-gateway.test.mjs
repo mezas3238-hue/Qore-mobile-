@@ -88,7 +88,6 @@ test('G297 rejects forged/missing bearer and non-driver or unverified session',a
   {role:'passenger'},
   {providerVerified:false},
   {sessionActive:false},
-  {userId:PASSENGER},
   {sessionId:null}
  ]){
   const {gateway:forged}=setup({
@@ -99,6 +98,11 @@ test('G297 rejects forged/missing bearer and non-driver or unverified session',a
   });
   assert.equal((await forged(input())).status,403);
  }
+ const {gateway:otherUser}=setup({verifyDriverSession:async()=>({
+  userId:PASSENGER,sessionId:SESSION,role:'driver',providerVerified:true,sessionActive:true
+ })});
+ // A valid but different Driver cannot own the requested active ride.
+ assert.equal((await otherUser(input())).status,409);
  const {gateway:revoked}=setup({verifyDriverSession:async()=>{throw Error('revoked')}});
  assert.equal((await revoked(input())).status,401);
 });
