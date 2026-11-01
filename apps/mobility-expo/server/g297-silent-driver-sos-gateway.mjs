@@ -51,6 +51,7 @@ export function createG297SilentDriverSosGateway({
   }
   // Must be provider-backed, current, exclusive Driver role, not raw JWT claims.
   if(!PLAIN(driver)||!uuid(driver.userId)||!uuid(driver.sessionId)||
+     !Number.isSafeInteger(driver.tokenIatMs)||driver.tokenIatMs<=0||
      driver.role!=='driver'||driver.providerVerified!==true||
      driver.sessionActive!==true)
    return receipt(403,{error:'Verified Driver authority required'});
@@ -79,7 +80,7 @@ export function createG297SilentDriverSosGateway({
   try{
    event=await persistAtomicIncident({
     actorId:driver.userId,sessionId:driver.sessionId,
-    requestKey:body.requestKey,tripId:trip.tripId,passengerId:trip.passengerId,
+    tokenIatMs:driver.tokenIatMs,requestKey:body.requestKey,tripId:trip.tripId,passengerId:trip.passengerId,
     vehicleKind:trip.vehicleKind,
     verificationStatus:identity.status,
     identityReceiptId:identity.receiptId
