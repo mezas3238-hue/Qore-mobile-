@@ -164,6 +164,11 @@ export default function DriverHome(){
     state.currentLicenseApproved?'aprobada en la revisión':'pendiente, rechazada o no verificada':'sin consultar'}. Ningún resultado habilita viajes reales.</Text>
   </Panel>
   <Panel>
+   <Text style={styles.heading}>Seguridad 🆘</Text>
+   <Text style={styles.small}>Configurá una vez si el botón pequeño de las pantallas de viaje llama a tu contacto de confianza o abre el 911. No uses llamadas reales de emergencia para probar.</Text>
+   <Action label="Configurar botón SOS" secondary onPress={()=>router.push('/sos-configuracion')}/>
+  </Panel>
+  <Panel>
    <Text style={styles.heading}>Vigencia documental y avisos</Text>
    <Text accessibilityRole="alert" style={[styles.text,{
     color:kyc.snapshot?.state==='READY_QA'?palette.teal:palette.amber,
