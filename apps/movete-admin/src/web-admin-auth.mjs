@@ -19,9 +19,13 @@ export function createWebAdminAuth({supabase,now=Date.now}={}){
   typeof supabase.auth?.mfa?.getAuthenticatorAssuranceLevel!=='function'||
   typeof supabase.auth?.mfa?.listFactors!=='function'||
   typeof supabase.auth?.mfa?.challengeAndVerify!=='function'||
+  typeof supabase.auth?.mfa?.enroll!=='function'||
   typeof supabase.rpc!=='function')
   throw Error('Admin requires provider-certified AAL2 and RLS');
  let busy=false;
+ // A temporary AAL1 session is permitted ONLY for MFA self-enrollment.
+ // It is never returned from readSession or allowed to call a privileged RPC.
+ let enrollmentAllowed=false,enrollmentFactor=null;
  async function factor(){
   const listed=await supabase.auth.mfa.listFactors();
   if(listed.error||!Array.isArray(listed.data?.totp))return null;
@@ -68,6 +72,7 @@ export function createWebAdminAuth({supabase,now=Date.now}={}){
    typeof password!=='string'||password.length<8||password.length>256)
    return fail('INVALID_AUTH_INPUT');
   busy=true;
+  enrollmentAllowed=false;enrollmentFactor=null;
   try{
    const {error}=await supabase.auth.signInWithPassword({
     email:email.trim().toLowerCase(),password
@@ -75,16 +80,96 @@ export function createWebAdminAuth({supabase,now=Date.now}={}){
    if(error)return fail('AUTH_UNAVAILABLE_OR_INVALID');
    const status=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
    const enrolled=await factor();
-   if(status.error||enrolled===null||
-    !['aal1','aal2'].includes(status.data?.currentLevel)){
+   if(status.error||!['aal1','aal2'].includes(status.data?.currentLevel)){
     await supabase.auth.signOut();
-    return fail('MFA_ENROLLMENT_REQUIRED');
+    return fail('MFA_ASSURANCE_UNAVAILABLE');
+   }
+   if(enrolled===null){
+    // Do not confuse 0 verified factors with multiple/invalid verified
+    // factors. Only a single newly signed-in identity with exactly zero
+    // factors may begin setup, and no backoffice role is disclosed at AAL1.
+    const listed=await supabase.auth.mfa.listFactors();
+    const sess=await supabase.auth.getSession();
+    const access=sess.data?.session?.access_token;
+    const id=sess.data?.session?.user?.id;
+    const user=typeof access==='string'?await supabase.auth.getUser(access):null;
+    const factorRows=listed.data?.totp;
+    if(status.data.currentLevel==='aal1'&&!listed.error&&
+     Array.isArray(factorRows)&&factorRows.length===0&&
+     !sess.error&&!user?.error&&UUID.test(id??'')&&
+     user?.data?.user?.id===id&&
+     user.data.user.is_anonymous!==true&&
+     (typeof user.data.user.email_confirmed_at==='string'||
+      typeof user.data.user.phone_confirmed_at==='string')){
+     enrollmentAllowed=true;
+     return fail('MFA_ENROLLMENT_REQUIRED');
+    }
+    await supabase.auth.signOut();
+    return fail('MFA_FACTOR_NOT_ELIGIBLE');
    }
    if(status.data.currentLevel!=='aal2')return fail('MFA_REQUIRED');
    const verified=await readSession();
    if(!verified){await supabase.auth.signOut();return fail('ADMIN_ROLE_NOT_VERIFIED');}
    return Object.freeze({ok:true,role:verified.role});
   }catch{return fail('AUTH_UNAVAILABLE');}
+  finally{busy=false;}
+ }
+ async function beginTotpEnrollment(){
+  if(busy)return fail('AUTH_BUSY');
+  if(!enrollmentAllowed||enrollmentFactor!==null)
+   return fail('MFA_SETUP_NOT_AUTHORIZED');
+  busy=true;
+  try{
+   const status=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+   const sess=await supabase.auth.getSession();
+   const access=sess.data?.session?.access_token;
+   const own=sess.data?.session?.user?.id;
+   const user=typeof access==='string'?await supabase.auth.getUser(access):null;
+   if(status.error||status.data?.currentLevel!=='aal1'||
+    sess.error||!UUID.test(own??'')||user?.error||
+    user?.data?.user?.id!==own||
+    user.data.user.is_anonymous===true)
+    return fail('MFA_SETUP_SESSION_INVALID');
+   const enrolled=await supabase.auth.mfa.enroll({
+    factorType:'totp',friendlyName:'Movete Facil STAGING'
+   });
+   const id=enrolled.data?.id,secret=enrolled.data?.totp?.secret;
+   if(enrolled.error||!UUID.test(id??'')||
+    typeof secret!=='string'||!/^[A-Z2-7]{16,128}$/i.test(secret))
+    return fail('MFA_SETUP_UNAVAILABLE');
+   enrollmentFactor=id;
+   // Never return the OTP URI, JWT or any role. Secret must only be shown
+   // to the authenticated user temporarily, never logged or persisted.
+   return Object.freeze({ok:true,secret});
+  }catch{return fail('MFA_SETUP_UNAVAILABLE');}
+  finally{busy=false;}
+ }
+ async function verifyEnrolledTotp(code){
+  if(busy)return fail('AUTH_BUSY');
+  if(!enrollmentAllowed||!UUID.test(enrollmentFactor??''))
+   return fail('MFA_SETUP_NOT_AUTHORIZED');
+  if(typeof code!=='string'||!/^[0-9]{6}$/.test(code))
+   return fail('INVALID_TOTP');
+  busy=true;
+  try{
+   const result=await supabase.auth.mfa.challengeAndVerify({
+    factorId:enrollmentFactor,code
+   });
+   if(result.error)return fail('MFA_DENIED');
+   const registered=await factor();
+   if(registered!==enrollmentFactor){
+    enrollmentAllowed=false;enrollmentFactor=null;
+    await supabase.auth.signOut();
+    return fail('MFA_FACTOR_NOT_VERIFIED');
+   }
+   enrollmentAllowed=false;enrollmentFactor=null;
+   const owner=await readSession();
+   if(!owner){
+    await supabase.auth.signOut();
+    return fail('BACKOFFICE_ROLE_NOT_APPROVED');
+   }
+   return Object.freeze({ok:true,role:owner.role});
+  }catch{return fail('MFA_SETUP_UNAVAILABLE');}
   finally{busy=false;}
  }
  async function verifyTotp(code){
@@ -103,8 +188,9 @@ export function createWebAdminAuth({supabase,now=Date.now}={}){
   finally{busy=false;}
  }
  async function signOut(){
+  enrollmentAllowed=false;enrollmentFactor=null;
   const result=await supabase.auth.signOut();
   if(result.error)throw Error('Remote Admin logout not confirmed');
  }
- return Object.freeze({readSession,signIn,verifyTotp,signOut});
+ return Object.freeze({readSession,signIn,beginTotpEnrollment,verifyEnrolledTotp,verifyTotp,signOut});
 }
