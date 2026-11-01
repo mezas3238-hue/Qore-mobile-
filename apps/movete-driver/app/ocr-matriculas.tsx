@@ -11,11 +11,13 @@ import {extractDriverPlateCandidates,addDriverPlateOcrSample,
  from '../src/domain/driver-plate-ocr-lab.mjs';
 import type {DriverOcrSamples,DriverPlateOcrSource}
  from '../src/domain/driver-plate-ocr-lab.mjs';
+import {OFFLINE_DRIVER_OCR_QA} from '../src/native/driver-offline-ocr-qa';
 
-const enabled=process.env.EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED==='true'&&
+const enabled=OFFLINE_DRIVER_OCR_QA||(
+ process.env.EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED==='true'&&
  process.env.EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED==='true'&&
  process.env.EXPO_PUBLIC_QORE_G291_OCR_LAB_APPROVED==='true'&&
- process.env.EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED!=='true';
+ process.env.EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED!=='true');
 const SOURCES:ReadonlyArray<{key:DriverPlateOcrSource;label:string}>=[
  {key:'registration',label:'Cédula verde (prueba)'},
  {key:'vehicle',label:'Chapa fotografiada (prueba)'},
@@ -89,7 +91,7 @@ export default function DriverPlateOcrLab(){
  if(!enabled||Platform.OS==='web')return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <Panel>
    <Text style={styles.heading}>OCR de matrículas — laboratorio OFF</Text>
-   <Text style={styles.text}>Solo funciona en una compilación Android/iOS nativa autorizada, con los flags STAGING de G290 y G291. No funciona en Expo Go ni navegador.</Text>
+   <Text style={styles.text}>Solo funciona en Android/iOS nativo STAGING autorizado o en la APK independiente G299 sin datos reales ni conexión a servidores. No funciona en Expo Go ni navegador.</Text>
    <Action label="Volver" secondary onPress={()=>router.back()}/>
   </Panel>
  </ScrollView>;
