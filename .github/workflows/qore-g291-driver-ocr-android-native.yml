@@ -32,7 +32,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Check preinstalled Android SDK
+        run: | 
+          test -n "$ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+          echo 'Android SDK is available on runner'
       - name: Install Driver dependencies (no lifecycle scripts)
         working-directory: apps/movete-driver
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
