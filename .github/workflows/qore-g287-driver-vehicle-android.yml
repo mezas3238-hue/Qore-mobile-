@@ -1,0 +1,32 @@
+name: QORE G287 native Driver real pending vehicle form
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-driver/**'
+      - '.github/workflows/qore-g287-driver-vehicle-android.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-driver-pending:
+    name: G287 Android Driver app typecheck and pending-only HTTP tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Driver Expo dependencies without lifecycle scripts
+        working-directory: apps/movete-driver
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: TypeScript compile of Driver screen and native adapter
+        working-directory: apps/movete-driver
+        run: npm run typecheck
+      - name: Full Driver domain regression tests (offline, no Auth secrets)
+        working-directory: apps/movete-driver
+        run: npm test
+      - name: Explicitly deny real QA writes in CI
+        run: echo 'CI uses only mock vehicle fields; real Driver input goes exclusively from approved native app to STAGING'
