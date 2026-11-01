@@ -8,7 +8,7 @@ const uuid='00000000-0000-4000-8000-000000000101';
 const requestKey='00000000-0000-4000-8000-000000000401';
 const applicationId='00000000-0000-4000-8000-000000000501';
 const token='a'.repeat(24)+'.'+'b'.repeat(24)+'.'+'c'.repeat(24);
-const draft={kind:'AUTO',service:'economico',municipalityCode:'ASUNCION',
+const draft={kind:'AUTO',service:'economico',
  plate:'REAL123',brand:'Real Motor',model:'City',year:2023,passengerCapacity:4};
 const auth={getSession:async()=>({role:'driver',userId:uuid,accessToken:token})};
 function run({status=202,receipt=null,session=auth}={}){
@@ -40,6 +40,7 @@ test('G287 valid real draft posts to exact approved HTTPS STAGING path',async()=
  assert.deepEqual(JSON.parse(call.options.body),{requestKey,...draft});
  assert.equal('approved' in JSON.parse(call.options.body),false);
  assert.equal('driverId' in JSON.parse(call.options.body),false);
+ assert.equal('municipalityCode' in JSON.parse(call.options.body),false);
 });
 test('G287 rejects disabled mobile flag before accessing Auth or transport',async()=>{
  const x=run();
@@ -79,7 +80,7 @@ test('G287 invalid vehicle kind, service, capacity, year and injected fields nev
  for(const bad of [
   {...draft,driverId:uuid},{...draft,approved:true},
   {...draft,plate:'invalid plate'},
-  {...draft,municipalityCode:'asuncion'},
+  {...draft,municipalityCode:'FORGED'},
   {...draft,kind:'MOTO',service:'economico'},
   {...draft,kind:'MOTO',service:'moto_pasajero',passengerCapacity:4},
   {...draft,service:'xl',passengerCapacity:4},
