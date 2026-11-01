@@ -6,7 +6,7 @@ import {Linking,PermissionsAndroid,Platform} from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as IntentLauncher from 'expo-intent-launcher';
 import {getNativeDriverAuth} from './NativeDriverAuth';
-import {planDriverSosDial,normalizeTrustedNumber} from './domain/g298-driver-sos-dial.mjs';
+import {planDriverSosDial,normalizeTrustedNumber,normalizeStoredSosPreference} from './domain/g298-driver-sos-dial.mjs';
 
 type Destination='EMERGENCY_911'|'TRUSTED_CONTACT';
 export type Preference={enabled:boolean;destination:Destination;trustedNumber:string};
@@ -37,20 +37,7 @@ export async function readDriverSosPreference():Promise<Preference>{
   const stored=await SecureStore.getItemAsync(storageKey(userId));
   if(!stored)return defaultChoice;
   const parsed:unknown=JSON.parse(stored);
-  if(parsed===null||typeof parsed!=='object'||Array.isArray(parsed))
-   return defaultChoice;
-  const row=parsed as Record<string,unknown>;
-  // G299: earlier versions saved a phone destination but had no enable flag.
-  // Never auto-enable SOS on upgrade or while SecureStore is loading.
-  const enabled=row.enabled===true;
-  if(row.destination==='TRUSTED_CONTACT'){
-   const phone=normalizeTrustedNumber(row.trustedNumber);
-   return {enabled:enabled&&phone!==null,destination:'TRUSTED_CONTACT',
-    trustedNumber:phone??''};
-  }
-  return row.destination==='EMERGENCY_911'
-   ?{enabled,destination:'EMERGENCY_911',trustedNumber:''}
-   :defaultChoice;
+  return normalizeStoredSosPreference(parsed) as Preference;
  }catch{return defaultChoice;}
 }
 export async function saveDriverSosPreference(next:Preference):Promise<boolean>{
