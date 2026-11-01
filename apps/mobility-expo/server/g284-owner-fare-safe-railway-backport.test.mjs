@@ -23,7 +23,8 @@ test('G284 separate fare flag defaults OFF and requires independently approved G
  assert.match(entry,/g268OwnerFareApproved=env.QORE_G268_OWNER_FARE_APPROVED==='true'/);
  assert.match(entry,/if\(g268OwnerFareApproved&&!g260AdminAal2Approved\)/);
  assert.match(entry,/g268OwnerFareApproved\}\=assertRailwayEnvironment/);
- assert.match(entry,/g268OwnerFareApproved,\n projectRef/);
+ assert.match(entry,/g268OwnerFareApproved,\n autoDispatchRetryQa:g113RetryApproved,\n projectRef/);
+ assert.match(entry,/await assertG283VerifiedDatabaseReadiness\(rpc\)/);
  assert.match(runtime,/g268OwnerFareApproved=false/);
  assert.match(runtime,/g268OwnerFareApproved&&!g260AdminAal2Approved/);
  assert.match(runtime,/!g268OwnerFareApproved\|\|verifiedAdminTrust===null\?null:createG268OwnerAutoFareGateway/);
