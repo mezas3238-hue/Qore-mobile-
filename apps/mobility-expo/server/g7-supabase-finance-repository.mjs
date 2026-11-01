@@ -101,6 +101,13 @@ export function createSupabaseStagingFinanceRepository(client){
    assertBase(params);
    if(!validId(params.quoteId)||!METHODS.has(params.method)||!validId(params.requestKey))
     throw Error('Invalid simulated payment authorization');
+   // G304: commerce is exclusively prepaid. A CASH selection cannot be
+   // authorized even on the legacy simulated endpoint. Check server quote,
+   // not a subject type supplied by the phone.
+   const originalQuote=await loadQuote(params.actorId,params.quoteId);
+   if(originalQuote.subjectKind==='MERCHANT_ORDER'&&
+      params.method==='SIMULATED_CASH')
+    throw Error('Merchant goods require prepaid digital payment');
    const paymentId=await rpc(client,'mobility_stage_payment_authorize',{
     _customer_id:params.actorId,_quote_id:params.quoteId,_method:params.method,
     _request_key:params.requestKey,
