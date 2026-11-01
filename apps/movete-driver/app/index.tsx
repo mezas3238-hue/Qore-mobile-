@@ -9,6 +9,7 @@ import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
 import {verifyResumableDriverAutoTrip} from '../src/domain/driver-accepted-ride-resume.mjs';
+import {restoreDriverSosActiveSession,clearDriverSosActiveSession} from '../src/DriverSosPhone';
 export default function DriverHome(){
  const [demoAvailable,setDemoAvailable]=useState(false);
  const auth=useNativeDriverAuth();
@@ -29,7 +30,11 @@ export default function DriverHome(){
    if(!auth)return;
    try{
     const session=await auth.getSession();
-    if(active)setAuthenticated(session?.role==='driver');
+    if(active){setAuthenticated(session?.role==='driver');
+     if(session?.role==='driver')await restoreDriverSosActiveSession();
+     // A temporary offline auth failure must not erase the already chosen
+     // emergency destination. Explicit logout clears the active account.
+    }
    }catch{if(active)setAuthenticated(false);}
   };
   void verify();
@@ -51,6 +56,7 @@ export default function DriverHome(){
     return;
    }
    setAuthenticated((await auth.getSession())?.role==='driver');
+   await restoreDriverSosActiveSession();
    setAuthMessage('Identidad Driver verificada. Sin backend autorizado, las ofertas siguen bloqueadas.');
   }catch{setAuthenticated(false);setAuthMessage('Sin conexión segura confirmada.');}
   finally{setAuthBusy(false);}
@@ -60,7 +66,7 @@ export default function DriverHome(){
   setAuthBusy(true);setPassword('');setMotoRecoveryMessage('');setAuthenticated(false);
   try{await auth.signOut();setAuthMessage('Sesión Driver cerrada.');}
   catch{setAuthMessage('Acceso oculto; no se confirmó revocación remota.');}
-  finally{setAuthBusy(false);}
+  finally{await clearDriverSosActiveSession().catch(()=>{});setAuthBusy(false);}
  }
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
@@ -162,6 +168,11 @@ export default function DriverHome(){
     onPress={()=>{void refresh();}}/>
    <Text style={styles.small}>Licencia revisada: {state.phase==='connected'?
     state.currentLicenseApproved?'aprobada en la revisión':'pendiente, rechazada o no verificada':'sin consultar'}. Ningún resultado habilita viajes reales.</Text>
+  </Panel>
+  <Panel>
+   <Text style={styles.heading}>Seguridad 🆘</Text>
+   <Text style={styles.small}>Configurá una vez si el botón pequeño de las pantallas de viaje llama a tu contacto de confianza o abre el 911. No uses llamadas reales de emergencia para probar.</Text>
+   <Action label="Configurar botón SOS" secondary onPress={()=>router.push('/sos-configuracion')}/>
   </Panel>
   <Panel>
    <Text style={styles.heading}>Vigencia documental y avisos</Text>

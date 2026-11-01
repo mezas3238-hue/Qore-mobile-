@@ -13,7 +13,10 @@
     },
     "android": {
       "package": "com.movetefacil.driver",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CALL_PHONE"
+      ]
     },
     "web": {
       "name": "Movete Fácil Driver",

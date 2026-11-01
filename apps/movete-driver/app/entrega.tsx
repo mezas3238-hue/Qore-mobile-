@@ -2,6 +2,7 @@ import React,{useCallback,useEffect} from 'react';
 import {AppState,ScrollView,Text,View} from 'react-native';
 import {useFocusEffect,useLocalSearchParams,router} from 'expo-router';
 import {Action,Panel,styles} from '../src/DriverUI';
+import {DriverSosFloatingControl} from '../src/DriverSosFloatingControl';
 import {useDriverCustody} from '../src/DriverCustodyProvider';
 const labels:Record<string,string>={
  accepted:'Reparto aceptado por el servidor',
@@ -42,7 +43,7 @@ export default function DriverDelivery(){
  // G66 default composition does not have a verified proof registry. The
  // controller blocks deliver even if a UI wrongly invokes advance().
  const proofRequired=state.nextEvent==='deliver'&&!hasProofSource;
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+ return <View style={{flex:1}}><ScrollView style={styles.page} contentContainerStyle={styles.content}>
   <View style={styles.hero}>
    <Text style={styles.heroText}>Custodia de mi entrega</Text>
    <Text style={styles.heroSub}>Recogida, entrega y devolución con comprobaciones del backend en STAGING.</Text>
@@ -80,5 +81,5 @@ export default function DriverDelivery(){
    <Text style={styles.small}>Ningún comprobante, GPS o mensaje debe interpretarse como verificado solo porque exista una clave UUID. MOTO transporta paquetes admitidos, nunca pasajeros.</Text>
   </Panel>
   <Action label="Volver a ofertas" secondary onPress={()=>router.back()}/>
- </ScrollView>;
+ </ScrollView><DriverSosFloatingControl/></View>;
 }

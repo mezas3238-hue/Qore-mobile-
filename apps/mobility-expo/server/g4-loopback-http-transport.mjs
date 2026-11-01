@@ -59,6 +59,7 @@ const fareQuoteRoute=/^\/v1\/staging\/fares\/quote$/;
 const paymentAuthorizeRoute=/^\/v1\/staging\/payments\/authorize$/;
 const paymentTransitionRoute=/^\/v1\/staging\/payments\/[0-9a-f-]{36}\/transition$/i;
 const paymentStatusRoute=/^\/v1\/staging\/payments\/[0-9a-f-]{36}\/status$/i;
+const driverSilentSosRoute=/^\/v1\/staging\/driver\/sos$/;
 const safetyReportRoute=/^\/v1\/staging\/safety\/incidents\/report$/;
 const safetyStatusRoute=/^\/v1\/staging\/safety\/incidents\/[0-9a-f-]{36}\/status$/i;
 const safetyTransitionRoute=/^\/v1\/staging\/admin\/safety\/incidents\/[0-9a-f-]{36}\/transition$/i;
@@ -104,7 +105,7 @@ function send(res,status,body) {
 }
 export function createQoreRadarLoopbackTransport({
  riderHandler,riderHistoryHandler,offerHandler,tripCommandHandler,deliveryHandler,merchantHandler,
- financeHandler,safetyHandler,merchantManagementHandler,deliveryOfferHandler,
+ financeHandler,safetyHandler,driverSilentSosHandler,merchantManagementHandler,deliveryOfferHandler,
  courierCustodyHandler,recipientConfirmationHandler,pickupPreferenceHandler,lostItemsHandler,motoLostItemsHandler,merchantInboxHandler,
  f1AutoHandler,motoHandler,driverMotoJourneyHandler,adminF1AuditHandler,adminServiceTraceHandler,adminMotoTraceHandler,adminCargoTraceHandler,adminCommerceTraceHandler,adminNativeTraceHandler,ownerCommissionHandler,ownerAutoFareHandler,ownerCargoRateHandler,driverDecisionRecoveryHandler,commerceQaHandler,ratingHandler,adminFraudHandler,
  courierPollHandler,driverInboxHandler,driverDocumentHandler,driverEnrollmentHandler,
@@ -139,7 +140,9 @@ export function createQoreRadarLoopbackTransport({
    (driverDecisionRecoveryHandler!==undefined&&typeof driverDecisionRecoveryHandler!=='function')||
    typeof deliveryHandler!=='function'||
    typeof merchantHandler!=='function'||typeof financeHandler!=='function'||
-   typeof safetyHandler!=='function'||typeof merchantManagementHandler!=='function'||
+   typeof safetyHandler!=='function'||
+   (driverSilentSosHandler!==undefined&&typeof driverSilentSosHandler!=='function')||
+   typeof merchantManagementHandler!=='function'||
    typeof deliveryOfferHandler!=='function'||
    (courierPollHandler!==undefined&&typeof courierPollHandler!=='function')||
    (driverInboxHandler!==undefined&&typeof driverInboxHandler!=='function')||
@@ -216,6 +219,7 @@ export function createQoreRadarLoopbackTransport({
   const financePost=req.method==='POST'&&
    (fareQuoteRoute.test(path)||paymentAuthorizeRoute.test(path)||
     paymentTransitionRoute.test(path));
+  const driverSilentSosPost=req.method==='POST'&&driverSilentSosRoute.test(path);
   const safetyGet=req.method==='GET'&&safetyStatusRoute.test(path);
   const safetyPost=req.method==='POST'&&
    (safetyReportRoute.test(path)||safetyTransitionRoute.test(path)||
@@ -239,7 +243,7 @@ export function createQoreRadarLoopbackTransport({
   if(!rider&&!riderHistory&&!offerGet&&!offerPost&&!offerRecoveryPost&&!tripPost&&!f1AutoGet&&!f1AutoPost&&!f1AutoSubsidyPost&&!motoPost&&!motoGet&&!driverMotoGet&&!driverMotoPost&&!adminF1AuditGet&&!adminServiceTraceGet&&!adminMotoTraceGet&&!adminCargoTraceGet&&!adminCommerceTraceGet&&!adminNativeTraceGet&&!ownerCommissionGet&&!ownerCommissionPost&&!ownerAutoFarePost&&!ownerCargoRateGet&&!ownerCargoRatePost&&
     !deliveryGet&&!deliveryPost&&
     !merchantGet&&!merchantInboxGet&&!merchantPost&&!adminFraudGet&&!ratingPost&&!commerceQaPost&&!commerceQaGet&&!courierCustodyGet&&!courierCustodyPost&&!recipientConfirmationGet&&!recipientConfirmationPost&&!pickupPreferenceGet&&!pickupPreferencePut&&!lostItemsGet&&!lostItemsPost&&!motoLostItemsGet&&!motoLostItemsPost&&!financeGet&&!financePost&&
-    !safetyGet&&!safetyPost&&!merchantManagementPost&&
+    !safetyGet&&!safetyPost&&!driverSilentSosPost&&!merchantManagementPost&&
     !deliveryOfferGet&&!deliveryOfferPost&&!courierPollGet&&!driverInboxGet&&
     !driverDocumentGet&&!driverDocumentPost&&!driverEnrollmentPost&&!g282VehicleDraftPost&&
     !driverLicenseReadinessGet&&!driverKycValidityGet&&!driverTripStatusGet&&
@@ -258,7 +262,7 @@ export function createQoreRadarLoopbackTransport({
    send(res,400,{error:'GET body not supported'});return;
   }
   let body;
-  if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||
+  if(offerPost||offerRecoveryPost||tripPost||f1AutoPost||motoPost||driverMotoPost||deliveryPost||merchantPost||financePost||safetyPost||driverSilentSosPost||
     merchantManagementPost||deliveryOfferPost||driverDocumentPost||driverEnrollmentPost||g282VehicleDraftPost||ownerCommissionPost||ownerAutoFarePost||ownerCargoRatePost||ratingPost||commerceQaPost||courierCustodyPost||recipientConfirmationPost||pickupPreferencePut||lostItemsPost||motoLostItemsPost){
    if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??'')){
     send(res,415,{error:'JSON required'});return;
@@ -307,6 +311,7 @@ export function createQoreRadarLoopbackTransport({
     merchantInboxGet?(merchantInboxHandler??(()=>({status:503,body:{error:'G156 staff inbox unavailable'}}))):
      (merchantGet||merchantPost)?merchantHandler:
     (financeGet||financePost)?financeHandler:
+    driverSilentSosPost?(driverSilentSosHandler??(()=>({status:503,body:{error:'G297 silent SOS and verified passenger dossier not configured'}}))):
     (safetyGet||safetyPost)?safetyHandler:
     merchantManagementPost?merchantManagementHandler:
     driverCurrentTripGet?(driverCurrentTripHandler??(()=>({status:503,body:{error:'Driver trip recovery not configured'}}))):

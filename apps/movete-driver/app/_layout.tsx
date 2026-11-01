@@ -21,6 +21,7 @@ export default function DriverLayout(){
    <Stack.Screen name="objetos-olvidados" options={{title:"Objetos olvidados"}}/>
    <Stack.Screen name="objetos-olvidados-moto" options={{title:"Objetos olvidados en MOTO"}}/>
    <Stack.Screen name="ganancias" options={{title:'Ganancias'}}/>
+   <Stack.Screen name="sos-configuracion" options={{title:'Configurar SOS Driver'}}/>
   </Stack>
  </DriverApplicationProviders>;
 }
