@@ -23,5 +23,20 @@ jobs:
         run: |
           node --check apps/mobility-expo/server/g279-rider-history-session-fence.mjs
           node --test apps/mobility-expo/server/g279-rider-history-session-fence.test.mjs
-      - name: No credentials or external provider network in CI
-        run: echo 'G279 CI uses offline Auth mocks; no STAGING migration or deployment'
+      - name: Offline unit tests never access private provider credentials
+        run: echo 'G279 unit tests use offline mocks only; no SQL migration or deploy'
+
+  staging-anonymous-denial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Existing Railway HTTPS must reject unauthenticated Passenger history
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 15 --proto '=https' --tlsv1.2 'https://qore-mobile-backend-staging-staging.up.railway.app/v1/staging/rider/history')"
+          if [[ "$status" != "401" ]]; then
+            echo "G279 STAGING external anonymous denial UNVERIFIED: HTTP $status"
+            exit 1
+          fi
+          echo 'G279 existing Railway STAGING denies anonymous private history (401); no bearer, no secrets, no writes'
