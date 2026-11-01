@@ -1,0 +1,42 @@
+name: QORE G295 Driver Android Metro export LAB only (no APK, no identity)
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-driver/**'
+      - '.github/workflows/qore-g295-driver-android-js-export.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-js-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: apps/movete-driver
+    env:
+      CI: '1'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_G290_CAMERA_LAB_APPROVED: 'false'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Expo native JavaScript dependencies without project scripts
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Typecheck Driver and camera code
+        run: npm run typecheck
+      - name: Run all Driver domain regression tests without network accounts
+        run: npm test
+      - name: Export Metro Android JavaScript bundle, never build or publish an APK
+        run: npx expo export --platform android --output-dir dist-ci-android
+      - name: Verify export exists and do not archive personal assets
+        run: |
+          test -d dist-ci-android
+          test -n "$(find dist-ci-android -type f -print -quit)"
+          echo 'PASS: Android JS export created locally; no credentials, APK, personal photos or deployment'
