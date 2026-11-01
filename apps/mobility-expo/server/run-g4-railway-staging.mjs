@@ -8,6 +8,9 @@ import {prepareQoreG4StagingRuntime} from './g4-staging-runtime.mjs';
 import {listenQoreRadarLoopback} from './g4-loopback-http-transport.mjs';
 import {createRailwayStagingIngress} from './railway-staging-ingress.mjs';
 import {verifyG256RailwayLaunch} from '../scripts/g256-railway-launch-preflight.mjs';
+import {readG282RailwayAutoRetryOptIn,assertG282PrivateBatchInstalled,
+ assertG283VerifiedDatabaseReadiness,startG282RailwayRetryWorker}
+ from './g282-railway-private-auto-retry-gate.mjs';
 
 function assertRailwayEnvironment(env){
  if(env.QORE_RAILWAY_STAGING_APPROVED!=='true'||
@@ -63,12 +66,26 @@ const {port,hostname,adminOrigin,admission,g247RecipientAuthApproved,
  g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved}=assertRailwayEnvironment(process.env);
 // Repeat the G256 read-only checks at process start: a missing Railway
 // pre-deploy hook must never bypass STAGING ownership or public-signup fence.
+const g113RetryApproved=readG282RailwayAutoRetryOptIn(process.env);
 const g256=await verifyG256RailwayLaunch({env:process.env});
 if(!g256.ok)throw Error('G256 staging startup blocked: '+g256.code);
 const {createClient}=await import('@supabase/supabase-js');
+if(g113RetryApproved){
+ // Never trust operator-only READY flags. Both checks are backend-only,
+ // explicitly non-dispatching and run before the public Railway listener.
+ const db=createClient(
+  'https://'+process.env.QORE_STAGING_PROJECT_REF+'.supabase.co',
+  process.env.QORE_STAGING_SERVICE_ROLE_KEY,
+  {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}
+ );
+ const rpc=(name,args)=>db.rpc(name,args);
+ await assertG282PrivateBatchInstalled(rpc);
+ await assertG283VerifiedDatabaseReadiness(rpc);
+}
 const runtime=await prepareQoreG4StagingRuntime({
  environment:'staging',liveTripsEnabled:false,allowQa:true,
  g247RecipientAuthApproved,g252MerchantInboxAuthApproved,g260AdminAal2Approved,g282VehicleDraftApproved,
+ autoDispatchRetryQa:g113RetryApproved,
  projectRef:process.env.QORE_STAGING_PROJECT_REF,
  anonKey:process.env.QORE_STAGING_PUBLISHABLE_KEY,
  serviceKey:process.env.QORE_STAGING_SERVICE_ROLE_KEY,
@@ -82,9 +99,22 @@ const localOrigin=await listenQoreRadarLoopback(runtime.server);
 const ingress=createRailwayStagingIngress({
  loopbackOrigin:localOrigin,expectedHost:hostname,adminOrigin,...admission
 });
-const shutdown=()=>{ingress.close();runtime.server.close();};
+let retryController=null;
+const shutdown=()=>{
+ retryController?.stop();
+ ingress.close();
+ runtime.server.close();
+};
 process.on('SIGTERM',shutdown);
 process.on('SIGINT',shutdown);
 ingress.listen(port,'0.0.0.0');
 await once(ingress,'listening');
+try{
+ retryController=startG282RailwayRetryWorker({
+  worker:runtime.qaAutoDispatchRetry,enabled:g113RetryApproved
+ });
+}catch{
+ shutdown();
+ throw Error('G284 cannot start private retry worker; failing closed');
+}
 console.log('QORE Railway STAGING transport ready; no LIVE or commercial authorization');

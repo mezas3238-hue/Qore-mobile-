@@ -1,0 +1,64 @@
+name: QORE G282 Railway private G113 retry activation contracts
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g282-railway-private-auto-retry-gate*.mjs'
+      - 'apps/mobility-expo/server/run-g4-railway-staging.mjs'
+      - '.github/workflows/qore-g282-railway-private-retry.yml'
+      - 'infra/qore-staging/migrations/g283_private_auto_dispatch_readiness_pg17.sql'
+      - 'infra/qore-staging/ci/g283_pg17_readiness_CI_ONLY.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate feature gate, no-job RPC preflight and worker stop
+        run: |
+          node --check apps/mobility-expo/server/g282-railway-private-auto-retry-gate.mjs
+          node --check apps/mobility-expo/server/run-g4-railway-staging.mjs
+          node --test apps/mobility-expo/server/g282-railway-private-auto-retry-gate.test.mjs
+      - name: No Railway deploy, private tokens or real dispatch
+        run: echo 'G282 tests are offline-only; scheduler OFF by default; no LIVE/PSP'
+
+  pg17-g283-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-only
+          POSTGRES_DB: qore_g283_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g283_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: disposable-only
+      PGDATABASE: qore_g283_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test EXACT G283 migration on disposable PG17, including negative prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp infra/qore-staging/migrations/g283_private_auto_dispatch_readiness_pg17.sql /tmp/g283_readiness_source.sql
+          psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g283_pg17_readiness_CI_ONLY.sql
+      - name: Confirm real STAGING has not been touched by CI
+        run: echo 'G283 disposable-only. No Supabase key, Railway access, role approval or deployment.'

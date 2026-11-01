@@ -10,6 +10,7 @@ import {safeStageRef,assertPublishableKey,inspectStageSignup} from '../scripts/s
 import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreRiderHistoryGateway} from './g26-rider-history-gateway.mjs';
+import {createG279RiderHistorySessionVerifier} from './g279-rider-history-session-fence.mjs';
 import {createQoreOwnHistoryRepository} from './g26-rider-history-repository.mjs';
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
 import {listenG165IsolatedQaRuntime} from './g165-isolated-qa-server-lifecycle.mjs';
@@ -34,6 +35,8 @@ import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-disp
 import {createG112ScopedAutoDispatchRepository} from './g112-scoped-auto-dispatch-repository.mjs';
 import {createG113AutoDispatchRetryWorker,createG113AutoDispatchBatchRepository}
  from './g113-auto-dispatch-retry-worker.mjs';
+import {assertG283VerifiedDatabaseReadiness}
+ from './g282-railway-private-auto-retry-gate.mjs';
 import {createQoreG73AutoGateway} from './g73-f1-auto-gateway.mjs';
 import {createG77VerifiedAutoRouteResolver} from './g77-f1-google-verified-route-resolver.mjs';
 import {createG75AdminF1AuditGateway} from './g75-f1-admin-audit-gateway.mjs';
@@ -427,6 +430,10 @@ export async function prepareQoreG4StagingRuntime({
    environment:'isolated_staging',qaOnly:true,liveEnabled:false,
    runDueBatch:async ({limit})=>{
     await inspect();
+    // G284: a tariff/Driver can be revoked after the worker starts.
+    // Reverify the private authoritative G283 snapshot BEFORE every batch.
+    // Missing/false readiness rejects the entire tick, no jobs processed.
+    await assertG283VerifiedDatabaseReadiness((name,args)=>admin.rpc(name,args));
     return createG113AutoDispatchBatchRepository(admin).runDueBatch({limit});
    },intervalMs:30000,maxJobs:5
   }):null;
@@ -577,8 +584,22 @@ export async function prepareQoreG4StagingRuntime({
    rpc:(name,params)=>admin.rpc(name,params)
   })
  });
+ // G279: provider Auth verifies the JWT subject; the private G42 SQL
+ // checks the same session still exists in auth.sessions after logout.
+ const verifiedHistorySession=createG279RiderHistorySessionVerifier({
+  projectRef:ref,verifyProviderUser:verified,now,
+  readProviderSession:async({userId,sessionId,issuedAtMs})=>{
+   const {data,error}=await admin.rpc('mobility_stage_g42_session_active',{
+    _user:userId,_session:sessionId,_iat_ms:issuedAtMs
+   });
+   if(error||typeof data!=='boolean')
+    throw Error('G279 provider session authority unavailable');
+   return data;
+  }
+ });
  const riderHistory=createQoreRiderHistoryGateway({
-  projectRef:ref,verifyAccessToken:verified,cursorSecrets:historyCursorSecrets,
+  projectRef:ref,verifyAccessToken:verifiedHistorySession,
+  cursorSecrets:historyCursorSecrets,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   loadOwnHistory:createQoreOwnHistoryRepository(admin),now
  });
