@@ -55,7 +55,7 @@ test('A screenshot, bearer, price, method or asserted paid flag in client input 
  ]){
   const r=await x.verify(payload);
   if(payload.paymentReference==='bad')assert.equal(r.code,'INVALID_PREPAYMENT_REFERENCE');
-  else assert.equal(r.ok,true,'extra phone fields are ignored, never trusted');
+  else assert.equal(r.code,'INVALID_PREPAYMENT_REFERENCE','client fields must be rejected');
   assert.equal(r.merchantCanPrepare??false,false);
  }
  assert(x.calls.every(row=>!JSON.stringify(row).includes('fake_card')));
