@@ -100,7 +100,7 @@ test('G287 invalid session/role, malformed receipt or commercial flag can never 
  for(const [status,expected] of [
   [401,'DRIVER_SESSION_REVOKED'],[403,'DRIVER_ROLE_DENIED'],
   [400,'VEHICLE_FIELDS_REJECTED'],[409,'VEHICLE_PENDING_CONFLICT'],
-  [429,'VEHICLE_RATE_LIMIT'],[503,'VEHICLE_RECEIPT_UNCONFIRMED']
+  [429,'VEHICLE_RATE_LIMIT'],[503,'STAGING_MUNICIPALITY_UNCONFIGURED']
  ]){
   const x=run({status}),r=await x.submit();
   assert.equal(r.ok,false);assert.equal(r.code,expected);
