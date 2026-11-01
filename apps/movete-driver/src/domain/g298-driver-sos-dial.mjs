@@ -16,7 +16,7 @@ export function normalizeTrustedNumber(value){
  if(!/^\+?[0-9]{7,15}$/.test(compact))return null;
  return compact;
 }
-export function planDriverSosDial(destination,trustedNumber=null){
+export function planDriverSosDial(destination,trustedNumber){
  if(destination===SOS_DESTINATIONS.EMERGENCY_911)
   return Object.freeze({
    destination,uri:'tel:911',number:'911',
