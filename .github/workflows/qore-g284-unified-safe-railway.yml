@@ -1,0 +1,39 @@
+name: QORE G284 unified Railway G260 G272 G279 G282 G283 safety
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g284-unified-staging-release.test.mjs'
+      - 'apps/mobility-expo/server/g279-rider-history-session-fence*.mjs'
+      - 'apps/mobility-expo/server/g282-railway-private-auto-retry-gate*.mjs'
+      - 'apps/mobility-expo/server/g282-private-driver-vehicle-gateway*.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/server/run-g4-railway-staging.mjs'
+      - '.github/workflows/qore-g284-unified-safe-railway.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  consolidated-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Railway + G4 source parsing
+        run: |
+          node --check apps/mobility-expo/server/run-g4-railway-staging.mjs
+          node --check apps/mobility-expo/server/g4-staging-runtime.mjs
+      - name: Execute G260 G272 and G279 G283 regression proof together
+        run: |
+          node --test \
+            apps/mobility-expo/server/g284-unified-staging-release.test.mjs \
+            apps/mobility-expo/server/g283-safe-backport-regression.test.mjs \
+            apps/mobility-expo/server/g279-rider-history-session-fence.test.mjs \
+            apps/mobility-expo/server/g282-railway-private-auto-retry-gate.test.mjs \
+            apps/mobility-expo/server/g282-private-driver-vehicle-gateway.test.mjs
+      - name: No real identities, payments or deployment
+        run: echo 'G284 is an offline regression branch; no external STAGING writes or LIVE'
