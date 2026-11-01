@@ -1,0 +1,30 @@
+name: QORE G268 Owner AUTO fare HTTP gateway offline contracts
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g268-owner-auto-fare-gateway*.mjs'
+      - 'apps/mobility-expo/server/g284-owner-fare-safe-railway-backport.test.mjs'
+      - 'apps/mobility-expo/server/run-g4-railway-staging.mjs'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/server/g4-loopback-http-transport.mjs'
+      - '.github/workflows/qore-g268-owner-auto-fare-http.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-owner-aal2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify isolated Owner AAL2 gateway contract
+        run: node --test apps/mobility-expo/server/g268-owner-auto-fare-gateway.test.mjs apps/mobility-expo/server/g268-owner-auto-fare-http.test.mjs apps/mobility-expo/server/g284-owner-fare-safe-railway-backport.test.mjs apps/mobility-expo/server/g283-safe-backport-regression.test.mjs
+      - name: Parse production-facing backend modules without starting a server
+        run: node --check apps/mobility-expo/server/run-g4-railway-staging.mjs && node --check apps/mobility-expo/server/g4-staging-runtime.mjs && node --check apps/mobility-expo/server/g4-loopback-http-transport.mjs
+      - name: No external users, databases, deployment or secrets
+        run: echo 'G268 contracts are offline only; no LIVE and no Supabase write'
