@@ -1,0 +1,28 @@
+name: QORE G278 read-only real QA Railway bridge (offline contracts)
+on:
+  push:
+    branches:
+      - 'integration/qore-g278-real-qa-railway-rider-history-readonly-20261031'
+    paths:
+      - 'apps/mobility-expo/scripts/g278-real-qa-railway-readonly*'
+      - '.github/workflows/qore-g278-real-qa-railway-readonly.yml'
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g278-real-qa-railway-readonly*'
+      - '.github/workflows/qore-g278-real-qa-railway-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  read-only-qa-bridge-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject any actual network or secret access in CI
+        run: |
+          node --test apps/mobility-expo/scripts/g278-real-qa-railway-readonly.test.mjs
