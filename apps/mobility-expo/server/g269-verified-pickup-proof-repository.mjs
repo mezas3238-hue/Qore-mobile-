@@ -20,7 +20,7 @@ export function createG269VerifiedPickupProofRepository({
     !KEYS.every(k=>validId(scope[k]))||
     scope.passengerId===scope.driverId)
     throw Error('G269 invalid original booking and Driver proof scope');
-   // Resolver must independently verify road route for THIS Driver and trip.
+   // Bind one independent road result to this exact booking, attempt and Driver.
    const evidence=await resolveVerifiedRoadPickup(Object.freeze({...scope}));
    const at=now();
    if(!evidence||typeof evidence!=='object'||Array.isArray(evidence)||
@@ -28,6 +28,8 @@ export function createG269VerifiedPickupProofRepository({
     evidence.fallbackUsed!==false||evidence.trafficAware!==true||
     !['GEOAPIFY','GOOGLE_MAPS'].includes(evidence.provider)||
     evidence.passengerId!==scope.passengerId||
+    evidence.bookingKey!==scope.bookingKey||
+    evidence.proofKey!==scope.proofKey||
     evidence.tripId!==scope.tripId||
     evidence.driverId!==scope.driverId||
     evidence.vehicleId!==scope.vehicleId||
