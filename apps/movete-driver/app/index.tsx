@@ -9,6 +9,7 @@ import {useDriverCustody} from '../src/DriverCustodyProvider';
 import {useDriverWorkspace} from '../src/DriverWorkspaceProvider';
 import {useNativeDriverAuth} from '../src/DriverApplicationProviders';
 import {verifyResumableDriverAutoTrip} from '../src/domain/driver-accepted-ride-resume.mjs';
+import {restoreDriverSosActiveSession,clearDriverSosActiveSession} from '../src/DriverSosPhone';
 export default function DriverHome(){
  const [demoAvailable,setDemoAvailable]=useState(false);
  const auth=useNativeDriverAuth();
@@ -29,7 +30,9 @@ export default function DriverHome(){
    if(!auth)return;
    try{
     const session=await auth.getSession();
-    if(active)setAuthenticated(session?.role==='driver');
+    if(active){setAuthenticated(session?.role==='driver');
+     if(session?.role==='driver')await restoreDriverSosActiveSession();
+     else await clearDriverSosActiveSession();}
    }catch{if(active)setAuthenticated(false);}
   };
   void verify();
@@ -51,6 +54,7 @@ export default function DriverHome(){
     return;
    }
    setAuthenticated((await auth.getSession())?.role==='driver');
+   await restoreDriverSosActiveSession();
    setAuthMessage('Identidad Driver verificada. Sin backend autorizado, las ofertas siguen bloqueadas.');
   }catch{setAuthenticated(false);setAuthMessage('Sin conexión segura confirmada.');}
   finally{setAuthBusy(false);}
@@ -60,7 +64,7 @@ export default function DriverHome(){
   setAuthBusy(true);setPassword('');setMotoRecoveryMessage('');setAuthenticated(false);
   try{await auth.signOut();setAuthMessage('Sesión Driver cerrada.');}
   catch{setAuthMessage('Acceso oculto; no se confirmó revocación remota.');}
-  finally{setAuthBusy(false);}
+  finally{await clearDriverSosActiveSession().catch(()=>{});setAuthBusy(false);}
  }
  const {state,refresh}=useDriverWorkspace();
  const kyc=useDriverKycExpiry();
