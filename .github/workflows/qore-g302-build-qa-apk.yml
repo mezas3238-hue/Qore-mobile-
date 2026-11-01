@@ -1,6 +1,9 @@
 name: G302 Android QA APK builds — internal only
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g302-build-qa-apk.yml'
   push:
     branches:
       - feature/qore-g300-store-distribution-eas-client-driver-20261101
