@@ -11,6 +11,7 @@ export default function DriverLayout(){
    <Stack.Screen name="index" options={{title:'Movete Fácil Driver'}}/>
    <Stack.Screen name="documentos" options={{title:'Mis documentos'}}/>
    <Stack.Screen name="camara-inteligente" options={{title:'Cámara inteligente STAGING'}}/>
+   <Stack.Screen name="ocr-matriculas" options={{title:'OCR matrículas (LAB)'}}/>
    <Stack.Screen name="vehiculo" options={{title:'Registrar vehículo'}}/>
    <Stack.Screen name="ofertas" options={{title:'Ofertas para mí'}}/>
    <Stack.Screen name="distancia-recogida" options={{title:'Distancia de recogida'}}/>
