@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
+import {pathToFileURL} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const read=path=>JSON.parse(readFileSync(resolve(root,path),'utf8'));
 const nativeApps=[
@@ -49,6 +50,30 @@ for(const {dir,id,audience} of nativeApps){
   assert.notEqual(eas.build['qa-apk'].android.buildType,eas.build.production.android.buildType);
   const text=JSON.stringify(eas);
   assert.doesNotMatch(text,/service_role|sb_secret_|private_key|api[_-]?token|password/i);
+ });
+}
+for(const {dir,id} of nativeApps){
+ test('G302 '+dir+' APK builds use .qa app ID with visible QA label and LIVE OFF',async()=>{
+  const moduleUrl=pathToFileURL(resolve(root,'apps',dir,'app.config.js')).href;
+  const config=(await import(moduleUrl)).default;
+  const staticConfig=read('apps/'+dir+'/app.json').expo;
+  const before=process.env.QORE_QA_BUILD;
+  try{
+   process.env.QORE_QA_BUILD='true';
+   const qa=config({config:staticConfig});
+   assert.equal(qa.android.package,id+'.qa');
+   assert.match(qa.name,/ QA$/);
+   assert.equal(qa.extra.qaBuild,true);
+   assert.equal(qa.extra.liveOperationsEnabled,false);
+   process.env.QORE_QA_BUILD='false';
+   const store=config({config:staticConfig});
+   assert.equal(store.android.package,id);
+   assert.equal(store.name,staticConfig.name);
+   assert.equal(store.extra.qaBuild,undefined);
+  }finally{
+   if(before===undefined)delete process.env.QORE_QA_BUILD;
+   else process.env.QORE_QA_BUILD=before;
+  }
  });
 }
 test('G300 Cliente and Driver package IDs and Expo names remain distinct',()=>{
