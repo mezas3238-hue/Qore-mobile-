@@ -32,6 +32,10 @@ No asumir porcentaje de comisión antes de que el Owner lo configure en servidor
 
 ## Seguridad y conciliación
 
+Al iniciar el cobro **todavía no hace falta un Repartidor asignado**. La asignación y verificación de su identidad se realizan después, al enlazar la entrega. El importe de envío y su regla Owner sí deben quedar congelados en la cotización previa.
+
+El cliente usa `apps/movete-cliente/src/domain/g304-payment-choice-policy.mjs`, que permite efectivo/tarjeta en viajes y envíos particulares, pero devuelve exclusivamente métodos digitales en Comercio, y no muestra ninguno hasta certificar la conexión PSP y el backend prepago. El adaptador financiero G7 de STAGING también rechaza `SIMULATED_CASH` para cotizaciones `MERCHANT_ORDER` verificadas por servidor.
+
 El backend final necesita un único escritor transaccional para cobro confirmado, stock reservado y autorización de preparación. `UNIQUE(order_id,psp_payment_ref)` / `UNIQUE(provider_event_ref)`, RLS, bloqueos y caducidad del pedido evitan despacho sin pago y cargos duplicados. Proveedor debe autenticar webhooks y permitir consultar el pago ante timeout. No confiar en capturas de pantalla, SMS, QR presentado por cliente ni estado local de app.
 
 Conciliar por pedido y por lote: (a) cobro de Cliente, (b) venta y producto, (c) tarifa de entrega, (d) comisión Comercio, (e) comisión Repartidor, (f) arancel PSP, (g) liquidación Comercio, (h) liquidación Driver, (i) devolución/reclamación. Mantener pruebas de auditoría sin PAN/CVV ni datos innecesarios.
