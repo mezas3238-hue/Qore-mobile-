@@ -33,7 +33,8 @@ export default function DriverHome(){
     if(active){setAuthenticated(session?.role==='driver');
      if(session?.role==='driver')await restoreDriverSosActiveSession();
      // A temporary offline auth failure must not erase the already chosen
-     // emergency destination. Explicit logout clears the active account.}
+     // emergency destination. Explicit logout clears the active account.
+    }
    }catch{if(active)setAuthenticated(false);}
   };
   void verify();
