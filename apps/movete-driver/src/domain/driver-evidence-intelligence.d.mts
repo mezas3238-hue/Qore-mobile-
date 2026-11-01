@@ -11,7 +11,7 @@ export type DriverCaptureFrame=Readonly<{
 }>;
 export type DriverCaptureQuality=Readonly<{
  ready:boolean;reasons:readonly string[];
- metrics:Readonly<{brightness:number;contrast:number;sharpness:number;glareRatio:number}>|null;
+ metrics:Readonly<{brightness:number;contrast:number;sharpness:number;interiorSharpness:number;interiorEdgeRatio:number;glareRatio:number}>|null;
  mayApprove:false;
 }>;
 export declare function assessDriverCaptureFrame(frame:DriverCaptureFrame):DriverCaptureQuality;
