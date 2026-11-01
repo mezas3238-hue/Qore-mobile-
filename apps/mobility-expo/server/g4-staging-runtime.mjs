@@ -10,6 +10,7 @@ import {safeStageRef,assertPublishableKey,inspectStageSignup} from '../scripts/s
 import {createQoreOfferGateway} from './g4-offer-gateway.mjs';
 import {createQoreRiderStatusGateway} from './g4-rider-status-gateway.mjs';
 import {createQoreRiderHistoryGateway} from './g26-rider-history-gateway.mjs';
+import {createG279RiderHistorySessionVerifier} from './g279-rider-history-session-fence.mjs';
 import {createQoreOwnHistoryRepository} from './g26-rider-history-repository.mjs';
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
 import {listenG165IsolatedQaRuntime} from './g165-isolated-qa-server-lifecycle.mjs';
@@ -577,8 +578,22 @@ export async function prepareQoreG4StagingRuntime({
    rpc:(name,params)=>admin.rpc(name,params)
   })
  });
+ // G279: provider Auth verifies the JWT subject; the private G42 SQL
+ // checks the same session still exists in auth.sessions after logout.
+ const verifiedHistorySession=createG279RiderHistorySessionVerifier({
+  projectRef:ref,verifyProviderUser:verified,now,
+  readProviderSession:async({userId,sessionId,issuedAtMs})=>{
+   const {data,error}=await admin.rpc('mobility_stage_g42_session_active',{
+    _user:userId,_session:sessionId,_iat_ms:issuedAtMs
+   });
+   if(error||typeof data!=='boolean')
+    throw Error('G279 provider session authority unavailable');
+   return data;
+  }
+ });
  const riderHistory=createQoreRiderHistoryGateway({
-  projectRef:ref,verifyAccessToken:verified,cursorSecrets:historyCursorSecrets,
+  projectRef:ref,verifyAccessToken:verifiedHistorySession,
+  cursorSecrets:historyCursorSecrets,
   authorizePassenger:id=>roleHas(admin,id,'passenger'),allowRequest,
   loadOwnHistory:createQoreOwnHistoryRepository(admin),now
  });
