@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {verifyG281DriverReadOnly} from './g281-real-driver-railway-readonly.mjs';
+import {verifyG281DriverReadOnly,g281OperatorPreflight} from './g281-real-driver-railway-readonly.mjs';
 
 const SLOTS=[
  ['owner_admin','admin'],['passenger','passenger'],
@@ -132,4 +132,37 @@ test('G281 stops without network when wrong project or broken manifest',async()=
 test('G281 refuses reopened public signup before credentials',async()=>{
  const s=run({signupClosed:false}),r=await s.call();
  assert.equal(r.ok,false);assert.equal(s.state().logins,0);
+});
+
+test('G281 operator preflight exposes only constant diagnostic codes, never secrets',()=>{
+ const allowed={
+  QORE_QA_DRIVER_READONLY_APPROVED:'CONFIRM_READ_ONLY_STAGING',
+  QORE_QA_MANIFEST_FILE:'/home/agent/.qore-qa-private/actors.json',
+  QORE_STAGING_PROJECT_REF:ref,
+  QORE_MOBILITY_ENV:'staging',
+  LIVE_TRIPS_ENABLED:'false',
+  QORE_STAGING_ANON_KEY:publicKey
+ };
+ const argv=['node','g281-real-driver-railway-readonly.mjs','--verify'];
+ assert.equal(g281OperatorPreflight(allowed,argv),null);
+ for(const [field,code] of [
+  ['QORE_QA_MANIFEST_FILE','G281_PRIVATE_MANIFEST_PATH_MISSING'],
+  ['QORE_STAGING_PROJECT_REF','G281_STAGING_PROJECT_REF_MISSING_OR_DIFFERENT'],
+  ['QORE_MOBILITY_ENV','G281_STAGING_ENVIRONMENT_REQUIRED'],
+  ['LIVE_TRIPS_ENABLED','G281_LIVE_TRIPS_MUST_BE_DISABLED'],
+  ['QORE_STAGING_ANON_KEY','G281_PUBLIC_KEY_MISSING_OR_INVALID'],
+  ['QORE_QA_DRIVER_READONLY_APPROVED','G281_EXPLICIT_READONLY_APPROVAL_MISSING']
+ ]){
+  const changed={...allowed};delete changed[field];
+  const result=g281OperatorPreflight(changed,argv);
+  assert.equal(result,code);
+  assert.ok(!result.includes(publicKey));
+  assert.ok(!result.includes('actors.json'));
+ }
+ assert.equal(g281OperatorPreflight({...allowed,CI:'true'},argv),
+  'G281_PRIVATE_OPERATOR_HOST_REQUIRED');
+ assert.equal(g281OperatorPreflight({...allowed,QORE_QA_ACTORS_JSON:'SECRET_DO_NOT_ECHO'},argv),
+  'G281_INLINE_CREDENTIALS_FORBIDDEN');
+ assert.equal(g281OperatorPreflight(allowed,['node','script','--apply']),
+  'G281_VERIFY_ONLY_REQUIRED');
 });
