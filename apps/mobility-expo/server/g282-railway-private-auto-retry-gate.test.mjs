@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
  readG282RailwayAutoRetryOptIn,assertG282PrivateBatchInstalled,
- startG282RailwayRetryWorker
+ assertG283VerifiedDatabaseReadiness,startG282RailwayRetryWorker
 } from './g282-railway-private-auto-retry-gate.mjs';
 
 const ready={
@@ -110,4 +110,43 @@ test('G282 Railway entry point runs only after G256 and binds lifecycle shutdown
   at('retryController=startG282RailwayRetryWorker('));
  assert.ok(at('retryController?.stop()')<at('ingress.close()'));
  assert.match(source,/enabled:g113RetryApproved/);
+});
+
+test('G283 accepts actual private read-only SQL readiness only when both approvals are real',async()=>{
+ const good={mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+  ownerAutoFareVerified:true,eligibleAutoDriverVerified:true,databaseReady:true};
+ let calls=0;
+ assert.equal(await assertG283VerifiedDatabaseReadiness(async(name,args)=>{
+  calls++;
+  assert.equal(name,'mobility_stage_g283_auto_retry_readiness_qa');
+  assert.deepEqual(args,{});
+  return {data:good,error:null};
+ }),true);
+ assert.equal(calls,1);
+ for(const bad of [
+  {...good,ownerAutoFareVerified:false,databaseReady:false},
+  {...good,eligibleAutoDriverVerified:false,databaseReady:false},
+  {...good,databaseReady:false},
+  {...good,commercialEnabled:true},
+  {...good,ownerId:'should_never_expose'},
+  {...good,ownerAutoFareVerified:'true'},
+  null
+ ]){
+  await assert.rejects(assertG283VerifiedDatabaseReadiness(
+   async()=>({data:bad,error:null})),/G282/);
+ }
+ for(const error of [{code:'PGRST202'},{code:'42501'}]){
+  await assert.rejects(assertG283VerifiedDatabaseReadiness(
+   async()=>({data:null,error})),/G282/);
+ }
+});
+test('G283 Railway cannot schedule even with all flags TRUE until DB certifies readiness',()=>{
+ const source=readFileSync(new URL('./run-g4-railway-staging.mjs',import.meta.url),'utf8');
+ const at=x=>source.indexOf(x);
+ assert.ok(at('await assertG283VerifiedDatabaseReadiness')>
+  at('await assertG282PrivateBatchInstalled'));
+ assert.ok(at('await assertG283VerifiedDatabaseReadiness')<
+  at('autoDispatchRetryQa:g113RetryApproved'));
+ assert.ok(at('autoDispatchRetryQa:g113RetryApproved')<
+  at('retryController=startG282RailwayRetryWorker'));
 });
