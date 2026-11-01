@@ -36,7 +36,7 @@ CREATE TABLE public.mobility_stage_g269_auto_dispatch_jobs (
 );
 CREATE INDEX mobility_stage_g269_due_auto
  ON public.mobility_stage_g269_auto_dispatch_jobs(next_attempt_at,created_at,booking_key)
- WHERE status IN ('PENDING','WAITING');
+ WHERE status IN ('PENDING','WAITING','OFFERED');
 ALTER TABLE public.mobility_stage_g269_auto_dispatch_jobs ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mobility_stage_g269_auto_dispatch_jobs
  FROM PUBLIC,anon,authenticated,service_role;
@@ -264,6 +264,10 @@ BEGIN
  END IF;
  UPDATE public.mobility_stage_g269_auto_dispatch_jobs
  SET status='OFFERED',offer_id=matched_offer_id,attempts=attempts+1,
+   -- An outstanding offer must be reclaimed after its own expiry.  This
+   -- value is backend-issued, never a mobile-provided retry deadline.
+   next_attempt_at=(SELECT GREATEST(o.expires_at,pg_catalog.clock_timestamp())
+     FROM public.mobility_stage_auto_demo_offers o WHERE o.id=matched_offer_id),
    updated_at=pg_catalog.clock_timestamp()
  WHERE booking_key=j.booking_key;
  RETURN pg_catalog.jsonb_build_object('mode','STAGING_DEMO_ONLY',
@@ -288,7 +292,7 @@ BEGIN
  FOR job IN
   SELECT j.passenger_id,j.booking_key,j.trip_id
   FROM public.mobility_stage_g269_auto_dispatch_jobs j
-  WHERE j.status IN ('PENDING','WAITING')
+  WHERE j.status IN ('PENDING','WAITING','OFFERED')
    AND j.next_attempt_at<=pg_catalog.clock_timestamp()
   ORDER BY j.next_attempt_at,j.created_at,j.booking_key
   LIMIT _limit FOR UPDATE OF j SKIP LOCKED
