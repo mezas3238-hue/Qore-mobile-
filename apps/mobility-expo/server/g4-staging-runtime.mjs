@@ -14,6 +14,7 @@ import {createQoreOwnHistoryRepository} from './g26-rider-history-repository.mjs
 import {createQoreRadarLoopbackTransport} from './g4-loopback-http-transport.mjs';
 import {listenG165IsolatedQaRuntime} from './g165-isolated-qa-server-lifecycle.mjs';
 import {createStagingRateLimiter} from './g2-staging-vehicle-gateway.mjs';
+import {createG282PendingVehicleGateway} from './g282-private-driver-vehicle-gateway.mjs';
 import {createSupabaseStagingDispatchRepository} from './g4-supabase-dispatch-repository.mjs';
 import {createQoreTripCommandGateway} from './g4-trip-command-gateway.mjs';
 import {createSupabaseStagingDeliveryRepository} from './g5-supabase-delivery-repository.mjs';
@@ -206,6 +207,7 @@ export async function prepareQoreG4StagingRuntime({
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
  g247RecipientAuthApproved=false,g252MerchantInboxAuthApproved=false,
+ g282VehicleDraftApproved=false,
  g260AdminAal2Approved=false,
  readDriverDecisionOwnerQa=null,now=Date.now,
  autoDispatchRetryQa=false,
@@ -215,6 +217,8 @@ export async function prepareQoreG4StagingRuntime({
  if(typeof g247RecipientAuthApproved!=='boolean'||
     (g247RecipientAuthApproved&&recipientTrust!==null))
   throw Error('G249 requires exclusive explicit G247 STAGING recipient opt-in');
+ if(typeof g282VehicleDraftApproved!=='boolean')
+  throw Error('G282 STAGING private vehicle draft requires explicit opt-in');
  if(typeof g252MerchantInboxAuthApproved!=='boolean'||
     (g252MerchantInboxAuthApproved&&merchantStaffTrust!==null))
   throw Error('G252 read-only merchant inbox requires exclusive explicit provider opt-in');
@@ -532,6 +536,9 @@ export async function prepareQoreG4StagingRuntime({
  // Supabase getUser. Until an independently revocable IdP is provisioned,
  // the private Driver endpoints are intentionally unavailable (fail closed).
  // This does not mint an eight-document G71 dossier or bypass G38 SQL.
+ const g282VehicleTrust=g282VehicleDraftApproved?
+  createQoreG247ProviderSessionTrust({projectRef:ref,auth:auth.auth,
+   db:admin,now,allowedByOwner:true,liveEnabled:false}):null;
  const guardedDriverAuth={
   verifyAccessToken:verifiedDriverOfferSession,requireFreshSession:true,
   verifySessionNotRevoked:p=>driverKycTrust===null?
@@ -1231,6 +1238,18 @@ export async function prepareQoreG4StagingRuntime({
    allowRequest:({actorId})=>allowRequest({userId:actorId}),
    admin,now
   });
+ const g282VehicleDraft=g282VehicleTrust===null?null:
+  createG282PendingVehicleGateway({
+   projectRef:ref,
+   verifyDriverSession:token=>g282VehicleTrust.verifyParticipantSession(token),
+   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
+   submitPending:async params=>{
+    const {data,error}=await admin.rpc('mobility_stage_g282_submit_vehicle_pending_qa',params);
+    if(error||typeof data!=='string'||!UUID.test(data))
+     throw Error('G282 original SQL mutation denied');
+    return data;
+   }
+  });
  const driverKycReadiness=createDriverKycReadinessGateway({
   projectRef:ref,verifyAccessToken:verified,
   authorizeDriver:id=>roleHas(admin,id,'driver'),allowRequest,
@@ -1311,6 +1330,7 @@ export async function prepareQoreG4StagingRuntime({
    driverInboxHandler:guard(driverInbox),
    driverDocumentHandler:guard(driverDocuments),
    driverEnrollmentHandler:guard(driverEnrollment),
+   ...(g282VehicleDraft===null?{}:{g282VehicleDraftHandler:guard(g282VehicleDraft)}),
    driverLicenseReadinessHandler:guard(driverKycReadiness),
        ...(driverTripStatus===null?{}:{driverTripStatusHandler:guard(driverTripStatus)}),
     ...(driverCurrentTrip===null?{}:{driverCurrentTripHandler:guard(driverCurrentTrip)}),
