@@ -16,12 +16,11 @@ const exact=(o,names)=>validObject(o)&&Object.keys(o).length===names.length&&
  names.every(k=>Object.hasOwn(o,k));
 const failed=code=>Object.freeze({ok:false,code,commercialEnabled:false});
 export function validateDriverPendingVehicleDraft(draft){
- const names=['kind','service','municipalityCode','plate','brand','model',
+ const names=['kind','service','plate','brand','model',
   'year','passengerCapacity'];
  if(!exact(draft,names))return false;
- const {kind,service,municipalityCode,plate,brand,model,year,passengerCapacity}=draft;
+ const {kind,service,plate,brand,model,year,passengerCapacity}=draft;
  if(!Object.hasOwn(SERVICES,kind)||!SERVICES[kind].has(service)||
-  typeof municipalityCode!=='string'||!/^[A-Z0-9_-]{2,60}$/.test(municipalityCode)||
   typeof plate!=='string'||!/^[A-Z0-9-]{4,12}$/.test(plate)||
   typeof brand!=='string'||brand.trim()!==brand||brand.length<2||brand.length>80||
   typeof model!=='string'||model.trim()!==model||model.length<1||model.length>80||
