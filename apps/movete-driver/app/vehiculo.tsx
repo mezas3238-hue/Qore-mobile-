@@ -21,6 +21,7 @@ const errors:Record<string,string>={
  DRIVER_ROLE_DENIED:'Esta cuenta no está autorizada para registrar vehículos.',
  VEHICLE_FIELDS_REJECTED:'El servidor rechazó uno o más datos del vehículo.',
  VEHICLE_RATE_LIMIT:'Se alcanzó el límite temporal de solicitudes.',
+ STAGING_MUNICIPALITY_UNCONFIGURED:'El área de servicio aún no está configurada en el servidor STAGING. No tenés que ingresar códigos de municipio.',
  VEHICLE_PENDING_CONFLICT:'La solicitud no fue aceptada. Revisá los datos y no crees una nueva solicitud automáticamente.',
  VEHICLE_RECEIPT_INVALID:'No pudimos comprobar el comprobante de recepción.',
  VEHICLE_RECEIPT_UNCONFIRMED:'No se pudo confirmar la recepción. Conservamos la misma clave para un reintento manual.'
