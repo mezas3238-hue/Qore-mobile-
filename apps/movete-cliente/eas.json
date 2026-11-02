@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/expo/eas-cli/main/packages/eas-json/schema/eas.schema.json",
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "qa-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false",
+        "QORE_QA_BUILD": "true"
+      }
+    },
+    "store-review": {
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false",
+        "QORE_QA_BUILD": "false"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_QORE_LIVE_OPERATIONS": "false",
+        "QORE_QA_BUILD": "false"
+      }
+    }
+  }
+}

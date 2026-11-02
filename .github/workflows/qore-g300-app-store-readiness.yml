@@ -1,0 +1,26 @@
+name: G300 App Store release configuration — no publish
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-cliente/app.json'
+      - 'apps/movete-cliente/eas.json'
+      - 'apps/movete-driver/app.json'
+      - 'apps/movete-driver/eas.json'
+      - 'scripts/g300-app-store-readiness.test.mjs'
+      - '.github/workflows/qore-g300-app-store-readiness.yml'
+  push:
+    branches:
+      - 'feature/qore-g300-store-distribution-eas-client-driver-20261101'
+permissions:
+  contents: read
+jobs:
+  verify-store-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate both mobile store configurations without credentials
+        run: node --test scripts/g300-app-store-readiness.test.mjs
