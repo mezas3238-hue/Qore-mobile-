@@ -3,9 +3,9 @@
  * the app backgrounds, the camera screen unmounts or permission is lost.
  * This is an on-device QA race fence, not a hardware autofocus certificate.
  */
-export function canCommitDriverCameraInspection({
- requestEpoch,currentEpoch,appActive,permissionGranted
-}={}){
+export function canCommitDriverCameraInspection(input={}){
+ if(!input||typeof input!=='object'||Array.isArray(input))return false;
+ const {requestEpoch,currentEpoch,appActive,permissionGranted}=input;
  return Number.isSafeInteger(requestEpoch)&&requestEpoch>=0&&
   Number.isSafeInteger(currentEpoch)&&currentEpoch===requestEpoch&&
   appActive===true&&permissionGranted===true;
