@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/qore-g302-build-qa-apk.yml'
+      - 'apps/movete-driver/app/camara-inteligente.tsx'
+      - 'apps/movete-driver/src/domain/driver-camera-session.*'
   push:
     branches:
       - integration/qore-g307-android-qa-camera-distribution-20261102

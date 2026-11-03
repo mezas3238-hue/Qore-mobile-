@@ -8,6 +8,8 @@ import {inspectNativeDriverDocumentPhoto,discardDriverCameraCache}
  from '../src/native/driver-camera-qa-frame';
 import {nextDriverAutoCaptureGate}
  from '../src/domain/driver-evidence-intelligence.mjs';
+import {canCommitDriverCameraInspection}
+ from '../src/domain/driver-camera-session.mjs';
 import {OFFLINE_DRIVER_OCR_QA} from '../src/native/driver-offline-ocr-qa';
 
 const authorized=OFFLINE_DRIVER_OCR_QA||(
@@ -38,6 +40,11 @@ export default function DriverSmartCameraLab(){
  const cameraReadyAt=useRef(0);
  const count=useRef(0);
  const lock=useRef(false);
+ // Invalidate pending camera promises when the app backgrounds or unmounts.
+ const sessionEpoch=useRef(0);
+ const appActive=useRef(AppState.currentState==='active');
+ const permissionGranted=useRef(permission?.granted===true);
+ permissionGranted.current=permission?.granted===true;
  const stop=()=>{
   setAuto(false);count.current=0;setPasses(0);
  };
@@ -57,13 +64,28 @@ export default function DriverSmartCameraLab(){
  },[ready,permission?.granted]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
-   if(state!=='active')stop();
+   if(state!=='active'){
+    appActive.current=false;
+    sessionEpoch.current++;
+    cameraReadyAt.current=0;
+    lastAcc.current=null;motion.current=1;
+    stop();
+   }else{
+    appActive.current=true;
+    // Never reuse the previous focus settling period on foreground return.
+    cameraReadyAt.current=Date.now();
+    count.current=0;setPasses(0);
+   }
   });
-  return ()=>subscription.remove();
+  return ()=>{
+   subscription.remove();
+   appActive.current=false;
+   sessionEpoch.current++;
+  };
  },[]);
  const shoot=useCallback(async(manual:boolean)=>{
   if(lock.current||!authorized||!ready||permission?.granted!==true||
-   !camera.current||done)return;
+   !appActive.current||!camera.current||done)return;
   // CameraView onCameraReady does not signal autofocus lock. Allow the
   // continuous AF system time to settle before inspecting any sample.
   if(Date.now()-cameraReadyAt.current<1800){
@@ -71,6 +93,11 @@ export default function DriverSmartCameraLab(){
    return;
   }
   lock.current=true;setBusy(true);
+  const requestEpoch=sessionEpoch.current;
+  const stillCurrent=()=>canCommitDriverCameraInspection({
+   requestEpoch,currentEpoch:sessionEpoch.current,
+   appActive:appActive.current,permissionGranted:permissionGranted.current
+  });
   const since=Date.now()-lastShot.current;
   lastShot.current=Date.now();
   let uri:string|undefined;
@@ -80,7 +107,10 @@ export default function DriverSmartCameraLab(){
    });
    if(!shot?.uri)throw Error('CAMERA_NO_IMAGE');
    uri=shot.uri;
+   // A backgrounded/unmounted request cannot accept a late shutter result.
+   if(!stillCurrent())return;
    const quality=await inspectNativeDriverDocumentPhoto(uri,motion.current);
+   if(!stillCurrent())return;
    const gate=nextDriverAutoCaptureGate({
     previousCount:count.current,quality,elapsedMs:since,minimumGapMs:450
    });
@@ -100,8 +130,10 @@ export default function DriverSmartCameraLab(){
    }
   }catch{
    count.current=0;setPasses(0);
-   setNotice('No se pudo analizar la fotografía. Intentá de nuevo. No se envió ningún archivo.');
-   if(!manual)setAuto(false);
+   if(stillCurrent()){
+    setNotice('No se pudo analizar la fotografía. Intentá de nuevo. No se envió ningún archivo.');
+    if(!manual)setAuto(false);
+   }
   }finally{
    discardDriverCameraCache(uri);
    lock.current=false;setBusy(false);
