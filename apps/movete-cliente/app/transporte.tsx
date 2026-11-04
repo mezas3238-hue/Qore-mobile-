@@ -34,7 +34,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const [gpsBusy,setGpsBusy]=useState(false);
  const [feedback,setFeedback]=useState('');
  const mounted=useRef(true);
- const active=useRef(AppState.currentState==='active');
+ const active=useRef(AppState.currentState!=='background'&&AppState.currentState!=='inactive');
  const gpsEpoch=useRef(0),searchEpoch=useRef(0);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
   requestEpoch:epoch,currentEpoch:gpsEpoch.current,
@@ -61,7 +61,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
  },[privateRevision]);
  useEffect(()=>{
-  mounted.current=true;active.current=AppState.currentState==='active';
+  mounted.current=true;active.current=AppState.currentState!=='background'&&AppState.currentState!=='inactive';
   if(active.current)void refreshPickup();
   const sub=AppState.addEventListener('change',status=>{
    if(status!=='active'){
