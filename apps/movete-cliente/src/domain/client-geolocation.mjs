@@ -25,8 +25,13 @@ export function inspectPassengerGpsFix(fix){
 export function makePassengerAddressLabel(address, fallback=null){
  if(!address||typeof address!=='object'||Array.isArray(address))
   return safeText(fallback)?fallback.trim():null;
- const parts=[address.streetNumber,address.street,address.district,
-  address.city,address.region].filter(x=>typeof x==='string'&&x.trim().length>0)
+ const raw=[address.streetNumber,address.street,address.district,
+  address.city,address.region];
+ // Reject control-character geocoder output before trim() can hide it.
+ if(raw.some(x=>typeof x==='string'&&
+  /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(x)))
+  return safeText(fallback)?fallback.trim():null;
+ const parts=raw.filter(x=>typeof x==='string'&&x.trim().length>0)
   .map(x=>x.trim());
  const unique=[...new Set(parts)],label=unique.join(', ');
  return safeText(label)?label.slice(0,120):
