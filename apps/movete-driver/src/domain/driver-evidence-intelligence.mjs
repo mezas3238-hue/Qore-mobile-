@@ -75,7 +75,7 @@ export function assessDriverCaptureFrame(frame){
  // The native ML Kit scanner returns a tightly cropped, perspective-fixed page.
  // Its JPEG may have NO visible outer rectangle, unlike CameraView preview.
  const rect=nativeScan?{x:0,y:0,width:1,height:1,confidence:1}:frame.subjectBox;
- const validBox=!!rect&&typeof rect==='object'&&finite01(rect.x)&&
+ const validBox=nativeScan||!!rect&&typeof rect==='object'&&finite01(rect.x)&&
   finite01(rect.y)&&finite01(rect.width)&&finite01(rect.height)&&
   finite01(rect.confidence)&&rect.confidence>=0.9&&
   rect.x>=0.025&&rect.y>=0.025&&rect.width>=0.55&&
