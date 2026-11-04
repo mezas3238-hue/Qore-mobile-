@@ -35,6 +35,12 @@
           "cameraPermission": "Movete Fácil Driver usa la cámara para capturas voluntarias de documentos en STAGING.",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Se necesita cámara solo para escanear documentos de prueba con nitidez."
+        }
       ]
     ],
     "extra": {

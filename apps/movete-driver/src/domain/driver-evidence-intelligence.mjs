@@ -50,11 +50,13 @@ const rejection=(reasons,metrics=null)=>Object.freeze({
 });
 const finite01=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=1;
 export function assessDriverCaptureFrame(frame){
+ const nativeScan=frame?.captureSource==='mlkit-document-scanner'&&frame?.motionRms===null;
  if(!frame||!Number.isInteger(frame.width)||!Number.isInteger(frame.height)||
   frame.width<48||frame.height<48||frame.width*frame.height>320*320||
   !(frame.luma instanceof Uint8Array)||
   frame.luma.length!==frame.width*frame.height||
-  !Number.isFinite(frame.motionRms)||frame.motionRms<0)
+  (frame.captureSource!==undefined&&!nativeScan)||
+  (!nativeScan&&(!Number.isFinite(frame.motionRms)||frame.motionRms<0)))
   return rejection(['INVALID_FRAME']);
  const {width:w,height:h,luma}=frame;
  let sum=0,bright=0,dark=0,variance=0,n=0,lapSum=0,lapSquares=0;
@@ -70,8 +72,10 @@ export function assessDriverCaptureFrame(frame){
   lapSum+=lap;lapSquares+=lap*lap;n++;
  }
  const sharpness=lapSquares/n-(lapSum/n)**2;
- const rect=frame.subjectBox;
- const validBox=!!rect&&typeof rect==='object'&&finite01(rect.x)&&
+ // The native ML Kit scanner returns a tightly cropped, perspective-fixed page.
+ // Its JPEG may have NO visible outer rectangle, unlike CameraView preview.
+ const rect=nativeScan?{x:0,y:0,width:1,height:1,confidence:1}:frame.subjectBox;
+ const validBox=nativeScan||!!rect&&typeof rect==='object'&&finite01(rect.x)&&
   finite01(rect.y)&&finite01(rect.width)&&finite01(rect.height)&&
   finite01(rect.confidence)&&rect.confidence>=0.9&&
   rect.x>=0.025&&rect.y>=0.025&&rect.width>=0.55&&
@@ -108,16 +112,17 @@ export function assessDriverCaptureFrame(frame){
  // thresholds are lab-only; physical-device calibration is still required.
  if(sharpness<180||interiorSharpness<420||interiorEdgeRatio<0.055)
   reasons.push('OUT_OF_FOCUS');
- if(frame.motionRms>0.085)reasons.push('CAMERA_MOVING');
+ if(!nativeScan&&frame.motionRms>0.085)reasons.push('CAMERA_MOVING');
  // Bounding box MUST be from an image-based detector; overlays are NOT evidence.
- if(!validBox)reasons.push('SUBJECT_NOT_VERIFIED_IN_FRAME');
+ if(!nativeScan&&!validBox)reasons.push('SUBJECT_NOT_VERIFIED_IN_FRAME');
  return Object.freeze({
   ready:reasons.length===0,reasons:Object.freeze(reasons),
   metrics:Object.freeze({brightness:Math.round(mean),contrast:Math.round(contrast),
    sharpness:Math.round(sharpness),interiorSharpness:Math.round(interiorSharpness),
    interiorEdgeRatio:Math.round(interiorEdgeRatio*1000)/1000,
    glareRatio:bright/luma.length}),
-  mayApprove:false
+  mayApprove:false,hardwareFocusCertified:false,
+  motionMeasured:!nativeScan
  });
 }
 /**

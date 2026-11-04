@@ -14,10 +14,12 @@ export function discardDriverCameraCache(uri:string|undefined|null){
  try{new File(uri).delete();}catch{ /* No photo bytes exposed to telemetry. */ }
 }
 export async function inspectNativeDriverDocumentPhoto(
- fileUri:string,motionRms:number
+ fileUri:string,motionRms:number|null,
+ captureSource?:'mlkit-document-scanner'
 ):Promise<DriverCaptureQuality>{
  if(typeof fileUri!=='string'||!fileUri.startsWith('file://')||
-  !Number.isFinite(motionRms)||motionRms<0)
+  (captureSource==='mlkit-document-scanner'?
+   motionRms!==null:!Number.isFinite(motionRms)||motionRms===null||motionRms<0))
   throw Error('CAMERA_IMAGE_SOURCE_INVALID');
  const ctx=ImageManipulator.manipulate(fileUri);
  // 160px downsampling concealed blurred glyphs behind crisp document
@@ -48,7 +50,8 @@ export async function inspectNativeDriverDocumentPhoto(
    width:image.width,height:image.height,luma
   });
   return assessDriverCaptureFrame({
-   width:image.width,height:image.height,luma,motionRms,subjectBox
+   width:image.width,height:image.height,luma,motionRms,subjectBox,
+   ...(captureSource==='mlkit-document-scanner'?{captureSource}:{})
   });
  }finally{
   // Best-effort zeroization of decoded PII pixels before GC.
