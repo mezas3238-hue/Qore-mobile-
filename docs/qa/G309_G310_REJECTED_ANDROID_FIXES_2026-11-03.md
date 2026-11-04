@@ -10,7 +10,8 @@
 
 ## Driver (G310)
 - **Se elimina el bucle de disparos periódicos:** el componente viejo llamaba a `CameraView.takePictureAsync` cada 1,2 segundos para medir la calidad y podía activar el obturador repetidamente aunque la imagen estuviera desenfocada. Esa mecánica queda reemplazada en la ruta de laboratorio.
-- Se integra el escáner documental **Google ML Kit / Google Play Services**, mediante `@infinitered/react-native-mlkit-document-scanner@5.0.0`. La app lo abre solo mediante un botón; `scannerMode: FULL`, `pageLimit:1`, `galleryImportAllowed:false`, `resultFormats:JPEG`.
+- Se integra el escáner documental **Google ML Kit / Google Play Services**, mediante `react-native-document-scanner-plugin@2.0.4`. La app lo abre solo mediante un botón; `maxNumDocuments:1`, `croppedImageQuality:100`, `responseType:ImageFilePath`.
+- El paquete anterior @infinitered/react-native-mlkit-document-scanner 5.0.0 falló en Expo 57 Gradle settings al faltar el campo publication.version; se sustituyó por el módulo React Native Document Scanner 2.0.4 para verificar compatibilidad nativa en CI.
 - El escáner nativo detecta contornos y decide cuándo autocapturar; cuando el usuario guarda, la app mide **píxeles reales interiores**, luz, contraste, reflejos y contorno y **rechaza las imágenes borrosas**. No inventa datos del acelerómetro ni afirma recibir `focus_locked` del hardware.
 - Las páginas devueltas se borran con esfuerzo máximo tras inspeccionarlas. Nunca se suben, registran ni aprueban identidades.
 - El selector de galería está deshabilitado. Si faltan Servicios de Google Play, sus modelos o el escáner no funciona, se muestra rechazo, **no se salta al viejo disparador**.
