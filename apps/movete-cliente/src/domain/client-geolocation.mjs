@@ -22,7 +22,7 @@ export function inspectPassengerGpsFix(fix){
   accuracyMeters:fix.accuracyMeters
  }),commercialVerified:false});
 }
-export function makePassengerAddressLabel(address, fallback){
+export function makePassengerAddressLabel(address, fallback=null){
  if(!address||typeof address!=='object'||Array.isArray(address))
   return safeText(fallback)?fallback.trim():null;
  const parts=[address.streetNumber,address.street,address.district,
