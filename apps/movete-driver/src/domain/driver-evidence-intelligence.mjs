@@ -72,7 +72,9 @@ export function assessDriverCaptureFrame(frame){
   lapSum+=lap;lapSquares+=lap*lap;n++;
  }
  const sharpness=lapSquares/n-(lapSum/n)**2;
- const rect=frame.subjectBox;
+ // The native ML Kit scanner returns a tightly cropped, perspective-fixed page.
+ // Its JPEG may have NO visible outer rectangle, unlike CameraView preview.
+ const rect=nativeScan?{x:0,y:0,width:1,height:1,confidence:1}:frame.subjectBox;
  const validBox=!!rect&&typeof rect==='object'&&finite01(rect.x)&&
   finite01(rect.y)&&finite01(rect.width)&&finite01(rect.height)&&
   finite01(rect.confidence)&&rect.confidence>=0.9&&
@@ -112,7 +114,7 @@ export function assessDriverCaptureFrame(frame){
   reasons.push('OUT_OF_FOCUS');
  if(!nativeScan&&frame.motionRms>0.085)reasons.push('CAMERA_MOVING');
  // Bounding box MUST be from an image-based detector; overlays are NOT evidence.
- if(!validBox)reasons.push('SUBJECT_NOT_VERIFIED_IN_FRAME');
+ if(!nativeScan&&!validBox)reasons.push('SUBJECT_NOT_VERIFIED_IN_FRAME');
  return Object.freeze({
   ready:reasons.length===0,reasons:Object.freeze(reasons),
   metrics:Object.freeze({brightness:Math.round(mean),contrast:Math.round(contrast),
