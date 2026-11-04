@@ -34,7 +34,10 @@ test('Inicio lleva al selector en ambos modos, y selector usa los formularios re
  assert.match(nav,/Stack.Screen name="transporte"/);
  assert.match(screen,/router.push\('\/viaje'\)/);
  assert.match(screen,/router.push\('\/moto'\)/);
- assert.match(screen,/disabled=\{!choice.ok\|\|!routeReview.ok\}/);
+ assert.match(screen,/disabled=\{!canContinue\}/);
+ assert.match(screen,/const pointsSelected=pickup!==null&&dropoff!==null/);
+ assert.match(screen,/getPassengerCurrentPickup/);
+ assert.match(screen,/searchPassengerDestination/);
  assert.doesNotMatch(screen,/requestMotoQuote|bookMoto|reserveQuotedAuto|fetch\(/);
 });
 

@@ -20,7 +20,15 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Movete Fácil usa tu ubicación precisa mientras elegís el origen de tu viaje. Podés rechazar el permiso.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "extra": {
       "qoreAudience": "CLIENT",
