@@ -105,3 +105,14 @@ test('G310 ML Kit scan may be checked by pixels without claiming motion or hardw
   ...frame,motionRms:null,captureSource:'unknown-scanner'
  }).ready,false);
 });
+
+test('G310 native ML Kit cropped page has no contour but MUST pass pixel sharpness gate',()=>{
+ const source=photo(),cropped={...source,subjectBox:null,motionRms:null,
+  captureSource:'mlkit-document-scanner'};
+ const clear=assessDriverCaptureFrame(cropped);
+ assert.equal(clear.ready,true);
+ assert.equal(clear.hardwareFocusCertified,false);
+ const blurred=assessDriverCaptureFrame({...cropped,luma:photo('blurred').luma});
+ assert.equal(blurred.ready,false);
+ assert(blurred.reasons.includes('OUT_OF_FOCUS'));
+});
