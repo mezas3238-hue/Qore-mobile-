@@ -92,3 +92,16 @@ test('G302 three frames with any blurred interior cannot trigger shutter',()=>{
  }
  assert.equal(prev,2);
 });
+
+test('G310 ML Kit scan may be checked by pixels without claiming motion or hardware AF lock',()=>{
+ const frame=photo(),scan=assessDriverCaptureFrame({
+  ...frame,motionRms:null,captureSource:'mlkit-document-scanner'
+ });
+ assert.equal(scan.ready,true);
+ assert.equal(scan.motionMeasured,false);
+ assert.equal(scan.hardwareFocusCertified,false);
+ assert.equal(assessDriverCaptureFrame({...frame,motionRms:null}).ready,false);
+ assert.equal(assessDriverCaptureFrame({
+  ...frame,motionRms:null,captureSource:'unknown-scanner'
+ }).ready,false);
+});
