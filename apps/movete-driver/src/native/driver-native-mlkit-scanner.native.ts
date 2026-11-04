@@ -8,8 +8,8 @@
 import {Platform} from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
-import {launchDocumentScannerAsync,ResultFormatOptions,ScannerModeOptions}
- from '@infinitered/react-native-mlkit-document-scanner';
+import DocumentScanner,{ResponseType,ScanDocumentResponseStatus}
+ from 'react-native-document-scanner-plugin';
 import {inspectNativeDriverDocumentPhoto,discardDriverCameraCache}
  from './driver-camera-qa-frame';
 import {isAcceptedNativeDriverScan} from '../domain/driver-native-scanner-qa.mjs';
@@ -24,18 +24,20 @@ export async function runNativeDriverDocumentScannerQa():Promise<NativeDriverSca
  let localUris:string[]=[];
  let copiedUri:string|null=null;
  try{
-  const scanned=await launchDocumentScannerAsync({
-   pageLimit:1,galleryImportAllowed:false,
-   scannerMode:ScannerModeOptions.FULL,resultFormats:ResultFormatOptions.JPEG
+  const scanned=await DocumentScanner.scanDocument({
+   maxNumDocuments:1,croppedImageQuality:100,
+   responseType:ResponseType.ImageFilePath
   });
-  if(scanned.canceled===true)return {status:'cancelled',
-   reasons:[],commercialApproved:false};
+  if(scanned.status===ScanDocumentResponseStatus.Cancel)
+   return {status:'cancelled',reasons:[],commercialApproved:false};
+  if(scanned.status!==ScanDocumentResponseStatus.Success)
+   return {status:'rejected',reasons:['INVALID_SCAN'],commercialApproved:false};
   // Android Google ML Kit returns content:// OR file://. Never reject
   // legitimate content-provider output merely for its private URI scheme.
-  if(!Array.isArray(scanned.pages))return {status:'rejected',
+  if(!Array.isArray(scanned.scannedImages))return {status:'rejected',
    reasons:['INVALID_SCAN'],commercialApproved:false};
-  localUris=scanned.pages.filter(uri=>typeof uri==='string');
-  if(scanned.pages.length!==1||localUris.length!==1||
+  localUris=scanned.scannedImages.filter(uri=>typeof uri==='string');
+  if(scanned.scannedImages.length!==1||localUris.length!==1||
    !(/^(?:file|content):\/\//.test(localUris[0])))return {status:'rejected',
    reasons:['INVALID_SCAN'],commercialApproved:false};
   let scanUri=localUris[0];
@@ -49,7 +51,7 @@ export async function runNativeDriverDocumentScannerQa():Promise<NativeDriverSca
    scanUri,null,'mlkit-document-scanner'
   );
   const accept=isAcceptedNativeDriverScan({
-   pageCount:scanned.pages.length,source:'mlkit-document-scanner',
+   pageCount:scanned.scannedImages.length,source:'mlkit-document-scanner',
    ready:quality.ready,reasons:quality.reasons
   });
   return {status:accept?'accepted':'rejected',
