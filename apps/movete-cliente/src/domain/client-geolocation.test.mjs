@@ -14,7 +14,7 @@ test('G309 uses only precise, non-mocked foreground GPS coordinates',()=>{
 test('G309 labels are bounded, sanitize invalid and missing reverse geocoding',()=>{
  assert.equal(makePassengerAddressLabel({streetNumber:'123',street:'Av España',
   city:'Asunción'},'Ubicación GPS'), '123, Av España, Asunción');
- assert.equal(makePassengerAddressLabel(null,'GPS'),null);
+ assert.equal(makePassengerAddressLabel(null,'GPS'),'GPS');
  assert.equal(makePassengerAddressLabel({street:'\nInsegura'},'Ubicación GPS'),
   'Ubicación GPS');
 });
