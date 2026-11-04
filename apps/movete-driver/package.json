@@ -41,7 +41,7 @@
     "expo-file-system": "~57.0.7",
     "jpeg-js": "0.4.4",
     "@react-native-ml-kit/text-recognition": "2.0.0",
-    "@infinitered/react-native-mlkit-document-scanner": "5.0.0"
+    "react-native-document-scanner-plugin": "2.0.4"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
