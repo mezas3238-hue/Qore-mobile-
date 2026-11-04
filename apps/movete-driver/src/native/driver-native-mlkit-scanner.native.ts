@@ -6,6 +6,8 @@
  * NEVER uploads/approves identity or private vehicle documents.
  */
 import {Platform} from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Crypto from 'expo-crypto';
 import {launchDocumentScannerAsync,ResultFormatOptions,ScannerModeOptions}
  from '@infinitered/react-native-mlkit-document-scanner';
 import {inspectNativeDriverDocumentPhoto,discardDriverCameraCache}
@@ -20,6 +22,7 @@ export async function runNativeDriverDocumentScannerQa():Promise<NativeDriverSca
  if(Platform.OS!=='android')return {status:'unavailable',
   reasons:['ANDROID_ONLY'],commercialApproved:false};
  let localUris:string[]=[];
+ let copiedUri:string|null=null;
  try{
   const scanned=await launchDocumentScannerAsync({
    pageLimit:1,galleryImportAllowed:false,
@@ -27,15 +30,23 @@ export async function runNativeDriverDocumentScannerQa():Promise<NativeDriverSca
   });
   if(scanned.canceled===true)return {status:'cancelled',
    reasons:[],commercialApproved:false};
-  // The SDK is expected to return one file:// JPEG page after the user saves.
+  // Android Google ML Kit returns content:// OR file://. Never reject
+  // legitimate content-provider output merely for its private URI scheme.
   if(!Array.isArray(scanned.pages))return {status:'rejected',
    reasons:['INVALID_SCAN'],commercialApproved:false};
   localUris=scanned.pages.filter(uri=>typeof uri==='string');
   if(scanned.pages.length!==1||localUris.length!==1||
-   !localUris[0].startsWith('file://'))return {status:'rejected',
+   !(/^(?:file|content):\/\//.test(localUris[0])))return {status:'rejected',
    reasons:['INVALID_SCAN'],commercialApproved:false};
+  let scanUri=localUris[0];
+  if(scanUri.startsWith('content://')){
+   if(!FileSystem.cacheDirectory)throw Error('NO_PRIVATE_CACHE');
+   copiedUri=FileSystem.cacheDirectory+'qore-g310-'+Crypto.randomUUID()+'.jpg';
+   await FileSystem.copyAsync({from:scanUri,to:copiedUri});
+   scanUri=copiedUri;
+  }
   const quality=await inspectNativeDriverDocumentPhoto(
-   localUris[0],null,'mlkit-document-scanner'
+   scanUri,null,'mlkit-document-scanner'
   );
   const accept=isAcceptedNativeDriverScan({
    pageCount:scanned.pages.length,source:'mlkit-document-scanner',
@@ -47,6 +58,7 @@ export async function runNativeDriverDocumentScannerQa():Promise<NativeDriverSca
   return {status:'unavailable',reasons:['NATIVE_SCANNER_UNAVAILABLE'],
    commercialApproved:false};
  }finally{
+  discardDriverCameraCache(copiedUri);
   for(const uri of localUris)discardDriverCameraCache(uri);
  }
 }
