@@ -23,7 +23,7 @@ export async function getPassengerCurrentPickup():Promise<{
   let label:string|null=null;
   try{
    const result=await timeout(Location.reverseGeocodeAsync(valid.point),10000);
-   label=makePassengerAddressLabel(result[0],null as unknown as string);
+   label=makePassengerAddressLabel(result[0],null);
   }catch{/* GPS coordinates survive if address service unavailable. */}
   const {latitude,longitude}=valid.point;
   if(!label)label='Ubicación GPS '+latitude.toFixed(5)+', '+longitude.toFixed(5);
