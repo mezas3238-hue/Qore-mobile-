@@ -1,8 +1,9 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import {readSupportCases,type SupportCase} from './support-gateway.mjs';
 import {verifySupportAccess,supportPasswordLogin,supportTotpVerify} from './support-auth.mjs';
+import {createSupportRequestFence} from './support-request-fence.mjs';
 import './styles.css';
 
 type Tab='bandeja'|'seguridad'|'tareas'|'acceso';
@@ -36,6 +37,8 @@ function App(){
  const [otp,setOtp]=useState('');
  const [factorId,setFactorId]=useState('');
  const [busy,setBusy]=useState(false);
+ // Every async auth/case request must belong to the current UI session.
+ const fence=useRef(createSupportRequestFence());
  const [message,setMessage]=useState('El portal necesita una cuenta de soporte aprobada y MFA AAL2.');
  const [tickets,setTickets]=useState<readonly SupportCase[]>([]);
  const [filter,setFilter]=useState('ALL');
@@ -44,15 +47,18 @@ function App(){
  useEffect(()=>{
   let active=true;
   if(!client)return;
+  const version=fence.current.current();
   void verifySupportAccess(client).then(session=>{
-   if(active&&session)setPhase('ready');
+   if(active&&fence.current.isCurrent(version)&&session)setPhase('ready');
   });
-  return()=>{active=false;};
+  return()=>{active=false;fence.current.invalidate();};
  },[]);
  async function login(){
   if(!client||busy)return;
+  const version=fence.current.begin();
   const pass=password;setPassword('');setBusy(true);setMessage('');
   const res=await supportPasswordLogin(client,email,pass);
+  if(!fence.current.isCurrent(version))return;
   if(res.ok){setFactorId('');setPhase('ready');setTab('bandeja');}
   else if(res.code==='MFA_REQUIRED'&&res.factorId){
    setFactorId(res.factorId);setMessage('Verificá el código temporal de tu autenticador.');
@@ -65,14 +71,18 @@ function App(){
  }
  async function verifyMfa(){
   if(!client||busy)return;
+  const version=fence.current.begin();
   const code=otp;setOtp('');setBusy(true);setMessage('');
   const result=await supportTotpVerify(client,factorId,code);
+  if(!fence.current.isCurrent(version))return;
   if(result.ok){setPhase('ready');setFactorId('');setTab('bandeja');}
   else{setMessage('Segundo factor o permiso de soporte no confirmado. No se habilitó la cuenta.');
    if(result.code==='SUPPORT_ROLE_REQUIRED')setFactorId('');}
   setBusy(false);
  }
  async function logout(){
+  fence.current.invalidate(); // defeat stale refresh, MFA and login promises
+  setBusy(false);
   setTickets([]);setLoadError('');setFactorId('');setOtp('');
   setPhase('locked');setPassword('');setEmail('');setMessage('Sesión de soporte cerrada.');
   try{await client?.auth.signOut();}catch{
@@ -81,8 +91,10 @@ function App(){
  }
  async function refresh(){
   if(!client||busy)return;
+  const version=fence.current.begin();
   setBusy(true);setPhase('loading');setLoadError('');
   const result=await readSupportCases(client);
+  if(!fence.current.isCurrent(version))return;
   if(result.ok){
    setTickets(result.cases);setPhase('ready');
   }else{
