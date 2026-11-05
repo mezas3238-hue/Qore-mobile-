@@ -5,6 +5,7 @@ import '../appearance/appearance_page.dart';
 import 'connection_health_card.dart';
 import 'dashboard_controller.dart';
 import '../data/qore_gateway_client.dart';
+import '../crt/crt_alerts_page.dart';
 import '../domain/models.dart';
 
 class QoreHome extends StatefulWidget {
@@ -157,7 +158,12 @@ class _QoreHomeState extends State<QoreHome> with WidgetsBindingObserver {
           runtimes: snapshot.runtimes,
         ),
       2 => _PositionsPage(positions: snapshot.positions),
-      3 => _AlertsPage(alerts: snapshot.alerts),
+      3 => QoreAlertsHub(
+          operationalAlerts: _AlertsPage(alerts: snapshot.alerts),
+          crtClient: widget.client is QoreCrtQaClient
+              ? widget.client as QoreCrtQaClient
+              : null,
+        ),
       _ => AppearancePage(
           controller:
               widget.appearanceController ?? AppearanceController.instance,
