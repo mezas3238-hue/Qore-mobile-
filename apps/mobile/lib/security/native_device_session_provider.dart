@@ -111,6 +111,13 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
     );
   }
 
+  Future<bool> setCrtQaReplayNoticeConsent(bool enabled) async {
+    return await _channel.invokeMethod<bool>(
+      'setCrtQaReplayNoticeConsent',
+      {'enabled': enabled},
+    ) ?? false;
+  }
+
   Future<void> setWidgetLiveMode({
     required bool enabled,
     required String gatewayUrl,
