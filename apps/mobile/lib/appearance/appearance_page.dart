@@ -68,6 +68,25 @@ class AppearancePage extends StatelessWidget {
     }
   }
 
+  Future<void> _runLocalQaTest(BuildContext context) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final posted = await _native.showCrtQaLocalTestNotification();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(posted
+          ? 'Prueba local enviada a Android. Comprueba las notificaciones. '
+            'NO demuestra recepción desde Railway.'
+          : 'Android bloqueó la prueba local. Revisa los permisos del sistema.'),
+      ));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo solicitar la prueba local en este dispositivo.'),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -125,6 +144,21 @@ class AppearancePage extends StatelessWidget {
               value: controller.crtQaLocalNoticesEnabled,
               onChanged: defaultTargetPlatform == TargetPlatform.android
                   ? (v) => _setCrtQaNotices(context, v)
+                  : null,
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.notifications_active_outlined),
+              title: const Text('Probar notificación Android (LOCAL)'),
+              subtitle: const Text(
+                'Verifica únicamente el aviso Android durante 60 segundos. '
+                'No depende de Railway, Firebase ni de una señal CRT.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: defaultTargetPlatform == TargetPlatform.android,
+              onTap: defaultTargetPlatform == TargetPlatform.android
+                  ? () => _runLocalQaTest(context)
                   : null,
             ),
           ),
