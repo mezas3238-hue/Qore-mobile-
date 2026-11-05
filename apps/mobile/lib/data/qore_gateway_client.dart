@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/models.dart';
+import '../crt/crt_qa_contract.dart';
 import '../security/device_proof.dart';
 import '../security/session.dart';
 import '../security/session_recovery_service.dart';
@@ -24,7 +25,11 @@ abstract interface class QoreGatewayClient {
   Future<DashboardSnapshot> fetchDashboard();
 }
 
-class HttpQoreGatewayClient implements QoreGatewayClient {
+abstract interface class QoreCrtQaClient {
+  Future<QoreCrtQaInbox> fetchCrtQaInbox();
+}
+
+class HttpQoreGatewayClient implements QoreGatewayClient, QoreCrtQaClient {
   HttpQoreGatewayClient({
     required this.baseUri,
     required this.sessionProvider,
@@ -272,6 +277,14 @@ class HttpQoreGatewayClient implements QoreGatewayClient {
       throw const QoreGatewayException('Expected a JSON array');
     }
     return value.map(_map).toList(growable: false);
+  }
+
+  @override
+  Future<QoreCrtQaInbox> fetchCrtQaInbox() async {
+    // Reuse existing biometric/device-bound signed gateway session and HTTPS.
+    // No cTrader credentials or extra Firebase identity are required.
+    final response = await _getJson('/v1/crt/alerts');
+    return QoreCrtQaInbox.fromJson(response);
   }
 
   @override
