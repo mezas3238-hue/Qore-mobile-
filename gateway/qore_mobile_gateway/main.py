@@ -575,7 +575,8 @@ def create_app(
         # trading or certified market-signal ingestion endpoint.
         if (
             os.getenv("QORE_CRT_QA_IMPORT_ENABLED") != "true"
-            or os.getenv("QORE_GATEWAY_ENV", "").lower() in {"production", "live"}
+            or os.getenv("QORE_GATEWAY_ENV", "").lower()
+               not in {"qa", "test", "staging"}
         ):
             _raise(403, "crt_qa_import_disabled", "isolated QA only")
         result = crt_inbox.stage(
