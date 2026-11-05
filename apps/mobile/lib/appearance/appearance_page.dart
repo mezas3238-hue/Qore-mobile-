@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
@@ -21,6 +22,10 @@ class AppearancePage extends StatelessWidget {
 
   Future<void> _setWidgetLive(bool enabled) async {
     await controller.setWidgetLiveEnabled(enabled);
+    if (!enabled) {
+      await controller.setCrtQaLocalNoticesEnabled(false);
+      try { await _native.setCrtQaReplayNoticeConsent(false); } catch (_) {}
+    }
     final config = QoreAppConfig.fromEnvironment();
     if (config == null) return;
     try {
@@ -29,6 +34,38 @@ class AppearancePage extends StatelessWidget {
         gatewayUrl: config.gatewayUri.toString(),
       );
     } catch (_) {}
+  }
+
+  Future<void> _setCrtQaNotices(BuildContext context, bool enabled) async {
+    if (enabled && !controller.widgetLiveEnabled) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Primero activa Widget LIVE para probar avisos CRT QA.'),
+        ));
+      }
+      return;
+    }
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      final allowed = await _native.setCrtQaReplayNoticeConsent(enabled);
+      if (enabled && !allowed) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Permiso de notificaciones denegado en Android.'),
+          ));
+        }
+        return;
+      }
+      await controller.setCrtQaLocalNoticesEnabled(allowed && enabled);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudieron configurar los avisos QA de Android.'),
+        ));
+      }
+    }
   }
 
   @override
@@ -74,6 +111,21 @@ class AppearancePage extends StatelessWidget {
               ),
               value: controller.widgetLiveEnabled,
               onChanged: _setWidgetLive,
+            ),
+          ),
+          Card(
+            child: SwitchListTile(
+              title: const Text('Avisos CRT de laboratorio (Android)'),
+              subtitle: const Text(
+                'Opcional, desactivado inicialmente. Usa Widget LIVE para '
+                'mostrar un aviso local solo ante un replay QA autenticado. '
+                'NO son señales operables, NO usa Firebase y no garantiza '
+                'entrega si Android detiene el servicio.',
+              ),
+              value: controller.crtQaLocalNoticesEnabled,
+              onChanged: defaultTargetPlatform == TargetPlatform.android
+                  ? (v) => _setCrtQaNotices(context, v)
+                  : null,
             ),
           ),
           _section(context, 'Fondo', QoreWidgetBackground.values, controller.widgetBackground,
