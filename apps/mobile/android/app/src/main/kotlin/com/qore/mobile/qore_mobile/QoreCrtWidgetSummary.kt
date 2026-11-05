@@ -38,18 +38,26 @@ internal object QoreCrtWidgetSummary {
     )
     private val states = setOf("CONFIRMED","AWAITING","UNVERIFIED")
 
-    fun latest(response: JSONObject, nowMs: Long): ReplayPreview? {
-        if (response.optString("schema_version") != "QORE_MOBILE_CRT_QA_V1" ||
+    private fun validEnvelope(response: JSONObject, nowMs: Long): Boolean {
+        if (nowMs <= 0L ||
+            response.optString("schema_version") != "QORE_MOBILE_CRT_QA_V1" ||
             response.opt("authenticated") != true ||
             response.opt("live_feed") != false ||
             response.opt("certified") != false ||
             response.opt("push_enabled") != false ||
             response.optInt("ttl_seconds") != 14400 ||
             response.optString("state") !in setOf(
-                "QA_NOT_CONNECTED", "OFFLINE_REPLAY_ONLY") ||
-            nowMs <= 0L) return null
+                "QA_NOT_CONNECTED", "OFFLINE_REPLAY_ONLY")) return false
+        val rows = response.optJSONArray("events") ?: return false
+        if (rows.length() > 100 ||
+            (response.optString("state") == "QA_NOT_CONNECTED" && rows.length() > 0))
+            return false
+        return true
+    }
+
+    fun latest(response: JSONObject, nowMs: Long): ReplayPreview? {
+        if (!validEnvelope(response, nowMs)) return null
         val events = response.optJSONArray("events") ?: return null
-        if (events.length() > 100) return null
         val unique = mutableMapOf<String, ReplayPreview>()
         val conflicts = mutableSetOf<String>()
         for (i in 0 until events.length()) {
@@ -111,7 +119,11 @@ internal object QoreCrtWidgetSummary {
     }
 
     fun project(response: JSONObject, nowMs: Long): String {
-        val event = latest(response, nowMs) ?: return OFFLINE
+        if (!validEnvelope(response, nowMs)) return OFFLINE
+        val event = latest(response, nowMs)
+        if (event == null) return if (response.optString("state") == "QA_NOT_CONNECTED")
+            "CRT QA · Gateway OK · Sin feed"
+        else "CRT QA · Sin eventos vigentes"
         val state5 = if (event.mssM5 == "CONFIRMED") "OK" else "—"
         val state15 = if (event.mssM15 == "CONFIRMED") "OK" else "—"
         return "CRT QA · " + event.symbol + " M5 " + state5 +
