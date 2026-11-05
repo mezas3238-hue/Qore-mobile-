@@ -117,7 +117,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
       });
       return;
     }
-    if (fetching) return;
+    if (fetching) { return; }
     fetching = true;
     if (!silent && mounted) setState(() => message = null);
     try {
@@ -169,8 +169,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
   String _time(DateTime instant) {
     final d = instant.toLocal();
     String pad(int n) => n.toString().padLeft(2, '0');
-    return pad(d.day) + '/' + pad(d.month) + ' ' +
-      pad(d.hour) + ':' + pad(d.minute);
+    return '${pad(d.day)}/${pad(d.month)} ${pad(d.hour)}:${pad(d.minute)}';
   }
 
   Widget _eventCard(BuildContext context, QoreCrtQaEvent event) {
@@ -197,14 +196,14 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
             Text(bullish ? 'Alcista' : 'Bajista'),
           ]),
           const SizedBox(height: 7),
-          Text(event.family + ' · ' + event.eventType),
+          Text('${event.family} · ${event.eventType}'),
           const Divider(),
           status('MSS M5', event.mssM5),
           const SizedBox(height: 5),
           status('MSS M15', event.mssM15),
           const SizedBox(height: 9),
-          Text('Confirmación: ' + _time(event.confirmedAt)),
-          Text('Vence: ' + _time(event.expiresAt)),
+          Text('Confirmación: ${_time(event.confirmedAt)}'),
+          Text('Vence: ${_time(event.expiresAt)}'),
           const SizedBox(height: 7),
           const Text('REPLAY QA · NO CERTIFICADO · NO OPERAR',
               style: TextStyle(color: Colors.deepOrange,
@@ -237,7 +236,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
           ]),
         )),
         Row(children: [
-          Expanded(child: Text('Eventos QA vigentes: ' + active.length.toString())),
+          Expanded(child: Text('Eventos QA vigentes: ${active.length}')),
           IconButton(
             tooltip: 'Actualizar CRT',
             onPressed: fetching ? null : _refresh,
