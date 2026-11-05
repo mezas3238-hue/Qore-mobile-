@@ -88,6 +88,21 @@ jobs:
 
           sha256sum "$APK"             > build/app/outputs/flutter-apk/app-release.apk.sha256
 
+      - name: Mark artifact as temporary-signer, NOT compatible with installed QORE
+        shell: bash
+        run: |
+          cat > build/app/outputs/flutter-apk/DO_NOT_UPDATE_EXISTING_QORE.txt <<'EOF'
+          WARNING: QA / EPHEMERAL SIGNING CERTIFICATE.
+          This GitHub workflow generates a brand new Android keystore each run.
+          DO NOT install this APK over your existing QORE Mobile application.
+          DO NOT uninstall the existing QORE Mobile app to work around
+          INSTALL_FAILED_UPDATE_INCOMPATIBLE: doing so destroys private
+          AndroidKeyStore device keys, biometric session and widget prefs.
+          A real update requires matching the currently installed APK signer
+          and an incremented versionCode. See verify_apk_update.py.
+          This artifact is for build integrity inspection only.
+          EOF
+
       - name: Upload direct-install APK
         uses: actions/upload-artifact@v4
         with:
@@ -96,5 +111,6 @@ jobs:
             apps/mobile/build/app/outputs/flutter-apk/app-release.apk
             apps/mobile/build/app/outputs/flutter-apk/app-release.apk.sha256
             apps/mobile/build/app/outputs/flutter-apk/app-release.apk.cert.txt
+            apps/mobile/build/app/outputs/flutter-apk/DO_NOT_UPDATE_EXISTING_QORE.txt
           if-no-files-found: error
           retention-days: 7
