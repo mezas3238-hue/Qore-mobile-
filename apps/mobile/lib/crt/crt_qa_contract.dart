@@ -58,7 +58,7 @@ class QoreCrtQaEvent {
       m5 is! String || m15 is! String ||
       !_statuses.contains(m5) || !_statuses.contains(m15) ||
       at is! int || c1 is! int || expiry is! int ||
-      eventId is! String) return null;
+      eventId is! String) { return null; }
     final tv = instrument == 'NDX100' ? 'IC:USTEC' :
       instrument == 'SPX500' ? 'IC:US500' : 'IC:$instrument';
     if (d['schema'] != 'QORE_CRT_MONITOR_QA_V2' ||
@@ -68,10 +68,10 @@ class QoreCrtQaEvent {
       d['transport'] != 'DISABLED' ||
       d['sendPush'] != false || d['actionable'] != false ||
       d['requiresRealFeedAndPineParity'] != true ||
-      d['tvSymbol'] != tv) return null;
+      d['tvSymbol'] != tv) { return null; }
     if (c1 <= 0 || at <= c1 || at-c1 > 345600000 ||
       at % 60000 != 0 || c1 % 60000 != 0 ||
-      expiry != at + _ttlMs) return null;
+      expiry != at + _ttlMs) { return null; }
     final phase = c1 % 300000;
     final step = eventType == 'MSS_M15_OBSERVED' ? 900000 : 300000;
     if (at % step != phase) return null;
@@ -107,15 +107,15 @@ class QoreCrtQaInbox {
       throw const FormatException('Invalid or untrusted QORE CRT inbox');
     }
     final rows = data['events'] as List<dynamic>;
-    if (rows.length > 100) throw const FormatException('CRT inbox over limit');
+    if (rows.length > 100) { throw const FormatException('CRT inbox over limit'); }
     final instant = (now??DateTime.now()).toUtc();
     final seen = <String,QoreCrtQaEvent>{};
     final conflicts = <String>{};
     for (final row in rows) {
       final event=QoreCrtQaEvent.fromJson(row,now:instant);
-      if(event==null)continue;
-      final key=event.eventId+'|'+event.family;
-      if(conflicts.contains(key))continue;
+      if(event==null){ continue; }
+      final key='${event.eventId}|${event.family}';
+      if(conflicts.contains(key)){ continue; }
       final old=seen[key];
       if(old!=null && (old.mssM5!=event.mssM5 ||
         old.mssM15!=event.mssM15)) {
