@@ -3,12 +3,24 @@ package com.qore.mobile.qore_mobile
 import org.json.JSONObject
 
 /**
- * Widget safe projection of the existing authenticated Gateway CRT QA inbox.
- * It never marks offline-replay as a certified market signal.
+ * Strict offline replay projection for the EXISTING QORE Android widget.
+ * No remote market push, trading control or client-side certification.
  */
 internal object QoreCrtWidgetSummary {
     const val OFFLINE = "CRT · Sin conexión"
     private const val TTL_MS = 14_400_000L
+
+    data class ReplayPreview(
+        val id: String,
+        val symbol: String,
+        val family: String,
+        val eventType: String,
+        val mssM5: String,
+        val mssM15: String,
+        val expiresAtMs: Long,
+        val eventAtMs: Long,
+    )
+
     private val markets = setOf(
         "AUDJPY","GBPUSD","GBPJPY","XAUUSD","NDX100","SPX500",
         "US30","BTCUSD","AUDUSD","USDCAD","USDJPY","EURUSD",
@@ -26,19 +38,20 @@ internal object QoreCrtWidgetSummary {
     )
     private val states = setOf("CONFIRMED","AWAITING","UNVERIFIED")
 
-    fun project(response: JSONObject, nowMs: Long): String {
+    fun latest(response: JSONObject, nowMs: Long): ReplayPreview? {
         if (response.optString("schema_version") != "QORE_MOBILE_CRT_QA_V1" ||
-            !response.optBoolean("authenticated") ||
-            response.optBoolean("live_feed", true) ||
-            response.optBoolean("certified", true) ||
-            response.optBoolean("push_enabled", true) ||
+            response.opt("authenticated") != true ||
+            response.opt("live_feed") != false ||
+            response.opt("certified") != false ||
+            response.opt("push_enabled") != false ||
             response.optInt("ttl_seconds") != 14400 ||
             response.optString("state") !in setOf(
-                "QA_NOT_CONNECTED", "OFFLINE_REPLAY_ONLY")) return OFFLINE
-        val events = response.optJSONArray("events") ?: return OFFLINE
-        if (events.length() > 100 || nowMs <= 0L) return OFFLINE
-        var bestAt = 0L
-        var bestText = OFFLINE
+                "QA_NOT_CONNECTED", "OFFLINE_REPLAY_ONLY") ||
+            nowMs <= 0L) return null
+        val events = response.optJSONArray("events") ?: return null
+        if (events.length() > 100) return null
+        val unique = mutableMapOf<String, ReplayPreview>()
+        val conflicts = mutableSetOf<String>()
         for (i in 0 until events.length()) {
             val row = events.optJSONObject(i) ?: continue
             val symbol = row.optString("instrumentId")
@@ -61,16 +74,16 @@ internal object QoreCrtWidgetSummary {
                 else -> "IC:" + symbol
             }
             if (symbol !in markets || family !in families || type !in eventTypes ||
-                direction !in setOf("BULLISH","BEARISH") ||
+                direction !in setOf("BULLISH", "BEARISH") ||
                 m5 !in states || m15 !in states ||
                 row.optString("schema") != "QORE_CRT_MONITOR_QA_V2" ||
                 row.optString("mode") != "OFFLINE_REPLAY" ||
                 row.optString("certification") != "NOT_VERIFIED" ||
                 row.optString("deliveryState") != "BLOCKED_NOT_CERTIFIED" ||
                 row.optString("transport") != "DISABLED" ||
-                row.optBoolean("sendPush", true) ||
-                row.optBoolean("actionable", true) ||
-                !row.optBoolean("requiresRealFeedAndPineParity") ||
+                row.opt("sendPush") != false ||
+                row.opt("actionable") != false ||
+                row.opt("requiresRealFeedAndPineParity") != true ||
                 row.optString("tvSymbol") != expectedSource ||
                 row.optString("eventId") != expectedId ||
                 c1 <= 0L || c1 % 60_000L != 0L ||
@@ -80,14 +93,28 @@ internal object QoreCrtWidgetSummary {
                 (type == "MSS_M15_OBSERVED" && m15 != "CONFIRMED") ||
                 at > Long.MAX_VALUE-TTL_MS || expiry != at+TTL_MS ||
                 nowMs < at || nowMs >= expiry) continue
-            if (at > bestAt) {
-                bestAt = at
-                val state5 = if (m5 == "CONFIRMED") "OK" else "—"
-                val state15 = if (m15 == "CONFIRMED") "OK" else "—"
-                bestText = "CRT QA · " + symbol + " M5 " + state5 +
-                    " · M15 " + state15 + " (no operar)"
-            }
+            val key = expectedId + "|" + family
+            if (key in conflicts) continue
+            val candidate = ReplayPreview(
+                id = key, symbol = symbol, family = family, eventType = type,
+                mssM5 = m5, mssM15 = m15, expiresAtMs = expiry, eventAtMs = at,
+            )
+            val prior = unique[key]
+            if (prior != null && prior != candidate) {
+                unique.remove(key)
+                conflicts.add(key)
+            } else unique[key] = candidate
         }
-        return bestText
+        return unique.values.maxWithOrNull(
+            compareBy<ReplayPreview> { it.eventAtMs }.thenBy { it.id }
+        )
+    }
+
+    fun project(response: JSONObject, nowMs: Long): String {
+        val event = latest(response, nowMs) ?: return OFFLINE
+        val state5 = if (event.mssM5 == "CONFIRMED") "OK" else "—"
+        val state15 = if (event.mssM15 == "CONFIRMED") "OK" else "—"
+        return "CRT QA · " + event.symbol + " M5 " + state5 +
+            " · M15 " + state15 + " (no operar)"
     }
 }
