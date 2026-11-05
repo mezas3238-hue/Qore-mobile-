@@ -110,6 +110,8 @@ jobs:
         run: flutter analyze
       - name: Test
         run: flutter test
+      - name: Verify Android update safety checks
+        run: python3 -m unittest discover -s tool -p 'test_verify_apk_*.py'
 
 
   android-native:
