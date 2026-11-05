@@ -111,10 +111,12 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
   Future<void> _refresh({bool silent = false}) async {
     final client = widget.client;
     if (client == null) {
-      if (mounted) setState(() {
-        inbox = null;
-        message = 'Gateway CRT no configurado. Sin señales certificadas.';
-      });
+      if (mounted) {
+        setState(() {
+          inbox = null;
+          message = 'Gateway CRT no configurado. Sin señales certificadas.';
+        });
+      }
       return;
     }
     if (fetching) { return; }
