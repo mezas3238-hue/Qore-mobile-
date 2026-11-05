@@ -37,6 +37,8 @@ import org.json.JSONObject
 class MainActivity : FlutterFragmentActivity() {
     private var pendingCrtQaPermission: MethodChannel.Result? = null
     private val crtQaPermissionRequestCode = 31055
+    private var pendingLocalQaTestPermission: MethodChannel.Result? = null
+    private val localQaTestPermissionRequestCode = 31056
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -44,6 +46,15 @@ class MainActivity : FlutterFragmentActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == localQaTestPermissionRequestCode) {
+            val callback = pendingLocalQaTestPermission ?: return
+            pendingLocalQaTestPermission = null
+            val allowed = grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            callback.success(allowed &&
+                QoreCrtReplayNotifier.showLocalConnectionTest(this))
+            return
+        }
         if (requestCode != crtQaPermissionRequestCode) return
         val callback = pendingCrtQaPermission ?: return
         pendingCrtQaPermission = null
@@ -159,6 +170,25 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(null)
                     }
                 }
+                "showCrtQaLocalTestNotification" -> {
+                    // Explicit button tap; never proof of server delivery.
+                    if (pendingCrtQaPermission != null ||
+                        pendingLocalQaTestPermission != null) {
+                        result.error(
+                            "CRT_QA_PERMISSION_PENDING", "Permission request in progress", null,
+                        )
+                    } else if (Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED) {
+                        pendingLocalQaTestPermission = result
+                        requestPermissions(
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            localQaTestPermissionRequestCode,
+                        )
+                    } else {
+                        result.success(QoreCrtReplayNotifier.showLocalConnectionTest(this))
+                    }
+                }
                 "setCrtQaReplayNoticeConsent" -> {
                     val requested = call.argument<Boolean>("enabled") ?: false
                     val preferences = getSharedPreferences(
@@ -172,7 +202,8 @@ class MainActivity : FlutterFragmentActivity() {
                             "Enable Widget LIVE before local CRT QA notices.",
                             null,
                         )
-                    } else if (pendingCrtQaPermission != null) {
+                    } else if (pendingCrtQaPermission != null ||
+                        pendingLocalQaTestPermission != null) {
                         result.error("CRT_QA_PERMISSION_PENDING", "Permission in progress", null)
                     } else if (Build.VERSION.SDK_INT >= 33 &&
                         checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
