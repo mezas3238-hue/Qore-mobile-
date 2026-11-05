@@ -100,7 +100,7 @@ class CrtQaSnapshot(BaseModel):
 class CrtQaInbox:
     def __init__(self) -> None:
         self._events: dict[tuple[str, str], QaCrtEvent] = {}
-        self._quarantined: set[tuple[str, str]] = set()
+        self._quarantined: dict[tuple[str, str], int] = {}
         self._lock = RLock()
 
     def stage(self, value: dict, *, now_ms: int) -> str:
@@ -119,7 +119,7 @@ class CrtQaInbox:
                 return "QA_DUPLICATE_NOT_RENOTIFIED"
             if old is not None:
                 self._events.pop(key, None)
-                self._quarantined.add(key)
+                self._quarantined[key] = event.eventAtMs + LIFETIME_MS
                 return "QA_CONFLICT_QUARANTINED"
             self._events[key] = event
         return "QA_STAGED_4H_NOT_SENDABLE"
@@ -128,6 +128,10 @@ class CrtQaInbox:
         for key, event in list(self._events.items()):
             if now_ms >= event.eventAtMs + LIFETIME_MS:
                 self._events.pop(key, None)
+        # Conflicts carry the same four-hour limit: no 7/30-day records.
+        for key, expires_at in list(self._quarantined.items()):
+            if now_ms >= expires_at:
+                self._quarantined.pop(key, None)
 
     def snapshot(self, *, now: datetime) -> CrtQaSnapshot:
         now_ms = int(now.timestamp() * 1000)
