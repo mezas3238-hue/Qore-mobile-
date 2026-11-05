@@ -111,6 +111,14 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
     );
   }
 
+  /// Posts a one-off Android-only local UI test, NOT a server delivery test.
+  /// True means Android accepted the request; user-visible delivery is separate.
+  Future<bool> showCrtQaLocalTestNotification() async {
+    return await _channel.invokeMethod<bool>(
+      'showCrtQaLocalTestNotification',
+    ) ?? false;
+  }
+
   Future<bool> setCrtQaReplayNoticeConsent(bool enabled) async {
     return await _channel.invokeMethod<bool>(
       'setCrtQaReplayNoticeConsent',
