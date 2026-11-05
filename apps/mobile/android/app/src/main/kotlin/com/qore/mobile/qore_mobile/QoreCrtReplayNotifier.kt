@@ -156,7 +156,21 @@ internal object QoreCrtReplayNotifier {
     }
 
     fun disable(context: Context) {
+        // Opt-out revokes future delivery AND removes already posted QA cards.
+        // Keep the hashes until each event's 4h expiry to prevent re-notify
+        // after rapidly toggling the preference.
         context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(CONSENT_KEY, false).commit()
+        val seen = context.getSharedPreferences(SEEN_PREFS, Context.MODE_PRIVATE)
+        val notifications = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        for ((key, _) in seen.all) {
+            if (key.length == 24 && key.all {
+                it in '0'..'9' || it in 'a'..'f'
+            }) {
+                notifications.cancel(key.hashCode())
+            }
+        }
     }
 }
