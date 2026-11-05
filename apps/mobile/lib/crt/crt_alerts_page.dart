@@ -224,6 +224,8 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now().toUtc();
+    final connState = inbox?.state == 'OFFLINE_REPLAY_ONLY'
+      ? 'solo replay QA' : 'sin fuente CRT';
     final active = (inbox?.events ?? <QoreCrtQaEvent>[])
       .where((e) => e.activeAt(now) &&
         (allSymbols || selected.contains(e.instrumentId)))
@@ -256,10 +258,9 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
               : 'Gateway CRT: conexión autenticada OK'),
             subtitle: Text(lastGatewayReadAt == null
               ? 'La app aún no ha recibido una respuesta QA válida.'
-              : 'Comprobado: ' + _time(lastGatewayReadAt!) +
-                '. Estado: ' + (inbox?.state == 'OFFLINE_REPLAY_ONLY'
-                  ? 'solo replay QA' : 'sin fuente CRT') +
-                '. Esto NO certifica mercados ni alertas push.'),
+              : 'Comprobado: ${_time(lastGatewayReadAt!)}. '
+                'Estado: $connState. '
+                'Esto NO certifica mercados ni alertas push.'),
           ),
         ),
         Row(children: [
