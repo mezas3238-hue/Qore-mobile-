@@ -100,6 +100,61 @@ internal object QoreCrtReplayNotifier {
         notifications.notify(hash.hashCode(), notification.build())
     }
 
+
+    /**
+     * One user-tapped test of Android's local notification UI.
+     * NO Railway, Firebase, CRT market event, account, order or automatic
+     * permission/subscription. Success means posted, NOT seen or delivered.
+     */
+    fun showLocalConnectionTest(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED) return false
+
+        val channel = "qore_crt_explicit_local_test_v1"
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+            as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(
+                channel,
+                "Prueba local de notificaciones QORE",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Prueba local solicitada manualmente; no viene del VPS."
+                enableVibration(false)
+            })
+            if (manager.areNotificationsEnabled().not()) return false
+            if (manager.getNotificationChannel(channel)?.importance ==
+                NotificationManager.IMPORTANCE_NONE) return false
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(
+            context, 31056, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notice = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            Notification.Builder(context, channel)
+        else Notification.Builder(context)
+        notice.setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("QORE Mobile · PRUEBA LOCAL")
+            .setContentText("Notificación de Android. NO procede del VPS ni es CRT.")
+            .setStyle(Notification.BigTextStyle().bigText(
+                "Prueba local solicitada desde QORE Mobile. NO prueba " +
+                    "la conexión a Railway, Firebase, cTrader o al detector CRT. " +
+                    "No es una señal ni una orden de trading.",
+            ))
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_STATUS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            notice.setTimeoutAfter(60_000L)
+        manager.notify(31056, notice.build())
+        return true
+    }
+
     fun disable(context: Context) {
         context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(CONSENT_KEY, false).commit()
