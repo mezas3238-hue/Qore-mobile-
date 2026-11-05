@@ -17,6 +17,7 @@ from .device_sessions import (
     IssuedSession,
     SessionAuthenticationError,
 )
+from .crt_qa import CrtQaInbox, CrtQaSnapshot, QaCrtEvent
 from .push import (
     PushProvider,
     PushRegistrationError,
@@ -144,6 +145,7 @@ def create_app(
     read_repository: ReadRepository | None = None,
     runtime_state: RuntimeStateStore | None = None,
     push_registrations: PushRegistrationStore | None = None,
+    crt_qa_inbox: CrtQaInbox | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="QORE Mobile Gateway",
@@ -162,6 +164,7 @@ def create_app(
     audit = audit_log or AuditLog()
     telemetry = TelemetryService(repository=repository, runtime_state=states)
     pushes = push_registrations or PushRegistrationStore()
+    crt_inbox = crt_qa_inbox if crt_qa_inbox is not None else CrtQaInbox()
     bearer = HTTPBearer(auto_error=False)
 
     async def require_mobile_read(
@@ -556,6 +559,29 @@ def create_app(
     @app.get("/v1/runtimes", response_model=list[RuntimeSnapshot])
     def runtimes(_: MobileRead) -> list[RuntimeSnapshot]:
         return states.list_snapshots(now=datetime.now(UTC))
+
+
+    @app.get("/v1/crt/alerts", response_model=CrtQaSnapshot)
+    def crt_alerts(_: MobileRead) -> CrtQaSnapshot:
+        """Authenticated CRT QA inbox; never represents market signals as LIVE."""
+        return crt_inbox.snapshot(now=datetime.now(UTC))
+
+    @app.post("/v1/admin/crt/qa-stage", status_code=202)
+    def stage_crt_qa_event(
+        event: QaCrtEvent,
+        _: AdminAccess,
+    ) -> dict[str, str]:
+        # Admin can stage laboratory observations only. This is NOT a
+        # trading or certified market-signal ingestion endpoint.
+        if (
+            os.getenv("QORE_CRT_QA_IMPORT_ENABLED") != "true"
+            or os.getenv("QORE_GATEWAY_ENV", "").lower() in {"production", "live"}
+        ):
+            _raise(403, "crt_qa_import_disabled", "isolated QA only")
+        result = crt_inbox.stage(
+            event.model_dump(), now_ms=int(datetime.now(UTC).timestamp() * 1000),
+        )
+        return {"state": result, "market_push": "false"}
 
     @app.get("/v1/alerts", response_model=list[AlertSnapshot])
     def alerts(_: MobileRead) -> list[AlertSnapshot]:
