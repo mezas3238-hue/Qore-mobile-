@@ -45,6 +45,15 @@ class QoreWidgetProvider : AppWidgetProvider() {
             }
             val views = RemoteViews(context.packageName, layout)
             style(views, appearance)
+            // CRT lab observations are sourced separately from the existing
+            // authenticated Gateway endpoint. Never confuse replay with LIVE.
+            val checkedAt = prefs.getLong("crt_widget_checked_ms", 0L)
+            val age = System.currentTimeMillis() - checkedAt
+            val crtLabel = if (checkedAt > 0L && age in 0L..60_000L)
+                prefs.getString("crt_widget_summary", QoreCrtWidgetSummary.OFFLINE)
+                    ?: QoreCrtWidgetSummary.OFFLINE
+            else QoreCrtWidgetSummary.OFFLINE
+            views.setTextViewText(R.id.qore_widget_crt, crtLabel)
             views.setOnClickPendingIntent(
                 R.id.qore_widget_root,
                 PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE),
@@ -120,7 +129,7 @@ class QoreWidgetProvider : AppWidgetProvider() {
             val scale = appearance.optDouble("text_scale", 1.0).toFloat().coerceIn(.85f, 1.25f)
             views.setInt(R.id.qore_widget_root, "setBackgroundResource", bg)
             listOf(R.id.qore_widget_title,R.id.qore_widget_balance,R.id.qore_widget_equity,R.id.qore_widget_pnl,R.id.qore_widget_dd,R.id.qore_widget_positions,R.id.qore_widget_runtimes,R.id.qore_widget_traders).forEach { views.setTextColor(it, fg) }
-            listOf(R.id.qore_widget_balance_label,R.id.qore_widget_equity_label,R.id.qore_widget_pnl_label,R.id.qore_widget_dd_label,R.id.qore_widget_positions_label,R.id.qore_widget_runtimes_label,R.id.qore_widget_traders_label,R.id.qore_widget_updated).forEach { views.setTextColor(it, muted) }
+            listOf(R.id.qore_widget_balance_label,R.id.qore_widget_equity_label,R.id.qore_widget_pnl_label,R.id.qore_widget_dd_label,R.id.qore_widget_positions_label,R.id.qore_widget_runtimes_label,R.id.qore_widget_traders_label,R.id.qore_widget_updated,R.id.qore_widget_crt).forEach { views.setTextColor(it, muted) }
             views.setTextColor(R.id.qore_widget_mode, accent)
             views.setTextViewTextSize(R.id.qore_widget_title, TypedValue.COMPLEX_UNIT_SP, 17f * scale)
             views.setTextViewTextSize(R.id.qore_widget_equity, TypedValue.COMPLEX_UNIT_SP, 16f * scale)

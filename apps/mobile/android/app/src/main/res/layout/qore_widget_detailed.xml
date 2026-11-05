@@ -79,6 +79,16 @@
         android:textColor="@android:color/white" />
 
     <TextView
+        android:id="@+id/qore_widget_crt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="CRT · Sin conexión"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textSize="10sp"
+        android:textColor="#93C5FD" />
+
+    <TextView
         android:id="@+id/qore_widget_updated"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
