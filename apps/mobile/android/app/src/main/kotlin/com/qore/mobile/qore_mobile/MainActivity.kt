@@ -229,6 +229,8 @@ class MainActivity : FlutterFragmentActivity() {
                                 serviceIntent,
                             )
                         } else {
+                            // Revocation is immediate when Widget LIVE stops.
+                            QoreCrtReplayNotifier.disable(this)
                             stopService(serviceIntent)
                         }
                         result.success(null)
