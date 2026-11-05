@@ -52,11 +52,13 @@ class QoreWidgetLiveService : Service() {
         private const val SIGNING_ALIAS = "qore_mobile_device_p256_v1"
 
         private const val DASHBOARD_PATH = "/v1/dashboard"
+        private const val CRT_ALERTS_PATH = "/v1/crt/alerts"
         private const val REFRESH_PATH = "/v1/mobile/refresh"
         private const val RECOVER_PATH = "/v1/mobile/recover"
     }
 
     private val running = AtomicBoolean(false)
+    private var crtLastPolledAt = 0L
     private val worker = Executors.newSingleThreadExecutor()
     private val random = SecureRandom()
 
@@ -190,6 +192,31 @@ class QoreWidgetLiveService : Service() {
         prefs.edit()
             .putString(WIDGET_SNAPSHOT, snapshot.toString())
             .apply()
+        // Once per 30 seconds: use the SAME device proof and existing
+        // authenticated QORE Mobile session. Nothing sent to Firebase.
+        // Never count a replay observation as a LIVE signal or trading order.
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - crtLastPolledAt >= 30_000L) {
+            crtLastPolledAt = nowMs
+            val crtReply = request(
+                gateway = gateway,
+                path = CRT_ALERTS_PATH,
+                method = "GET",
+                token = session.optString("access_token"),
+                deviceId = session.optString("device_id"),
+            )
+            val crtSummary = if (crtReply.code == HttpURLConnection.HTTP_OK) {
+                try {
+                    QoreCrtWidgetSummary.project(JSONObject(crtReply.body), nowMs)
+                } catch (_: Exception) {
+                    QoreCrtWidgetSummary.OFFLINE
+                }
+            } else QoreCrtWidgetSummary.OFFLINE
+            prefs.edit()
+                .putString("crt_widget_summary", crtSummary)
+                .putLong("crt_widget_checked_ms", nowMs)
+                .apply()
+        }
         QoreWidgetProvider.updateAll(this)
     }
 
