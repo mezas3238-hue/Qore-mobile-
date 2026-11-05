@@ -27,6 +27,8 @@ class AppearanceController extends ChangeNotifier {
   bool showHeartbeatAge = true;
   bool showExactTime = false;
   bool widgetLiveEnabled = true;
+  // OFF by default. Owner may opt into LOCAL QA replay previews on Android.
+  bool crtQaLocalNoticesEnabled = false;
 
   Future<void> load() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -74,6 +76,7 @@ class AppearanceController extends ChangeNotifier {
         prefs.getBool('appearance.show_exact_time') ?? showExactTime;
     widgetLiveEnabled =
         prefs.getBool('appearance.widget_live_enabled') ?? widgetLiveEnabled;
+    crtQaLocalNoticesEnabled = prefs.getBool('appearance.crt_qa_local_notices') ?? false;
     notifyListeners();
   }
 
@@ -186,6 +189,12 @@ class AppearanceController extends ChangeNotifier {
     widgetLiveEnabled = value;
     notifyListeners();
     await (await _store()).setBool('appearance.widget_live_enabled', value);
+  }
+
+  Future<void> setCrtQaLocalNoticesEnabled(bool value) async {
+    crtQaLocalNoticesEnabled = value;
+    notifyListeners();
+    await (await _store()).setBool('appearance.crt_qa_local_notices', value);
   }
 
   Map<String, Object?> widgetPreferences() {
