@@ -1,0 +1,167 @@
+# Owner-only signing workflow; NEVER run untrusted PR code with signing secrets.
+# Not invokable until this workflow is reviewed and lands on a trusted main.
+name: QORE Owner Signed Android Update
+on:
+  workflow_dispatch:
+    inputs:
+      approved_main_sha:
+        description: "Reviewed HEAD commit SHA of main (40 lowercase hex)"
+        required: true
+        type: string
+      installed_signer_sha256:
+        description: "Existing QORE Mobile installed APK signing certificate SHA256 (64 hex)"
+        required: true
+        type: string
+      installed_version_code:
+        description: "VersionCode of existing installed QORE Mobile APK"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  compile-unsigned:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout reviewed main only
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify approved commit and owner-supplied installed version
+        working-directory: .
+        env:
+          EXPECTED_SHA: ${{ inputs.approved_main_sha }}
+          INSTALLED_VERSION: ${{ inputs.installed_version_code }}
+          EXPECTED_SIGNER: ${{ inputs.installed_signer_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_SIGNER" =~ ^[0-9A-Fa-f]{64}$ ]]
+          [[ "$INSTALLED_VERSION" =~ ^[0-9]+$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyzer
+        run: flutter analyze
+      - name: Regression tests
+        run: flutter test
+      - name: Compile release APK without signing material
+        run: |
+          set -euo pipefail
+          flutter build apk --release \
+            --dart-define=QORE_GATEWAY_URL=https://qore-mobile-gateway-production.up.railway.app
+          test -f build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload unsigned candidate for protected signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: qore-mobile-owner-update-UNSIGNED
+          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 1
+          if-no-files-found: error
+
+  sign-owner-update:
+    needs: compile-unsigned
+    runs-on: ubuntu-latest
+    # This GitHub Environment MUST require explicit Owner approval.
+    # It contains release secrets; no PR build ever has those secrets.
+    environment:
+      name: qore-android-owner-signing
+    permissions:
+      contents: read
+    steps:
+      - name: Download reviewed unsigned APK from same run
+        uses: actions/download-artifact@v4
+        with:
+          name: qore-mobile-owner-update-UNSIGNED
+          path: unsigned
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Validate package/version, sign and pin installed certificate
+        shell: bash
+        env:
+          OWNER_KEYSTORE_B64: ${{ secrets.QORE_ANDROID_OWNER_KEYSTORE_B64 }}
+          QORE_ANDROID_STORE_PASSWORD: ${{ secrets.QORE_ANDROID_STORE_PASSWORD }}
+          QORE_ANDROID_KEY_PASSWORD: ${{ secrets.QORE_ANDROID_KEY_PASSWORD }}
+          QORE_ANDROID_KEY_ALIAS: ${{ secrets.QORE_ANDROID_KEY_ALIAS }}
+          INSTALLED_SHA256: ${{ inputs.installed_signer_sha256 }}
+          INSTALLED_CODE: ${{ inputs.installed_version_code }}
+        run: |
+          set -euo pipefail
+          umask 077
+          : "GITHUB ENVIRONMENT MUST REQUIRE AN APPROVAL BEFORE THIS JOB"
+          for key in OWNER_KEYSTORE_B64 QORE_ANDROID_STORE_PASSWORD \
+            QORE_ANDROID_KEY_PASSWORD QORE_ANDROID_KEY_ALIAS; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing protected signing secret $key"
+              exit 1
+            fi
+          done
+
+          APK="unsigned/app-release.apk"
+          test -f "$APK"
+          [[ "$INSTALLED_SHA256" =~ ^[0-9A-Fa-f]{64}$ ]]
+          [[ "$INSTALLED_CODE" =~ ^[0-9]+$ ]]
+
+          AAPT="$(find "${ANDROID_HOME:-/opt/android-sdk}" -type f -path '*/build-tools/*/aapt' 2>/dev/null | sort -V | tail -1)"
+          APKSIGNER="$(find "${ANDROID_HOME:-/opt/android-sdk}" -type f -path '*/build-tools/*/apksigner' 2>/dev/null | sort -V | tail -1)"
+          test -n "$AAPT" && test -n "$APKSIGNER"
+          BADGING="$("$AAPT" dump badging "$APK" | grep -m1 '^package:')"
+          [[ "$BADGING" == *"name='com.qore.mobile.qore_mobile'"* ]]
+          VERSION="$(sed -n -E "s/.*versionCode='([0-9]+)'.*/\1/p" <<< "$BADGING")"
+          [[ "$VERSION" =~ ^[0-9]+$ ]]
+          if (( VERSION <= INSTALLED_CODE )); then
+            echo "::error::Candidate versionCode is not newer than installed."
+            exit 1
+          fi
+
+          DIR="$(mktemp -d)"
+          cleanup() {
+            rm -rf "$DIR"
+            unset OWNER_KEYSTORE_B64 QORE_ANDROID_STORE_PASSWORD \
+              QORE_ANDROID_KEY_PASSWORD QORE_ANDROID_KEY_ALIAS
+          }
+          trap cleanup EXIT
+          printf '%s' "$OWNER_KEYSTORE_B64" | base64 -d > "$DIR/owner.jks"
+          "$APKSIGNER" sign --ks "$DIR/owner.jks" \
+            --ks-key-alias "$QORE_ANDROID_KEY_ALIAS" \
+            --ks-pass env:QORE_ANDROID_STORE_PASSWORD \
+            --key-pass env:QORE_ANDROID_KEY_PASSWORD \
+            "$APK"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" \
+            > "$DIR/certificate.txt"
+          CERT="$(sed -n -E 's/^Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]{64})$/\1/p' "$DIR/certificate.txt")"
+          ACTUAL="$(tr '[:upper:]' '[:lower:]' <<< "$CERT" | tr -d '\n')"
+          EXPECTED="$(tr '[:upper:]' '[:lower:]' <<< "$INSTALLED_SHA256" | tr -d '\n')"
+          if [[ -z "$ACTUAL" || "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::Signing certificate does NOT match existing installed QORE Mobile."
+            exit 1
+          fi
+
+          mkdir -p signed
+          cp "$APK" signed/QORE_Mobile_Owner_Compatible_Update.apk
+          sha256sum signed/QORE_Mobile_Owner_Compatible_Update.apk \
+            > signed/QORE_Mobile_Owner_Compatible_Update.apk.sha256
+          printf 'Reviewed SHA: %s\nPackage: com.qore.mobile.qore_mobile\nVersionCode: %s\nCertificate SHA-256: %s\nSigned after Owner approval. Validate on device before rollout.\n' \
+            "${{ inputs.approved_main_sha }}" "$VERSION" "$ACTUAL" \
+            > signed/README_OWNER_UPDATE.txt
+
+      - name: Upload only cert-matched Owner release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QORE-Mobile-CERT-MATCHED-OWNER-UPDATE
+          path: signed/
+          retention-days: 3
+          if-no-files-found: error
