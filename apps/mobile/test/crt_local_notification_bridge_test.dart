@@ -25,6 +25,19 @@ void main() {
     expect(calls.single.arguments, isNull);
   });
 
+  test('null Android bridge reply fails closed without enabling QA', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (message) async {
+      expect(message.method, 'showCrtQaLocalTestNotification');
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    expect(await NativeDeviceSessionProvider()
+        .showCrtQaLocalTestNotification(), isFalse);
+  });
+
   test('denied Android notification permission is not success', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (message) async => false);
