@@ -170,6 +170,10 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(null)
                     }
                 }
+                "openCrtQaNotificationSettings" -> {
+                    // User-initiated Android settings only. No alerts activated.
+                    result.success(QoreCrtReplayNotifier.openCrtQaNotificationSettings(this))
+                }
                 "showCrtQaLocalTestNotification" -> {
                     // Explicit button tap; never proof of server delivery.
                     if (pendingCrtQaPermission != null ||
