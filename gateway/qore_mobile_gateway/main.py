@@ -18,6 +18,9 @@ from .device_sessions import (
     SessionAuthenticationError,
 )
 from .crt_qa import CrtQaInbox, CrtQaSnapshot, QaCrtEvent
+from .crt_ctrader_probe import (
+    CTraderDemoProbeInbox, CTraderDemoProbeSnapshot, ProbeValidationError,
+)
 from .push import (
     PushProvider,
     PushRegistrationError,
@@ -146,6 +149,7 @@ def create_app(
     runtime_state: RuntimeStateStore | None = None,
     push_registrations: PushRegistrationStore | None = None,
     crt_qa_inbox: CrtQaInbox | None = None,
+    ctrader_demo_probe_inbox: CTraderDemoProbeInbox | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="QORE Mobile Gateway",
@@ -165,6 +169,8 @@ def create_app(
     telemetry = TelemetryService(repository=repository, runtime_state=states)
     pushes = push_registrations or PushRegistrationStore()
     crt_inbox = crt_qa_inbox if crt_qa_inbox is not None else CrtQaInbox()
+    ctrader_probe = (ctrader_demo_probe_inbox if ctrader_demo_probe_inbox is not None
+                     else CTraderDemoProbeInbox())
     bearer = HTTPBearer(auto_error=False)
 
     async def require_mobile_read(
@@ -560,6 +566,36 @@ def create_app(
     def runtimes(_: MobileRead) -> list[RuntimeSnapshot]:
         return states.list_snapshots(now=datetime.now(UTC))
 
+
+    @app.get("/v1/crt/ctrader-demo-probe", response_model=CTraderDemoProbeSnapshot)
+    def ctrader_demo_probe_status(_: MobileRead) -> CTraderDemoProbeSnapshot:
+        """Read-only, authenticated QA transport status; NOT a CRT alert."""
+        return ctrader_probe.snapshot(now=datetime.now(UTC))
+
+    @app.post("/v1/admin/crt/ctrader-demo-probe", status_code=202)
+    async def receive_ctrader_demo_probe(
+        request: Request,
+        x_qore_ctrader_time: str | None = Header(default=None, alias="X-Qore-Ctrader-Time"),
+        x_qore_ctrader_nonce: str | None = Header(default=None, alias="X-Qore-Ctrader-Nonce"),
+        x_qore_ctrader_signature: str | None = Header(default=None, alias="X-Qore-Ctrader-Signature"),
+    ) -> dict[str, str]:
+        """Strict HMAC-authorized STAGING receipt. Cannot emit trading signals."""
+        if request.headers.get("content-length", "0").isdigit() and int(
+            request.headers.get("content-length", "0")
+        ) > 4096:
+            _raise(413, "crt_probe_body_too_large", "bounded QA evidence only")
+        body = await request.body()
+        try:
+            state = ctrader_probe.accept(
+                raw_body=body,
+                timestamp_ms=x_qore_ctrader_time,
+                nonce=x_qore_ctrader_nonce,
+                signature=x_qore_ctrader_signature,
+                now_ms=int(datetime.now(UTC).timestamp() * 1000),
+            )
+        except ProbeValidationError:
+            _raise(403, "crt_demo_probe_rejected", "QA receipt not authorized")
+        return {"state": state, "signals_enabled": "false", "push_enabled": "false"}
 
     @app.get("/v1/crt/alerts", response_model=CrtQaSnapshot)
     def crt_alerts(_: MobileRead) -> CrtQaSnapshot:
