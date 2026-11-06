@@ -1,0 +1,53 @@
+name: QORE G312 Support PG16 private queue and row-level access QA
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-soporte/**'
+      - 'apps/mobility-expo/docs/g301-support-staging-schema.sql'
+      - '.github/workflows/qore-g312-support-pg-ready.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  support-pg-private-qa:
+    name: G312 synthetic support RLS and append-only request outbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: qore_g312_disposable_ci_only
+          POSTGRES_DB: g312_support_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d g312_support_ci"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qore_g312_disposable_ci_only
+      PGDATABASE: g312_support_ci
+      QORE_SUPPORT_ACTIONS_ENABLED: 'false'
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Readonly + AAL2 + row RLS + private intent outbox on disposable Postgres
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/movete-soporte/scripts/sql/g312-support-disposable-ci.sql
+      - name: Independent support JS contract and disabled gateway
+        run: node --test apps/movete-soporte/src/*.test.mjs
+      - name: Fail closed for production and real employee access
+        run: |
+          test "$QORE_SUPPORT_ACTIONS_ENABLED" = 'false'
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = 'false'
+          echo 'G312: synthetic local Postgres only; no Supabase migration/deploy and no real staff/tickets.'
