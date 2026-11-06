@@ -67,6 +67,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
 
   QoreCrtQaInbox? inbox;
   String? message;
+  DateTime? lastGatewayReadAt;
   bool fetching = false;
   bool showSymbols = false;
   bool allSymbols = true;
@@ -114,6 +115,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
       if (mounted) {
         setState(() {
           inbox = null;
+          lastGatewayReadAt = null;
           message = 'Gateway CRT no configurado. Sin señales certificadas.';
         });
       }
@@ -127,12 +129,14 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
       if (!mounted) return;
       setState(() {
         inbox = fresh;
+        lastGatewayReadAt = DateTime.now().toUtc();
         message = null;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         inbox = null; // Fail closed rather than display stale alerts.
+        lastGatewayReadAt = null;
         message = 'Bandeja CRT no disponible o contrato inválido.';
       });
     } finally {
@@ -145,6 +149,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.client != widget.client) {
       inbox = null;
+      lastGatewayReadAt = null;
       _startPeriodicRefresh();
       _refresh();
     }
@@ -158,6 +163,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
     } else {
       refreshTimer?.cancel();
       inbox = null;
+      lastGatewayReadAt = null;
     }
   }
 
@@ -218,6 +224,8 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now().toUtc();
+    final connState = inbox?.state == 'OFFLINE_REPLAY_ONLY'
+      ? 'solo replay QA' : 'sin fuente CRT';
     final active = (inbox?.events ?? <QoreCrtQaEvent>[])
       .where((e) => e.activeAt(now) &&
         (allSymbols || selected.contains(e.instrumentId)))
@@ -237,6 +245,24 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
               'MSS M5 y M15 independientes · vigencia 4 horas.'),
           ]),
         )),
+        Card(
+          child: ListTile(
+            leading: Icon(
+              lastGatewayReadAt != null ? Icons.cloud_done_outlined
+                  : Icons.cloud_off_outlined,
+              color: lastGatewayReadAt != null ? Colors.teal
+                  : Colors.amber.shade700,
+            ),
+            title: Text(lastGatewayReadAt == null
+              ? 'Gateway CRT: no verificado'
+              : 'Gateway CRT: conexión autenticada OK'),
+            subtitle: Text(lastGatewayReadAt == null
+              ? 'La app aún no ha recibido una respuesta QA válida.'
+              : 'Comprobado: ${_time(lastGatewayReadAt!)}. '
+                'Estado: $connState. '
+                'Esto NO certifica mercados ni alertas push.'),
+          ),
+        ),
         Row(children: [
           Expanded(child: Text('Eventos QA vigentes: ${active.length}')),
           IconButton(

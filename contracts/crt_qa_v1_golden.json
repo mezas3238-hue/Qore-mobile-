@@ -1,0 +1,33 @@
+{
+  "schema_version": "QORE_MOBILE_CRT_QA_V1",
+  "state": "OFFLINE_REPLAY_ONLY",
+  "authenticated": true,
+  "live_feed": false,
+  "push_enabled": false,
+  "certified": false,
+  "ttl_seconds": 14400,
+  "as_of": "2027-01-15T08:01:00Z",
+  "events": [
+    {
+      "schema": "QORE_CRT_MONITOR_QA_V2",
+      "mode": "OFFLINE_REPLAY",
+      "certification": "NOT_VERIFIED",
+      "deliveryState": "BLOCKED_NOT_CERTIFIED",
+      "transport": "DISABLED",
+      "sendPush": false,
+      "actionable": false,
+      "requiresRealFeedAndPineParity": true,
+      "eventId": "IC|USDCAD|1799971200000|1|MSS_M15_OBSERVED|1800000000000",
+      "instrumentId": "USDCAD",
+      "tvSymbol": "IC:USDCAD",
+      "family": "CRT_3C_TRUE",
+      "direction": "BULLISH",
+      "eventType": "MSS_M15_OBSERVED",
+      "mssM5": "CONFIRMED",
+      "mssM15": "CONFIRMED",
+      "c1StartMs": 1799971200000,
+      "eventAtMs": 1800000000000,
+      "expiresAtMs": 1800014400000
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
@@ -21,6 +22,10 @@ class AppearancePage extends StatelessWidget {
 
   Future<void> _setWidgetLive(bool enabled) async {
     await controller.setWidgetLiveEnabled(enabled);
+    if (!enabled) {
+      await controller.setCrtQaLocalNoticesEnabled(false);
+      try { await _native.setCrtQaReplayNoticeConsent(false); } catch (_) {}
+    }
     final config = QoreAppConfig.fromEnvironment();
     if (config == null) return;
     try {
@@ -29,6 +34,57 @@ class AppearancePage extends StatelessWidget {
         gatewayUrl: config.gatewayUri.toString(),
       );
     } catch (_) {}
+  }
+
+  Future<void> _setCrtQaNotices(BuildContext context, bool enabled) async {
+    if (enabled && !controller.widgetLiveEnabled) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Primero activa Widget LIVE para probar avisos CRT QA.'),
+        ));
+      }
+      return;
+    }
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      final allowed = await _native.setCrtQaReplayNoticeConsent(enabled);
+      if (enabled && !allowed) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Permiso de notificaciones denegado en Android.'),
+          ));
+        }
+        return;
+      }
+      await controller.setCrtQaLocalNoticesEnabled(allowed && enabled);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudieron configurar los avisos QA de Android.'),
+        ));
+      }
+    }
+  }
+
+  Future<void> _runLocalQaTest(BuildContext context) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final posted = await _native.showCrtQaLocalTestNotification();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(posted
+          ? 'Prueba local enviada a Android. Comprueba las notificaciones. '
+            'NO demuestra recepción desde Railway.'
+          : 'Android bloqueó la prueba local. Revisa los permisos del sistema.'),
+      ));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo solicitar la prueba local en este dispositivo.'),
+      ));
+    }
   }
 
   @override
@@ -74,6 +130,36 @@ class AppearancePage extends StatelessWidget {
               ),
               value: controller.widgetLiveEnabled,
               onChanged: _setWidgetLive,
+            ),
+          ),
+          Card(
+            child: SwitchListTile(
+              title: const Text('Avisos CRT de laboratorio (Android)'),
+              subtitle: const Text(
+                'Opcional, desactivado inicialmente. Usa Widget LIVE para '
+                'mostrar un aviso local solo ante un replay QA autenticado. '
+                'NO son señales operables, NO usa Firebase y no garantiza '
+                'entrega si Android detiene el servicio.',
+              ),
+              value: controller.crtQaLocalNoticesEnabled,
+              onChanged: defaultTargetPlatform == TargetPlatform.android
+                  ? (v) => _setCrtQaNotices(context, v)
+                  : null,
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.notifications_active_outlined),
+              title: const Text('Probar notificación Android (LOCAL)'),
+              subtitle: const Text(
+                'Verifica únicamente el aviso Android durante 60 segundos. '
+                'No depende de Railway, Firebase ni de una señal CRT.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: defaultTargetPlatform == TargetPlatform.android,
+              onTap: defaultTargetPlatform == TargetPlatform.android
+                  ? () => _runLocalQaTest(context)
+                  : null,
             ),
           ),
           _section(context, 'Fondo', QoreWidgetBackground.values, controller.widgetBackground,

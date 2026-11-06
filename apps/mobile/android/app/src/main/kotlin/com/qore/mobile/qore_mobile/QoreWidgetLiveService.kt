@@ -207,7 +207,12 @@ class QoreWidgetLiveService : Service() {
             )
             val crtSummary = if (crtReply.code == HttpURLConnection.HTTP_OK) {
                 try {
-                    QoreCrtWidgetSummary.project(JSONObject(crtReply.body), nowMs)
+                    val crtResponse = JSONObject(crtReply.body)
+                    val preview = QoreCrtWidgetSummary.project(crtResponse, nowMs)
+                    // Optional LOCAL QA notice on the existing widget service.
+                    // Strict OFFLINE_REPLAY validation and Owner consent required.
+                    QoreCrtReplayNotifier.maybeNotify(this, crtResponse, nowMs)
+                    preview
                 } catch (_: Exception) {
                     QoreCrtWidgetSummary.OFFLINE
                 }

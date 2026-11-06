@@ -90,10 +90,25 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds:80));
     expect(find.text('LABORATORIO · SIN SEÑALES REALES'),findsOneWidget);
+    expect(find.text('Gateway CRT: conexión autenticada OK'),findsOneWidget);
     expect(find.text('REPLAY QA · NO CERTIFICADO · NO OPERAR'),findsOneWidget);
     expect(find.text('USDCAD'),findsOneWidget);
     await tester.tap(find.text('Operativas'));
     await tester.pump();
     expect(find.text('Informes VPS preservados'),findsOneWidget);
+  });
+
+  testWidgets('CRT tab explicitly reports no authenticated QA connection',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: QoreAlertsHub(
+        operationalAlerts: Center(child: Text('Informes VPS preservados')),
+      ),
+    )));
+    await tester.tap(find.text('CRT Alerts'));
+    await tester.pump();
+    expect(find.text('Gateway CRT: no verificado'), findsOneWidget);
+    expect(find.text('LABORATORIO · SIN SEÑALES REALES'), findsOneWidget);
+    expect(find.text('REPLAY QA · NO CERTIFICADO · NO OPERAR'), findsNothing);
   });
 }

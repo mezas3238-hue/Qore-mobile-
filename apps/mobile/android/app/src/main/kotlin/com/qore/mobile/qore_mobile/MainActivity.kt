@@ -1,5 +1,7 @@
 package com.qore.mobile.qore_mobile
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.KeyguardManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -33,6 +35,36 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
 class MainActivity : FlutterFragmentActivity() {
+    private var pendingCrtQaPermission: MethodChannel.Result? = null
+    private val crtQaPermissionRequestCode = 31055
+    private var pendingLocalQaTestPermission: MethodChannel.Result? = null
+    private val localQaTestPermissionRequestCode = 31056
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == localQaTestPermissionRequestCode) {
+            val callback = pendingLocalQaTestPermission ?: return
+            pendingLocalQaTestPermission = null
+            val allowed = grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            callback.success(allowed &&
+                QoreCrtReplayNotifier.showLocalConnectionTest(this))
+            return
+        }
+        if (requestCode != crtQaPermissionRequestCode) return
+        val callback = pendingCrtQaPermission ?: return
+        pendingCrtQaPermission = null
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        val persisted = getSharedPreferences("qore_widget", Context.MODE_PRIVATE)
+            .edit().putBoolean(QoreCrtReplayNotifier.CONSENT_KEY, granted).commit()
+        callback.success(granted && persisted)
+    }
+
     companion object {
         private const val CHANNEL = "qore.mobile/security"
         private const val SIGNING_ALIAS = "qore_mobile_device_p256_v1"
@@ -138,6 +170,56 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(null)
                     }
                 }
+                "showCrtQaLocalTestNotification" -> {
+                    // Explicit button tap; never proof of server delivery.
+                    if (pendingCrtQaPermission != null ||
+                        pendingLocalQaTestPermission != null) {
+                        result.error(
+                            "CRT_QA_PERMISSION_PENDING", "Permission request in progress", null,
+                        )
+                    } else if (Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED) {
+                        pendingLocalQaTestPermission = result
+                        requestPermissions(
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            localQaTestPermissionRequestCode,
+                        )
+                    } else {
+                        result.success(QoreCrtReplayNotifier.showLocalConnectionTest(this))
+                    }
+                }
+                "setCrtQaReplayNoticeConsent" -> {
+                    val requested = call.argument<Boolean>("enabled") ?: false
+                    val preferences = getSharedPreferences(
+                        WIDGET_PREFS, Context.MODE_PRIVATE)
+                    if (!requested) {
+                        QoreCrtReplayNotifier.disable(this)
+                        result.success(false)
+                    } else if (!preferences.getBoolean(WIDGET_LIVE_ENABLED, false)) {
+                        result.error(
+                            "CRT_QA_WIDGET_INACTIVE",
+                            "Enable Widget LIVE before local CRT QA notices.",
+                            null,
+                        )
+                    } else if (pendingCrtQaPermission != null ||
+                        pendingLocalQaTestPermission != null) {
+                        result.error("CRT_QA_PERMISSION_PENDING", "Permission in progress", null)
+                    } else if (Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED) {
+                        pendingCrtQaPermission = result
+                        requestPermissions(
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            crtQaPermissionRequestCode,
+                        )
+                    } else {
+                        val saved = preferences.edit()
+                            .putBoolean(QoreCrtReplayNotifier.CONSENT_KEY, true)
+                            .commit()
+                        result.success(saved)
+                    }
+                }
                 "setWidgetLiveMode" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: false
                     val gatewayUrl = call.argument<String>("gateway_url")
@@ -178,6 +260,8 @@ class MainActivity : FlutterFragmentActivity() {
                                 serviceIntent,
                             )
                         } else {
+                            // Revocation is immediate when Widget LIVE stops.
+                            QoreCrtReplayNotifier.disable(this)
                             stopService(serviceIntent)
                         }
                         result.success(null)
