@@ -43,3 +43,12 @@ Fuentes: TradingView pricing https://es.tradingview.com/pricing/ ; TradingView P
 - No ajustar automáticamente el motor para «parecerse» a cTrader; equivalencia significa **mismos datos y reglas verificadas**, no solo nombres de símbolos.
 
 **Resultado:** fuente de la señal primero; notificación exclusiva después. El indicador V34.12X queda intacto. No MERGE, no LIVE, no activar emisión de señales sin evidencia Owner.
+## Confirmación posterior del Owner — 05-nov-2026
+
+**CONFIRMADO:** el broker de la cuenta **cTrader DEMO es IC Markets**, y la fuente visual de TradingView para los 34 instrumentos V34.12X utiliza **IC Markets (`IC:`)**. Esta coincidencia de marca elimina la sospecha de *bróker nominal diferente*, pero NO acredita identidad de servidor, fase M5, OHLC, sesiones ni resultados CRT/MSS.
+
+**Hallazgo reutilizable:** QORE Core ya dispone del cliente de mercado cTrader Open API para barras M5 DEMO y comprobaciones de cuenta/symbol ID en `src/qore/infrastructure/ctrader_open_api_market_data_client.py`. No crear un segundo conector paralelo por defecto.
+
+**Laboratorio nuevo de fuente:** [QORE Core PR #1005](https://github.com/mezas3238-hue/qore-core/pull/1005), herramienta `tools/crt_feed_parity/compare_ic_m5.py`. Compara 600 velas M5 cerradas de ambos feeds, con UTC y OHLC exacto; **SAMPLE_MATCH_ONLY no habilita alertas ni certifica las 7 familias**. CI offline PASS. VPS `vps-vrix` no está conectado por Desktop Commander al momento de la consulta; faltan datos reales. TradingView Free puede no permitir descarga de datos de gráfico CSV ni alertas Pine, por lo que debe preverse evidencia autorizada alternativa.
+
+Hasta entonces: gateway QORE Mobile mantiene CRT en estado QA sin feed certificado ni push de mercado; permitir solo prueba local y replay explicitamente etiquetados. NO MERGE / NO LIVE / NO PUSH.
