@@ -53,6 +53,7 @@ class QoreWidgetLiveService : Service() {
 
         private const val DASHBOARD_PATH = "/v1/dashboard"
         private const val CRT_ALERTS_PATH = "/v1/crt/alerts"
+        private const val CRT_DEMO_PROBE_PATH = "/v1/crt/ctrader-demo-probe"
         private const val REFRESH_PATH = "/v1/mobile/refresh"
         private const val RECOVER_PATH = "/v1/mobile/recover"
     }
@@ -217,8 +218,29 @@ class QoreWidgetLiveService : Service() {
                     QoreCrtWidgetSummary.OFFLINE
                 }
             } else QoreCrtWidgetSummary.OFFLINE
+            // Separate authenticated read-only status for IC Markets cTrader
+            // DEMO. No signals are created here; never claim that a probe
+            // means parity with TradingView or a market push connection.
+            val qaProbeLabel: String? = try {
+                val probeReply = request(
+                    gateway = gateway,
+                    path = CRT_DEMO_PROBE_PATH,
+                    method = "GET",
+                    token = session.optString("access_token"),
+                    deviceId = session.optString("device_id"),
+                )
+                if (probeReply.code == HttpURLConnection.HTTP_OK)
+                    QoreCrtDemoProbeStatus.label(JSONObject(probeReply.body), nowMs)
+                else null
+            } catch (_: Exception) { null }
+            val displayedCrt = if (
+                qaProbeLabel != null &&
+                (crtSummary == QoreCrtWidgetSummary.OFFLINE ||
+                 crtSummary == "CRT QA · Gateway OK · Sin feed" ||
+                 crtSummary == "CRT QA · Sin eventos vigentes")
+            ) qaProbeLabel else crtSummary
             prefs.edit()
-                .putString("crt_widget_summary", crtSummary)
+                .putString("crt_widget_summary", displayedCrt)
                 .putLong("crt_widget_checked_ms", nowMs)
                 .apply()
         }
