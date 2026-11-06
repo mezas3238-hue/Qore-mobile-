@@ -119,6 +119,15 @@ class NativeDeviceSessionProvider implements DeviceSessionProvider {
     ) ?? false;
   }
 
+  /// Open Android's dedicated CRT QA notification channel controls.
+  /// User selects ringtone, vibration or quiet mode through OS settings.
+  /// This does not connect to cTrader nor enable market notifications.
+  Future<bool> openCrtQaNotificationSettings() async {
+    return await _channel.invokeMethod<bool>(
+      'openCrtQaNotificationSettings',
+    ) ?? false;
+  }
+
   Future<bool> setCrtQaReplayNoticeConsent(bool enabled) async {
     return await _channel.invokeMethod<bool>(
       'setCrtQaReplayNoticeConsent',
