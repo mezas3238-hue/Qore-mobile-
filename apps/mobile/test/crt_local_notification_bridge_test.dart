@@ -6,6 +6,37 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('qore.mobile/security');
 
+  test('CRT channel settings opens only on explicit user action', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (message) async {
+      calls.add(message);
+      if (message.method == 'openCrtQaNotificationSettings') return true;
+      throw PlatformException(code: 'UNEXPECTED_CALL');
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    final provider = NativeDeviceSessionProvider();
+    expect(await provider.openCrtQaNotificationSettings(), isTrue);
+    expect(calls, hasLength(1));
+    expect(calls.single.arguments, isNull);
+  });
+
+  test('CRT notification settings unsupported fails closed', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (message) async {
+      expect(message.method, 'openCrtQaNotificationSettings');
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    expect(await NativeDeviceSessionProvider().openCrtQaNotificationSettings(),
+        isFalse);
+  });
+
   test('local QA notification is one explicit native action, not FCM', () async {
     final calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
