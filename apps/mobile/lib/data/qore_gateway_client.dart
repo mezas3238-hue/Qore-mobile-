@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../domain/models.dart';
 import '../crt/crt_qa_contract.dart';
+import '../crt/crt_demo_probe_status.dart';
 import '../security/device_proof.dart';
 import '../security/session.dart';
 import '../security/session_recovery_service.dart';
@@ -29,7 +30,11 @@ abstract interface class QoreCrtQaClient {
   Future<QoreCrtQaInbox> fetchCrtQaInbox();
 }
 
-class HttpQoreGatewayClient implements QoreGatewayClient, QoreCrtQaClient {
+abstract interface class QoreCrtDemoProbeClient {
+  Future<QoreCrtDemoProbeStatus> fetchCrtDemoProbeStatus();
+}
+
+class HttpQoreGatewayClient implements QoreGatewayClient, QoreCrtQaClient, QoreCrtDemoProbeClient {
   HttpQoreGatewayClient({
     required this.baseUri,
     required this.sessionProvider,
@@ -277,6 +282,13 @@ class HttpQoreGatewayClient implements QoreGatewayClient, QoreCrtQaClient {
       throw const QoreGatewayException('Expected a JSON array');
     }
     return value.map(_map).toList(growable: false);
+  }
+
+  @override
+  Future<QoreCrtDemoProbeStatus> fetchCrtDemoProbeStatus() async {
+    // Reuse existing signed QORE Mobile device session (no cTrader token).
+    final data = await _getJson('/v1/crt/ctrader-demo-probe');
+    return QoreCrtDemoProbeStatus.fromJson(data);
   }
 
   @override
