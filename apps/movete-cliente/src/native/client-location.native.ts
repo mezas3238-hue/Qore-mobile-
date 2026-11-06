@@ -1,7 +1,8 @@
 /** G309: native-only foreground location and device geocoder, no app key. */
 import * as Location from 'expo-location';
 import {inspectPassengerGpsFix,makePassengerAddressLabel,
- inspectDestinationCandidates} from '../domain/client-geolocation.mjs';
+ inspectDestinationCandidates,scopePassengerDestinationQuery,
+ makePassengerDestinationCandidate} from '../domain/client-geolocation.mjs';
 export type PassengerPlace=Readonly<{label:string;latitude:number;longitude:number}>;
 const timeout=<T,>(task:Promise<T>,ms:number):Promise<T>=>Promise.race([
  task,new Promise<T>((_,reject)=>setTimeout(()=>reject(Error('LOCATION_TIMEOUT')),ms))
@@ -40,11 +41,22 @@ export async function searchPassengerDestination(query:string):Promise<{
   // Android geocoding also requires foreground location permission.
   const perm=await timeout(Location.getForegroundPermissionsAsync(),5000);
   if(perm.granted!==true)return {ok:false,code:'LOCATION_DENIED'};
-  const spots=await timeout(Location.geocodeAsync(query.trim()),12000);
-  const places=inspectDestinationCandidates(spots.slice(0,5).map((point,i)=>({
-   latitude:point.latitude,longitude:point.longitude,
-   label:spots.length===1?query.trim():query.trim()+' · Opción '+(i+1)
-  })));
+  const scoped=scopePassengerDestinationQuery(query);
+  if(!scoped)return {ok:false,code:'ADDRESS_QUERY_TOO_SHORT'};
+  // Forward geocoder coordinates are not user-facing addresses by themselves.
+  // Resolve the top two suggestions back to a real Paraguayan postal address.
+  const spots=await timeout(Location.geocodeAsync(scoped),12000);
+  const confirmed:PassengerPlace[]=[];
+  for(const point of spots.slice(0,2)){
+   try{
+    const resolved=await timeout(Location.reverseGeocodeAsync({
+     latitude:point.latitude,longitude:point.longitude
+    }),4500);
+    const address=makePassengerDestinationCandidate(point,resolved[0]);
+    if(address)confirmed.push(address);
+   }catch{/* Unverified suggestions must never be selectable. */}
+  }
+  const places=inspectDestinationCandidates(confirmed);
   return places.length?{ok:true,places}:{ok:false,code:'ADDRESS_NOT_FOUND'};
  }catch{return {ok:false,code:'GEOCODER_UNAVAILABLE'};}
 }
