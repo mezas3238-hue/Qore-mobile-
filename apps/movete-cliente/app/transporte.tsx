@@ -88,7 +88,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     if(!result.ok){
      setDestinationNotice(result.code==='LOCATION_DENIED'
       ?'El buscador del dispositivo necesita permiso de ubicación.'
-      :'Sin resultados verificados. Escribí calle y ciudad y volvé a intentar.');
+      :'No se encontró una dirección concreta en Paraguay. Escribí calle, barrio y ciudad y volvé a intentar.');
      return;
     }
     setSuggestions(result.places);
@@ -159,7 +159,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     }} style={{padding:12,borderRadius:12,borderWidth:1,borderColor:'#D1E3E0'}}>
     <Text style={styles.text}>{option.label}</Text>
     <Text style={styles.small}>
-     Coordenadas aproximadas: {option.latitude.toFixed(5)}, {option.longitude.toFixed(5)}
+     Dirección localizada en Paraguay · Confirmá el punto antes de viajar
     </Text>
    </Pressable>)}
    <Action secondary label="Intercambiar origen y destino"

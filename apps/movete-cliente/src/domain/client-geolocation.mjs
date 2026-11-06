@@ -37,6 +37,33 @@ export function makePassengerAddressLabel(address, fallback=null){
  return safeText(label)?label.slice(0,120):
   safeText(fallback)?fallback.trim():null;
 }
+
+/** Never show a geocoded point in another country as a Paraguay destination. */
+export function scopePassengerDestinationQuery(query){
+ if(!safeText(query))return null;
+ const normalized=query.trim().replace(/\s+/g,' ');
+ return /(?:^|,\s*)paraguay$/iu.test(normalized)?
+  normalized:normalized+', Paraguay';
+}
+/** An actual reverse-geocoded address is required before offering a tappable place. */
+export function makePassengerDestinationCandidate(point,address){
+ if(!point||!address||typeof point!=='object'||typeof address!=='object'||
+  Array.isArray(point)||Array.isArray(address))return null;
+ const countryCode=typeof address.isoCountryCode==='string'?
+  address.isoCountryCode.trim().toUpperCase():'';
+ const country=typeof address.country==='string'?
+  address.country.trim().toLowerCase():'';
+ if(countryCode!=='PY'&&country!=='paraguay')return null;
+ if(![address.name,address.street,address.district].some(safeText))return null;
+ const addressLabel=makePassengerAddressLabel(address,null);
+ const name=safeText(address.name)?address.name.trim():null;
+ const label=name&&addressLabel&&!addressLabel.includes(name)?
+  (name+', '+addressLabel).slice(0,120):addressLabel??name;
+ if(!safeText(label))return null;
+ return inspectDestinationCandidates([{latitude:point.latitude,
+  longitude:point.longitude,label}])[0]??null;
+}
+
 export function inspectDestinationCandidates(candidates){
  if(!Array.isArray(candidates))return Object.freeze([]);
  const accepted=[];
