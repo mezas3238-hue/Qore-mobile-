@@ -54,6 +54,10 @@ export function makePassengerDestinationCandidate(point,address){
  const country=typeof address.country==='string'?
   address.country.trim().toLowerCase():'';
  if(countryCode!=='PY'&&country!=='paraguay')return null;
+ // Never substitute a business name for corrupted street/district metadata.
+ if([address.name,address.streetNumber,address.street,address.district,
+   address.city,address.region,address.country].some(value=>typeof value==='string'&&
+   /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(value)))return null;
  if(![address.name,address.street,address.district].some(safeText))return null;
  const addressLabel=makePassengerAddressLabel(address,null);
  const name=safeText(address.name)?address.name.trim():null;
