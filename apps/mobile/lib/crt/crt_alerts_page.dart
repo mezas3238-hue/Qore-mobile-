@@ -133,7 +133,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
       QoreCrtDemoProbeStatus? health;
       if (client is QoreCrtDemoProbeClient) {
         try {
-          health = await client.fetchCrtDemoProbeStatus();
+          health = await (client as QoreCrtDemoProbeClient).fetchCrtDemoProbeStatus();
         } catch (_) {
           health = null; // Fail closed, no stale connection claims.
         }
