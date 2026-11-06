@@ -5,6 +5,9 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.provider.Settings
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -24,7 +27,59 @@ internal object QoreCrtReplayNotifier {
     const val CONSENT_KEY = "crt_qa_notices_opt_in"
     private const val WIDGET_PREFS = "qore_widget"
     private const val SEEN_PREFS = "qore_crt_qa_notice_dedup_v1"
-    private const val CHANNEL_ID = "qore_crt_lab_replay_v1"
+    private const val CHANNEL_ID = "qore_crt_lab_replay_v2"
+
+
+    /**
+     * Dedicated Android channel for CRT QA notices. Android owns the
+     * final sound/vibration preference from this channel's settings.
+     * Version v2 is intentional: a v1 channel's sound/vibration cannot
+     * be changed by code after first creation.
+     *
+     * A dedicated channel does NOT turn the replay into a market signal.
+     */
+    fun ensureCrtQaChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+            as NotificationManager
+        manager.createNotificationChannel(NotificationChannel(
+            CHANNEL_ID,
+            "QORE CRT · Avisos QA (tono/vibración)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Avisos CRT de laboratorio, independientes del resto de QORE. NO OPERAR."
+            enableVibration(true)
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                    .build()
+            )
+        })
+    }
+
+    /**
+     * Opens Android's own per-channel preferences: sound, vibration, quiet.
+     * Users' choices prevail over initial app defaults. Does NOT enable
+     * alerts or request a market feed.
+     */
+    fun openCrtQaNotificationSettings(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        ensureCrtQaChannel(context)
+        return try {
+            val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: android.content.ActivityNotFoundException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        }
+    }
 
     fun maybeNotify(context: Context, response: JSONObject, nowMs: Long) {
         val widget = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
@@ -55,16 +110,7 @@ internal object QoreCrtReplayNotifier {
         val notifications = context.getSystemService(
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notifications.createNotificationChannel(NotificationChannel(
-                CHANNEL_ID,
-                "CRT Alerts · Laboratorio QA",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Pruebas técnicas no operables; nunca señales reales."
-                enableVibration(false)
-            })
-        }
+        ensureCrtQaChannel(context)
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -111,18 +157,13 @@ internal object QoreCrtReplayNotifier {
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
                 PackageManager.PERMISSION_GRANTED) return false
 
-        val channel = "qore_crt_explicit_local_test_v1"
+        // Preview uses the SAME dedicated CRT QA notification channel as
+        // real QA replay notices, testing the configured ringtone/vibration.
+        val channel = CHANNEL_ID
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
             as NotificationManager
+        ensureCrtQaChannel(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(
-                channel,
-                "Prueba local de notificaciones QORE",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                description = "Prueba local solicitada manualmente; no viene del VPS."
-                enableVibration(false)
-            })
             if (manager.areNotificationsEnabled().not()) return false
             if (manager.getNotificationChannel(channel)?.importance ==
                 NotificationManager.IMPORTANCE_NONE) return false
