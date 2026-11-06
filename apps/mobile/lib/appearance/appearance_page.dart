@@ -68,6 +68,25 @@ class AppearancePage extends StatelessWidget {
     }
   }
 
+  Future<void> _configureCrtNotificationChannel(BuildContext context) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final opened = await _native.openCrtQaNotificationSettings();
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Este dispositivo no permite abrir los ajustes '
+              'de tono/vibración del canal CRT directamente.'),
+        ));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudieron abrir los ajustes de notificaciones CRT.'),
+        ));
+      }
+    }
+  }
+
   Future<void> _runLocalQaTest(BuildContext context) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
     try {
@@ -149,10 +168,27 @@ class AppearancePage extends StatelessWidget {
           ),
           Card(
             child: ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('Tono y vibración exclusivos CRT'),
+              subtitle: const Text(
+                'Abre el canal de notificaciones CRT en Android. '
+                'Elige su sonido, vibración o silencio por separado '
+                'de los demás avisos QORE. Solo aplica por ahora '
+                'a las pruebas CRT QA, no certifica cTrader.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: defaultTargetPlatform == TargetPlatform.android,
+              onTap: defaultTargetPlatform == TargetPlatform.android
+                  ? () => _configureCrtNotificationChannel(context)
+                  : null,
+            ),
+          ),
+          Card(
+            child: ListTile(
               leading: const Icon(Icons.notifications_active_outlined),
               title: const Text('Probar notificación Android (LOCAL)'),
               subtitle: const Text(
-                'Verifica únicamente el aviso Android durante 60 segundos. '
+                'Prueba el canal CRT y el tono/vibración elegidos durante 60 segundos. '
                 'No depende de Railway, Firebase ni de una señal CRT.',
               ),
               trailing: const Icon(Icons.chevron_right),
