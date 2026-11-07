@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/qore_gateway_client.dart';
 import 'crt_qa_contract.dart';
+import 'crt_demo_probe_status.dart';
 
 /// QORE CRT is a section of the EXISTING QORE Mobile Alerts screen.
 /// This module never trades, subscribes to market push or self-certifies signals.
@@ -66,6 +67,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
   static const _symbolsKey = 'qore_crt_selected_markets_v1';
 
   QoreCrtQaInbox? inbox;
+  QoreCrtDemoProbeStatus? demoProbe;
   String? message;
   DateTime? lastGatewayReadAt;
   bool fetching = false;
@@ -115,6 +117,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
       if (mounted) {
         setState(() {
           inbox = null;
+          demoProbe = null;
           lastGatewayReadAt = null;
           message = 'Gateway CRT no configurado. Sin señales certificadas.';
         });
@@ -126,9 +129,19 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
     if (!silent && mounted) setState(() => message = null);
     try {
       final fresh = await client.fetchCrtQaInbox();
+      // Authenticated IC Markets DEMO status is diagnostic, NEVER a CRT alert.
+      QoreCrtDemoProbeStatus? health;
+      if (client is QoreCrtDemoProbeClient) {
+        try {
+          health = await (client as QoreCrtDemoProbeClient).fetchCrtDemoProbeStatus();
+        } catch (_) {
+          health = null; // Fail closed, no stale connection claims.
+        }
+      }
       if (!mounted) return;
       setState(() {
         inbox = fresh;
+        demoProbe = health;
         lastGatewayReadAt = DateTime.now().toUtc();
         message = null;
       });
@@ -136,6 +149,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
       if (!mounted) return;
       setState(() {
         inbox = null; // Fail closed rather than display stale alerts.
+        demoProbe = null;
         lastGatewayReadAt = null;
         message = 'Bandeja CRT no disponible o contrato inválido.';
       });
@@ -149,6 +163,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.client != widget.client) {
       inbox = null;
+      demoProbe = null;
       lastGatewayReadAt = null;
       _startPeriodicRefresh();
       _refresh();
@@ -163,6 +178,7 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
     } else {
       refreshTimer?.cancel();
       inbox = null;
+      demoProbe = null;
       lastGatewayReadAt = null;
     }
   }
@@ -261,6 +277,19 @@ class _QoreCrtQaPanelState extends State<QoreCrtQaPanel>
               : 'Comprobado: ${_time(lastGatewayReadAt!)}. '
                 'Estado: $connState. '
                 'Esto NO certifica mercados ni alertas push.'),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.cell_tower),
+            title: const Text('cTrader DEMO · IC Markets'),
+            subtitle: Text(demoProbe?.recent == true
+              ? 'Prueba de conexión QA recibida: '
+                '${demoProbe!.symbolsObserved} símbolos observados, '
+                '${demoProbe!.sampledClosedM5} velas M5 de muestra. '
+                'No demuestra paridad TradingView ni señales CRT/MSS.'
+              : 'Sin prueba vigente de conexión cTrader DEMO. '
+                'No hay señales CRT/MSS certificadas ni notificaciones de mercado.'),
           ),
         ),
         Row(children: [
