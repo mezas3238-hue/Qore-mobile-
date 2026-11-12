@@ -27,7 +27,7 @@ jobs:
       EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN: ''
       EXPO_PUBLIC_SUPABASE_URL: ''
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
-      RELEASE_TAG: qa-g319-cliente-gps-estable-2026-11-12
+      RELEASE_TAG_PREFIX: qa-g319-cliente-gps-estable-2026-11-12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,12 +81,14 @@ jobs:
           fi
           sha256sum "$apk" | tee "$RUNNER_TEMP/g319-sha256.txt"
           cp "$apk" "$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk"
-      - name: Publish direct GitHub QA prerelease; never overwrite an existing APK
+      - name: Publish immutable GitHub QA prerelease for this run and source SHA
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo 'Release tag already exists; refusing overwrite'
+          source_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          release_tag="${RELEASE_TAG_PREFIX}-${source_sha:0:12}-run${GITHUB_RUN_ID}-attempt${GITHUB_RUN_ATTEMPT}"
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Immutable release tag already exists; refusing overwrite'
             exit 1
           fi
           cat > "$RUNNER_TEMP/release-note.md" <<'NOTES'
@@ -104,11 +106,16 @@ jobs:
           Los usuarios deben probar en un Android físico y no declarar completada
           la aplicación sin aceptación real de Cliente.
           NOTES
-          gh release create "$RELEASE_TAG" "$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk" \
+          asset="$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk"
+          asset_sha="$(sha256sum "$asset" | awk '{print $1}')"
+          printf '\nSource SHA: %s\nAPK SHA256: %s\nGitHub Actions run: %s, attempt: %s\n' \
+            "$source_sha" "$asset_sha" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$RUNNER_TEMP/release-note.md"
+          gh release create "$release_tag" "$asset" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --target "$source_sha" \
             --title "Movete Fácil Cliente G319 — estabilidad Android QA" \
             --prerelease --notes-file "$RUNNER_TEMP/release-note.md"
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
       - name: Ensure stable direct-download asset exists
         shell: bash
         run: |
