@@ -31,10 +31,15 @@ function leafletHtml(point:ClientMapPoint){
   const bounds=L.latLngBounds([[-27.8,-62.9],[-19.2,-54.1]]);
   const map=L.map('map',{zoomControl:true,preferCanvas:true,maxBounds:bounds,maxBoundsViscosity:1});
   map.setView(initial,16);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  const tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom:18,minZoom:6
-  }).addTo(map);
+  });
+  let errors=0;
+  tiles.once('tileload',function(){window.ReactNativeWebView.postMessage('{"kind":"map-ready"}');});
+  tiles.on('tileerror',function(){if(++errors>=3)
+   window.ReactNativeWebView.postMessage('{"kind":"map-error"}');});
+  tiles.addTo(map);
   const marker=L.marker(initial,{draggable:true,autoPan:true}).addTo(map);
   function move(latlng){
    if(!bounds.contains(latlng))return;
@@ -51,6 +56,7 @@ function leafletHtml(point:ClientMapPoint){
 export default function ClientPlaceMap({role,point,busy,onConfirm,onClose}:ClientPlaceMapProps){
  const [selected,setSelected]=useState<ClientMapPoint>(point);
  const [failure,setFailure]=useState(false);
+ const [tilesReady,setTilesReady]=useState(false);
  const html=useMemo(()=>leafletHtml(point),[point.latitude,point.longitude]);
  return <View style={{gap:9}}>
   <Text style={styles.small}>Mapa de QA: el pin indica el {role==='pickup'?'lugar de recogida':'destino'}.
@@ -69,16 +75,21 @@ export default function ClientPlaceMap({role,point,busy,onConfirm,onClose}:Clien
       return false;
      }}
      onMessage={event=>{
-      const parsed=parseMapPointMessage(event.nativeEvent.data);
-      if(parsed)setSelected(parsed);
+      if(event.nativeEvent.data==='{"kind":"map-ready"}')setTilesReady(true);
+      else if(event.nativeEvent.data==='{"kind":"map-error"}')setFailure(true);
+      else{
+       const parsed=parseMapPointMessage(event.nativeEvent.data);
+       if(parsed)setSelected(parsed);
+      }
      }}
      onError={()=>setFailure(true)}
      style={{flex:1}}/>
    </View>:<Text style={styles.small}>Mapa no disponible. Revisá la conexión; no se confirmó el punto.</Text>}
+  {!failure&&!tilesReady&&<Text style={styles.small}>Cargando el mapa y sus calles antes de permitir confirmar…</Text>}
   <Text style={styles.small}>Punto propuesto: {selected.latitude.toFixed(5)}, {selected.longitude.toFixed(5)}.
    Las teselas de OpenStreetMap se solicitan solamente al abrir este mapa; no hay rastreo continuo.</Text>
   <Action label={busy?'Comprobando dirección…':'Confirmar punto en el mapa'}
-   disabled={busy||failure||!isParaguayMapCoordinate(selected)}
+   disabled={busy||failure||!tilesReady||!isParaguayMapCoordinate(selected)}
    onPress={()=>onConfirm(selected)}/>
   <Action secondary label="Cerrar mapa sin confirmar" disabled={busy} onPress={onClose}/>
  </View>;
