@@ -11,7 +11,7 @@
 
 ## Nuevos controles implementados
 
-La función `qore_support_private.mobility_stage_g313_enqueue_qa` es `SECURITY INVOKER`, en esquema NO expuesto y accesible únicamente a `service_role`. Rechaza:
+La función `qore_support_private.mobility_stage_g313_enqueue_qa` es `SECURITY DEFINER` **excepcional**, en esquema NO expuesto y ejecutable únicamente por `service_role`. Se utiliza para consultar y bloquear los registros privados de `auth.sessions`, `auth.users` y `auth.mfa_factors` sin otorgar lectura ni escritura directa sobre ellos a `service_role`. La función usa `SET search_path=''`, nombres de tablas totalmente calificados, argumentos cerrados y deniega cualquier rol distinto de Soporte. Requiere revisión de seguridad independiente antes de aplicarla. Rechaza:
 
 - actor que no tiene rol independiente de soporte activo y aprobado por Owner activo;
 - sesión/Auth borrada, expirada, baneada o no confirmada; MFA sin `totp` verificado o sin `aal2`;
@@ -28,7 +28,7 @@ El contrato **no concede** capacidad de iniciar sesión, modificar estados, cont
 
 1. La función recibe `_actor` y `_session` desde un backend de confianza. El futuro Edge Function debe validar JWT con `auth.getUser(token)` y comprobar `session_id` enlazado al actor; jamás exponer servicio privilegiado en navegador.
 2. El modelo de aprobación requiere un Owner realmente registrado y aprobado con un actor distinto, aún sin certificar en STAGING.
-3. Se deben comprobar los permisos exactos `service_role` sobre `auth.users/auth.sessions/auth.mfa_factors` y tablas G301 en PostgreSQL 17 antes de proponer el despliegue. El test crea grants locales solo en el contenedor desechable.
+3. Se comprobó en Supabase PostgreSQL 17 real que `service_role` **NO** tiene `SELECT` en `auth.users`, `auth.sessions` ni `auth.mfa_factors` (12-nov-2026). La función elevada en esquema privado evita conceder permisos directos sobre esos datos. El test PG16 exige también cero SELECT/UPDATE Auth para `service_role`. **Auditar especialmente `SECURITY DEFINER`**, propietario de función, privilegios `EXECUTE`, búsqueda vacía y qué roles pueden cambiar su definición; si estos requisitos no se pueden cumplir, bloquear la instalación.
 4. Revocaciones que introduzcan *nuevos* roles en tablas paralelas pueden competir con las comprobaciones de ausencia. Sus escritores autorizados deberán tomar un bloqueo de asesoramiento compatible o usar un coordinador transaccional para cerrar esa carrera.
 5. Una solicitud `QUEUED` no significa que el ticket esté `RESOLVED` ni que una respuesta se haya enviado. Hace falta worker/revisión y bitácora independiente con anti-spam y retención.
 6. **NO MERGE / NO DEPLOY / NO LIVE.** Los otros frentes (#118 móvil, #119 comercio/pagos) no se modifican.
