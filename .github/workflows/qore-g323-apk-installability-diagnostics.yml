@@ -26,7 +26,7 @@ jobs:
           - role: Driver
             tag: qa-g313-driver-arm64-2026-11-12
             filename: Movete-Facil-Driver-G313-ARM64-QA.apk
-            expected_id: com.movetefacil.driver.g313qa
+            expected_id: com.movetefacil.driver.ocrqa
             expected_sha256: 62471be99ac88906ee1db3640980802082272e4de2a2a5a9ed22c85630e1698e
     steps:
       - name: Download the actual GitHub Release artifact, not a simulated build
