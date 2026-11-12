@@ -82,9 +82,6 @@ BEGIN
  END;
  IF NOT duplicate_failed THEN
   RAISE EXCEPTION 'G313 idempotency key was reused for different action'; END IF;
- IF (SELECT status FROM public.mobility_stage_support_cases
-  WHERE ticket_id='ddddddd2-dddd-4ddd-8ddd-dddddddddddd')<>'OPEN'
- THEN RAISE EXCEPTION 'G313 enqueuing illegally changed ticket status'; END IF;
 END $request$;
 
 DO $negative$
@@ -221,5 +218,13 @@ BEGIN
  IF NOT blocked THEN RAISE EXCEPTION 'G313 revoked approver still authorized'; END IF;
 END $approver$;
 RESET ROLE;
+
+-- Assert immutability with the disposable database owner, never by
+-- granting service_role extra direct access to private case rows.
+DO $ticket_immutable$ BEGIN
+ IF (SELECT status FROM public.mobility_stage_support_cases
+     WHERE ticket_id='ddddddd2-dddd-4ddd-8ddd-dddddddddddd')<>'OPEN'
+ THEN RAISE EXCEPTION 'G313 enqueuing illegally changed ticket status'; END IF;
+END $ticket_immutable$;
 
 \echo G313 PASS: private atomic enqueue, live session+MFA, no Owner, assignment+status lock, idempotency, zero ticket mutations, replay revocation, no LIVE.
