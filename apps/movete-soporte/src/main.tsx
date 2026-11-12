@@ -4,6 +4,10 @@ import {createClient,type SupabaseClient} from '@supabase/supabase-js';
 import {readSupportCases,type SupportCase} from './support-gateway.mjs';
 import {verifySupportAccess,supportPasswordLogin,supportTotpVerify} from './support-auth.mjs';
 import {createSupportRequestFence} from './support-request-fence.mjs';
+import {allowedSupportActions} from './support-action-options.mjs';
+import {enqueueSupportAction} from './support-action-gateway.mjs';
+import {claimSupportCase} from './support-claim-gateway.mjs';
+import type {SupportActionKind} from './support-action-contract.mjs';
 import './styles.css';
 
 type Tab='bandeja'|'seguridad'|'tareas'|'acceso';
@@ -15,6 +19,8 @@ const labels:Record<string,string>={
  ESCALATED:'Escalado',RESOLVED:'Resuelto',NORMAL:'Normal',HIGH:'Alta',CRITICAL:'Crítica'
 };
 const env=import.meta.env;
+const supportActionsEnabled=env.VITE_QORE_SUPPORT_ACTIONS_APPROVED==='true';
+const supportClaimsEnabled=env.VITE_QORE_SUPPORT_CLAIMS_APPROVED==='true';
 function stagingClient():SupabaseClient|null{
  if(env.VITE_QORE_SUPPORT_STAGING_APPROVED!=='true')return null;
  const ref=env.VITE_QORE_SUPPORT_PROJECT_REF;
@@ -39,6 +45,10 @@ function App(){
  const [busy,setBusy]=useState(false);
  // Every async auth/case request must belong to the current UI session.
  const fence=useRef(createSupportRequestFence());
+ const actionKeys=useRef(new Map<string,string>());
+ const claimKeys=useRef(new Map<string,string>());
+ const [supportUserId,setSupportUserId]=useState('');
+ const [actionMessage,setActionMessage]=useState('');
  const [message,setMessage]=useState('El portal necesita una cuenta de soporte aprobada y MFA AAL2.');
  const [tickets,setTickets]=useState<readonly SupportCase[]>([]);
  const [filter,setFilter]=useState('ALL');
@@ -49,7 +59,9 @@ function App(){
   if(!client)return;
   const version=fence.current.current();
   void verifySupportAccess(client).then(session=>{
-   if(active&&fence.current.isCurrent(version)&&session)setPhase('ready');
+   if(active&&fence.current.isCurrent(version)&&session){
+    setSupportUserId(session.userId);setPhase('ready');
+   }
   });
   return()=>{active=false;fence.current.invalidate();};
  },[]);
@@ -59,7 +71,14 @@ function App(){
   const pass=password;setPassword('');setBusy(true);setMessage('');
   const res=await supportPasswordLogin(client,email,pass);
   if(!fence.current.isCurrent(version))return;
-  if(res.ok){setFactorId('');setPhase('ready');setTab('bandeja');}
+  if(res.ok){
+   const session=await verifySupportAccess(client);
+   if(!fence.current.isCurrent(version))return;
+   if(session){
+    setSupportUserId(session.userId);
+    setFactorId('');setPhase('ready');setTab('bandeja');
+   }else{setPhase('locked');setMessage('La sesión no pudo verificarse nuevamente.');}
+  }
   else if(res.code==='MFA_REQUIRED'&&res.factorId){
    setFactorId(res.factorId);setMessage('Verificá el código temporal de tu autenticador.');
   }else{
@@ -75,13 +94,22 @@ function App(){
   const code=otp;setOtp('');setBusy(true);setMessage('');
   const result=await supportTotpVerify(client,factorId,code);
   if(!fence.current.isCurrent(version))return;
-  if(result.ok){setPhase('ready');setFactorId('');setTab('bandeja');}
+  if(result.ok){
+   const session=await verifySupportAccess(client);
+   if(!fence.current.isCurrent(version))return;
+   if(session){
+    setSupportUserId(session.userId);
+    setPhase('ready');setFactorId('');setTab('bandeja');
+   }else{setPhase('locked');setMessage('La sesión no pudo verificarse nuevamente.');}
+  }
   else{setMessage('Segundo factor o permiso de soporte no confirmado. No se habilitó la cuenta.');
    if(result.code==='SUPPORT_ROLE_REQUIRED')setFactorId('');}
   setBusy(false);
  }
  async function logout(){
   fence.current.invalidate(); // defeat stale refresh, MFA and login promises
+  actionKeys.current.clear();claimKeys.current.clear();
+  setActionMessage('');setSupportUserId('');
   setBusy(false);
   setTickets([]);setLoadError('');setFactorId('');setOtp('');
   setPhase('locked');setPassword('');setEmail('');setMessage('Sesión de soporte cerrada.');
@@ -96,12 +124,85 @@ function App(){
   const result=await readSupportCases(client);
   if(!fence.current.isCurrent(version))return;
   if(result.ok){
+   const session=await verifySupportAccess(client);
+   if(!fence.current.isCurrent(version))return;
+   if(!session){
+    setTickets([]);setSupportUserId('');setPhase('locked');
+    setLoadError('Se revocó el acceso a Soporte.');setBusy(false);return;
+   }
+   setSupportUserId(session.userId);
    setTickets(result.cases);setPhase('ready');
   }else{
-   setTickets([]);setPhase(result.code==='NOT_AUTHORIZED'||result.code==='SESSION_CHANGED'?'locked':'ready');
+   setTickets([]);
+   if(result.code==='NOT_AUTHORIZED'||result.code==='SESSION_CHANGED')setSupportUserId('');
+   setPhase(result.code==='NOT_AUTHORIZED'||result.code==='SESSION_CHANGED'?'locked':'ready');
    setLoadError(result.code==='SERVER_NOT_READY'
     ?'La bandeja privada aún no está habilitada en el servidor. No se mostrará información de otras cuentas.'
     :'No se pudo validar la consulta o el permiso. Ningún expediente fue mostrado.');
+  }
+  setBusy(false);
+ }
+ async function requestClaim(c:SupportCase){
+  if(!client||busy||!supportClaimsEnabled||!supportUserId||phase!=='ready')return;
+  if(c.assigned_support_id!==null||c.status!=='OPEN'||
+     (c.priority!=='NORMAL'&&c.priority!=='HIGH'))return;
+  const version=fence.current.begin();
+  const requestKey=claimKeys.current.get(c.ticket_id)??crypto.randomUUID();
+  claimKeys.current.set(c.ticket_id,requestKey);
+  setBusy(true);setActionMessage('');setLoadError('');
+  const claim=await claimSupportCase(client,{
+   ticket_id:c.ticket_id,idempotency_key:requestKey
+  },{approved:supportClaimsEnabled});
+  if(!fence.current.isCurrent(version))return;
+  if(claim.ok){
+   const latest=await readSupportCases(client);
+   if(!fence.current.isCurrent(version))return;
+   if(latest.ok){
+    // The server is authoritative: only show assignment after re-reading.
+    const confirmed=latest.cases.find(t=>t.ticket_id===c.ticket_id);
+    setTickets(latest.cases);setPhase('ready');
+    if(confirmed?.assigned_support_id===supportUserId){
+     claimKeys.current.delete(c.ticket_id);
+     setActionMessage(`Caso ${c.case_code} asignado. Registro de auditoría ${claim.claim_id}.`);
+    }else{
+     setActionMessage('Se recibió un comprobante, pero no se verificó la asignación. Actualizá la bandeja.');
+    }
+   }else{
+    setTickets([]);
+    if(latest.code==='NOT_AUTHORIZED'||latest.code==='SESSION_CHANGED'){
+     setPhase('locked');setSupportUserId('');
+    }
+    setActionMessage('No se pudo verificar la adjudicación en la bandeja. Actualizá antes de actuar.');
+   }
+  }else{
+   if(claim.code==='NOT_AUTHORIZED'||claim.code==='SESSION_CHANGED'){
+    setTickets([]);setSupportUserId('');setPhase('locked');
+   }
+   setActionMessage('El caso no pudo asignarse. Puede haber sido tomado por otro empleado.');
+  }
+  setBusy(false);
+ }
+ async function requestAction(c:SupportCase,action:SupportActionKind){
+  if(!client||busy||!supportActionsEnabled||!supportUserId)return;
+  if(!allowedSupportActions(c,supportUserId,true).some(x=>x.action===action))return;
+  const version=fence.current.begin();
+  const key=`${c.ticket_id}|${c.status}|${action}`;
+  const requestKey=actionKeys.current.get(key)??crypto.randomUUID();
+  actionKeys.current.set(key,requestKey);
+  setBusy(true);setActionMessage('');
+  const result=await enqueueSupportAction(client,{
+   ticket_id:c.ticket_id,expected_status:c.status,action,
+   idempotency_key:requestKey
+  },{approved:supportActionsEnabled});
+  if(!fence.current.isCurrent(version))return;
+  if(result.ok){
+   actionKeys.current.delete(key);
+   setActionMessage(`Solicitud ${result.request_id} EN COLA. Esto no confirma respuesta, cierre ni transferencia.`);
+  }else{
+   if(result.code==='NOT_AUTHORIZED'||result.code==='SESSION_CHANGED'){
+    setTickets([]);setSupportUserId('');setPhase('locked');
+   }
+   setActionMessage('No se pudo registrar la solicitud. No se confirmó ninguna acción.');
   }
   setBusy(false);
  }
@@ -172,6 +273,7 @@ function App(){
        </select>
       </div>
       {loadError&&<p className="notice" role="alert">{loadError}</p>}
+      {actionMessage&&<p className="notice" role="status">{actionMessage}</p>}
       {phase==='loading'?<p>Comprobando permisos y consultando casos…</p>:
        visible.length===0?<div className="empty"><strong>Sin casos autorizados visibles</strong>
         <p>Esto no demuestra que no existan tickets en la plataforma. Actualizá para consultar el servidor.</p></div>:
@@ -181,8 +283,21 @@ function App(){
          <span>{labels[c.status]}</span><span>{labels[c.priority]}</span>
          <span>{new Date(c.updated_at).toLocaleString('es-PY')}</span>
         </div>
+        {supportClaimsEnabled&&!!supportUserId&&c.assigned_support_id===null&&
+         c.status==='OPEN'&&(c.priority==='NORMAL'||c.priority==='HIGH')&&
+         <div className="ticket-actions">
+          <button type="button" disabled={busy} onClick={()=>void requestClaim(c)}>
+           Tomar caso
+          </button>
+         </div>}
+        {supportActionsEnabled&&allowedSupportActions(c,supportUserId,true).length>0&&
+         <div className="ticket-actions" aria-label={`Acciones para ${c.case_code}`}>
+          {allowedSupportActions(c,supportUserId,true).map(option=>
+           <button type="button" key={option.action} disabled={busy}
+            onClick={()=>void requestAction(c,option.action)}>{option.label}</button>)}
+         </div>}
        </article>)}</div>}
-      <p className="small">Acciones de respuesta, asignación y cierre aún bloqueadas hasta certificar permisos por operación, auditoría y revocación. Ningún botón efectúa escrituras.</p>
+      <p className="small">Las solicitudes del agente permanecen desactivadas por defecto. Si se habilitan tras certificación, solamente se colocan en una cola auditada: NO envían mensajes, no cierran reclamos ni modifican pagos. Los casos sin asignar solo podrán adjudicarse con autorización del servidor. El botón Tomar caso está desactivado por defecto y no modifica pagos ni documentación.</p>
      </section>
     </>:tab==='tareas'?<section className="panel"><h2>Trabajo cotidiano del agente</h2>
       <div className="tasklist">
