@@ -17,7 +17,11 @@ CREATE OR REPLACE FUNCTION qore_support_private.mobility_stage_g313_enqueue_qa(
 )
 RETURNS uuid
 LANGUAGE plpgsql
-SECURITY INVOKER
+-- EXCEPTIONAL trusted private SECURITY DEFINER: must inspect and lock
+-- Supabase Auth sessions and MFA atomically without granting service_role
+-- broad UPDATE or SELECT on Auth private tables. Private non-exposed schema,
+-- EXECUTE only service_role, exact actor/session/assignment checks below.
+SECURITY DEFINER
 SET search_path = ''
 AS $g313$
 DECLARE
