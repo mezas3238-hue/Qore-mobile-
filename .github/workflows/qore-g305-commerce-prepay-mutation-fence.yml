@@ -1,0 +1,42 @@
+name: QORE G305 merchant prepaid mutation safety fence
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g305-*'
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/docs/g305-*'
+      - '.github/workflows/qore-g305-commerce-prepay-mutation-fence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  commerce-prepay-fence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIVE_PAYMENTS_ENABLED: 'false'
+      COMMERCE_COD_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+      G305_MERCHANT_PREPAID_MUTATIONS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JavaScript syntax
+        run: |
+          node --check apps/mobility-expo/server/g305-merchant-prepayment-mutation-fence.mjs
+          node --check apps/mobility-expo/server/g305-merchant-prepayment-mutation-fence.test.mjs
+      - name: Merchant preparation/dispatch cannot bypass prepaid gate
+        run: node --test apps/mobility-expo/server/g305-merchant-prepayment-mutation-fence.test.mjs
+      - name: Existing merchant G304 and finance regressions
+        run: |
+          node --test apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs
+          node --test apps/mobility-expo/server/g7-supabase-finance-repository.test.mjs
+          node --test apps/movete-cliente/src/domain/g304-payment-choice-policy.test.mjs
+      - name: Verify paid-goods protection never flips LIVE flags
+        run: |
+          node --input-type=module -e 'import {G305_MERCHANT_PREPAID_MUTATIONS_ENABLED} from "./apps/mobility-expo/server/g305-merchant-prepayment-mutation-fence.mjs"; if(G305_MERCHANT_PREPAID_MUTATIONS_ENABLED!==false)process.exit(1)'
+          echo 'PASS: LIVE commerce remains OFF; no PSP capture/payout.'

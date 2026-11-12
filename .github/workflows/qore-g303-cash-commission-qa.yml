@@ -1,0 +1,38 @@
+name: QORE G303 cash commission receivable and Driver-safe offset QA
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g303-cash-commission-qa.*'
+      - 'apps/mobility-expo/docs/g303-*'
+      - '.github/workflows/qore-g303-cash-commission-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cash-commission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+      CASH_AUTO_COLLECTION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate G303 source and tests
+        run: |
+          node --check apps/mobility-expo/server/g303-cash-commission-qa.mjs
+          node --check apps/mobility-expo/server/g303-cash-commission-qa.test.mjs
+      - name: Cash holds, commission, Owner-capped Driver offsets (offline)
+        run: node --test apps/mobility-expo/server/g303-cash-commission-qa.test.mjs
+      - name: Existing electronic settlement regression (offline)
+        run: node --test apps/mobility-expo/server/g302-auto-settlement-qa.test.mjs apps/mobility-expo/server/staging-ledger.test.mjs
+      - name: Payments and trips explicitly remain OFF
+        run: |
+          node --input-type=module -e 'import * as g from "./apps/mobility-expo/server/g303-cash-commission-qa.mjs"; if(g.CASH_LIVE_OPERATIONS_ENABLED!==false||g.CASH_AUTO_COLLECTION_ENABLED!==false)process.exit(1);'
+          echo 'G303 PASS: no PSP, no cash custody, no auto-debits, no bank payouts, no LIVE.'

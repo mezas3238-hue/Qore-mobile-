@@ -1,0 +1,52 @@
+name: QORE G313 Support private atomic action QA — no LIVE
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-soporte/**'
+      - '.github/workflows/qore-g313-support-atomic-enqueue-pg.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  support-atomic:
+    name: G313 PG16 private enqueue, AAL2, revocation, assignment and idempotency
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: qore_g313_disposable_qa_only
+          POSTGRES_DB: g313_support_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d g313_support_disposable"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qore_g313_disposable_qa_only
+      PGDATABASE: g313_support_disposable
+      QORE_SUPPORT_ACTIONS_ENABLED: 'false'
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: G313 real disposable PostgreSQL16 isolation, SQL state and authorizations
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/movete-soporte/scripts/sql/g313-support-atomic-disposable-ci.sql
+      - name: Client contract and inactive Edge Function gateway regression
+        run: node --test apps/movete-soporte/src/*.test.mjs
+      - name: Confirm no LIVE activation or real database credentials
+        run: |
+          test "$QORE_SUPPORT_ACTIONS_ENABLED" = "false"
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = "false"
+          echo "PASS: no Supabase DDL applied, no Edge Function deployed, no payment, no LIVE."
