@@ -161,7 +161,7 @@ export function ClientRuntimeProvider({children,experience}:{
   </PassengerRideIntentContext.Provider>
  </ExperienceContext.Provider>;
 }
-export function useClientView(){
+export function useClientView({polling=true}:{polling?:boolean}={}){
  const client=useContext(ExperienceContext);
  if(!client)throw new Error('La vista requiere ClientRuntimeProvider');
  const [view,setView]=useState<ClientSnapshot>(()=>client.snapshot());
@@ -170,8 +170,10 @@ export function useClientView(){
   // Evita que un precio vencido o GPS viejo queden visibles sin eventos.
   // Solo refresca la vista enfocada; nunca consulta red por este timer.
   setView(client.snapshot());
+  // Static origin/destination screens need no periodic full-snapshot rerender.
+  if(!polling)return;
   const interval=setInterval(()=>setView(client.snapshot()),5000);
   return ()=>clearInterval(interval);
- },[client]));
+ },[client,polling]));
  return {client,view};
 }
