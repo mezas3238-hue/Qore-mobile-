@@ -1,5 +1,5 @@
 /** Explicit AUTO/MOTO passenger choice, without mixing cargo/merchant modes. */
-import React,{useCallback,useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {router} from 'expo-router';
 import {AppState,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
@@ -11,6 +11,8 @@ import {getPassengerCurrentPickup,searchPassengerDestination}
 import type {PassengerPlace} from '../src/native/client-location';
 import {isCurrentPassengerLocationResult}
  from '../src/domain/client-geolocation.mjs';
+import {createClientLocationWorkBudget}
+ from '../src/domain/client-location-work-budget.mjs';
 import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.mjs';
 
 export default function ChoosePassengerVehicle(){
@@ -32,71 +34,97 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const [destinationNotice,setDestinationNotice]=useState('Escribí el lugar o calle y elegí una sugerencia.');
  const [suggestions,setSuggestions]=useState<readonly PassengerPlace[]>([]);
  const [gpsBusy,setGpsBusy]=useState(false);
+ const [searchBusy,setSearchBusy]=useState(false);
  const [feedback,setFeedback]=useState('');
  const mounted=useRef(true);
  const active=useRef(AppState.currentState!=='background'&&AppState.currentState!=='inactive');
  const gpsEpoch=useRef(0),searchEpoch=useRef(0);
+ // One native operation at a time, with an explicit cooldown and no loop.
+ const locationBudget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
   requestEpoch:epoch,currentEpoch:gpsEpoch.current,
   privateRevision,activeRevision:privateRevision,appActive:active.current
  })&&mounted.current;
- const refreshPickup=useCallback(async()=>{
-  const epoch=++gpsEpoch.current;
+ const refreshPickup=useCallback(async(manual=false)=>{
   if(!active.current)return;
-  setGpsBusy(true);setPickupNotice('Localizando tu origen con GPS…');
-  const result=await getPassengerCurrentPickup();
-  if(!isValid(epoch))return;
-  setGpsBusy(false);
-  if(!result.ok){
-   setPickup(null);setPickupAccuracy(null);
-   setPickupNotice(result.code==='LOCATION_DENIED'
-    ?'Permiso GPS denegado. Activá Ubicación precisa para elegir el punto de partida.'
-    :result.code==='GPS_NOT_PRECISE'||result.code==='UNKNOWN_ACCURACY'
-    ?'La precisión GPS es insuficiente. Acercate a una ventana y volvé a intentar.'
-    :'No se pudo determinar una ubicación precisa. Reintentá o revisá los permisos.');
+  const permit=locationBudget.beginGps({manual});
+  if(!permit.ok){
+   if(manual&&mounted.current)
+    setPickupNotice(permit.code==='GPS_COOLDOWN'
+     ?'El GPS ya fue consultado. Reintentá más tarde para evitar sobrecargar el celular.'
+     :'Una consulta de ubicación ya está en curso.');
    return;
   }
-  setPickup(result.place);setOrigin(result.place.label);
-  setPickupAccuracy(result.accuracyMeters);
-  setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
- },[privateRevision]);
+  const epoch=++gpsEpoch.current;
+  setGpsBusy(true);setPickupNotice('Consultando GPS una sola vez…');
+  try{
+   const result=await getPassengerCurrentPickup();
+   if(!isValid(epoch))return;
+   if(!result.ok){
+    setPickup(null);setPickupAccuracy(null);
+    setPickupNotice(result.code==='LOCATION_DENIED'
+     ?'No hay permiso GPS. Podés activarlo desde los ajustes del teléfono.'
+     :result.code==='GPS_NOT_PRECISE'||result.code==='UNKNOWN_ACCURACY'
+     ?'La precisión es insuficiente. Movete a un lugar con mejor señal y reintentá.'
+     :'GPS no disponible. No se repetirá automáticamente. Podés reintentar.');
+    return;
+   }
+   setPickup(result.place);setOrigin(result.place.label);
+   setPickupAccuracy(result.accuracyMeters);
+   setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
+  }finally{
+   locationBudget.end('gps');
+   if(mounted.current)setGpsBusy(false);
+  }
+ },[privateRevision,locationBudget]);
  useEffect(()=>{
-  mounted.current=true;active.current=AppState.currentState!=='background'&&AppState.currentState!=='inactive';
-  if(active.current)void refreshPickup();
+  mounted.current=true;
+  active.current=AppState.currentState!=='background';
+  // One automatic GPS acquisition per screen entry. Permission dialogues
+  // can toggle "inactive" then "active": never restart GPS for that event.
+  if(active.current)void refreshPickup(false);
   const sub=AppState.addEventListener('change',status=>{
-   if(status!=='active'){
+   if(status==='background'){
     active.current=false;gpsEpoch.current++;searchEpoch.current++;
     setSuggestions([]);
-  }else{
+    setDestinationNotice('Escribí la dirección y tocá Buscar cuando vuelvas a la app.');
+   }else if(status==='active'){
     active.current=true;
-    // GPS can be stale on return; fresh permission/coordinate check required.
-    void refreshPickup();
-  }
+    // NO automatic re-entry into GPS or geocoder after a permission modal.
+   }
   });
   return ()=>{mounted.current=false;active.current=false;
    gpsEpoch.current++;searchEpoch.current++;sub.remove();};
  },[refreshPickup]);
- useEffect(()=>{
+ async function findDestination(){
+  if(!mounted.current||!active.current||destination.trim().length<4)return;
+  const lease=locationBudget.beginDestination(destination);
+  if(!lease.ok){
+   setDestinationNotice(lease.code==='SEARCH_COOLDOWN'
+    ?'Esperá unos segundos antes de buscar nuevamente.'
+    :'Hay otra consulta de ubicación en curso. Intentá al terminar.');
+   return;
+  }
   const epoch=++searchEpoch.current;
-  setSuggestions([]);
-  if(destination.trim().length<4||dropoff!==null)return;
-  const id=setTimeout(()=>{
+  const query=destination.trim();
+  setSearchBusy(true);setSuggestions([]);
+  setDestinationNotice('Buscando direcciones. El teléfono realizará una sola consulta…');
+  try{
+   const result=await searchPassengerDestination(query);
    if(!mounted.current||!active.current||epoch!==searchEpoch.current)return;
-   setDestinationNotice('Buscando direcciones cercanas al texto ingresado…');
-   void searchPassengerDestination(destination).then(result=>{
-    if(!mounted.current||!active.current||epoch!==searchEpoch.current)return;
-    if(!result.ok){
-     setDestinationNotice(result.code==='LOCATION_DENIED'
-      ?'El buscador del dispositivo necesita permiso de ubicación.'
-      :'No se encontró una dirección concreta en Paraguay. Escribí calle, barrio y ciudad y volvé a intentar.');
-     return;
-    }
-    setSuggestions(result.places);
-    setDestinationNotice('Elegí una dirección de la lista para fijar el destino.');
-   });
-  },850);
-  return ()=>clearTimeout(id);
- },[destination,dropoff]);
+   if(!result.ok){
+    setDestinationNotice(result.code==='LOCATION_DENIED'
+     ?'El buscador de Android requiere permiso de ubicación.'
+     :'No se encontró una dirección verificable. Agregá calle y ciudad y volvé a buscar.');
+    return;
+   }
+   setSuggestions(result.places);
+   setDestinationNotice('Elegí el destino de esta lista.');
+  }finally{
+   locationBudget.end('destination');
+   if(mounted.current)setSearchBusy(false);
+  }
+ }
  const choice=selectPassengerVehicle(vehicle);
  const routeReview=reviewLocalRouteDraft({origin,destination,stops:[],revision:0});
  const pointsSelected=pickup!==null&&dropoff!==null&&
@@ -137,7 +165,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
    <TextInput style={styles.field} value={origin} maxLength={120}
     accessibilityLabel="Origen de transporte" placeholder="Buscando ubicación GPS…"
-    onChangeText={value=>{setOrigin(value);setPickup(null);
+    onChangeText={value=>{gpsEpoch.current++;setOrigin(value);setPickup(null);
      setPickupAccuracy(null);setFeedback('');
      setPickupNotice('Origen editado sin coordenadas verificadas. Usá el GPS.');}}/>
    <Text accessibilityLiveRegion="polite" style={styles.small}>{pickupNotice}</Text>
@@ -145,12 +173,16 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     Precisión comunicada por Android: ±{Math.round(pickupAccuracy)} m. Confirmá el punto antes de viajar.
    </Text>}
    <Action secondary label={gpsBusy?'Consultando GPS…':'Actualizar ubicación GPS'}
-    disabled={gpsBusy} onPress={()=>{void refreshPickup();}}/>
+    disabled={gpsBusy||searchBusy} onPress={()=>{void refreshPickup(true);}}/>
    <Text style={styles.text}>¿A dónde vas?</Text>
    <TextInput style={styles.field} value={destination} maxLength={120}
     accessibilityLabel="Destino de transporte" placeholder="Calle, comercio, barrio y ciudad"
-    onChangeText={value=>{setDestination(value);setDropoff(null);
-     setSuggestions([]);setFeedback('');}}/>
+    onChangeText={value=>{searchEpoch.current++;setDestination(value);setDropoff(null);
+     setSuggestions([]);setFeedback('');
+     setDestinationNotice('Escribí la calle y ciudad. Tocá Buscar para ver sugerencias.');}}/>
+   <Action secondary label={searchBusy?'Buscando dirección…':'Buscar destinos'}
+    disabled={gpsBusy||searchBusy||destination.trim().length<4||dropoff!==null}
+    onPress={()=>{void findDestination();}}/>
    <Text accessibilityLiveRegion="polite" style={styles.small}>{destinationNotice}</Text>
    {suggestions.map((option,i)=><Pressable key={String(i)+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
@@ -168,7 +200,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
      setSuggestions([]);setFeedback('');
      setPickupNotice('Punto intercambiado. Verificá la ubicación antes de viajar.');
      setDestinationNotice('Punto intercambiado. Confirmá el destino.');}}/>
-   <Text style={styles.small}>El origen procede del GPS con tu permiso. El destino se busca y lo seleccionás vos: el teléfono no puede conocer de antemano adónde querés ir. Se conserva solo en memoria; las coordenadas aún requieren un contrato de ruta validado por el servidor para realizar reservas reales.</Text>
+   <Text style={styles.small}>El origen procede del GPS con tu permiso. Para evitar bloqueos del teléfono, el destino se busca solo al tocar Buscar; luego elegís una dirección de la lista. Se conserva solo en memoria; las coordenadas aún requieren un contrato de ruta validado por el servidor para realizar reservas reales.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>3 · Continuá con tu viaje</Text>
