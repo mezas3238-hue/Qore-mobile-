@@ -58,7 +58,12 @@ test('G319 Android Client GPS must never loop on permission foreground or search
  const runtime=readFileSync(new URL('../ClientRuntime.tsx',import.meta.url),'utf8');
  const native=readFileSync(new URL('../native/client-location.native.ts',import.meta.url),'utf8');
  assert.match(screen,/locationBudget\.beginGps\(\{manual\}\)/);
- assert.match(screen,/locationBudget\.beginDestination\(destination\)/);
+ // Origin and destination now share one serialized geocoder budget.
+ // Keep the no-per-keystroke rule without requiring the obsolete variable name.
+ assert.match(screen,/const query=\(kind==='pickup'\?origin:destination\)\.trim\(\)/);
+ assert.match(screen,/locationBudget\.beginDestination\(query\)/);
+ assert.match(screen,/onPress=\{\(\)=>\{void findPlace\('pickup'\);\}\}/);
+ assert.match(screen,/onPress=\{\(\)=>\{void findPlace\('destination'\);\}\}/);
  assert.match(screen,/useClientView\(\{polling:false\}\)/);
  assert.match(screen,/onPress=\{\(\)=>\{void findDestination\(\);\}\}/);
  assert.match(screen,/NO automatic re-entry into GPS or geocoder/);
