@@ -1,0 +1,71 @@
+name: QORE G320 Support atomic ticket claim — private QA OFF
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-soporte/**'
+      - '.github/workflows/qore-g320-support-claim-atomic-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g320-claim:
+    name: G320 PG16 atomic two-agent claim + HTTP + Edge + web build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: qore_g320_disposable_ci_only
+          POSTGRES_DB: g320_support_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d g320_support_qa"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qore_g320_disposable_ci_only
+      PGDATABASE: g320_support_qa
+      QORE_SUPPORT_ACTIONS_ENABLED: 'false'
+      QORE_SUPPORT_CLAIMS_ENABLED: 'false'
+      VITE_QORE_SUPPORT_CLAIMS_APPROVED: 'false'
+      VITE_QORE_SUPPORT_ACTIONS_APPROVED: 'false'
+      VITE_QORE_SUPPORT_STAGING_APPROVED: 'false'
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: G320 PG16 restricted atomic claims and audit
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/movete-soporte/scripts/sql/g320-support-claim-disposable-ci.sql
+      - name: G320 two independent agents contend on same ticket
+        run: bash apps/movete-soporte/scripts/sql/g320-support-concurrent-claim-ci.sh
+      - name: G320 and predecessor support HTTP / Auth / UI tests
+        run: node --test apps/movete-soporte/src/*.test.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: G320 Edge claim candidate typecheck (no deploy)
+        run: deno check --no-config apps/movete-soporte/edge-functions/qore-support-claim/index.ts
+      - name: Standalone Support web compile (defaults OFF)
+        working-directory: apps/movete-soporte
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+      - name: Prove the frontend and backend claim switches are OFF
+        run: |
+          test "$QORE_SUPPORT_CLAIMS_ENABLED" = 'false'
+          test "$VITE_QORE_SUPPORT_CLAIMS_APPROVED" = 'false'
+          test "$VITE_QORE_SUPPORT_STAGING_APPROVED" = 'false'
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = 'false'
+          echo 'G320 CI PASS: synthetic tickets only, no Edge deployment, no live identity, no money.'
