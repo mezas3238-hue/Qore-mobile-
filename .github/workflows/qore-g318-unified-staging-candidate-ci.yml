@@ -1,0 +1,98 @@
+name: QORE G318 unified STAGING candidate — test without deploy
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g318-unified-staging-candidate-ci.yml'
+      - 'apps/mobility-expo/server/**'
+      - 'apps/movete-soporte/**'
+      - 'apps/movete-admin/**'
+      - 'apps/movete-cliente/**'
+      - 'apps/movete-driver/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qore-g318-no-deploy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend-gates:
+    name: Backend merchant prepaid gate + G4 HTTP (no writes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/mobility-expo
+    env:
+      CI: '1'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      QORE_G305_COMMERCE_PREPAYMENT_LIVE_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install without lifecycle scripts
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Require all relevant prepaid and G4 tests to PASS
+        run: |
+          node --test server/g305-merchant-prepayment-mutation-fence.test.mjs \
+            server/g306-merchant-prepay-provider-verifier.test.mjs \
+            server/g302-auto-settlement-qa.test.mjs \
+            server/g303-cash-commission-qa.test.mjs \
+            server/g4-staging-runtime.test.mjs
+  support-privilege:
+    name: Support portal and least-privilege regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: apps/movete-soporte
+    env:
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: npm run check
+      - run: npm run build
+  admin-privilege:
+    name: Admin AAL2 role constraints
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: apps/movete-admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: npm run check
+      - run: npm run build
+  mobile-regressions:
+    name: Combined Cliente GPS and Driver scan (no LIVE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [movete-cliente, movete-driver]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    env:
+      CI: '1'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED: 'false'
+      EXPO_PUBLIC_SUPABASE_URL: ''
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: npm run check
