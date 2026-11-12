@@ -28,3 +28,11 @@ Supabase STAGING fue verificado `ACTIVE_HEALTHY` pero tiene **0 tablas de Soport
 **Gate crítico para desplegar:** certificación de cuenta Owner AAL2 y staff individual, revisión de funciones `SECURITY DEFINER` en esquemas privados y públicos, sin grants a `authenticated/anon`, matriz de revocación con cuentas reales QA, disponibilidad/retención/auditoría, protección de contraseñas comprometidas, y aprobación del integrador. El PR #138 de integración móvil/comercio es ajeno a este trabajo; no introducir conflictos cruzados.
 
 La adjudicación no constituye responder, resolver, cancelar una carrera, aprobar un documento, disparar un SOS ni reembolsar dinero. **NO LIVE, NO MERGE, NO DEPLOY, NO PSP.**
+
+## Evidencia de la primera ejecución G320 y corrección
+
+La ejecución inicial [#43322315839](https://github.com/mezas3238-hue/Qore-mobile-/actions/runs/43322315839) confirmó **PASS** para PostgreSQL16 (RLS, Auth, claim idempotente), dos sesiones PostgreSQL competidoras, pruebas de Node y `deno check`. La tarea de compilación web no pudo comenzar porque el workflow G320 usaba `npm ci` sin `package-lock.json`. Se corrigió para reutilizar el procedimiento de instalación del workflow G301 (`npm install --ignore-scripts --package-lock=false`). El resultado global no se declarará PASS hasta completar la nueva corrida de CI.
+
+### Límite residual de concurrencia
+
+G320 serializa adjudicaciones de **tickets sin asignar** mediante `SELECT ... FOR UPDATE`. La prueba de dos sesiones muestra que no hay doble adjudicación del mismo ticket. Este control **no** implementa todavía reasignación, recuperación tras baja del agente, SLA ni cierre automático; esas acciones requieren una función independiente y auditoría adicional.
