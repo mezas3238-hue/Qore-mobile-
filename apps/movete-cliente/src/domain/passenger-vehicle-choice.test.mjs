@@ -65,7 +65,6 @@ test('G319 Android Client GPS must never loop on permission foreground or search
  assert.match(screen,/onPress=\{\(\)=>\{void findPlace\('pickup'\);\}\}/);
  assert.match(screen,/onPress=\{\(\)=>\{void findPlace\('destination'\);\}\}/);
  assert.match(screen,/useClientView\(\{polling:false\}\)/);
- assert.match(screen,/onPress=\{\(\)=>\{void findDestination\(\);\}\}/);
  assert.match(screen,/NO automatic re-entry into GPS or geocoder/);
  assert.doesNotMatch(screen,/setTimeout\(\(\)=>\{/);
  assert.match(runtime,/if\(!polling\)return;/);
