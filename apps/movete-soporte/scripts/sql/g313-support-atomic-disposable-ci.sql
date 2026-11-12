@@ -5,12 +5,16 @@
 
 -- Two columns exist in Supabase PG17 Auth but were not needed in G312 stub.
 ALTER TABLE auth.users ADD COLUMN deleted_at timestamptz, ADD COLUMN banned_until timestamptz;
--- Supabase service_role is a trusted-server-only role, NOT a browser role.
--- Fixture grants explicitly because a bare PostgreSQL service_role has none.
-GRANT SELECT ON auth.users,auth.sessions,auth.mfa_factors TO service_role;
-GRANT SELECT ON public.mobility_stage_support_agents,
- public.mobility_stage_backoffice_roles,public.user_roles,
- public.mobility_stage_support_cases TO service_role;
+-- Do NOT grant service_role direct access to Supabase Auth private tables.
+-- The trusted non-exposed private function owns privilege for checking and
+-- locking AAL2/session rows without revealing the underlying Auth records.
+DO $auth_least_privilege$ BEGIN
+ IF has_table_privilege('service_role','auth.users','SELECT')
+ OR has_table_privilege('service_role','auth.sessions','SELECT')
+ OR has_table_privilege('service_role','auth.mfa_factors','SELECT')
+ OR has_table_privilege('service_role','auth.sessions','UPDATE')
+ THEN RAISE EXCEPTION 'G313 unexpected direct Auth privileges'; END IF;
+END $auth_least_privilege$;
 
 \ir ../../sql/g313-support-atomic-enqueue-draft.sql
 
