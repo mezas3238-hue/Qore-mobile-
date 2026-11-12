@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import {inspectPassengerGpsFix,makePassengerAddressLabel,
  inspectDestinationCandidates,scopePassengerDestinationQuery,
  makePassengerDestinationCandidate} from '../domain/client-geolocation.mjs';
+import {isParaguayMapCoordinate,sameMapCoordinate} from '../domain/client-map-point.mjs';
 export type PassengerPlace=Readonly<{label:string;latitude:number;longitude:number}>;
 const timeout=<T,>(task:Promise<T>,ms:number):Promise<T>=>Promise.race([
  task,new Promise<T>((_,reject)=>setTimeout(()=>reject(Error('LOCATION_TIMEOUT')),ms))
@@ -63,4 +64,21 @@ export async function searchPassengerDestination(query:string):Promise<{
   const places=inspectDestinationCandidates(confirmed);
   return places.length?{ok:true,places}:{ok:false,code:'ADDRESS_NOT_FOUND'};
  }catch{return {ok:false,code:'GEOCODER_UNAVAILABLE'};}
+}
+
+/** Resolve a manually moved pin only on explicit confirmation; never per drag frame. */
+export async function confirmPassengerMapPoint(
+ previous:PassengerPlace,selected:Readonly<{latitude:number;longitude:number}>
+):Promise<{ok:true;place:PassengerPlace}|{ok:false;code:string}>{
+ if(!isParaguayMapCoordinate(selected)||!isParaguayMapCoordinate(previous))
+  return {ok:false,code:'MAP_POINT_OUT_OF_SCOPE'};
+ if(sameMapCoordinate(previous,selected))return {ok:true,place:previous};
+ try{
+  const permission=await timeout(Location.getForegroundPermissionsAsync(),5000);
+  if(permission.granted!==true)return {ok:false,code:'LOCATION_DENIED'};
+  const found=await timeout(Location.reverseGeocodeAsync(selected),8000);
+  // Reverse geocoding is only a locale/label cross-check, not proof of service area.
+  const place=makePassengerDestinationCandidate(selected,found[0]);
+  return place?{ok:true,place}:{ok:false,code:'MAP_ADDRESS_NOT_VERIFIED'};
+ }catch{return {ok:false,code:'MAP_GEOCODER_UNAVAILABLE'};}
 }
