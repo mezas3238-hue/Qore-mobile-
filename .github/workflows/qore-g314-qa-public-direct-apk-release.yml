@@ -1,0 +1,76 @@
+name: QORE G314 Android QA direct-download release (no deployment)
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '.github/workflows/qore-g314-qa-public-direct-apk-release.yml'
+permissions:
+  contents: write
+concurrency:
+  group: qore-g314-qa-public-direct-apk
+  cancel-in-progress: false
+jobs:
+  publish-verified-qa:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'distribution/qore-g314-arm64-qa-release-20261112'
+    name: Publish immutable Android test APK as GitHub prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: qa-g313-driver-arm64-2026-11-12
+      QA_SHA: fdccbd7361467f573ff96ffd2cbc6dc76cae7bdb
+      APK_SHA256: 62471be99ac88906ee1db3640980802082272e4de2a2a5a9ed22c85630e1698e
+    steps:
+      - name: Fetch exact green GitHub Actions artifact for G313
+        uses: actions/download-artifact@v4
+        with:
+          name: QORE-G313-Driver-ARM64-QA-small
+          run-id: 42427030665
+          github-token: ${{ github.token }}
+          path: artifact
+      - name: Require original APK hash, ARM64-only ABI and no oversized binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=artifact/app-release.apk
+          test -s "$apk"
+          echo "$APK_SHA256  $apk" | sha256sum --check --status
+          test "$(stat -c%s "$apk")" -lt 104857600
+          unzip -Z1 "$apk" | grep -q '^lib/arm64-v8a/'
+          if unzip -Z1 "$apk" | grep -E '^lib/(armeabi-v7a|x86|x86_64)/'; then
+            echo 'Reject: unexpected native ABIs'
+            exit 1
+          fi
+          mv "$apk" artifact/Movete-Facil-Driver-G313-ARM64-QA.apk
+          sha256sum artifact/Movete-Facil-Driver-G313-ARM64-QA.apk
+      - name: Create stable GitHub public prerelease (QA only, no LIVE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$TAG"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Verified QA release tag already exists. Refusing overwrite.'
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/qa-release-notes.md" <<'NOTES'
+          **MOVETE FÁCIL DRIVER — SOLO QA INTERNO / SIN OPERACIONES REALES.**
+
+          - Instalador Android ARM64 descargable directamente, sin ZIP intermediario.
+          - Compilado desde commit G313 fdccbd7361467f573ff96ffd2cbc6dc76cae7bdb, con prueba Gradle exitosa.
+          - SHA256 APK: 62471be99ac88906ee1db3640980802082272e4de2a2a5a9ed22c85630e1698e
+          - Contiene el laboratorio de cámara/escáner G310; no aprueba documentos, viajes, cobros ni vehículos.
+          - La autocaptura debe repetirse en hardware Android antes de certificarla.
+          - No apto para Google Play ni operaciones comerciales. No subir datos personales.
+          - Se distribuye como prerelease de QA para facilitar la descarga en Android.
+          NOTES
+          gh release create "$tag" artifact/Movete-Facil-Driver-G313-ARM64-QA.apk \
+            --repo "$GITHUB_REPOSITORY" --target "$QA_SHA" \
+            --title 'QORE Driver G313 ARM64 — SOLO QA' --prerelease \
+            --notes-file "$RUNNER_TEMP/qa-release-notes.md" --verify-tag=false
+      - name: Verify public download metadata exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isPrerelease,assets \
+            --jq '.assets[] | select(.name=="Movete-Facil-Driver-G313-ARM64-QA.apk") | .url' | grep -q 'https://'
+          echo 'Test APK publicly listed, production disabled.'
