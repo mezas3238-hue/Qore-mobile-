@@ -1,0 +1,117 @@
+name: QORE G319 Cliente Android stability QA direct APK
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-cliente/**'
+      - '.github/workflows/qore-g319-client-android-stability-qa-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: qore-g319-stable-client-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  g319-client-stability:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: G319 Cliente GPS one-shot + low-load Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: '1'
+      GH_TOKEN: ${{ github.token }}
+      QORE_QA_BUILD: 'false'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_F1_OWNER_APPROVED: 'false'
+      EXPO_PUBLIC_MOTO_OWNER_APPROVED: 'false'
+      EXPO_PUBLIC_F1_STAGING_ORIGIN: ''
+      EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN: ''
+      EXPO_PUBLIC_SUPABASE_URL: ''
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+      RELEASE_TAG: qa-g319-cliente-gps-estable-2026-11-12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Assert QA-only, no LIVE booking or credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED" = false
+          test "$EXPO_PUBLIC_F1_OWNER_APPROVED" = false
+          test "$EXPO_PUBLIC_MOTO_OWNER_APPROVED" = false
+          test -z "$EXPO_PUBLIC_F1_STAGING_ORIGIN"
+          test -z "$EXPO_PUBLIC_SUPABASE_URL"
+          test -z "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          test -d "$ANDROID_HOME"
+      - name: Install and test G319 GPS budget and all Client regressions
+        working-directory: apps/movete-cliente
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm run check
+      - name: Make unique QA identity without overwriting prior apps
+        working-directory: apps/movete-cliente
+        run: |
+          node -e 'const fs=require("fs");const path="app.json";const j=JSON.parse(fs.readFileSync(path,"utf8"));j.expo.name="Movete Cliente G319 QA";j.expo.android.package="com.movetefacil.cliente.g319qa";fs.writeFileSync(path,JSON.stringify(j,null,2));'
+          npx expo config --json > "$RUNNER_TEMP/client-config.json"
+          node -e 'const j=require(process.argv[1]); if(j.android?.package!=="com.movetefacil.cliente.g319qa"||j.extra?.liveOperationsEnabled!==false)throw Error("Unsafe G319 config");' "$RUNNER_TEMP/client-config.json"
+      - name: Build Android ARM64 native (no deployment)
+        working-directory: apps/movete-cliente
+        run: |
+          npx expo prebuild --platform android --no-install --clean
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+      - name: Verify APK, architecture and immutable hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="apps/movete-cliente/android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          test "$(stat -c%s "$apk")" -lt 104857600
+          unzip -Z1 "$apk" | grep -q '^lib/arm64-v8a/'
+          if unzip -Z1 "$apk" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'; then
+            echo 'unexpected device ABI'; exit 1
+          fi
+          sha256sum "$apk" | tee "$RUNNER_TEMP/g319-sha256.txt"
+          cp "$apk" "$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk"
+      - name: Publish direct GitHub QA prerelease; never overwrite an existing APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release tag already exists; refusing overwrite'
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/release-note.md" <<'NOTES'
+          MOVETE FÁCIL CLIENTE G319 — QA SOLO, SIN VIAJES/COBROS REALES
+
+          Corrección de estabilidad Android: GPS de origen una sola vez al abrir,
+          sin relanzar por cambios de primer plano/permisos; búsqueda de destino
+          por botón para impedir consultas geográficas continuas mientras se escribe;
+          una sola consulta a la vez y límites de frecuencia, sin refresco periódico
+          completo de esta pantalla.
+
+          Paquete independiente com.movetefacil.cliente.g319qa.
+          No reemplaza otras aplicaciones instaladas. Solo ARM64.
+          No contiene credenciales de backend y operaciones LIVE desactivadas.
+          Los usuarios deben probar en un Android físico y no declarar completada
+          la aplicación sin aceptación real de Cliente.
+          NOTES
+          gh release create "$RELEASE_TAG" "$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --title "Movete Fácil Cliente G319 — estabilidad Android QA" \
+            --prerelease --notes-file "$RUNNER_TEMP/release-note.md"
+      - name: Ensure stable direct-download asset exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name=="Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk") | .url' | grep -q 'https://'
