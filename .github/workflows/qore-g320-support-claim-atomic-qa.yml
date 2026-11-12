@@ -59,7 +59,7 @@ jobs:
       - name: Standalone Support web compile (defaults OFF)
         working-directory: apps/movete-soporte
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false
           npx tsc --noEmit
           npm run build
       - name: Prove the frontend and backend claim switches are OFF
