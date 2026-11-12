@@ -1,0 +1,120 @@
+name: QORE G315 Client Android direct APK download (QA only)
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - '.github/workflows/qore-g315-client-qa-direct-apk-release.yml'
+permissions:
+  contents: write
+concurrency:
+  group: qore-g315-client-qa-release
+  cancel-in-progress: false
+jobs:
+  client-android-qa-release:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'distribution/qore-g315-cliente-gps-qa-download-20261112'
+    name: Verify and publish Client GPS QA APK (no backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: '1'
+      QORE_QA_BUILD: 'true'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_F1_OWNER_APPROVED: 'false'
+      EXPO_PUBLIC_MOTO_OWNER_APPROVED: 'false'
+      EXPO_PUBLIC_F1_STAGING_ORIGIN: ''
+      EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN: ''
+      EXPO_PUBLIC_SUPABASE_URL: ''
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+      GH_TOKEN: ${{ github.token }}
+      TAG: qa-g312-cliente-gps-2026-11-12
+      QA_SHA: 77bfad2735c25a4bcb03f75ed81b448f1b2f6ffd
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify no live/purchase/backend configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$QORE_QA_BUILD" = true
+          test "$EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED" = false
+          test "$EXPO_PUBLIC_F1_OWNER_APPROVED" = false
+          test "$EXPO_PUBLIC_MOTO_OWNER_APPROVED" = false
+          test -z "$EXPO_PUBLIC_SUPABASE_URL"
+          test -z "$EXPO_PUBLIC_F1_STAGING_ORIGIN"
+          test -d "$ANDROID_HOME"
+      - name: Install and test Cliente GPS domain
+        working-directory: apps/movete-cliente
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+          npm run typecheck
+          npm run test
+      - name: Assert isolated Android application package
+        working-directory: apps/movete-cliente
+        shell: bash
+        run: |
+          npx expo config --json > "$RUNNER_TEMP/qore-g315-config.json"
+          node - "$RUNNER_TEMP/qore-g315-config.json" <<'NODE'
+          const fs=require('fs');
+          const config=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(config.android?.package!=='com.movetefacil.cliente.qa'||
+             config.extra?.qaBuild!==true||
+             config.extra?.liveOperationsEnabled!==false)
+            throw Error('G315: QA identity or LIVE boundary mismatch');
+          console.log('Verified isolated app com.movetefacil.cliente.qa');
+          NODE
+      - name: Build arm64-only standalone Cliente QA APK
+        working-directory: apps/movete-cliente
+        run: |
+          npx expo prebuild --platform android --no-install --clean
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+      - name: Verify APK size, ABI and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=apps/movete-cliente/android/app/build/outputs/apk/release/app-release.apk
+          test -s "$apk"
+          test "$(stat -c%s "$apk")" -lt 104857600
+          unzip -Z1 "$apk" | grep -q '^lib/arm64-v8a/'
+          if unzip -Z1 "$apk" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'; then
+            echo 'Unexpected ABI'; exit 1
+          fi
+          sha256sum "$apk"
+          cp "$apk" "$RUNNER_TEMP/Movete-Facil-Cliente-G312-GPS-ARM64-QA.apk"
+      - name: Publish stable public GitHub QA prerelease (not Google Play)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'QA tag exists: never overwrite another artifact'
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/qa-client-notes.md" <<'NOTES'
+          **MOVETE FÁCIL CLIENTE — APK ANDROID QA, NO PRODUCCIÓN**
+          - Versión de prueba para evaluar GPS de origen y selección geográfica del destino.
+          - Branch G312, commit 77bfad2735c25a4bcb03f75ed81b448f1b2f6ffd.
+          - Paquete aislado com.movetefacil.cliente.qa, LIVE OFF y sin backend, pagos, reservas o despachos.
+          - Solo Android ARM64. No habilita viajes ni comprueba cobertura comercial.
+          - El GPS requiere permiso de primer plano y puede tener margen de error.
+          - El GPS no predice la intención del destino: se debe escribir y seleccionar una dirección.
+          - Debe validarse en un teléfono físico antes de su aprobación; no es distribución final de tienda.
+          NOTES
+          gh release create "$TAG" "$RUNNER_TEMP/Movete-Facil-Cliente-G312-GPS-ARM64-QA.apk" \
+            --repo "$GITHUB_REPOSITORY" --target "$QA_SHA" \
+            --title 'QORE Cliente G312 GPS ARM64 — SOLO QA' --prerelease \
+            --notes-file "$RUNNER_TEMP/qa-client-notes.md"
+      - name: Verify release contains APK
+        shell: bash
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name=="Movete-Facil-Cliente-G312-GPS-ARM64-QA.apk") | .url' | grep -q 'https://'
+          echo 'Verified publicly accessible test artifact. No production deployment.'
