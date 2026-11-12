@@ -1,4 +1,4 @@
-name: QORE G299 Driver OCR offline QA APK
+name: QORE G313 Driver ARM64 compact QA APK
 on:
   pull_request:
     paths:
@@ -63,7 +63,20 @@ jobs:
         working-directory: apps/movete-driver/android
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+      - name: Verify ARM64-only packaging under 100 MiB
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=apps/movete-driver/android/app/build/outputs/apk/release/app-release.apk
+          test -s "$apk"
+          test "$(stat -c%s "$apk")" -lt 104857600
+          unzip -Z1 "$apk" | grep -q '^lib/arm64-v8a/'
+          if unzip -Z1 "$apk" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'; then
+            echo "Non-arm64 native binaries unexpectedly included"
+            exit 1
+          fi
+          sha256sum "$apk"
       - name: Verify generated APK and no credential injection
         shell: bash
         run: |
@@ -74,7 +87,7 @@ jobs:
           echo 'APK is offline laboratory only; not commercially signed or certified.'
       - uses: actions/upload-artifact@v4
         with:
-          name: QORE-G299-Driver-OCR-QA-Android-offline
+          name: QORE-G313-Driver-ARM64-QA-small
           path: apps/movete-driver/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 5
           if-no-files-found: error
