@@ -200,7 +200,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
    <TextInput style={styles.field} value={origin} maxLength={120}
     accessibilityLabel="Origen de transporte" placeholder="Buscando ubicación GPS…"
-    onChangeText={value=>{gpsEpoch.current++;setOrigin(value);setPickup(null);
+    onChangeText={value=>{gpsEpoch.current++;searchEpoch.current++;setOrigin(value);setPickup(null);
      setPickupAccuracy(null);setPickupConfirmed(false);setPickupSuggestions([]);setFeedback('');
      setPickupNotice('Origen editado. Buscá la dirección o actualizá el GPS.');}}/>
    <Action secondary label={searchBusy?'Buscando…':'Buscar otro punto de recogida'}
