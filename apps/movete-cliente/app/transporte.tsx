@@ -16,7 +16,7 @@ import {createClientLocationWorkBudget}
 import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.mjs';
 
 export default function ChoosePassengerVehicle(){
- const {view}=useClientView();
+ const {view}=useClientView({polling:false});
  // A JWT/Passenger epoch change must erase unsent address fields from the
  // visible form, not only from its in-memory intent cache.
  return <PrivatePassengerVehicleForm key={view.privateViewRevision}
