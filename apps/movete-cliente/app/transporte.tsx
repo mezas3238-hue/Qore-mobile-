@@ -1,7 +1,7 @@
 /** Explicit AUTO/MOTO passenger choice, without mixing cargo/merchant modes. */
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {router} from 'expo-router';
-import {AppState,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
+import {AppState,Linking,Platform,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewLocalRouteDraft} from '../src/domain/client-route-editor.mjs';
@@ -13,6 +13,8 @@ import {isCurrentPassengerLocationResult}
  from '../src/domain/client-geolocation.mjs';
 import {createClientLocationWorkBudget}
  from '../src/domain/client-location-work-budget.mjs';
+import {createPassengerMapPreviewLinks}
+ from '../src/domain/client-map-preview.mjs';
 import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.mjs';
 
 export default function ChoosePassengerVehicle(){
@@ -33,6 +35,10 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const [pickupNotice,setPickupNotice]=useState('Localizando tu origen con GPS…');
  const [destinationNotice,setDestinationNotice]=useState('Escribí el lugar o calle y elegí una sugerencia.');
  const [suggestions,setSuggestions]=useState<readonly PassengerPlace[]>([]);
+ const [pickupSuggestions,setPickupSuggestions]=useState<readonly PassengerPlace[]>([]);
+ const [pickupConfirmed,setPickupConfirmed]=useState(false);
+ const [destinationConfirmed,setDestinationConfirmed]=useState(false);
+ const [mapNotice,setMapNotice]=useState('');
  const [gpsBusy,setGpsBusy]=useState(false);
  const [searchBusy,setSearchBusy]=useState(false);
  const [feedback,setFeedback]=useState('');
@@ -61,7 +67,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    const result=await getPassengerCurrentPickup();
    if(!isValid(epoch))return;
    if(!result.ok){
-    setPickup(null);setPickupAccuracy(null);
+    setPickup(null);setPickupAccuracy(null);setPickupConfirmed(false);
     setPickupNotice(result.code==='LOCATION_DENIED'
      ?'No hay permiso GPS. Podés activarlo desde los ajustes del teléfono.'
      :result.code==='GPS_NOT_PRECISE'||result.code==='UNKNOWN_ACCURACY'
@@ -70,6 +76,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     return;
    }
    setPickup(result.place);setOrigin(result.place.label);
+   setPickupConfirmed(false);setPickupSuggestions([]);
    setPickupAccuracy(result.accuracyMeters);
    setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
   }finally{
@@ -86,7 +93,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   const sub=AppState.addEventListener('change',status=>{
    if(status==='background'){
     active.current=false;gpsEpoch.current++;searchEpoch.current++;
-    setSuggestions([]);
+    setSuggestions([]);setPickupSuggestions([]);
     setDestinationNotice('Escribí la dirección y tocá Buscar cuando vuelvas a la app.');
    }else if(status==='active'){
     active.current=true;
@@ -96,39 +103,67 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   return ()=>{mounted.current=false;active.current=false;
    gpsEpoch.current++;searchEpoch.current++;sub.remove();};
  },[refreshPickup]);
- async function findDestination(){
-  if(!mounted.current||!active.current||destination.trim().length<4)return;
-  const lease=locationBudget.beginDestination(destination);
+ async function findPlace(kind:'pickup'|'destination'){
+  const query=(kind==='pickup'?origin:destination).trim();
+  if(!mounted.current||!active.current||query.length<4)return;
+  // Same serialized/cooldown native geocoder for both ends of the trip.
+  const lease=locationBudget.beginDestination(query);
   if(!lease.ok){
-   setDestinationNotice(lease.code==='SEARCH_COOLDOWN'
+   const note=lease.code==='SEARCH_COOLDOWN'
     ?'Esperá unos segundos antes de buscar nuevamente.'
-    :'Hay otra consulta de ubicación en curso. Intentá al terminar.');
+    :'Hay otra consulta de ubicación en curso. Intentá al terminar.';
+   if(kind==='pickup')setPickupNotice(note);else setDestinationNotice(note);
    return;
   }
   const epoch=++searchEpoch.current;
-  const query=destination.trim();
-  setSearchBusy(true);setSuggestions([]);
-  setDestinationNotice('Buscando direcciones. El teléfono realizará una sola consulta…');
+  setSearchBusy(true);setSuggestions([]);setPickupSuggestions([]);
+  if(kind==='pickup')setPickupNotice('Buscando puntos de recogida en Paraguay…');
+  else setDestinationNotice('Buscando direcciones en Paraguay…');
   try{
    const result=await searchPassengerDestination(query);
    if(!mounted.current||!active.current||epoch!==searchEpoch.current)return;
    if(!result.ok){
-    setDestinationNotice(result.code==='LOCATION_DENIED'
+    const note=result.code==='LOCATION_DENIED'
      ?'El buscador de Android requiere permiso de ubicación.'
-     :'No se encontró una dirección verificable. Agregá calle y ciudad y volvé a buscar.');
+     :'No se encontró un lugar verificable. Agregá calle y ciudad y volvé a buscar.';
+    if(kind==='pickup')setPickupNotice(note);else setDestinationNotice(note);
     return;
    }
-   setSuggestions(result.places);
-   setDestinationNotice('Elegí el destino de esta lista.');
+   if(kind==='pickup'){
+    setPickupSuggestions(result.places);
+    setPickupNotice('Elegí el punto de recogida y confirmalo en el mapa.');
+   }else{
+    setSuggestions(result.places);
+    setDestinationNotice('Elegí el destino y comprobalo en el mapa.');
+   }
   }finally{
    locationBudget.end('destination');
    if(mounted.current)setSearchBusy(false);
   }
  }
+ async function openPlaceOnMap(place:PassengerPlace|null){
+  if(!place)return;
+  const links=createPassengerMapPreviewLinks(place,Platform.OS);
+  if(!links){setMapNotice('No se pudo preparar la vista del mapa.');return;}
+  // Only an explicit button tap shares this one point with a map provider.
+  // No background tracking, periodic GPS or address in a URL.
+  try{
+   await Linking.openURL(links.primary);
+   if(mounted.current)setMapNotice('Comprobá el marcador en el mapa y regresá para confirmar el punto.');
+  }catch{
+   try{
+    await Linking.openURL(links.fallback);
+    if(mounted.current)setMapNotice('Comprobá el marcador en el navegador y regresá para confirmar el punto.');
+   }catch{
+    if(mounted.current)setMapNotice('No hay aplicación de mapas disponible. Podés verificar la dirección antes de continuar.');
+   }
+  }
+ }
  const choice=selectPassengerVehicle(vehicle);
  const routeReview=reviewLocalRouteDraft({origin,destination,stops:[],revision:0});
  const pointsSelected=pickup!==null&&dropoff!==null&&
-  pickup.label===origin&&dropoff.label===destination;
+  pickup.label===origin&&dropoff.label===destination&&
+  pickupConfirmed&&destinationConfirmed;
  const canContinue=choice.ok&&routeReview.ok&&pointsSelected;
  function continueToRide(){
   // Navegar no cotiza, reserva ni inicia un despacho.
@@ -166,48 +201,75 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <TextInput style={styles.field} value={origin} maxLength={120}
     accessibilityLabel="Origen de transporte" placeholder="Buscando ubicación GPS…"
     onChangeText={value=>{gpsEpoch.current++;setOrigin(value);setPickup(null);
-     setPickupAccuracy(null);setFeedback('');
-     setPickupNotice('Origen editado sin coordenadas verificadas. Usá el GPS.');}}/>
+     setPickupAccuracy(null);setPickupConfirmed(false);setPickupSuggestions([]);setFeedback('');
+     setPickupNotice('Origen editado. Buscá la dirección o actualizá el GPS.');}}/>
+   <Action secondary label={searchBusy?'Buscando…':'Buscar otro punto de recogida'}
+    disabled={gpsBusy||searchBusy||origin.trim().length<4}
+    onPress={()=>{void findPlace('pickup');}}/>
+   {pickupSuggestions.map((option,i)=><Pressable key={'pickup-'+i+'-'+option.latitude+'-'+option.longitude}
+    accessibilityRole="button" onPress={()=>{
+     setOrigin(option.label);setPickup(option);setPickupAccuracy(null);
+     setPickupConfirmed(false);setPickupSuggestions([]);
+     setPickupNotice('Punto de recogida encontrado. Verificalo y confirmalo.');
+    }} style={{padding:12,borderRadius:12,borderWidth:1,borderColor:'#D1E3E0'}}>
+    <Text style={styles.text}>{option.label}</Text>
+    <Text style={styles.small}>Punto geográfico de Paraguay · Tocá para elegir</Text>
+   </Pressable>)}
    <Text accessibilityLiveRegion="polite" style={styles.small}>{pickupNotice}</Text>
    {pickupAccuracy!==null&&<Text style={styles.small}>
     Precisión comunicada por Android: ±{Math.round(pickupAccuracy)} m. Confirmá el punto antes de viajar.
    </Text>}
    <Action secondary label={gpsBusy?'Consultando GPS…':'Actualizar ubicación GPS'}
     disabled={gpsBusy||searchBusy} onPress={()=>{void refreshPickup(true);}}/>
+   {pickup!==null&&pickup.label===origin&&<>
+    <Action secondary label="Ver recogida en el mapa" onPress={()=>{void openPlaceOnMap(pickup);}}/>
+    <Action label={pickupConfirmed?'Recogida confirmada':'Confirmar punto de recogida'}
+     disabled={pickupConfirmed} onPress={()=>{setPickupConfirmed(true);
+      setPickupNotice('Punto de recogida confirmado por el pasajero.');}}/>
+   </>}
    <Text style={styles.text}>¿A dónde vas?</Text>
    <TextInput style={styles.field} value={destination} maxLength={120}
     accessibilityLabel="Destino de transporte" placeholder="Calle, comercio, barrio y ciudad"
     onChangeText={value=>{searchEpoch.current++;setDestination(value);setDropoff(null);
-     setSuggestions([]);setFeedback('');
+     setDestinationConfirmed(false);setSuggestions([]);setFeedback('');
      setDestinationNotice('Escribí la calle y ciudad. Tocá Buscar para ver sugerencias.');}}/>
    <Action secondary label={searchBusy?'Buscando dirección…':'Buscar destinos'}
     disabled={gpsBusy||searchBusy||destination.trim().length<4||dropoff!==null}
-    onPress={()=>{void findDestination();}}/>
+    onPress={()=>{void findPlace('destination');}}/>
    <Text accessibilityLiveRegion="polite" style={styles.small}>{destinationNotice}</Text>
    {suggestions.map((option,i)=><Pressable key={String(i)+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
      setDestination(option.label);setDropoff(option);setSuggestions([]);
-     setDestinationNotice('Destino seleccionado del buscador geográfico. Comprobá la dirección.');
+     setDestinationConfirmed(false);
+     setDestinationNotice('Destino geocodificado. Comprobá el marcador y confirmá el lugar.');
     }} style={{padding:12,borderRadius:12,borderWidth:1,borderColor:'#D1E3E0'}}>
     <Text style={styles.text}>{option.label}</Text>
     <Text style={styles.small}>
      Dirección localizada en Paraguay · Confirmá el punto antes de viajar
     </Text>
    </Pressable>)}
+   {dropoff!==null&&dropoff.label===destination&&<>
+    <Action secondary label="Ver destino en el mapa" onPress={()=>{void openPlaceOnMap(dropoff);}}/>
+    <Action label={destinationConfirmed?'Destino confirmado':'Confirmar destino'}
+     disabled={destinationConfirmed} onPress={()=>{setDestinationConfirmed(true);
+      setDestinationNotice('Destino confirmado por el pasajero.');}}/>
+   </>}
+   {mapNotice!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{mapNotice}</Text>}
    <Action secondary label="Intercambiar origen y destino"
     onPress={()=>{setOrigin(destination);setDestination(origin);
-     setPickup(dropoff);setDropoff(pickup);
-     setSuggestions([]);setFeedback('');
+     setPickup(dropoff);setDropoff(pickup);setPickupAccuracy(null);
+     setPickupConfirmed(false);setDestinationConfirmed(false);
+     setSuggestions([]);setPickupSuggestions([]);setFeedback('');
      setPickupNotice('Punto intercambiado. Verificá la ubicación antes de viajar.');
      setDestinationNotice('Punto intercambiado. Confirmá el destino.');}}/>
-   <Text style={styles.small}>El origen procede del GPS con tu permiso. Para evitar bloqueos del teléfono, el destino se busca solo al tocar Buscar; luego elegís una dirección de la lista. Se conserva solo en memoria; las coordenadas aún requieren un contrato de ruta validado por el servidor para realizar reservas reales.</Text>
+   <Text style={styles.small}>El origen se localiza automáticamente una vez al entrar, con tu permiso. Podés elegir otra recogida o buscar un destino con una consulta geográfica a la vez. Los botones de mapa abren una aplicación externa únicamente si los tocás. Volvé a Movete Fácil y confirmá cada punto. No se guarda tu ruta en el teléfono; el servidor todavía debe validar ruta y tarifa antes de reservar.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>3 · Continuá con tu viaje</Text>
    <Text accessibilityLiveRegion="polite" style={styles.text}>
     {choice.ok?(canContinue
      ?'Origen GPS y destino geográfico seleccionados. Falta verificar cobertura, tarifa y ruta por servidor antes de una reserva.'
-     :'Seleccioná el origen GPS y un destino de las sugerencias; comprobá que sean distintos.'):'Seleccioná AUTO o MOTO para continuar.'}
+     :'Verificá y confirmá la recogida y el destino; comprobá que sean distintos.'):'Seleccioná AUTO o MOTO para continuar.'}
    </Text>
    <Action large label={choice.ok?'Continuar con '+choice.kind:'Primero elegí un vehículo'}
     disabled={!canContinue} onPress={continueToRide}
