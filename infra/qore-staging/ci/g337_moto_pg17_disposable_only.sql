@@ -145,3 +145,57 @@ BEGIN
  THEN RAISE EXCEPTION 'G337 duplicate or missing simulated ledger legs' USING ERRCODE='P3379'; END IF;
  RAISE NOTICE 'G337 DISPOSABLE PG17 ONLY: native MOTO quote/book/status/cancel/idempotency/ledger PASS; E2E EXTERNAL NOT CERTIFIED';
 END $checks$;
+
+-- G338: two distinct quote/booking keys for one Passenger must NEVER produce
+-- simultaneous active MOTO reservations. The second may succeed only after
+-- cancellation of the first; no phantom ledger rows on the rejected attempt.
+DO $one_active$
+DECLARE
+ passenger uuid := '33700000-0000-4337-8337-000000000002';
+ quote1_key uuid := '33700000-0000-4337-8337-000000000011';
+ quote2_key uuid := '33700000-0000-4337-8337-000000000012';
+ booking1_key uuid := '33700000-0000-4337-8337-000000000013';
+ booking2_key uuid := '33700000-0000-4337-8337-000000000014';
+ cancel1_key uuid := '33700000-0000-4337-8337-000000000015';
+ quote1 jsonb;
+ quote2 jsonb;
+ first_trip jsonb;
+ second_trip jsonb;
+BEGIN
+ quote1:=public.mobility_stage_g100_moto_quote_qa(
+  passenger,quote1_key,'VILLA_MORRA','CENTRO','ASUNCION',2100,300);
+ quote2:=public.mobility_stage_g100_moto_quote_qa(
+  passenger,quote2_key,'VILLA_MORRA','CENTRO','ASUNCION',2100,300);
+ first_trip:=public.mobility_stage_g100_moto_book_qa(
+  passenger,(quote1->>'quoteId')::uuid,booking1_key);
+ IF first_trip->>'tripState'<>'searching'
+ THEN RAISE EXCEPTION 'G338 initial active MOTO booking missing' USING ERRCODE='P3380'; END IF;
+ BEGIN
+  PERFORM public.mobility_stage_g100_moto_book_qa(
+   passenger,(quote2->>'quoteId')::uuid,booking2_key);
+  RAISE EXCEPTION 'G338 accepted two concurrent active MOTO bookings' USING ERRCODE='P3380';
+ EXCEPTION WHEN SQLSTATE 'P3375' THEN NULL;
+ END;
+ IF (SELECT pg_catalog.count(*) FROM qore_stage_internal.g337_moto_trips
+     WHERE passenger_id=passenger AND status='searching')<>1
+  OR EXISTS(SELECT 1 FROM qore_stage_internal.g337_moto_trips
+    WHERE booking_key=booking2_key)
+  OR (SELECT pg_catalog.count(*) FROM qore_stage_internal.g337_moto_ledger
+    WHERE trip_id=(first_trip->>'tripId')::uuid)<>3
+ THEN RAISE EXCEPTION 'G338 rejected MOTO booking changed trip or ledger'
+  USING ERRCODE='P3380'; END IF;
+ PERFORM public.mobility_stage_g100_moto_cancel_qa(
+  passenger,booking1_key,cancel1_key);
+ second_trip:=public.mobility_stage_g100_moto_book_qa(
+  passenger,(quote2->>'quoteId')::uuid,booking2_key);
+ IF second_trip->>'tripState'<>'searching' OR
+   second_trip->>'tripId' = first_trip->>'tripId'
+  OR (SELECT pg_catalog.count(*) FROM qore_stage_internal.g337_moto_trips
+     WHERE passenger_id=passenger AND status='searching')<>1
+  OR (SELECT pg_catalog.count(*) FROM qore_stage_internal.g337_moto_ledger l
+     JOIN qore_stage_internal.g337_moto_trips t ON t.id=l.trip_id
+     WHERE t.passenger_id=passenger)<>9
+ THEN RAISE EXCEPTION 'G338 cancellation did not safely release active MOTO slot'
+  USING ERRCODE='P3380'; END IF;
+ RAISE NOTICE 'G338 one-active-MOTO unique fence + rollback-free rejection + retry after cancel PASS (DISPOSABLE ONLY)';
+END $one_active$;
