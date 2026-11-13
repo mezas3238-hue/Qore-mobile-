@@ -68,6 +68,13 @@ CREATE TABLE qore_stage_internal.g337_moto_trips(
  (status='cancelled' AND revision=2 AND cancel_key IS NOT NULL AND cancel_event_id IS NOT NULL))
 );
 CREATE INDEX g337_moto_trips_owner_booking ON qore_stage_internal.g337_moto_trips(passenger_id,booking_key);
+-- G338: a Passenger cannot hold two searching MOTO reservations.
+-- Partial UNIQUE is the durable concurrency authority, including two
+-- independent SQL transactions racing with different booking UUIDs.
+-- Cancellation frees the slot; historical cancelled trips remain immutable.
+CREATE UNIQUE INDEX g338_moto_one_active_passenger
+ ON qore_stage_internal.g337_moto_trips(passenger_id)
+ WHERE status='searching';
 
 -- Simulated QA accruals, NOT PSP money, disbursements or collected funds.
 CREATE TABLE qore_stage_internal.g337_moto_ledger(
