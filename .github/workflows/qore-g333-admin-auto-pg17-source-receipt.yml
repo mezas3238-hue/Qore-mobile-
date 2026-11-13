@@ -62,3 +62,17 @@ jobs:
         run: |
           node --test apps/mobility-expo/server/g75-f1-admin-audit-gateway.test.mjs \
             apps/mobility-expo/server/g262-native-admin-trace-gateway.test.mjs
+      - name: Verify G333 rollback removes only functions, preserves native G262/G73 rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(psql -Atqc "select count(*) from public.mobility_stage_g262_auto_prequotes")" = 1
+          test "$(psql -Atqc "select count(*) from public.mobility_stage_g73_auto_routes")" = 2
+          psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g333_rollback_admin_auto_receipt_pg17_NOT_DEPLOYED.sql
+          psql -Atqc "select to_regprocedure('public.mobility_stage_g75_admin_f1_receipt(uuid,uuid)') is null" | grep -Fx t
+          psql -Atqc "select to_regprocedure('qore_stage_internal.mobility_stage_g333_native_admin_auto_receipt(uuid,uuid)') is null" | grep -Fx t
+          test "$(psql -Atqc "select count(*) from public.mobility_stage_g262_auto_prequotes")" = 1
+          test "$(psql -Atqc "select count(*) from public.mobility_stage_auto_demo_trips")" = 1
+          test "$(psql -Atqc "select count(*) from public.mobility_stage_g73_auto_routes")" = 2
+          echo "G333 PG17 rollback PASS; no original business records removed"
+
