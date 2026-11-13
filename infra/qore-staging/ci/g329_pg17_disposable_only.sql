@@ -58,44 +58,34 @@ SELECT public.mobility_stage_g329_route_pinned(
  'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
  '32900000-0000-4329-8329-000000000020',
  -25.4061,-54.6302,-25.5092,-54.6115,
- (pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint
+ (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint
 ) AS route_id \gset
-SELECT public.mobility_stage_g329_route_pinned_receipt(
- '32900000-0000-4329-8329-000000000001', :'route_id'::uuid
-) AS receipt \gset
-DO $receipt$ DECLARE r jsonb:=:'receipt'::jsonb; BEGIN
- IF r->>'pinBound'<>'true' OR r->>'commercialEnabled'<>'false'
- OR r->>'pinEvidenceId'<>'32900000-0000-4329-8329-000000000020'
- OR r->>'ownerId'<>'32900000-0000-4329-8329-000000000001'
- THEN RAISE EXCEPTION 'G329 missing or fraudulent owner-scoped pinned receipt: %',r; END IF;
-END $receipt$;
--- Cross-actor receipt must be NULL.
-DO $isolation$ BEGIN
- IF public.mobility_stage_g329_route_pinned_receipt(
- '32900000-0000-4329-8329-000000000002', :'route_id'::uuid) IS NOT NULL
- THEN RAISE EXCEPTION 'G329 leaked another passenger pinned route'; END IF;
-END $isolation$;
+-- SQL-level assertions avoid substituting psql variables into DO dollar strings.
+SELECT 1/(CASE WHEN
+ r->>'pinBound'='true' AND r->>'commercialEnabled'='false'
+ AND r->>'pinEvidenceId'='32900000-0000-4329-8329-000000000020'
+ AND r->>'ownerId'='32900000-0000-4329-8329-000000000001'
+ THEN 1 ELSE 0 END) AS assert_pinned_receipt
+FROM (SELECT public.mobility_stage_g329_route_pinned_receipt(
+ '32900000-0000-4329-8329-000000000001', :'route_id'::uuid) AS r) x;
+SELECT 1/(CASE WHEN public.mobility_stage_g329_route_pinned_receipt(
+ '32900000-0000-4329-8329-000000000002', :'route_id'::uuid) IS NULL
+ THEN 1 ELSE 0 END) AS assert_cross_actor_isolation;
 
 -- Idempotent retry: keep original evidence timestamp stable by getting the
 -- server-side stored millisecond value; do not manufacture a new timestamp.
 RESET ROLE;
-SELECT (pg_catalog.extract(epoch FROM verified_at)*1000)::bigint AS verified_at_ms
+SELECT (extract(epoch FROM verified_at)*1000)::bigint AS verified_at_ms
 FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes
 WHERE route_id=:'route_id'::uuid \gset
 SET ROLE service_role;
-DO $retry$
-DECLARE again uuid;
-BEGIN
- again:=public.mobility_stage_g329_route_pinned(
+SELECT 1/(CASE WHEN public.mobility_stage_g329_route_pinned(
  '32900000-0000-4329-8329-000000000001',
  '32900000-0000-4329-8329-000000000010','economico',
  'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
  '32900000-0000-4329-8329-000000000020',
- -25.4061,-54.6302,-25.5092,-54.6115,
- :verified_at_ms);
- IF again<>:'route_id'::uuid
- THEN RAISE EXCEPTION 'G329 created duplicate route'; END IF;
-END $retry$;
+ -25.4061,-54.6302,-25.5092,-54.6115,:verified_at_ms
+) = :'route_id'::uuid THEN 1 ELSE 0 END) AS assert_idempotent_retry;
 
 -- A replay with altered evidence must NEVER modify original record.
 DO $reject$
@@ -106,7 +96,8 @@ BEGIN
   '32900000-0000-4329-8329-000000000010','economico',
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000099',
-  -25.4061,-54.6302,-25.5092,-54.6115,:verified_at_ms);
+  -25.4061,-54.6302,-25.5092,-54.6115,
+  (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted changed route evidence';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
  BEGIN
@@ -116,7 +107,7 @@ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000021',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp()-interval '2 minutes')*1000)::bigint);
+  (extract(epoch FROM pg_catalog.clock_timestamp()-interval '2 minutes')*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted expired evidence';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
  BEGIN
@@ -126,7 +117,7 @@ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000022',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+  (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted Driver as passenger';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
 END $reject$;
@@ -148,7 +139,7 @@ DO $legacy$ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000023',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (pg_catalog.extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+  (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 retrofitted legacy route proof';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
 END $legacy$;
