@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readGoogleMapsShare,stageGoogleMapsShare,consumeGoogleMapsShare,clearGoogleMapsShare} from './client-google-maps-share.mjs';
+import {readGoogleMapsShare,stageGoogleMapsShare,stageGoogleMapsGeocodedCandidate,consumeGoogleMapsShare,clearGoogleMapsShare} from './client-google-maps-share.mjs';
 test('Google Maps share with place name proposes search, never auto-confirms',()=>{
  const r=readGoogleMapsShare([{shareType:'text',value:'Parque Guasu Metropolitano\nhttps://maps.app.goo.gl/abc123'}]);
  assert.deepEqual(r,{ok:true,query:'Parque Guasu Metropolitano',requiresVerification:true});
@@ -73,4 +73,37 @@ test('G330 prefers original shared place name over resolved redirect for user co
  const out=readGoogleMapsShare([{shareType:'text',value}],
   [{contentUri:'https://www.google.com/maps/place/Otro+lugar'}]);
  assert.deepEqual(out,{ok:true,query:'Plaza de Armas, Encarnación',requiresVerification:true});
+});
+
+test('G331 a native-geocoded shared place goes to RAM only until user confirms',()=>{
+ clearGoogleMapsShare();
+ const place={latitude:-25.51554,longitude:-54.62124,label:'Shopping Paris, Ciudad del Este'};
+ assert.equal(stageGoogleMapsGeocodedCandidate('Shopping Paris',place,5000),true);
+ assert.deepEqual(consumeGoogleMapsShare(5200),{
+  query:'Shopping Paris',requiresVerification:true,place
+ });
+ assert.equal(consumeGoogleMapsShare(5200),null);
+ assert.equal(Object.hasOwn(place,'confirmed'),false);
+});
+test('G331 never stages fake, malformed or expired geocoded locations',()=>{
+ clearGoogleMapsShare();
+ for(const invalid of [null,{},[],{label:'GPS',latitude:NaN,longitude:0},
+  {label:'Some place',latitude:95,longitude:0},
+  {label:'a',latitude:-25.3,longitude:-57.4},
+  {label:'Spoof\u0000Place',latitude:-25.3,longitude:-57.4}]){
+  assert.equal(stageGoogleMapsGeocodedCandidate('Asunción',invalid,1000),false);
+  assert.equal(consumeGoogleMapsShare(1001),null);
+ }
+ const good={label:'Asunción Centro',latitude:-25.29,longitude:-57.64};
+ assert.equal(stageGoogleMapsGeocodedCandidate('Asunción',good,1000),true);
+ assert.equal(consumeGoogleMapsShare(121001),null);
+});
+test('G331 manual fallback cannot inherit a previously chosen verified point',()=>{
+ clearGoogleMapsShare();
+ assert.equal(stageGoogleMapsGeocodedCandidate('Shopping Paris',
+  {label:'Shopping Paris',latitude:-25.5,longitude:-54.6},1000),true);
+ assert.equal(stageGoogleMapsShare('Ciudad del Este',1010),true);
+ assert.deepEqual(consumeGoogleMapsShare(1020),{
+  query:'Ciudad del Este',requiresVerification:true
+ });
 });
