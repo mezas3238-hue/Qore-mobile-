@@ -28,7 +28,7 @@ const jwt={rider:'syntheticRiderBearerTokenNoRealJwt12345',
 function mockSupabase(){
  const state={policy:true,missing:null,rolesLookups:0,dualRoleDriver:false,authCalls:0,rpcs:[],clients:[],schemaProbes:[],
    adminRole:null,adminReceipt:null,autoTraceReceipt:null,motoTraceReceipt:null,cargoTraceReceipt:null,
-   g77RegisteredRoute:null,
+   g77RegisteredRoute:null,g330PinSqlEnabled:false,g330PinRoute:null,g330PinReads:0,
    g84Enabled:false,g84DispatchAttempts:0,g113BatchCalls:0,g283Ready:true,g283ReadinessChecks:0,g89TripReadError:false,
   trip:{id:ride,passenger_id:passenger,driver_id:null,vehicle_id:null,
    status:'searching',revision:1,service:'economico',
@@ -187,6 +187,28 @@ function mockSupabase(){
        attempts:state.g84Enabled?state.g84DispatchAttempts:1,
        offerPendingAcceptance:state.g84Enabled&&state.g84DispatchAttempts>0}:null,
        error:null};
+    }
+    if(name==='mobility_stage_g329_route_pinned_receipt'){
+     state.g330PinReads++;
+     if(!state.g330PinSqlEnabled)
+      return {data:null,error:{code:'42883',message:'G329 not installed'}};
+     if(params._route_id==='00000000-0000-0000-0000-000000000000')
+      return {data:null,error:null};
+     const p=state.g330PinRoute;
+     return {data:p&&params._route_id===offer&&
+       params._passenger_id===passenger?{
+        mode:'STAGING_DEMO_ONLY',commercialEnabled:false,
+        ownerId:passenger,routeId:offer,requestKey:p._request_key,
+        service:p._service,routingVerified:true,
+        expiresAt:(state.routeClock??now)+600000,
+        pinEvidenceId:p._pin_evidence_id,pinBound:true
+       }:null,error:null};
+    }
+    if(name==='mobility_stage_g329_route_pinned'){
+     if(!state.g330PinSqlEnabled)
+      return {data:null,error:{code:'42883'}};
+     state.g330PinRoute=params;
+     return {data:offer,error:null};
     }
     if(name==='mobility_stage_g73_route'){
      state.g77RegisteredRoute=params;
