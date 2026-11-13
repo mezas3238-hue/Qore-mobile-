@@ -37,9 +37,11 @@ function fixture(override={}){
     zoneTag:'ALTO_PARANA',distanceMeters:3000,durationSeconds:320,
     tollsPyg:0,pinBound:true,pinEvidenceId:evidenceId};
   },
-  registerRoute:async x=>{calls.register++;
+  registerRoute:async()=>{throw Error('legacy SQL must not be called');},
+  loadRoute:async()=>{throw Error('legacy SQL must not be called');},
+  registerPinnedRoute:async x=>{calls.register++;
    assert.equal(x.pinEvidenceId,evidenceId);return routeId;},
-  loadRoute:async()=>admittedRoute,
+  loadPinnedRoute:async()=>admittedRoute,
   quoteRoute:async()=>{throw Error('not enabled')},
   loadQuote:async()=>null,bookQuote:async()=>{throw Error('not enabled')},
   reconcileBooking:async()=>null
@@ -77,12 +79,14 @@ test('G328 refuses provider-missing, mismatched coverage, wrong resolver or SQL 
  })});
  assert.equal((await wrongRoute.app(call(body))).status,409);
  assert.equal(wrongRoute.calls.register,0);
- const wrongSql=fixture({loadRoute:async()=>({...admittedRoute,pinEvidenceId:routeId})});
+ const wrongSql=fixture({loadPinnedRoute:async()=>({...admittedRoute,pinEvidenceId:routeId})});
  assert.equal((await wrongSql.app(call(body))).status,409);
  assert.equal(wrongSql.calls.register,1);
 });
-test('G328 cannot enable pin contract without real independent verifier',()=>{
- assert.throws(()=>createQoreG73AutoGateway({
-  projectRef:'staging1234567890abcd',requirePinnedAutoRoute:true
- }),/required/);
+test('G328 cannot enable pin contract without independent verifier and dedicated SQL writer',()=>{
+ const f=fixture();
+ assert.equal(typeof f.app,'function');
+ assert.throws(()=>fixture({registerPinnedRoute:null}),/required/);
+ assert.throws(()=>fixture({loadPinnedRoute:null}),/required/);
+ assert.throws(()=>fixture({verifyIndependentPins:null}),/required/);
 });
