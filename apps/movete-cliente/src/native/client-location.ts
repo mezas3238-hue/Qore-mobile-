@@ -6,6 +6,10 @@ export async function getPassengerCurrentPickup():Promise<{
 }|{ok:false;code:string}>{
  return {ok:false,code:'NATIVE_GPS_REQUIRED'};
 }
+/** Web cannot claim native address permission; keep QA fail-closed. */
+export async function requestPassengerDestinationGeocoderPermission():Promise<boolean>{
+ return false;
+}
 export async function searchPassengerDestination(_query:string):Promise<{
  ok:true;places:readonly PassengerPlace[]
 }|{ok:false;code:string}>{
