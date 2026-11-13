@@ -29,6 +29,7 @@ import {createG127GoogleCargoRoadResolver} from './g127-google-cargo-road-resolv
 import {createG128GeoapifyCargoRoadResolver} from './g128-geoapify-cargo-road-resolver.mjs';
 import {createG134GeoapifyAutoRouteResolver} from './g134-geoapify-auto-route-resolver.mjs';
 import {createQoreG73AutoRepository} from './g73-auto-f1-repository.mjs';
+import {createG329PinnedAutoRepository} from './g329-pinned-route-repository.mjs';
 import {createG101MotoPassengerRepository,createG101MotoPassengerGateway} from './g101-moto-passenger-gateway.mjs';
 import {createG169DriverMotoJourneyGateway} from './g169-driver-moto-journey-gateway.mjs';
 import {createG111AfterBookingAutoDispatch} from './g111-after-booking-auto-dispatch.mjs';
@@ -208,7 +209,7 @@ export async function prepareQoreG4StagingRuntime({
  g127CargoRouteOptions=null,
  g128GeoapifyOptions=null,
  verifiedAutoRoute=null,verifiedMotoRoute=null,g77RouteOptions=null,
- g134GeoapifyAutoOptions=null,
+ g134GeoapifyAutoOptions=null,g330PinnedAutoQa=null,
  privateEvidenceAdapters=null,adminF1Trust=null,driverKycTrust=null,
  ratingTrust=null,merchantStaffTrust=null,buyerCommerceTrust=null,g66ProofTrust=null,
  recipientTrust=null,journeyTrust=null,
@@ -302,6 +303,14 @@ export async function prepareQoreG4StagingRuntime({
        'reserveFreeQuota','request']
       .every(k=>typeof g134GeoapifyAutoOptions[k]==='function')
      &&verifiedAutoRoute===null&&g77RouteOptions===null))||
+   // G330: enable pinned routes ONLY by explicit isolated QA adapter. The
+   // independent G134 provider must already have passed its full validation.
+   !(g330PinnedAutoQa===null||(
+     Object.getPrototypeOf(g330PinnedAutoQa)===Object.prototype&&
+     Object.keys(g330PinnedAutoQa).length===2&&
+     g330PinnedAutoQa.enabled===true&&
+     typeof g330PinnedAutoQa.verifyIndependentPins==='function'&&
+     g134GeoapifyAutoOptions!==null))||
    !(verifiedAutoRoute===null||typeof verifiedAutoRoute==='function')||
    !(verifiedMotoRoute===null||typeof verifiedMotoRoute==='function')||
    !(privateEvidenceAdapters===null||
@@ -424,6 +433,11 @@ export async function prepareQoreG4StagingRuntime({
  const merchantPersistence=createSupabaseStagingMerchantRepository(admin);
  const financePersistence=createSupabaseStagingFinanceRepository(admin);
  const f1AutoPersistence=createQoreG73AutoRepository(admin);
+ // G330 deliberately does not mutate the database on startup. If opt-in is
+ // requested before G329 migration/service-role ACL, refuse to open QA.
+ const g330PinnedAuto=g330PinnedAutoQa===null?null:
+  createG329PinnedAutoRepository({client:admin,enabled:true,now});
+ if(g330PinnedAuto!==null)await g330PinnedAuto.assertPinnedSchemaReady();
  const f1MotoPersistence=createG101MotoPassengerRepository(admin);
  const scopedAutoDispatch=createG112ScopedAutoDispatchRepository(admin);
  // G162: optional server-only G113 due retry. No scheduler is created by
@@ -854,6 +868,13 @@ export async function prepareQoreG4StagingRuntime({
   resolveVerifiedRoute:params=>resolvedAutoRoute(params),
   registerRoute:params=>f1AutoPersistence.registerRoute(params),
   loadRoute:params=>f1AutoPersistence.routeReceipt(params),
+  requirePinnedAutoRoute:g330PinnedAuto!==null,
+  verifyIndependentPins:g330PinnedAuto===null?null:
+   params=>g330PinnedAutoQa.verifyIndependentPins(params),
+  registerPinnedRoute:g330PinnedAuto===null?null:
+   params=>g330PinnedAuto.registerPinnedRoute(params),
+  loadPinnedRoute:g330PinnedAuto===null?null:
+   params=>g330PinnedAuto.loadPinnedRoute(params),
   quoteRoute:params=>f1AutoPersistence.quote(params),
   loadQuote:params=>f1AutoPersistence.quoteReceipt(params),
   bookQuote:params=>f1AutoPersistence.book(params),
