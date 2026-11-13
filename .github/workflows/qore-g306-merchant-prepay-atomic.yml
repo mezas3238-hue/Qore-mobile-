@@ -1,0 +1,60 @@
+name: QORE G306 merchant prepaid PSP attestation and atomic SQL (QA OFF)
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g306-*'
+      - 'apps/mobility-expo/scripts/sql/g306-*'
+      - 'apps/mobility-expo/docs/g306-*'
+      - '.github/workflows/qore-g306-merchant-prepay-atomic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g306-private-prepay-atomic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: qore_disposable_ci_only
+          POSTGRES_DB: g306_disposable_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d g306_disposable_qa"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qore_disposable_ci_only
+      PGDATABASE: g306_disposable_qa
+      PSP_LIVE_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      G306_ORDER_RELEASE_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript syntax and independent provider evidence checks
+        run: |
+          node --check apps/mobility-expo/server/g306-merchant-prepay-provider-verifier.mjs
+          node --test apps/mobility-expo/server/g306-merchant-prepay-provider-verifier.test.mjs
+      - name: PostgreSQL16 unique provider receipts and atomic locked original merchant transition
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/mobility-expo/scripts/sql/g306-prepaid-atomic-disposable-ci.sql
+      - name: Regressions merchant PREPAID and original QA freeze
+        run: |
+          node --test apps/mobility-expo/server/g305-merchant-prepayment-mutation-fence.test.mjs
+          node --test apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs
+          node --test apps/mobility-expo/server/g7-supabase-finance-repository.test.mjs
+      - name: Assert LIVE operations and commercial dispatch remain OFF
+        run: |
+          node --input-type=module -e 'import * as g from "./apps/mobility-expo/server/g306-merchant-prepay-provider-verifier.mjs"; if(g.G306_LIVE_COMMERCE_ENABLED!==false||g.G306_REAL_PSP_CONNECTED!==false||g.G306_ORDER_RELEASE_ENABLED!==false)process.exit(1);'
+          echo 'G306 PG16 disposable QA PASS; NO PSP, NO real payment, NO Railway deploy.'

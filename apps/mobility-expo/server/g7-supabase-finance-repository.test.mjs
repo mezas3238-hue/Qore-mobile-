@@ -80,3 +80,15 @@ test('repository rejects live mode, malformed totals and cross-owner data',async
  f.payment.customer_id='99999999-9999-4999-8999-999999999999';
  await assert.rejects(repo.paymentSnapshot({...base,paymentId}),/malformed/i);
 });
+
+test('G304 merchant payment cannot be CASH even via legacy QA finance route',async()=>{
+ const f=fixture(),repo=createSupabaseStagingFinanceRepository(f.client);
+ await assert.rejects(repo.authorize({...base,quoteId,
+  method:'SIMULATED_CASH',requestKey}),/prepaid digital/i);
+ assert.equal(f.state.calls.some(x=>x.name==='mobility_stage_payment_authorize'),false);
+ // Same payment method may still be used for passenger rides, subject
+ // to independent real-money controls.
+ f.quote.subject_kind='RIDE';f.quote.mode='AUTO';
+ assert.deepEqual(await repo.authorize({...base,quoteId,
+  method:'SIMULATED_CASH',requestKey}),{ok:true,liveEnabled:false,paymentId});
+});

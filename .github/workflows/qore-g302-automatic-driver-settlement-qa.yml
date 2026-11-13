@@ -1,0 +1,36 @@
+name: QORE G302 automatic Driver settlement contracts (sandbox only)
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g302-auto-settlement-qa.mjs'
+      - 'apps/mobility-expo/server/g302-auto-settlement-qa.test.mjs'
+      - 'apps/mobility-expo/docs/g302-*'
+      - '.github/workflows/qore-g302-automatic-driver-settlement-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa-auto-settlement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm G302 source is valid JavaScript
+        run: node --check apps/mobility-expo/server/g302-auto-settlement-qa.mjs
+      - name: Test commission / provider earnings / settlement balance
+        run: node --test apps/mobility-expo/server/g302-auto-settlement-qa.test.mjs
+      - name: Regression test existing synthetic ledger
+        run: node --test apps/mobility-expo/server/staging-ledger.test.mjs
+      - name: Verify explicit safety flags and no PSP external transfer
+        run: |
+          node --input-type=module -e 'import * as g from "./apps/mobility-expo/server/g302-auto-settlement-qa.mjs"; if(g.G302_LIVE_PAYMENTS_ENABLED!==false||g.G302_LIVE_PAYOUTS_ENABLED!==false)process.exit(1);'
+          echo 'G302 STAGING QA only; no actual PSP credentials, money capture, transfer, bank payout or LIVE service.'

@@ -7,7 +7,7 @@ const factorId='88880000-0000-4888-8888-000000000002';
 const now=1900000000000;
 function fixture({role='admin',aal='aal2',factors=1,verified=true,confirmed=true,roleError=null}={}){
  const events=[];
- let level=aal;
+ let level=aal,registered=factors>0,unverified=false;
  const supabase={
   auth:{
    getSession:async()=>({data:{session:{
@@ -23,10 +23,17 @@ function fixture({role='admin',aal='aal2',factors=1,verified=true,confirmed=true
     getAuthenticatorAssuranceLevel:async()=>{events.push('aal');return {data:{
      currentLevel:level,nextLevel:'aal2'},error:null};},
     listFactors:async()=>{events.push('factors');return {data:{totp:
-     Array.from({length:factors},(_,i)=>({id:i===0?factorId:admin,status:'verified'}))
+     Array.from({length:factors},(_,i)=>({id:i===0?factorId:admin,status:i===0&&unverified?'unverified':'verified'}))
     },error:null};},
+    enroll:async ({factorType,friendlyName})=>{
+     events.push(['enroll',factorType,friendlyName]);
+     factors=1;unverified=true;
+     return {data:{id:factorId,totp:{secret:'JBSWY3DPEHPK3PXP'}},error:null};
+    },
     challengeAndVerify:async ({factorId:id,code})=>{
-     events.push(['mfa',id,code]);level='aal2';return {error:null};
+     events.push(['mfa',id,code]);
+     if(code==='999999')return {error:{code:'mfa_verification_failed'}};
+     level='aal2';registered=true;unverified=false;return {error:null};
     }
    }
   },
@@ -77,14 +84,49 @@ test('Password sign-in only queues verified MFA, six-digit challenge promotes pr
  assert(f.events.some(x=>Array.isArray(x)&&x[0]==='mfa'&&x[1]===factorId));
  assert.equal((await f.auth.readSession()).mfaVerified,true);
 });
-test('Missing TOTP enrollment rejects and revokes browser identity; bad code never calls provider',async()=>{
+test('AAL1 with no MFA offers setup only, never a verified admin session',async()=>{
  const f=fixture({aal:'aal1',factors:0});
  assert.equal((await f.auth.signIn('admin@example.com','SecurePassword123')).code,
   'MFA_ENROLLMENT_REQUIRED');
+ assert.equal(await f.auth.readSession(),null);
+ assert.equal(f.events.some(x=>Array.isArray(x)&&x[0]==='rpc'),false,
+  'AAL1 never touches backoffice role RPC');
+ const setup=await f.auth.beginTotpEnrollment();
+ assert.equal(setup.ok,true);
+ assert.equal(setup.secret,'JBSWY3DPEHPK3PXP');
+ assert.equal((await f.auth.beginTotpEnrollment()).code,'MFA_SETUP_NOT_AUTHORIZED');
+ assert.equal((await f.auth.verifyEnrolledTotp('999999')).code,'MFA_DENIED');
+ assert.equal(await f.auth.readSession(),null);
+ const verified=await f.auth.verifyEnrolledTotp('123456');
+ assert.equal(verified.ok,true);
+ assert.equal(verified.role,'admin');
+ assert.equal((await f.auth.beginTotpEnrollment()).code,'MFA_SETUP_NOT_AUTHORIZED');
+ assert.equal((await f.auth.readSession()).mfaVerified,true);
+});
+test('TOTP enrollment cannot grant an unapproved Owner or Admin role',async()=>{
+ const f=fixture({aal:'aal1',factors:0,role:null});
+ assert.equal((await f.auth.signIn('owner@example.com','SecurePassword123')).code,
+  'MFA_ENROLLMENT_REQUIRED');
+ assert.equal((await f.auth.beginTotpEnrollment()).ok,true);
+ const result=await f.auth.verifyEnrolledTotp('123456');
+ assert.equal(result.code,'BACKOFFICE_ROLE_NOT_APPROVED');
  assert.equal(f.events.at(-1),'logout');
+ assert.equal(await f.auth.readSession(),null);
+});
+test('Without sign-in, MFA enrollment and invalid codes are refused',async()=>{
+ const f=fixture({aal:'aal1',factors:0});
+ assert.equal((await f.auth.beginTotpEnrollment()).code,'MFA_SETUP_NOT_AUTHORIZED');
+ assert.equal((await f.auth.verifyEnrolledTotp('123456')).code,'MFA_SETUP_NOT_AUTHORIZED');
  const v=fixture();
  assert.equal((await v.auth.verifyTotp('000000000')).code,'INVALID_TOTP');
  assert.equal(v.events.length,0);
+});
+test('Multiple registered factors cannot trigger MFA self-enrollment bypass',async()=>{
+ const f=fixture({aal:'aal1',factors:2});
+ const signed=await f.auth.signIn('admin@example.com','SecurePassword123');
+ assert.equal(signed.code,'MFA_FACTOR_NOT_ELIGIBLE');
+ assert.equal(f.events.at(-1),'logout');
+ assert.equal((await f.auth.beginTotpEnrollment()).code,'MFA_SETUP_NOT_AUTHORIZED');
 });
 test('G264 role lookup never queries the RLS native user_roles table',async()=>{
  const f=fixture();

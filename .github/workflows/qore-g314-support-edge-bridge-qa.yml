@@ -1,0 +1,61 @@
+name: QORE G314 Support edge authenticated gateway QA — OFF
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-soporte/**'
+      - '.github/workflows/qore-g314-support-edge-bridge-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g314-support-secure-gateway:
+    name: G314 Edge Auth + private service RPC + UI contract + PG16
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: qore_g314_disposable_ci_only
+          POSTGRES_DB: g314_disposable_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d g314_disposable_qa"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      CI: 'true'
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qore_g314_disposable_ci_only
+      PGDATABASE: g314_disposable_qa
+      QORE_SUPPORT_ACTIONS_ENABLED: 'false'
+      VITE_QORE_SUPPORT_ACTIONS_APPROVED: 'false'
+      VITE_QORE_SUPPORT_STAGING_APPROVED: 'false'
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: G314 PostgreSQL16 trusted service-only RPC and Auth session tests
+        run: psql -X -v ON_ERROR_STOP=1 -f apps/movete-soporte/scripts/sql/g314-support-edge-disposable-ci.sql
+      - name: G314 HTTP request and support client isolation regressions
+        run: node --test apps/movete-soporte/src/*.test.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck Deno Edge Function candidate without deploying
+        run: deno check --no-config apps/movete-soporte/edge-functions/qore-support-actions/index.ts
+      - name: Confirm disabled commercial and support mutation gates
+        run: |
+          test "$QORE_SUPPORT_ACTIONS_ENABLED" = 'false'
+          test "$VITE_QORE_SUPPORT_ACTIONS_APPROVED" = 'false'
+          test "$VITE_QORE_SUPPORT_STAGING_APPROVED" = 'false'
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = 'false'
+          echo 'G314 QA PASS. No Supabase DDL, Edge deploy, credentials, money, or LIVE.'

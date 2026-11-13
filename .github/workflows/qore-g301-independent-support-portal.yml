@@ -1,0 +1,40 @@
+name: QORE G301 independent Support portal RBAC and web build
+on:
+  pull_request:
+    paths:
+      - 'apps/movete-soporte/**'
+      - '.github/workflows/qore-g301-independent-support-portal.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  support-portal:
+    name: Support isolated QA (no Admin/Owner privileges)
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    defaults:
+      run:
+        working-directory: apps/movete-soporte
+    env:
+      CI: 'true'
+      VITE_QORE_SUPPORT_STAGING_APPROVED: 'false'
+      VITE_QORE_SUPPORT_SUPABASE_URL: ''
+      VITE_QORE_SUPPORT_PUBLISHABLE_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove support-only AAL2, zero Owner inheritance and no PII leakage
+        run: node --test src/*.test.mjs
+      - name: Install standalone Support dependencies without running scripts
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Typecheck independent React Support UI
+        run: npm run typecheck
+      - name: Build standalone web portal (auth and all functions OFF)
+        run: |
+          npm run build
+          test -f dist/index.html
+          echo 'PASS G301: separate portal build; no support staff roles assigned, no live operational writes or real credentials.'

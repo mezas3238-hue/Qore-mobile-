@@ -11,11 +11,15 @@ export async function getPassengerCurrentPickup():Promise<{
  ok:true;place:PassengerPlace;accuracyMeters:number
 }|{ok:false;code:string}>{
  try{
-  const permit=await timeout(Location.requestForegroundPermissionsAsync(),15000);
+  // Never reopen the Android permission or high-accuracy settings dialogue
+  // when permission was already granted. Foreground location is one-shot.
+  const existing=await timeout(Location.getForegroundPermissionsAsync(),5000);
+  const permit=existing.granted===true?existing:
+   await timeout(Location.requestForegroundPermissionsAsync(),12000);
   if(permit.granted!==true)return {ok:false,code:'LOCATION_DENIED'};
   const gps=await timeout(Location.getCurrentPositionAsync({
-   accuracy:Location.Accuracy.High,mayShowUserSettingsDialog:true
-  }),20000);
+   accuracy:Location.Accuracy.High,mayShowUserSettingsDialog:false
+  }),15000);
   const valid=inspectPassengerGpsFix({
    latitude:gps.coords.latitude,longitude:gps.coords.longitude,
    accuracyMeters:gps.coords.accuracy,mocked:gps.mocked

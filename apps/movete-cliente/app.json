@@ -28,6 +28,21 @@
           "isAndroidBackgroundLocationEnabled": false,
           "isIosBackgroundLocationEnabled": false
         }
+      ],
+      [
+        "expo-sharing",
+        {
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "text/plain"
+            ],
+            "multipleShareMimeTypes": []
+          },
+          "ios": {
+            "enabled": false
+          }
+        }
       ]
     ],
     "extra": {
