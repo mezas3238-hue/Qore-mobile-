@@ -1,0 +1,73 @@
+name: QORE G336 GPS retention PG17 isolated verification (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g336_*'
+      - 'infra/qore-staging/ci/g336_*'
+      - '.github/workflows/qore-g336-*'
+  push:
+    branches:
+      - integration/qore-g336-g329-private-gps-retention-20261113
+    paths:
+      - 'infra/qore-staging/migrations/g336_*'
+      - 'infra/qore-staging/ci/g336_*'
+      - '.github/workflows/qore-g336-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g336-manual-retention-qa-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres17:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: g336_disposable_only
+          POSTGRES_DB: qore_g329_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g329_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: g336_disposable_only
+      PGDATABASE: qore_g329_ci
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prove disposable PostgreSQL 17 and disabled commercial flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGDATABASE" = qore_g329_ci
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          psql -Atqc "SELECT current_database() || ':' || (current_setting('server_version_num')::int>=170000)" | grep -Fx 'qore_g329_ci:true'
+      - name: Run G329 original + G336 manual retention read/write-isolated SQL tests
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g336_manual_g329_pin_retention_pg17_disposable_only.sql
+      - name: Rollback must reject a recorded deletion, then work on synthetic empty audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          script=infra/qore-staging/migrations/g336_g329_manual_pin_retention_rollback_EMPTY_ONLY_NOT_DEPLOYED.sql
+          if psql -X -v ON_ERROR_STOP=1 -f "$script"; then
+            echo "G336 unsafe rollback accepted existing audit!" >&2
+            exit 1
+          fi
+          test "$(psql -Atqc 'select count(*) from qore_stage_internal.mobility_stage_g336_pin_retention_runs')" = 1
+          # CI database ONLY: no real audit or GPS data is touched.
+          psql -X -v ON_ERROR_STOP=1 -c 'DELETE FROM qore_stage_internal.mobility_stage_g336_pin_retention_runs'
+          psql -X -v ON_ERROR_STOP=1 -f "$script"
+          psql -Atqc "SELECT to_regprocedure('qore_stage_internal.mobility_stage_g336_manual_expired_pin_retention(timestamptz,integer,boolean,text)') IS NULL" | grep -Fx t
+          test "$(psql -Atqc 'SELECT count(*) FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes')" = 1
+          test "$(psql -Atqc 'SELECT count(*) FROM public.mobility_stage_g73_auto_routes')" = 3
+          echo "G336 PG17 rollback PASS (disposable DB only)"
