@@ -11,3 +11,10 @@ export async function searchPassengerDestination(_query:string):Promise<{
 }|{ok:false;code:string}>{
  return {ok:false,code:'NATIVE_GPS_REQUIRED'};
 }
+
+/** Unsupported browser must never approve a map point. */
+export async function confirmPassengerMapPoint(
+ _previous:PassengerPlace,_selected:Readonly<{latitude:number;longitude:number}>
+):Promise<{ok:true;place:PassengerPlace}|{ok:false;code:string}>{
+ return {ok:false,code:'NATIVE_MAP_REQUIRED'};
+}

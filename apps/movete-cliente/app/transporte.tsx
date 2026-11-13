@@ -6,8 +6,10 @@ import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewLocalRouteDraft} from '../src/domain/client-route-editor.mjs';
 import {selectPassengerVehicle} from '../src/domain/passenger-vehicle-choice.mjs';
-import {getPassengerCurrentPickup,searchPassengerDestination}
+import {getPassengerCurrentPickup,searchPassengerDestination,confirmPassengerMapPoint}
  from '../src/native/client-location';
+import ClientPlaceMap from '../src/components/ClientPlaceMap';
+import type {ClientMapPoint} from '../src/components/ClientPlaceMap';
 import type {PassengerPlace} from '../src/native/client-location';
 import {isCurrentPassengerLocationResult}
  from '../src/domain/client-geolocation.mjs';
@@ -39,12 +41,14 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const [pickupConfirmed,setPickupConfirmed]=useState(false);
  const [destinationConfirmed,setDestinationConfirmed]=useState(false);
  const [mapNotice,setMapNotice]=useState('');
+ const [openMap,setOpenMap]=useState<'pickup'|'dropoff'|null>(null);
+ const [mapBusy,setMapBusy]=useState(false);
  const [gpsBusy,setGpsBusy]=useState(false);
  const [searchBusy,setSearchBusy]=useState(false);
  const [feedback,setFeedback]=useState('');
  const mounted=useRef(true);
  const active=useRef(AppState.currentState!=='background'&&AppState.currentState!=='inactive');
- const gpsEpoch=useRef(0),searchEpoch=useRef(0);
+ const gpsEpoch=useRef(0),searchEpoch=useRef(0),mapEpoch=useRef(0);
  // One native operation at a time, with an explicit cooldown and no loop.
  const locationBudget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
@@ -62,6 +66,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    return;
   }
   const epoch=++gpsEpoch.current;
+  mapEpoch.current++;setOpenMap(null);setMapNotice('');
   setGpsBusy(true);setPickupNotice('Consultando GPS una sola vez…');
   try{
    const result=await getPassengerCurrentPickup();
@@ -92,7 +97,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   if(active.current)void refreshPickup(false);
   const sub=AppState.addEventListener('change',status=>{
    if(status==='background'){
-    active.current=false;gpsEpoch.current++;searchEpoch.current++;
+    active.current=false;gpsEpoch.current++;searchEpoch.current++;mapEpoch.current++;
     setSuggestions([]);setPickupSuggestions([]);
     setDestinationNotice('Escribí la dirección y tocá Buscar cuando vuelvas a la app.');
    }else if(status==='active'){
@@ -101,7 +106,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    }
   });
   return ()=>{mounted.current=false;active.current=false;
-   gpsEpoch.current++;searchEpoch.current++;sub.remove();};
+   gpsEpoch.current++;searchEpoch.current++;mapEpoch.current++;sub.remove();};
  },[refreshPickup]);
  async function findPlace(kind:'pickup'|'destination'){
   const query=(kind==='pickup'?origin:destination).trim();
@@ -116,6 +121,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    return;
   }
   const epoch=++searchEpoch.current;
+  mapEpoch.current++;setOpenMap(null);setMapNotice('');
   setSearchBusy(true);setSuggestions([]);setPickupSuggestions([]);
   if(kind==='pickup')setPickupNotice('Buscando puntos de recogida en Paraguay…');
   else setDestinationNotice('Buscando direcciones en Paraguay…');
@@ -159,6 +165,34 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    }
   }
  }
+ async function confirmOnMap(role:'pickup'|'dropoff',coordinate:ClientMapPoint){
+  const previous=role==='pickup'?pickup:dropoff;
+  if(!previous||mapBusy||!mounted.current||!active.current)return;
+  const epoch=++mapEpoch.current;
+  setMapBusy(true);setMapNotice('Verificando el lugar seleccionado…');
+  try{
+   const result=await confirmPassengerMapPoint(previous,coordinate);
+   if(!mounted.current||!active.current||epoch!==mapEpoch.current)return;
+   if(!result.ok){
+    setMapNotice(result.code==='LOCATION_DENIED'
+     ?'Hace falta permiso de ubicación para verificar un pin desplazado.'
+     :result.code==='MAP_POINT_OUT_OF_SCOPE'
+      ?'Elegí un punto dentro de Paraguay.'
+      :'No se pudo verificar la dirección del pin. Probá una ubicación cercana.');
+    return;
+   }
+   if(role==='pickup'){
+    setPickup(result.place);setOrigin(result.place.label);
+    setPickupConfirmed(true);setPickupAccuracy(null);
+    setPickupNotice('Recogida confirmada en el mapa.');
+   }else{
+    setDropoff(result.place);setDestination(result.place.label);
+    setDestinationConfirmed(true);
+    setDestinationNotice('Destino confirmado en el mapa.');
+   }
+   setOpenMap(null);setMapNotice('');setFeedback('');
+  }finally{if(mounted.current)setMapBusy(false);}
+ }
  const choice=selectPassengerVehicle(vehicle);
  const routeReview=reviewLocalRouteDraft({origin,destination,stops:[],revision:0});
  const pointsSelected=pickup!==null&&dropoff!==null&&
@@ -200,14 +234,16 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
    <TextInput style={styles.field} value={origin} maxLength={120}
     accessibilityLabel="Origen de transporte" placeholder="Buscando ubicación GPS…"
-    onChangeText={value=>{gpsEpoch.current++;searchEpoch.current++;setOrigin(value);setPickup(null);
+    onChangeText={value=>{gpsEpoch.current++;searchEpoch.current++;mapEpoch.current++;
+     setOpenMap(null);setMapNotice('');setOrigin(value);setPickup(null);
      setPickupAccuracy(null);setPickupConfirmed(false);setPickupSuggestions([]);setFeedback('');
      setPickupNotice('Origen editado. Buscá la dirección o actualizá el GPS.');}}/>
    <Action secondary label={searchBusy?'Buscando…':'Buscar otro punto de recogida'}
-    disabled={gpsBusy||searchBusy||origin.trim().length<4}
+    disabled={gpsBusy||searchBusy||mapBusy||origin.trim().length<4}
     onPress={()=>{void findPlace('pickup');}}/>
    {pickupSuggestions.map((option,i)=><Pressable key={'pickup-'+i+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
+     mapEpoch.current++;setOpenMap(null);setMapNotice('');
      setOrigin(option.label);setPickup(option);setPickupAccuracy(null);
      setPickupConfirmed(false);setPickupSuggestions([]);
      setPickupNotice('Punto de recogida encontrado. Verificalo y confirmalo.');
@@ -220,25 +256,32 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     Precisión comunicada por Android: ±{Math.round(pickupAccuracy)} m. Confirmá el punto antes de viajar.
    </Text>}
    <Action secondary label={gpsBusy?'Consultando GPS…':'Actualizar ubicación GPS'}
-    disabled={gpsBusy||searchBusy} onPress={()=>{void refreshPickup(true);}}/>
+    disabled={gpsBusy||searchBusy||mapBusy} onPress={()=>{void refreshPickup(true);}}/>
    {pickup!==null&&pickup.label===origin&&<>
-    <Action secondary label="Ver recogida en el mapa" onPress={()=>{void openPlaceOnMap(pickup);}}/>
-    <Action label={pickupConfirmed?'Recogida confirmada':'Confirmar punto de recogida'}
-     disabled={pickupConfirmed} onPress={()=>{setPickupConfirmed(true);
-      setPickupNotice('Punto de recogida confirmado por el pasajero.');}}/>
+    <Action secondary label={pickupConfirmed?'Ajustar pin de recogida':'Confirmar recogida en el mapa'}
+     disabled={gpsBusy||searchBusy||mapBusy} onPress={()=>{
+      setOpenMap('pickup');setPickupConfirmed(false);setMapNotice('');
+     }}/>
+    {openMap==='pickup'&&<ClientPlaceMap
+     key={'pickup-'+pickup.latitude+'-'+pickup.longitude} role="pickup" point={pickup}
+     busy={mapBusy} onConfirm={p=>{void confirmOnMap('pickup',p);}}
+     onClose={()=>{mapEpoch.current++;setOpenMap(null);setMapNotice('');}}/>}
+    <Action secondary label="Ver recogida en Google Maps" onPress={()=>{void openPlaceOnMap(pickup);}}/>
    </>}
    <Text style={styles.text}>¿A dónde vas?</Text>
    <TextInput style={styles.field} value={destination} maxLength={120}
     accessibilityLabel="Destino de transporte" placeholder="Calle, comercio, barrio y ciudad"
-    onChangeText={value=>{searchEpoch.current++;setDestination(value);setDropoff(null);
+    onChangeText={value=>{searchEpoch.current++;mapEpoch.current++;
+     setOpenMap(null);setMapNotice('');setDestination(value);setDropoff(null);
      setDestinationConfirmed(false);setSuggestions([]);setFeedback('');
      setDestinationNotice('Escribí la calle y ciudad. Tocá Buscar para ver sugerencias.');}}/>
    <Action secondary label={searchBusy?'Buscando dirección…':'Buscar destinos'}
-    disabled={gpsBusy||searchBusy||destination.trim().length<4||dropoff!==null}
+    disabled={gpsBusy||searchBusy||mapBusy||destination.trim().length<4||dropoff!==null}
     onPress={()=>{void findPlace('destination');}}/>
    <Text accessibilityLiveRegion="polite" style={styles.small}>{destinationNotice}</Text>
    {suggestions.map((option,i)=><Pressable key={String(i)+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
+     mapEpoch.current++;setOpenMap(null);setMapNotice('');
      setDestination(option.label);setDropoff(option);setSuggestions([]);
      setDestinationConfirmed(false);
      setDestinationNotice('Destino geocodificado. Comprobá el marcador y confirmá el lugar.');
@@ -249,27 +292,34 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     </Text>
    </Pressable>)}
    {dropoff!==null&&dropoff.label===destination&&<>
-    <Action secondary label="Ver destino en el mapa" onPress={()=>{void openPlaceOnMap(dropoff);}}/>
-    <Action label={destinationConfirmed?'Destino confirmado':'Confirmar destino'}
-     disabled={destinationConfirmed} onPress={()=>{setDestinationConfirmed(true);
-      setDestinationNotice('Destino confirmado por el pasajero.');}}/>
+    <Action secondary label={destinationConfirmed?'Ajustar pin de destino':'Confirmar destino en el mapa'}
+     disabled={gpsBusy||searchBusy||mapBusy} onPress={()=>{
+      setOpenMap('dropoff');setDestinationConfirmed(false);setMapNotice('');
+     }}/>
+    {openMap==='dropoff'&&<ClientPlaceMap
+     key={'dropoff-'+dropoff.latitude+'-'+dropoff.longitude} role="dropoff" point={dropoff}
+     busy={mapBusy} onConfirm={p=>{void confirmOnMap('dropoff',p);}}
+     onClose={()=>{mapEpoch.current++;setOpenMap(null);setMapNotice('');}}/>}
+    <Action secondary label="Ver destino en Google Maps" onPress={()=>{void openPlaceOnMap(dropoff);}}/>
    </>}
    {mapNotice!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{mapNotice}</Text>}
    <Action secondary label="Intercambiar origen y destino"
-    onPress={()=>{setOrigin(destination);setDestination(origin);
+    disabled={gpsBusy||searchBusy||mapBusy}
+    onPress={()=>{mapEpoch.current++;setOpenMap(null);setMapNotice('');
+     setOrigin(destination);setDestination(origin);
      setPickup(dropoff);setDropoff(pickup);setPickupAccuracy(null);
      setPickupConfirmed(false);setDestinationConfirmed(false);
      setSuggestions([]);setPickupSuggestions([]);setFeedback('');
      setPickupNotice('Punto intercambiado. Verificá la ubicación antes de viajar.');
      setDestinationNotice('Punto intercambiado. Confirmá el destino.');}}/>
-   <Text style={styles.small}>El origen se localiza automáticamente una vez al entrar, con tu permiso. Podés elegir otra recogida o buscar un destino con una consulta geográfica a la vez. Los botones de mapa abren una aplicación externa únicamente si los tocás. Volvé a Movete Fácil y confirmá cada punto. No se guarda tu ruta en el teléfono; el servidor todavía debe validar ruta y tarifa antes de reservar.</Text>
+   <Text style={styles.small}>El GPS ubica el origen una sola vez al entrar. Podés corregir la recogida o destino desde el mapa y confirmar ambos pines. El mapa interno de QA carga teselas externas solo al tocar «Confirmar en el mapa»; Google Maps es opcional. No hay rastreo continuo y nada se reserva ni cobra sin validación del servidor.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>3 · Continuá con tu viaje</Text>
    <Text accessibilityLiveRegion="polite" style={styles.text}>
     {choice.ok?(canContinue
-     ?'Origen GPS y destino geográfico seleccionados. Falta verificar cobertura, tarifa y ruta por servidor antes de una reserva.'
-     :'Verificá y confirmá la recogida y el destino; comprobá que sean distintos.'):'Seleccioná AUTO o MOTO para continuar.'}
+     ?'Recogida y destino confirmados en el mapa. La tarifa y la ruta aún requieren confirmación del servidor.'
+     :'Verificá y confirmá ambos pines en el mapa. Las dos direcciones deben ser distintas.'):'Seleccioná AUTO o MOTO para continuar.'}
    </Text>
    <Action large label={choice.ok?'Continuar con '+choice.kind:'Primero elegí un vehículo'}
     disabled={!canContinue} onPress={continueToRide}
