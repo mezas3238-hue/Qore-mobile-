@@ -2,6 +2,7 @@
  * Never dereference short URLs, fetch third-party pages or trust shared coordinates.
  * Return only a human-readable search query, which requires native geocoding.
  */
+import {inspectDestinationCandidates} from './client-geolocation.mjs';
 const fail=code=>Object.freeze({ok:false,code});
 const safeText=text=>typeof text==='string'&&text.length>=4&&text.length<=120&&
  !/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(text)&&
@@ -87,10 +88,25 @@ export function stageGoogleMapsShare(query,now=Date.now()){
  value={query:query.trim(),createdAt:now};
  return true;
 }
+/**
+ * Only a place returned by the native Paraguay geocoder is passed here.
+ * Selection stays ephemeral and never auto-confirms the ride.
+ */
+export function stageGoogleMapsGeocodedCandidate(query,place,now=Date.now()){
+ if(!safeText(query)||!Number.isSafeInteger(now)||now<0)return false;
+ const verifiedShape=inspectDestinationCandidates([place]);
+ if(verifiedShape.length!==1)return false;
+ value={query:query.trim(),createdAt:now,place:verifiedShape[0]};
+ return true;
+}
 export function consumeGoogleMapsShare(now=Date.now()){
  const item=value;value=null;
  if(!item||!Number.isFinite(now)||now<item.createdAt||
   now-item.createdAt>120000)return null;
+ if(item.place)return Object.freeze({
+  query:item.query,requiresVerification:true,
+  place:item.place
+ });
  return Object.freeze({query:item.query,requiresVerification:true});
 }
 export function clearGoogleMapsShare(){value=null;}
