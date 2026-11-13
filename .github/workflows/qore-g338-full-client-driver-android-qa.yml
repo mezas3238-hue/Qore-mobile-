@@ -72,6 +72,18 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
       - name: Check complete existing app types and domain tests
         run: npm run check
+      - name: Give each full QA app a G338-only Android identifier in this runner
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const path='app.json';
+          const j=JSON.parse(fs.readFileSync(path,'utf8'));
+          if(j.expo?.extra?.liveOperationsEnabled!==false)throw Error('LIVE forbidden');
+          j.expo.android.package+='.g338';
+          j.expo.name+=' G338';
+          fs.writeFileSync(path,JSON.stringify(j,null,2));
+          NODE
       - name: Prove unique non-production QA application identifier
         shell: bash
         run: |
@@ -100,8 +112,8 @@ jobs:
           apk=android/app/build/outputs/apk/release/app-release.apk
           test -s "$apk"
           unzip -t "$apk" | grep -q 'No errors detected'
-          unzip -Z -1 "$apk" | grep -q '^AndroidManifest.xml$'
-          unzip -Z -1 "$apk" | grep -q '^lib/arm64-v8a/libreactnative.so$'
+          unzip -Z -1 "$apk" | grep -x 'AndroidManifest.xml' >/dev/null
+          unzip -Z -1 "$apk" | grep -x 'lib/arm64-v8a/libreactnative.so' >/dev/null
           sha256sum "$apk"
           test "$(stat -c %s "$apk")" -lt 180000000
           echo "APK_SOURCE_SHA=$GITHUB_SHA"
