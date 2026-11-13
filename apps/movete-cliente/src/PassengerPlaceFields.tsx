@@ -46,8 +46,9 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
   const sub=AppState.addEventListener('change',state=>{
    foreground.current=state==='active';
    if(state==='background'){
-    epoch.current++;setCandidates([]);setSelected(null);
-    setMapNotice('');
+    // External Maps temporarily backgrounds this app. Preserve the chosen
+    // candidate so the passenger can confirm it after returning from Maps.
+    epoch.current++;setCandidates([]);setMapNotice('');
    }
   });
   return ()=>{mounted.current=false;foreground.current=false;epoch.current++;sub.remove();};
@@ -130,9 +131,9 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
    if(mounted.current)setSearchBusy(false);
   }
  }
- async function viewSelectedMap(){
-  if(!selected)return;
-  const urls=createPassengerMapPreviewLinks(selected,Platform.OS);
+ async function viewSelectedMap(place:PassengerPlace|null=selected){
+  if(!place)return;
+  const urls=createPassengerMapPreviewLinks(place,Platform.OS);
   if(!urls){setMapNotice('Las coordenadas no son válidas.');return;}
   try{
    await Linking.openURL(urls.primary);
@@ -199,7 +200,9 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
     {candidates.map((place,index)=>
      <Pressable key={index+'-'+place.latitude+'-'+place.longitude}
       accessibilityRole="button"
-      onPress={()=>{setSelected(place);setMapNotice('');}}
+      onPress={()=>{setSelected(place);setMapNotice('');
+       // User selected a candidate: open the native map for visual checking.
+       void viewSelectedMap(place);}}
       style={[styles.card,{borderColor:selected===place?palette.primary:palette.border}]}>
       <Text style={{fontSize:16,fontWeight:'700',color:palette.ink}}>{place.label}</Text>
       <Text style={styles.small}>Tocá para seleccionar este punto geográfico.</Text>
