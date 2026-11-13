@@ -1,0 +1,53 @@
+name: QORE G337 native MOTO PG17 disposable contract only
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g337_private_moto_native_pg17_DRAFT_NOT_DEPLOYED.sql'
+      - 'infra/qore-staging/ci/g337_moto_pg17_disposable_only.sql'
+      - '.github/workflows/qore-g337-moto-pg17-disposable-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pg17-moto-no-commercial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: g337_disposable_only
+          POSTGRES_DB: qore_disposable_g337
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_disposable_g337"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      LIVE_PAYOUTS_ENABLED: 'false'
+      COMMERCE_COD_ENABLED: 'false'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: g337_disposable_only
+      PGDATABASE: qore_disposable_g337
+      PGAPPNAME: qore_disposable_chain
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Refuse persistent or real account execution
+        run: |
+          test "$PGDATABASE" = qore_disposable_g337
+          test "$PGAPPNAME" = qore_disposable_chain
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$LIVE_PAYOUTS_ENABLED" = false
+          test "$COMMERCE_COD_ENABLED" = false
+      - name: Native MOTO SQL and full simulated ledger replay on disposable PG17
+        run: psql -v ON_ERROR_STOP=1 --single-transaction -f infra/qore-staging/ci/g337_moto_pg17_disposable_only.sql
+      - name: Assert G100 legacy CI_ONLY tables were never promoted
+        run: |
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN to_regclass('public.mobility_stage_g100_moto_quotes') IS NULL AND to_regclass('public.mobility_stage_g100_moto_trips') IS NULL AND to_regclass('public.mobility_stage_g100_moto_entries') IS NULL THEN 'LEGACY_TABLES_ABSENT' ELSE 'FAIL' END" | grep -qx LEGACY_TABLES_ABSENT
