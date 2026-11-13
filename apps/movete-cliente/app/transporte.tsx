@@ -95,10 +95,18 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   // Consume exactly once from RAM, never through a URL or persistent storage.
   const shared=consumeGoogleMapsShare();
   if(shared){
-   searchEpoch.current++;setDestination(shared.query);setDropoff(null);
+   // G331: native geocoder result is a proposed DRAFT, never a confirmed
+   // address, price or booking. Review + Confirm remain mandatory.
+   searchEpoch.current++;
+   setDestination(shared.place?.label??shared.query);
+   setDropoff(shared.place??null);
    setDestinationConfirmed(false);setSuggestions([]);
-   setDestinationNotice('Lugar recibido de Google Maps. Tocá Buscar destinos, elegí el resultado de Paraguay y confirmalo.');
-   setMapNotice('Google Maps compartió el nombre, no una ubicación geográfica certificada.');
+   setDestinationNotice(shared.place
+    ?'Lugar compartido y localizado. Revisá el marcador y confirmá el destino.'
+    :'Lugar recibido de Google Maps. Tocá Buscar destinos, elegí el resultado de Paraguay y confirmalo.');
+   setMapNotice(shared.place
+    ?'La dirección se localizó en el teléfono. No se solicitó ni cotizó un viaje.'
+    :'Google Maps compartió el nombre, no una ubicación geográfica certificada.');
   }
  },[]);
  useEffect(()=>{
