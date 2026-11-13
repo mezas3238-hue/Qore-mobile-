@@ -12,7 +12,8 @@ G326 abre Google Maps instalado vía Maps URLs (sin API key), pero no recibe dir
 
 ## Limitaciones intencionales
 - La función es EXPERIMENTAL de Expo SDK57; debe pasar test de equipo Android. iOS Share Extension queda OFF.
-- Una URL corta `maps.app.goo.gl` sin nombre visible no revela coordenadas. No se siguen redirecciones desde Cliente ni se promete recuperar la intención del usuario automáticamente.
+- Una URL corta `maps.app.goo.gl` sin nombre visible no revela coordenadas. En G330 se aprovecha la resolución **experimental de Expo Sharing** únicamente cuando devuelve otra URL HTTPS válida de Google Maps con nombre de lugar o consulta; se valida estrictamente el origen y el destino de ese enlace. Si falla la resolución, no se inventa una ubicación y se mantiene la búsqueda manual.
+- **La dirección recibida es solo una propuesta**: nunca certifica coordenadas, no equivale a una selección automática de pin y exige geocodificación nativa paraguaya y confirmación del pasajero.
 - Solo texto o URL HTTPs de Google Maps, un único payload, límite 2048 caracteres y texto sanitizado; jamás se ejecutan comandos, se confían coordenadas de enlaces, se registran GPS o se envía URL externo a servidor.
 - Módulo RAM es consumible una sola vez, expira en 2 minutos y se invalida al cambiar la sesión privada.
 - No se toca Driver, cámara, finanzas, Railway o Supabase. Modo QA no LIVE.
@@ -20,3 +21,12 @@ G326 abre Google Maps instalado vía Maps URLs (sin API key), pero no recibe dir
 
 ## Certificación pendiente
 Compile Android ARM64, verificar intent-filter ACTION_SEND text/plain, descargar APK, probar en Android real con selección Google Maps → Compartir → Movete Fácil → geocoder → confirmación y regreso, además de denegación/timeout/NO GPS y ausencia de ANR.
+
+
+## G331 — evitar volver a escribir/buscar el destino compartido
+- En la pantalla de recepción de Maps, el pasajero pulsa **Buscar el lugar automáticamente** una vez. Si requiere permiso de ubicación, Android lo solicita únicamente por ese gesto.
+- La app usa el geocodificador nativo `searchPassengerDestination` (validación inversa PY); no consulta una API Google, no sigue GPS en segundo plano y no busca mientras escribe.
+- Si encuentra candidatos, el pasajero elige el correcto; se traspasa su dirección + coordenadas a un **borrador temporal en RAM** de dos minutos, de un solo uso. En `/transporte` aparece el destino elegido, pero `destinationConfirmed=false`: el cliente debe **comprobar el punto en Maps y confirmar**; la selección recibida jamás dispara un viaje o una tarifa.
+- Si el permiso está denegado, el geocodificador no encuentra lugar, la URL es inverificable o el usuario sale del primer plano, se conserva la búsqueda manual sin inventar coordenadas.
+- No hay nuevas dependencias, servicios comerciales, keys, SQL ni pagos. Los botones «Ver recorrido» y «Continuar» requieren confirmación independiente y condiciones de servidor.
+- Certificación: debe probarse en **Android físico** con enlaces cortos reales, Maps instalado, share sheet, permisos ON/OFF, retorno desde segundo plano y ausencia de ANR. PASS de CI no certifica estas condiciones.

@@ -1,6 +1,6 @@
 /** Explicit AUTO/MOTO passenger choice, without mixing cargo/merchant modes. */
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {router} from 'expo-router';
+import {router,useFocusEffect} from 'expo-router';
 import {AppState,Linking,Platform,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
@@ -15,7 +15,7 @@ import {createClientLocationWorkBudget}
  from '../src/domain/client-location-work-budget.mjs';
 import {createPassengerMapPreviewLinks}
  from '../src/domain/client-map-preview.mjs';
-import {createGoogleMapsLaunchUrl}
+import {createGoogleMapsLaunchUrl,createGoogleMapsDirectionsUrl}
  from '../src/domain/client-google-maps-links.mjs';
 import {consumeGoogleMapsShare}
  from '../src/domain/client-google-maps-share.mjs';
@@ -51,6 +51,9 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const mounted=useRef(true);
  const active=useRef(AppState.currentState!=='background'&&AppState.currentState!=='inactive');
  const gpsEpoch=useRef(0),searchEpoch=useRef(0);
+ // A recent foreground fix may be reused for a tap; no periodic tracking.
+ const lastGpsFixAt=useRef(0);
+ const lastGpsFixPlace=useRef<PassengerPlace|null>(null);
  // One native operation at a time, with an explicit cooldown and no loop.
  const locationBudget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
@@ -81,26 +84,39 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
      :'GPS no disponible. No se repetirá automáticamente. Podés reintentar.');
     return;
    }
+   lastGpsFixAt.current=Date.now();
+   lastGpsFixPlace.current=result.place;
    setPickup(result.place);setOrigin(result.place.label);
    setPickupConfirmed(false);setPickupSuggestions([]);
    setPickupAccuracy(result.accuracyMeters);
    setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
+   return result.place;
   }finally{
    locationBudget.end('gps');
    if(mounted.current)setGpsBusy(false);
   }
  },[privateRevision,locationBudget]);
- useEffect(()=>{
-  // Shared Maps place is a proposed SEARCH TEXT, never a trusted coordinate.
-  // Consume exactly once from RAM, never through a URL or persistent storage.
+ useFocusEffect(useCallback(()=>{
+  // G333: Android's share sheet may return to an EXISTING Transporte screen.
+  // Consume the shared place on FOCUS, not just on the first mount.
+  // RAM consumption is one-shot; it does not restart GPS, request permissions,
+  // geocode again or mark destination as confirmed.
   const shared=consumeGoogleMapsShare();
   if(shared){
-   searchEpoch.current++;setDestination(shared.query);setDropoff(null);
+   // G331: native geocoder result is a proposed DRAFT, never a confirmed
+   // address, price or booking. Review + Confirm remain mandatory.
+   searchEpoch.current++;
+   setDestination(shared.place?.label??shared.query);
+   setDropoff(shared.place??null);
    setDestinationConfirmed(false);setSuggestions([]);
-   setDestinationNotice('Lugar recibido de Google Maps. Tocá Buscar destinos, elegí el resultado de Paraguay y confirmalo.');
-   setMapNotice('Google Maps compartió el nombre, no una ubicación geográfica certificada.');
+   setDestinationNotice(shared.place
+    ?'Lugar compartido y localizado. Revisá el marcador y confirmá el destino.'
+    :'Lugar recibido de Google Maps. Tocá Buscar destinos, elegí el resultado de Paraguay y confirmalo.');
+   setMapNotice(shared.place
+    ?'La dirección se localizó en el teléfono. No se solicitó ni cotizó un viaje.'
+    :'Google Maps compartió el nombre, no una ubicación geográfica certificada.');
   }
- },[]);
+ },[]));
  useEffect(()=>{
   mounted.current=true;
   active.current=AppState.currentState!=='background';
@@ -177,8 +193,27 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   }
  }
  async function openPersonalGoogleMaps(kind:'pickup'|'destination'){
-  // No Maps SDK, no app key. The user explicitly initiates Google Maps.
-  const url=createGoogleMapsLaunchUrl(kind,pickup);
+  // G334: Origen must acquire a real one-shot GPS fix before displaying its
+  // marker in Maps. No stale manual address or (0,0) default accepted.
+  let mapsPickup=pickup;
+  if(kind==='pickup'){
+   if(gpsBusy||searchBusy||locationBudget.busy()){
+    setMapNotice('El GPS está localizando. Tocá Origen cuando termine la consulta.');
+    return;
+   }
+   if(!mapsPickup||!lastGpsFixPlace.current||
+    mapsPickup.latitude!==lastGpsFixPlace.current.latitude||
+    mapsPickup.longitude!==lastGpsFixPlace.current.longitude||
+    Date.now()-lastGpsFixAt.current>30000){
+    mapsPickup=await refreshPickup(true)??null;
+    if(!mapsPickup){
+     setMapNotice('Todavía no tenemos tu ubicación GPS precisa. Revisá el permiso o la señal y volvé a tocar Origen.');
+     return;
+    }
+   }
+  }
+  // Only explicit user tap opens Google Maps. No SDK, API key or tracking.
+  const url=createGoogleMapsLaunchUrl(kind,mapsPickup);
   if(!url)return;
   try{
    await Linking.openURL(url);
@@ -197,6 +232,21 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   pickup.label===origin&&dropoff.label===destination&&
   pickupConfirmed&&destinationConfirmed;
  const canContinue=choice.ok&&routeReview.ok&&pointsSelected;
+ async function openConfirmedRoadRoute(){
+  // Deliberate user tap only: Google Maps owns the road route and duration.
+  // No local price or trip claim is derived from its navigation screen.
+  if(!pointsSelected||!pickup||!dropoff)return;
+  const url=createGoogleMapsDirectionsUrl(pickup,dropoff);
+  if(!url){setMapNotice('Revisá los dos puntos antes de abrir la ruta.');return;}
+  try{
+   await Linking.openURL(url);
+   if(mounted.current)setMapNotice(
+    'Google Maps muestra un recorrido orientativo. La tarifa y la cobertura de Movete Fácil deben verificarse en el servidor.'
+   );
+  }catch{
+   if(mounted.current)setMapNotice('No fue posible abrir la ruta en Google Maps.');
+  }
+ }
  function continueToRide(){
   // Navegar no cotiza, reserva ni inicia un despacho.
   if(!canContinue)return;
@@ -231,8 +281,10 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Text accessibilityRole="header" style={styles.heading}>2 · Origen y destino</Text>
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
    <Pressable accessibilityRole="button" accessibilityLabel="Abrir Google Maps con mi ubicación GPS"
-    style={styles.field} onPress={()=>{void openPersonalGoogleMaps('pickup');}}>
-    <Text style={{fontSize:16,color:'#183044'}}>{origin||'Tocá para ver tu ubicación en Google Maps'}</Text>
+    style={styles.field} disabled={gpsBusy||searchBusy}
+    accessibilityState={{disabled:gpsBusy||searchBusy}}
+    onPress={()=>{void openPersonalGoogleMaps('pickup');}}>
+    <Text style={{fontSize:16,color:'#183044'}}>{gpsBusy?'Localizando tu GPS…':origin||'Tocá para detectar tu GPS y abrir Google Maps'}</Text>
    </Pressable>
    <Action secondary label={editingPickup?'Ocultar edición de recogida':'Elegir otro punto de recogida'}
     onPress={()=>setEditingPickup(v=>!v)}/>
@@ -310,6 +362,9 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
      disabled={destinationConfirmed} onPress={()=>{setDestinationConfirmed(true);
       setDestinationNotice('Destino confirmado por el pasajero.');}}/>
    </>}
+   {pointsSelected&&<Action secondary label="Ver recorrido en mi Google Maps"
+    hint="Abre Maps para ver el recorrido; no reserva ni cotiza"
+    onPress={()=>{void openConfirmedRoadRoute();}}/>}
    {mapNotice!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{mapNotice}</Text>}
    <Action secondary label="Intercambiar origen y destino"
     onPress={()=>{setOrigin(destination);setDestination(origin);

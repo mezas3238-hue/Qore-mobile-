@@ -18,3 +18,19 @@ export function createGoogleMapsLaunchUrl(kind,point=null){
    encodeURIComponent(coordinates(point))+'&zoom=16':
   'https://www.google.com/maps/@?api=1&map_action=map';
 }
+
+/**
+ * Opens a passenger-confirmed route in the phone's Google Maps app/browser.
+ * Maps calculates the road route and travel time itself; the app must NOT
+ * treat those as a server-authoritative quote, ETA, or vehicle availability.
+ * Returns null until BOTH coordinates exist and are distinct. No labels,
+ * account identifiers, API credentials, or tracking parameters are sent.
+ */
+export function createGoogleMapsDirectionsUrl(pickup,destination){
+ if(!valid(pickup)||!valid(destination))return null;
+ const from=coordinates(pickup),to=coordinates(destination);
+ if(from===to)return null;
+ return 'https://www.google.com/maps/dir/?api=1&origin='+
+  encodeURIComponent(from)+'&destination='+encodeURIComponent(to)+
+  '&travelmode=driving';
+}

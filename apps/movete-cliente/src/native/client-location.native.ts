@@ -36,6 +36,18 @@ export async function getPassengerCurrentPickup():Promise<{
    accuracyMeters:valid.point.accuracyMeters};
  }catch{return {ok:false,code:'LOCATION_UNAVAILABLE'};}
 }
+/**
+ * G331: one permission check only when the passenger explicitly accepts
+ * a Google Maps shared place. Does NOT request a GPS position or track.
+ */
+export async function requestPassengerDestinationGeocoderPermission():Promise<boolean>{
+ try{
+  const existing=await timeout(Location.getForegroundPermissionsAsync(),5000);
+  if(existing.granted===true)return true;
+  const prompted=await timeout(Location.requestForegroundPermissionsAsync(),12000);
+  return prompted.granted===true;
+ }catch{return false;}
+}
 export async function searchPassengerDestination(query:string):Promise<{
  ok:true;places:readonly PassengerPlace[]
 }|{ok:false;code:string}>{
