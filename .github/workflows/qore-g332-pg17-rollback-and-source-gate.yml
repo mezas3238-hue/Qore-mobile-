@@ -1,0 +1,89 @@
+name: QORE G332 PG17 rollback safety + CI-only source boundary
+on:
+  push:
+    branches:
+      - integration/qore-g332-pg17-safe-rollback-and-source-gate-20261113
+    paths:
+      - 'apps/mobility-expo/scripts/g332-*'
+      - 'infra/qore-staging/migrations/g332_*'
+      - '.github/workflows/qore-g332-pg17-rollback-and-source-gate.yml'
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/scripts/g332-*'
+      - 'infra/qore-staging/migrations/g332_*'
+      - '.github/workflows/qore-g332-pg17-rollback-and-source-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g332-synthetic-only-rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: qa_g332_disposable_only
+          POSTGRES_DB: qore_g329_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g329_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qa_g332_disposable_only
+      PGDATABASE: qore_g329_ci
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refuse fake promotion of G261 PG16 CI_ONLY objects into persistent PG17
+        run: |
+          node --test apps/mobility-expo/scripts/g332-persistent-e2e-source-gate.test.mjs
+          node apps/mobility-expo/scripts/g332-persistent-e2e-source-gate.mjs
+      - name: Verify strictly disposable PostgreSQL 17 and flags OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGDATABASE" = 'qore_g329_ci'
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          psql -Atqc 'select current_database()' | grep -Fx 'qore_g329_ci'
+          psql -Atqc "select current_setting('server_version_num')::int >= 170000" | grep -Fx 't'
+      - name: Install G329 using existing PG17 disposable-only fixture tests
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g329_pg17_disposable_only.sql
+      - name: Rollback must refuse when any GPS pin evidence is persisted
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback=infra/qore-staging/migrations/g332_g329_rollback_EMPTY_ONLY_NOT_DEPLOYED.sql
+          if psql -X -v ON_ERROR_STOP=1 -f "$rollback" > /tmp/g332-refusal.log 2>&1; then
+            echo 'G332 failed: unsafe rollback succeeded with persisted GPS evidence'
+            exit 1
+          fi
+          grep -F 'persisted GPS data exists' /tmp/g332-refusal.log
+          test "$(psql -Atqc 'SELECT count(*) FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes')" = 1
+          test "$(psql -Atqc 'SELECT count(*) FROM public.mobility_stage_g73_auto_routes')" = 2
+      - name: After synthetic pin evidence is explicitly deleted, rollback is safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -c "
+            DELETE FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes
+            WHERE pin_evidence_id='32900000-0000-4329-8329-000000000020'::uuid;"
+          test "$(psql -Atqc 'SELECT count(*) FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes')" = 0
+          psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g332_g329_rollback_EMPTY_ONLY_NOT_DEPLOYED.sql
+          psql -Atqc "SELECT to_regclass('qore_stage_internal.mobility_stage_g329_auto_pinned_routes') IS NULL" | grep -Fx 't'
+          psql -Atqc "SELECT to_regprocedure('public.mobility_stage_g329_route_pinned_receipt(uuid,uuid)') IS NULL" | grep -Fx 't'
+          test "$(psql -Atqc 'SELECT count(*) FROM public.mobility_stage_g73_auto_routes')" = 2
+          echo 'G332 PASS: rollback requires empty data and leaves legacy routes untouched'
