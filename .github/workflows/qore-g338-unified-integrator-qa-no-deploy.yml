@@ -9,6 +9,12 @@ on:
       - 'infra/qore-staging/ci/g337_*'
       - 'apps/mobility-expo/server/g336-*'
       - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'infra/qore-staging/migrations/g333_*'
+      - 'infra/qore-staging/ci/g333_*'
+      - 'apps/mobility-expo/server/g304-*'
+      - 'apps/mobility-expo/server/g305-*'
+      - 'apps/mobility-expo/server/g306-*'
+      - 'apps/movete-soporte/src/support-*'
   workflow_dispatch:
 permissions:
   contents: read
@@ -142,3 +148,112 @@ jobs:
           psql -X -Atqc "select to_regprocedure('qore_stage_internal.mobility_stage_g336_manual_expired_pin_retention(timestamptz,integer,boolean,text)') is null" | grep -Fx t
           test "$(psql -X -Atqc 'select count(*) from qore_stage_internal.mobility_stage_g329_auto_pinned_routes')" = 1
           test "$(psql -X -Atqc 'select count(*) from public.mobility_stage_g73_auto_routes')" = 3
+
+  integrator-admin-postgres17:
+    name: G333 Admin original G262/G73 priced receipt and rollback (disposable PG17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: g338_admin_disposable_only
+          POSTGRES_DB: qore_g333_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g333_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: g338_admin_disposable_only
+      PGDATABASE: qore_g333_ci
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Ensure no persistent database or commercial operation
+        run: |
+          test "$PGDATABASE" = qore_g333_ci
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          psql -X -Atqc "select current_database() || ':' || (current_setting('server_version_num')::int >= 170000)" | grep -Fx 'qore_g333_ci:true'
+      - name: G333 real-source SQL receipt with independent synthetic Admin
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g333_admin_auto_pg17_disposable_only.sql
+      - name: G75 Admin AAL2 and G262 original-source gateway regressions
+        run: |
+          node --test \
+            apps/mobility-expo/server/g75-f1-admin-audit-gateway.test.mjs \
+            apps/mobility-expo/server/g262-native-admin-trace-gateway.test.mjs
+      - name: G333 rollback removes only new functions, never original trip data
+        run: |
+          test "$(psql -X -Atqc 'select count(*) from public.mobility_stage_g262_auto_prequotes')" = 1
+          test "$(psql -X -Atqc 'select count(*) from public.mobility_stage_g73_auto_routes')" = 2
+          psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g333_rollback_admin_auto_receipt_pg17_NOT_DEPLOYED.sql
+          psql -X -Atqc "select to_regprocedure('public.mobility_stage_g75_admin_f1_receipt(uuid,uuid)') is null" | grep -Fx t
+          test "$(psql -X -Atqc 'select count(*) from public.mobility_stage_auto_demo_trips')" = 1
+          test "$(psql -X -Atqc 'select count(*) from public.mobility_stage_g73_auto_routes')" = 2
+
+  integrator-commerce-finance:
+    name: G304/G305/G306 commerce prepaid and signed PSP sandbox contracts (OFF)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+      COMMERCE_COD_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove no real funds and no cash-on-delivery commerce
+        run: |
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          test "$COMMERCE_COD_ENABLED" = false
+      - name: Verify merchant cannot advance without validated prepayment
+        run: |
+          node --test \
+            apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs \
+            apps/mobility-expo/server/g305-merchant-prepayment-mutation-fence.test.mjs \
+            apps/mobility-expo/server/g306-merchant-prepay-provider-verifier.test.mjs
+
+  integrator-support-security:
+    name: Support action claim AAL2 session revocation and isolation (local QA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Local Support gateway action claim security test suite
+        run: |
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          node --test \
+            apps/movete-soporte/src/support-action-contract.test.mjs \
+            apps/movete-soporte/src/support-action-gateway.test.mjs \
+            apps/movete-soporte/src/support-action-http.test.mjs \
+            apps/movete-soporte/src/support-claim-gateway.test.mjs \
+            apps/movete-soporte/src/support-claim-http.test.mjs \
+            apps/movete-soporte/src/support-auth.test.mjs \
+            apps/movete-soporte/src/support-request-fence.test.mjs
