@@ -22,14 +22,14 @@ export default function ReceiveMapsLocation(){
  const [checking,setChecking]=useState(false);
  const [places,setPlaces]=useState<readonly PassengerPlace[]>([]);
  const [notice,setNotice]=useState('');
- const mounted=useRef(true),foreground=useRef(AppState.currentState==='active');
+ const mounted=useRef(true),foreground=useRef(AppState.currentState!=='background');
  const requestEpoch=useRef(0),requestBusy=useRef(false);
 
  useEffect(()=>{
   mounted.current=true;
-  foreground.current=AppState.currentState==='active';
+  foreground.current=AppState.currentState!=='background';
   const sub=AppState.addEventListener('change',state=>{
-   foreground.current=state==='active';
+   foreground.current=state!=='background';
    if(state==='background'){
     requestEpoch.current++;requestBusy.current=false;
     setChecking(false);setPlaces([]);
