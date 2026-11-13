@@ -2555,3 +2555,102 @@ test('G252 true wires signed provider only to private merchant inbox, not mercha
    x.name==='mobility_stage_g173_merchant_transition_qa').length,0);
  });
 });
+
+
+const g330PinEvidenceId='33000000-0000-4330-8330-000000000001';
+const g330Pickup={latitude:-25.2773434,longitude:-57.6371671};
+const g330Dropoff={latitude:-25.2828767,longitude:-57.5674503};
+function g330Options({validProof=true}={}){
+ return {enabled:true,verifyIndependentPins:async scope=>({
+  source:'INDEPENDENT_PIN_AUTHORITY',serverVerified:validProof,
+  coverageVerified:true,actorId:scope.actorId,
+  quoteRequestKey:scope.quoteRequestKey,
+  origin:scope.origin,destination:scope.destination,service:scope.service,
+  pickupPoint:scope.pickupPoint,dropoffPoint:scope.dropoffPoint,
+  evidenceId:g330PinEvidenceId,revision:1,verifiedAtMs:g141At-1000
+ })};
+}
+function g330GeoapifyOptions(){
+ const f=g141GeoapifyOptions();
+ const original=f.options.resolveCoveredAutoCoordinates;
+ f.options.resolveCoveredAutoCoordinates=async scope=>({
+  ...(await original(scope)),pinEvidenceId:g330PinEvidenceId
+ });
+ return f;
+}
+test('G330 keeps G329 SQL and independent GPS pin mode OFF by default',async()=>{
+ const m=mockSupabase(),geo=g141GeoapifyOptions();
+ m.state.routeClock=g141At;
+ const rt=await prepare(m,{now:()=>g141At,g134GeoapifyAutoOptions:geo.options});
+ await http(rt,async base=>{
+  const reply=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,
+   destination:g79Destination,service:'economico'
+  });
+  assert.equal(reply.status,200);
+  assert.equal(m.state.g330PinRoute,null);
+  assert.equal(m.state.g330PinReads,0);
+ });
+});
+test('G330 rejects unavailable PG17 pin RPC before accepting any QA request',async()=>{
+ const m=mockSupabase(),geo=g330GeoapifyOptions();
+ await assert.rejects(prepare(m,{now:()=>g141At,
+  g134GeoapifyAutoOptions:geo.options,
+  g330PinnedAutoQa:g330Options()}),/private database unavailable/);
+ assert.equal(m.state.g330PinRoute,null);
+ assert.equal(m.state.g330PinReads,1);
+});
+test('G330 refuses explicit opt-in without independent G134 provider',async()=>{
+ for(const bad of [
+  {g330PinnedAutoQa:g330Options()},
+  {g330PinnedAutoQa:{enabled:false,verifyIndependentPins:async()=>({})},
+   g134GeoapifyAutoOptions:g330GeoapifyOptions().options},
+  {g330PinnedAutoQa:{enabled:true,verifyIndependentPins:'fake'},
+   g134GeoapifyAutoOptions:g330GeoapifyOptions().options},
+  {g330PinnedAutoQa:{...g330Options(),skipCoverage:true},
+   g134GeoapifyAutoOptions:g330GeoapifyOptions().options}
+ ]){
+  const m=mockSupabase();
+  await assert.rejects(prepare(m,bad));
+  assert.equal(m.state.clients.length,0);
+ }
+});
+test('G330 G4 HTTP binds pickup and dropoff to private pin route SQL',async()=>{
+ const m=mockSupabase(),geo=g330GeoapifyOptions();
+ m.state.routeClock=g141At;m.state.g330PinSqlEnabled=true;
+ const rt=await prepare(m,{now:()=>g141At,
+  g134GeoapifyAutoOptions:geo.options,g330PinnedAutoQa:g330Options()});
+ await http(rt,async base=>{
+  const response=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,
+   destination:g79Destination,service:'economico',
+   pickupPoint:g330Pickup,dropoffPoint:g330Dropoff
+  });
+  assert.equal(response.status,200,JSON.stringify(response.body));
+  assert.equal(response.body.coverageVerified,true);
+  assert.equal(m.state.g330PinRoute._pin_evidence_id,g330PinEvidenceId);
+  assert.equal(m.state.g330PinRoute._pickup_latitude,g330Pickup.latitude);
+  assert.equal(m.state.g330PinRoute._dropoff_longitude,g330Dropoff.longitude);
+  assert.equal(m.state.g77RegisteredRoute,null,'no legacy SQL writer');
+  assert.deepEqual(geo.calls,{covered:1,provider:1,quota:1,verifiedToll:1});
+  assert.equal(Object.hasOwn(response.body,'pinEvidenceId'),false);
+  assert.equal(Object.hasOwn(response.body,'pickupPoint'),false);
+ });
+});
+test('G330 rejects forged pin before road request or any SQL insert',async()=>{
+ const m=mockSupabase(),geo=g330GeoapifyOptions();
+ m.state.routeClock=g141At;m.state.g330PinSqlEnabled=true;
+ const rt=await prepare(m,{now:()=>g141At,
+  g134GeoapifyAutoOptions:geo.options,
+  g330PinnedAutoQa:g330Options({validProof:false})});
+ await http(rt,async base=>{
+  const response=await req(base,g79Path,'rider','POST',{
+   quoteRequestKey:requestKey,origin:g79Origin,
+   destination:g79Destination,service:'economico',
+   pickupPoint:g330Pickup,dropoffPoint:g330Dropoff
+  });
+  assert.equal(response.status,409);
+  assert.equal(m.state.g330PinRoute,null);
+  assert.deepEqual(geo.calls,{covered:0,provider:0,quota:0,verifiedToll:0});
+ });
+});
