@@ -27,6 +27,18 @@ export function createG329PinnedAutoRepository({
  const active=enabled===true;
  return Object.freeze({
   enabled:active,
+  async assertPinnedSchemaReady(){
+   if(!active)throw Error('G329 pinned route SQL not enabled');
+   // A NO-WRITE owner-scoped RPC probe proves the G329 SQL migration and
+   // service_role EXECUTE grants exist before the runtime accepts requests.
+   // A fixture returning anything except null is not the required private RPC.
+   const nil='00000000-0000-0000-0000-000000000000';
+   const probe=await secureRpc(client,'mobility_stage_g329_route_pinned_receipt',{
+    _passenger_id:nil,_route_id:nil
+   });
+   if(probe!==null)throw Error('G329 pinned route database readiness unverified');
+   return true;
+  },
   async registerPinnedRoute(p){
    if(!active)throw Error('G329 pinned route SQL not enabled');
    const at=now();
