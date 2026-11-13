@@ -51,6 +51,8 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const mounted=useRef(true);
  const active=useRef(AppState.currentState!=='background'&&AppState.currentState!=='inactive');
  const gpsEpoch=useRef(0),searchEpoch=useRef(0);
+ // A recent foreground fix may be reused for a tap; no periodic tracking.
+ const lastGpsFixAt=useRef(0);
  // One native operation at a time, with an explicit cooldown and no loop.
  const locationBudget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
@@ -81,10 +83,12 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
      :'GPS no disponible. No se repetirá automáticamente. Podés reintentar.');
     return;
    }
+   lastGpsFixAt.current=Date.now();
    setPickup(result.place);setOrigin(result.place.label);
    setPickupConfirmed(false);setPickupSuggestions([]);
    setPickupAccuracy(result.accuracyMeters);
    setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
+   return result.place;
   }finally{
    locationBudget.end('gps');
    if(mounted.current)setGpsBusy(false);
@@ -187,8 +191,24 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   }
  }
  async function openPersonalGoogleMaps(kind:'pickup'|'destination'){
-  // No Maps SDK, no app key. The user explicitly initiates Google Maps.
-  const url=createGoogleMapsLaunchUrl(kind,pickup);
+  // G334: Origen must acquire a real one-shot GPS fix before displaying its
+  // marker in Maps. No stale manual address or (0,0) default accepted.
+  let mapsPickup=pickup;
+  if(kind==='pickup'){
+   if(gpsBusy||searchBusy||locationBudget.busy()){
+    setMapNotice('El GPS está localizando. Tocá Origen cuando termine la consulta.');
+    return;
+   }
+   if(!mapsPickup||Date.now()-lastGpsFixAt.current>30000){
+    mapsPickup=await refreshPickup(true)??null;
+    if(!mapsPickup){
+     setMapNotice('Todavía no tenemos tu ubicación GPS precisa. Revisá el permiso o la señal y volvé a tocar Origen.');
+     return;
+    }
+   }
+  }
+  // Only explicit user tap opens Google Maps. No SDK, API key or tracking.
+  const url=createGoogleMapsLaunchUrl(kind,mapsPickup);
   if(!url)return;
   try{
    await Linking.openURL(url);
@@ -256,8 +276,10 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Text accessibilityRole="header" style={styles.heading}>2 · Origen y destino</Text>
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
    <Pressable accessibilityRole="button" accessibilityLabel="Abrir Google Maps con mi ubicación GPS"
-    style={styles.field} onPress={()=>{void openPersonalGoogleMaps('pickup');}}>
-    <Text style={{fontSize:16,color:'#183044'}}>{origin||'Tocá para ver tu ubicación en Google Maps'}</Text>
+    style={styles.field} disabled={gpsBusy||searchBusy}
+    accessibilityState={{disabled:gpsBusy||searchBusy}}
+    onPress={()=>{void openPersonalGoogleMaps('pickup');}}>
+    <Text style={{fontSize:16,color:'#183044'}}>{gpsBusy?'Localizando tu GPS…':origin||'Tocá para detectar tu GPS y abrir Google Maps'}</Text>
    </Pressable>
    <Action secondary label={editingPickup?'Ocultar edición de recogida':'Elegir otro punto de recogida'}
     onPress={()=>setEditingPickup(v=>!v)}/>
