@@ -147,3 +147,49 @@ test('G328 denies mismatched routeId on a signed quote without booking',async()=
  assert.equal(r.status,409);
  assert.equal(booked,0);
 });
+
+test('G335 refuses a signed price for a different class than the verified pins',async()=>{
+ let quotes=0;
+ const f=fixture({
+  quoteRoute:async()=>{quotes++;return quoteId;},
+  loadQuote:async()=>({...quoteReceipt,service:'xl'})
+ });
+ const req={...call({requestKey:priceRequestKey,routeId}),
+  path:'/v1/staging/rider/auto/prequote'};
+ const response=await f.app(req);
+ assert.equal(response.status,409);
+ assert.match(response.body.error,/service mismatch/);
+ assert.equal(quotes,1);
+ // A rejected quote response never becomes passenger booking authority.
+});
+
+test('G335 blocks booking even if the signed quote and pinned route have valid IDs',async()=>{
+ let bookings=0;
+ const f=fixture({
+  loadQuote:async()=>({...quoteReceipt,service:'confort'}),
+  bookQuote:async()=>{bookings++;return tripId;}
+ });
+ const req={...call({requestKey:bookingKey,quoteId,accepted:true}),
+  path:'/v1/staging/rider/auto/book'};
+ const response=await f.app(req);
+ assert.equal(response.status,409);
+ assert.match(response.body.error,/service mismatch/);
+ assert.equal(bookings,0);
+});
+
+test('G335 blocks an unrelated pinned service even with an otherwise valid quote',async()=>{
+ let quotes=0,bookings=0;
+ const f=fixture({
+  loadPinnedRoute:async()=>({...admittedRoute,service:'xl'}),
+  quoteRoute:async()=>{quotes++;return quoteId;},
+  bookQuote:async()=>{bookings++;return tripId;}
+ });
+ const quoteReq={...call({requestKey:priceRequestKey,routeId}),
+  path:'/v1/staging/rider/auto/prequote'};
+ const bookReq={...call({requestKey:bookingKey,quoteId,accepted:true}),
+  path:'/v1/staging/rider/auto/book'};
+ assert.equal((await f.app(quoteReq)).status,409);
+ assert.equal((await f.app(bookReq)).status,409);
+ assert.equal(quotes,1);
+ assert.equal(bookings,0);
+});
