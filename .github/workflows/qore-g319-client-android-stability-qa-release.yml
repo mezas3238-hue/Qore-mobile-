@@ -27,6 +27,10 @@ jobs:
       EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN: ''
       EXPO_PUBLIC_SUPABASE_URL: ''
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+      # Google Maps Android SDK stays OFF unless the Owner provisions a QA-key
+      # restricted to the exact Android package name and QA signing SHA-1.
+      QORE_NATIVE_MAPS_APPROVED: ${{ secrets.QORE_NATIVE_MAPS_QA_APPROVED == 'true' && 'true' || 'false' }}
+      QORE_ANDROID_MAPS_API_KEY: ${{ secrets.QORE_ANDROID_MAPS_QA_API_KEY }}
       RELEASE_TAG_PREFIX: qa-g319-cliente-gps-estable-2026-11-12
     steps:
       - uses: actions/checkout@v4
