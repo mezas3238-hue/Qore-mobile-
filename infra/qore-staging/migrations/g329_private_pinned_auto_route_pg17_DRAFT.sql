@@ -104,8 +104,8 @@ BEGIN
 
  SELECT * INTO previous FROM public.mobility_stage_g73_auto_routes
   WHERE request_key=_request_key FOR UPDATE;
- SELECT * INTO bound FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes
-  WHERE route_id=previous.id;
+ SELECT * INTO bound FROM qore_stage_internal.mobility_stage_g329_auto_pinned_routes pin
+  WHERE pin.route_id=previous.id;
  IF NOT FOUND OR previous.id IS NULL OR previous.expires_at<=stamp
   OR ROW(previous.passenger_id,previous.service,previous.origin_tag,
    previous.destination_tag,previous.zone_tag,previous.distance_meters,
