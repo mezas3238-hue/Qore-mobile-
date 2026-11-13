@@ -255,7 +255,9 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
      originTag:r.originTag,destinationTag:r.destinationTag,zoneTag:r.zoneTag,
      distanceMeters:r.distanceMeters,durationSeconds:r.durationSeconds,
      tollsPyg:r.tollsPyg,
-     ...(pinEvidence===null?{}:{pinEvidenceId:pinEvidence.evidenceId})});
+     ...(pinEvidence===null?{}:{pinEvidenceId:pinEvidence.evidenceId,
+      pickupPoint:pinEvidence.pickupPoint,dropoffPoint:pinEvidence.dropoffPoint,
+      verifiedAtMs:pinEvidence.verifiedAtMs})});
     const receipt=await (pinEvidence===null?loadRoute:loadPinnedRoute)({
      actorId:user.id,routeId,...(pinEvidence===null?{}:{
       pinEvidenceId:pinEvidence.evidenceId})});
