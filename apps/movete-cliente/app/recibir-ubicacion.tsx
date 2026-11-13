@@ -45,14 +45,15 @@ export default function ReceiveMapsLocation(){
   setChecking(false);setPlaces([]);setNotice('');
  },[candidate.ok?candidate.query:null]);
 
+ // Go back to an EXISTING Transporte screen if there is one; otherwise replace.
  function cancel(){
   requestEpoch.current++;requestBusy.current=false;
-  clearSharedPayloads();router.replace('/transporte');
+  clearSharedPayloads();router.dismissTo('/transporte');
  }
  function manual(){
   if(!candidate.ok||!stageGoogleMapsShare(candidate.query))return;
   requestEpoch.current++;requestBusy.current=false;
-  clearSharedPayloads();router.replace('/transporte');
+  clearSharedPayloads();router.dismissTo('/transporte');
  }
  async function locateSharedPlace(){
   if(!candidate.ok||requestBusy.current||!foreground.current)return;
@@ -92,7 +93,7 @@ export default function ReceiveMapsLocation(){
    setNotice('Ese punto no se pudo verificar. Elegí otro.');
    return;
   }
-  requestEpoch.current++;clearSharedPayloads();router.replace('/transporte');
+  requestEpoch.current++;clearSharedPayloads();router.dismissTo('/transporte');
  }
  return <ScrollView style={styles.page} contentContainerStyle={styles.content}
   contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
