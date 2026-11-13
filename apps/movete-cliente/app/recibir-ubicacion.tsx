@@ -13,7 +13,9 @@ export default function ReceiveMapsLocation(){
   if(!candidate.ok||!stageGoogleMapsShare(candidate.query))return;
   clearSharedPayloads();router.replace('/transporte');
  }
- return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+ return <ScrollView style={styles.page} contentContainerStyle={styles.content}
+  contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
+  keyboardDismissMode="on-drag">
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>
     Recibir lugar de Google Maps

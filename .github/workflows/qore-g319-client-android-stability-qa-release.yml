@@ -1,4 +1,4 @@
-name: QORE G319 Cliente Android stability QA direct APK
+name: QORE G327 Cliente Google Maps compartido QA APK
 on:
   pull_request:
     paths:
@@ -8,12 +8,12 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: qore-g319-stable-client-${{ github.ref }}
+  group: qore-g327-personal-maps-client-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  g319-client-stability:
+  g327-client-share:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    name: G319 Cliente GPS one-shot + low-load Android APK
+    name: G327 Cliente GPS + Google Maps Share Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -27,7 +27,7 @@ jobs:
       EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN: ''
       EXPO_PUBLIC_SUPABASE_URL: ''
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
-      RELEASE_TAG_PREFIX: qa-g319-cliente-gps-estable-2026-11-12
+      RELEASE_TAG_PREFIX: qa-g327-cliente-google-maps-share-2026-11-12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +50,7 @@ jobs:
           test -z "$EXPO_PUBLIC_SUPABASE_URL"
           test -z "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
           test -d "$ANDROID_HOME"
-      - name: Install and test G319 GPS budget and all Client regressions
+      - name: Install and test G327 Google Maps share and GPS budget and all Client regressions
         working-directory: apps/movete-cliente
         run: |
           npm install --ignore-scripts --no-audit --no-fund --package-lock=false
@@ -58,9 +58,9 @@ jobs:
       - name: Make unique QA identity without overwriting prior apps
         working-directory: apps/movete-cliente
         run: |
-          node -e 'const fs=require("fs");const path="app.json";const j=JSON.parse(fs.readFileSync(path,"utf8"));j.expo.name="Movete Cliente G319 QA";j.expo.android.package="com.movetefacil.cliente.g319qa";fs.writeFileSync(path,JSON.stringify(j,null,2));'
+          node -e 'const fs=require("fs");const path="app.json";const j=JSON.parse(fs.readFileSync(path,"utf8"));j.expo.name="Movete Cliente G327 QA";j.expo.android.package="com.movetefacil.cliente.g327qa";fs.writeFileSync(path,JSON.stringify(j,null,2));'
           npx expo config --json > "$RUNNER_TEMP/client-config.json"
-          node -e 'const j=require(process.argv[1]); if(j.android?.package!=="com.movetefacil.cliente.g319qa"||j.extra?.liveOperationsEnabled!==false)throw Error("Unsafe G319 config");' "$RUNNER_TEMP/client-config.json"
+          node -e 'const j=require(process.argv[1]); if(j.android?.package!=="com.movetefacil.cliente.g327qa"||j.extra?.liveOperationsEnabled!==false)throw Error("Unsafe G327 config");' "$RUNNER_TEMP/client-config.json"
       - name: Build Android ARM64 native (no deployment)
         working-directory: apps/movete-cliente
         run: |
@@ -79,8 +79,8 @@ jobs:
           if unzip -Z1 "$apk" | grep -E '^lib/(x86|x86_64|armeabi-v7a)/'; then
             echo 'unexpected device ABI'; exit 1
           fi
-          sha256sum "$apk" | tee "$RUNNER_TEMP/g319-sha256.txt"
-          cp "$apk" "$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk"
+          sha256sum "$apk" | tee "$RUNNER_TEMP/g327-sha256.txt"
+          cp "$apk" "$RUNNER_TEMP/Movete-Facil-Cliente-G327-Google-Maps-Compartir-ARM64-QA.apk"
       - name: Publish immutable GitHub QA prerelease for this run and source SHA
         shell: bash
         run: |
@@ -92,28 +92,28 @@ jobs:
             exit 1
           fi
           cat > "$RUNNER_TEMP/release-note.md" <<'NOTES'
-          MOVETE FÁCIL CLIENTE G319 — QA SOLO, SIN VIAJES/COBROS REALES
+          MOVETE FÁCIL CLIENTE G327 — GOOGLE MAPS COMPARTIR QA SOLO, SIN VIAJES/COBROS REALES
 
-          Corrección de estabilidad Android: GPS de origen una sola vez al abrir,
+          GPS de origen de una sola consulta y uso de Google Maps instalado sin clave API:
           sin relanzar por cambios de primer plano/permisos; búsqueda de destino
-          por botón para impedir consultas geográficas continuas mientras se escribe;
+          por botón; la app recibe texto compartido de Google Maps para búsqueda confirmada;
           una sola consulta a la vez y límites de frecuencia, sin refresco periódico
           completo de esta pantalla.
 
-          Paquete independiente com.movetefacil.cliente.g319qa.
+          Paquete independiente com.movetefacil.cliente.g327qa.
           No reemplaza otras aplicaciones instaladas. Solo ARM64.
           No contiene credenciales de backend y operaciones LIVE desactivadas.
           Los usuarios deben probar en un Android físico y no declarar completada
-          la aplicación sin aceptación real de Cliente.
+          la aplicación sin aceptación real de Cliente.\n          Compartir un enlace de Google Maps no confirma automáticamente coordenadas.
           NOTES
-          asset="$RUNNER_TEMP/Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk"
+          asset="$RUNNER_TEMP/Movete-Facil-Cliente-G327-Google-Maps-Compartir-ARM64-QA.apk"
           asset_sha="$(sha256sum "$asset" | awk '{print $1}')"
           printf '\nSource SHA: %s\nAPK SHA256: %s\nGitHub Actions run: %s, attempt: %s\n' \
             "$source_sha" "$asset_sha" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$RUNNER_TEMP/release-note.md"
           gh release create "$release_tag" "$asset" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$source_sha" \
-            --title "Movete Fácil Cliente G319 — estabilidad Android QA" \
+            --title "Movete Fácil Cliente G327 — Google Maps Compartir QA" \
             --prerelease --notes-file "$RUNNER_TEMP/release-note.md"
           echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
       - name: Ensure stable direct-download asset exists
@@ -121,4 +121,4 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[] | select(.name=="Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk") | .url' | grep -q 'https://'
+            --jq '.assets[] | select(.name=="Movete-Facil-Cliente-G327-Google-Maps-Compartir-ARM64-QA.apk") | .url' | grep -q 'https://'
