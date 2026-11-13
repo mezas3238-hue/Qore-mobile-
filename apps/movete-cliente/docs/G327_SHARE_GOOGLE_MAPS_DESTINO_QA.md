@@ -21,3 +21,12 @@ G326 abre Google Maps instalado vía Maps URLs (sin API key), pero no recibe dir
 
 ## Certificación pendiente
 Compile Android ARM64, verificar intent-filter ACTION_SEND text/plain, descargar APK, probar en Android real con selección Google Maps → Compartir → Movete Fácil → geocoder → confirmación y regreso, además de denegación/timeout/NO GPS y ausencia de ANR.
+
+
+## G331 — evitar volver a escribir/buscar el destino compartido
+- En la pantalla de recepción de Maps, el pasajero pulsa **Buscar el lugar automáticamente** una vez. Si requiere permiso de ubicación, Android lo solicita únicamente por ese gesto.
+- La app usa el geocodificador nativo `searchPassengerDestination` (validación inversa PY); no consulta una API Google, no sigue GPS en segundo plano y no busca mientras escribe.
+- Si encuentra candidatos, el pasajero elige el correcto; se traspasa su dirección + coordenadas a un **borrador temporal en RAM** de dos minutos, de un solo uso. En `/transporte` aparece el destino elegido, pero `destinationConfirmed=false`: el cliente debe **comprobar el punto en Maps y confirmar**; la selección recibida jamás dispara un viaje o una tarifa.
+- Si el permiso está denegado, el geocodificador no encuentra lugar, la URL es inverificable o el usuario sale del primer plano, se conserva la búsqueda manual sin inventar coordenadas.
+- No hay nuevas dependencias, servicios comerciales, keys, SQL ni pagos. Los botones «Ver recorrido» y «Continuar» requieren confirmación independiente y condiciones de servidor.
+- Certificación: debe probarse en **Android físico** con enlaces cortos reales, Maps instalado, share sheet, permisos ON/OFF, retorno desde segundo plano y ausencia de ANR. PASS de CI no certifica estas condiciones.
