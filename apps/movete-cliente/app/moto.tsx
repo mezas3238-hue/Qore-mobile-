@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import {AppState,ScrollView,Text,TextInput,View} from 'react-native';
 import {router,useFocusEffect} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
+import {PassengerPlaceFields} from '../src/PassengerPlaceFields';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewMotoRideDraft} from '../src/domain/moto-ride-draft.mjs';
 
@@ -133,14 +134,9 @@ function PrivateMoto({authenticated,client,moto,rideStatus,revision}:{
   </View>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Origen y destino</Text>
-   <TextInput style={styles.field} value={origin} maxLength={120} editable={canEdit}
-    accessibilityLabel="Origen del viaje MOTO"
-    placeholder="¿Dónde te buscamos?"
-    onChangeText={value=>edit(setOrigin,value)}/>
-   <TextInput style={styles.field} value={destination} maxLength={120} editable={canEdit}
-    accessibilityLabel="Destino del viaje MOTO"
-    placeholder="¿A dónde vas?"
-    onChangeText={value=>edit(setDestination,value)}/>
+   <PassengerPlaceFields origin={origin} destination={destination}
+    editable={canEdit} onOriginChange={value=>edit(setOrigin,value)}
+    onDestinationChange={value=>edit(setDestination,value)}/>
    <Text style={styles.small}>Las direcciones se envían al backend exclusivamente si confirmás una cotización con proveedor habilitado. Sin esa autorización permanecen en el formulario. No se publica GPS.</Text>
   </Panel>
   <Panel>
