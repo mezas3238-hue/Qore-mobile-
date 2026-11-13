@@ -12,7 +12,8 @@ G326 abre Google Maps instalado vía Maps URLs (sin API key), pero no recibe dir
 
 ## Limitaciones intencionales
 - La función es EXPERIMENTAL de Expo SDK57; debe pasar test de equipo Android. iOS Share Extension queda OFF.
-- Una URL corta `maps.app.goo.gl` sin nombre visible no revela coordenadas. No se siguen redirecciones desde Cliente ni se promete recuperar la intención del usuario automáticamente.
+- Una URL corta `maps.app.goo.gl` sin nombre visible no revela coordenadas. En G330 se aprovecha la resolución **experimental de Expo Sharing** únicamente cuando devuelve otra URL HTTPS válida de Google Maps con nombre de lugar o consulta; se valida estrictamente el origen y el destino de ese enlace. Si falla la resolución, no se inventa una ubicación y se mantiene la búsqueda manual.
+- **La dirección recibida es solo una propuesta**: nunca certifica coordenadas, no equivale a una selección automática de pin y exige geocodificación nativa paraguaya y confirmación del pasajero.
 - Solo texto o URL HTTPs de Google Maps, un único payload, límite 2048 caracteres y texto sanitizado; jamás se ejecutan comandos, se confían coordenadas de enlaces, se registran GPS o se envía URL externo a servidor.
 - Módulo RAM es consumible una sola vez, expira en 2 minutos y se invalida al cambiar la sesión privada.
 - No se toca Driver, cámara, finanzas, Railway o Supabase. Modo QA no LIVE.
