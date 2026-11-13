@@ -276,10 +276,12 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
    }
    if(isQuote){
     // A pin-required request cannot quote a legacy, unpinned route.
-    // This owner-scoped independent SQL readback is mandatory BEFORE price.
+    // Owner-scoped SQL must also agree with the independently bound
+    // service: a quote for XL must never price an Economico route.
+    let pinnedRoute=null;
     if(requirePinnedAutoRoute){
-     const pinned=await loadPinnedRoute({actorId:user.id,routeId:body.routeId});
-     if(!sanePinnedRouteReceipt(pinned,user.id,body.routeId,now()))
+     pinnedRoute=await loadPinnedRoute({actorId:user.id,routeId:body.routeId});
+     if(!sanePinnedRouteReceipt(pinnedRoute,user.id,body.routeId,now()))
       return respond(409,{error:'Pinned route authority unavailable'});
     }
     const quoteId=await quoteRoute({actorId:user.id,
@@ -287,6 +289,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     const receipt=await loadQuote({actorId:user.id,quoteId});
     if(!saneQuote(receipt,user.id,body.requestKey,body.routeId,now()))
       throw Error('Quote not confirmed');
+    if(pinnedRoute!==null&&receipt.service!==pinnedRoute.service)
+      return respond(409,{error:'Pinned route and quote service mismatch'});
     return respond(200,receipt);
    }
    if(subsidyMatch){
@@ -312,8 +316,9 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
       return respond(409,{error:'Pinned quote authority unavailable'});
      const pinned=await loadPinnedRoute({actorId:user.id,
       routeId:verifiedQuote.routeId});
-     if(!sanePinnedRouteReceipt(pinned,user.id,verifiedQuote.routeId,now()))
-      return respond(409,{error:'Pinned quote route unavailable'});
+     if(!sanePinnedRouteReceipt(pinned,user.id,verifiedQuote.routeId,now())||
+      pinned.service!==verifiedQuote.service)
+      return respond(409,{error:'Pinned quote route or service mismatch'});
     }
     const tripId=await bookQuote({actorId:user.id,requestKey:body.requestKey,
       quoteId:body.quoteId});
