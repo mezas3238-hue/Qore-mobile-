@@ -46,6 +46,10 @@ const saneRoute=(x,uid,key,serviceName,now,pinEvidence=null)=>
  (pinEvidence===null||(x.pinBound===true&&
   x.pinEvidenceId===pinEvidence.evidenceId))&&
  Number.isSafeInteger(x.expiresAt)&&x.expiresAt>now&&x.expiresAt<=now+3600000;
+const sanePinnedRouteReceipt=(x,uid,routeId,at)=>
+ obj(x)&&id(x.requestKey)&&id(x.pinEvidenceId)&&
+ x.routeId===routeId&&saneRoute(x,uid,x.requestKey,x.service,at,
+ {evidenceId:x.pinEvidenceId});
 const saneQuote=(x,uid,key,routeId,now)=>exact(x,quoteFields)&&
  x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
  x.ownerId===uid&&x.routeId===routeId&&id(x.quoteId)&&
@@ -269,6 +273,13 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     return respond(200,consumer);
    }
    if(isQuote){
+    // A pin-required request cannot quote a legacy, unpinned route.
+    // This owner-scoped independent SQL readback is mandatory BEFORE price.
+    if(requirePinnedAutoRoute){
+     const pinned=await loadPinnedRoute({actorId:user.id,routeId:body.routeId});
+     if(!sanePinnedRouteReceipt(pinned,user.id,body.routeId,now()))
+      return respond(409,{error:'Pinned route authority unavailable'});
+    }
     const quoteId=await quoteRoute({actorId:user.id,
       requestKey:body.requestKey,routeId:body.routeId});
     const receipt=await loadQuote({actorId:user.id,quoteId});
@@ -288,6 +299,20 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     return respond(200,receipt);
    }
    if(isBook){
+    // Pre-quote and booking must not bypass pin-required mode by reusing an
+    // old quoteId. Require both owner-scoped quote and linked pinned route.
+    if(requirePinnedAutoRoute){
+     const verifiedQuote=await loadQuote({actorId:user.id,quoteId:body.quoteId});
+     if(!obj(verifiedQuote)||!id(verifiedQuote.routeId)||
+      !id(verifiedQuote.quoteRequestKey)||
+      !saneQuote(verifiedQuote,user.id,verifiedQuote.quoteRequestKey,
+       verifiedQuote.routeId,now())||verifiedQuote.quoteId!==body.quoteId)
+      return respond(409,{error:'Pinned quote authority unavailable'});
+     const pinned=await loadPinnedRoute({actorId:user.id,
+      routeId:verifiedQuote.routeId});
+     if(!sanePinnedRouteReceipt(pinned,user.id,verifiedQuote.routeId,now()))
+      return respond(409,{error:'Pinned quote route unavailable'});
+    }
     const tripId=await bookQuote({actorId:user.id,requestKey:body.requestKey,
       quoteId:body.quoteId});
     const rec=await reconcileBooking({actorId:user.id,requestKey:body.requestKey});
