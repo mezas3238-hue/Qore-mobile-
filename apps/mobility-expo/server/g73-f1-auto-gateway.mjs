@@ -150,7 +150,8 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
  bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,
  readSubsidyPreview=null,readAutoFinancialState=null,
  cancelBookedAuto=null,readCancellation=null,now=Date.now,
- requirePinnedAutoRoute=false,verifyIndependentPins=null}={}){
+ requirePinnedAutoRoute=false,verifyIndependentPins=null,
+ registerPinnedRoute=null,loadPinnedRoute=null}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
@@ -162,7 +163,10 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
  !(cancelBookedAuto===null||typeof cancelBookedAuto==='function')||
  !(readCancellation===null||typeof readCancellation==='function')||
  typeof requirePinnedAutoRoute!=='boolean'||
- (requirePinnedAutoRoute===true&&typeof verifyIndependentPins!=='function'))
+ (requirePinnedAutoRoute===true&&(
+  typeof verifyIndependentPins!=='function'||
+  typeof registerPinnedRoute!=='function'||
+  typeof loadPinnedRoute!=='function')))
  throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
@@ -240,13 +244,17 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
       r.durationSeconds<0||r.durationSeconds>86400||
       !Number.isSafeInteger(r.tollsPyg)||r.tollsPyg<0||r.tollsPyg>1000000)
       return respond(409,{error:'Independently verified route unavailable'});
-    const routeId=await registerRoute({
+    // Do not let a legacy label-only SQL writer silently discard the pin
+    // proof. G328 requires its own independently reviewed atomic repository.
+    const routeId=await (pinEvidence===null?registerRoute:registerPinnedRoute)({
      actorId:user.id,requestKey:body.quoteRequestKey,service:body.service,
      originTag:r.originTag,destinationTag:r.destinationTag,zoneTag:r.zoneTag,
      distanceMeters:r.distanceMeters,durationSeconds:r.durationSeconds,
      tollsPyg:r.tollsPyg,
      ...(pinEvidence===null?{}:{pinEvidenceId:pinEvidence.evidenceId})});
-    const receipt=await loadRoute({actorId:user.id,routeId});
+    const receipt=await (pinEvidence===null?loadRoute:loadPinnedRoute)({
+     actorId:user.id,routeId,...(pinEvidence===null?{}:{
+      pinEvidenceId:pinEvidence.evidenceId})});
     if(!saneRoute(receipt,user.id,body.quoteRequestKey,body.service,now(),pinEvidence))
       throw Error('Route not confirmed');
     // Echo only the same just-authenticated route intent; SQL retains no
