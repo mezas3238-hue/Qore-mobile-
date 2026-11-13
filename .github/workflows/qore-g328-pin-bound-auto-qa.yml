@@ -1,0 +1,50 @@
+name: QORE G328 pin-bound AUTO route STAGING-only (NO LIVE)
+on:
+  push:
+    branches:
+      - integration/qore-g328-pin-bound-auto-route-staging-only-20261113
+    paths:
+      - 'apps/mobility-expo/server/g328-*'
+      - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
+      - '.github/workflows/qore-g328-pin-bound-auto-qa.yml'
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g328-*'
+      - 'apps/mobility-expo/server/g73-f1-auto-gateway.mjs'
+      - '.github/workflows/qore-g328-pin-bound-auto-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g328-pin-binding:
+    name: Independent pinned-route authority, G73 compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+      QORE_G328_PIN_BOUND_ROUTING_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert safe defaults and syntax
+        run: |
+          set -euo pipefail
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          test "$QORE_G328_PIN_BOUND_ROUTING_ENABLED" = false
+          node --check apps/mobility-expo/server/g328-pinned-auto-evidence.mjs
+          node --check apps/mobility-expo/server/g73-f1-auto-gateway.mjs
+      - name: Verify G328 proof plus unchanged legacy G73 and G134
+        run: |
+          node --test \
+            apps/mobility-expo/server/g328-pinned-auto-evidence.test.mjs \
+            apps/mobility-expo/server/g328-pinned-route-g73.test.mjs \
+            apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs \
+            apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs
