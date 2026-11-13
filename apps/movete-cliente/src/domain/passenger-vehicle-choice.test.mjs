@@ -62,6 +62,8 @@ test('G319 Android Client GPS must never loop on permission foreground or search
  // Keep the no-per-keystroke rule without requiring the obsolete variable name.
  assert.match(screen,/const query=\(kind==='pickup'\?origin:destination\)\.trim\(\)/);
  assert.match(screen,/locationBudget\.beginDestination\(query\)/);
+ assert.match(screen,/ClientPlaceMap/);
+ assert.match(screen,/pickupConfirmed&&destinationConfirmed/);
  assert.match(screen,/onPress=\{\(\)=>\{void findPlace\('pickup'\);\}\}/);
  assert.match(screen,/onPress=\{\(\)=>\{void findPlace\('destination'\);\}\}/);
  assert.match(screen,/useClientView\(\{polling:false\}\)/);
