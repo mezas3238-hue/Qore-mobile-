@@ -35,6 +35,8 @@ test('G325 only user can preview map and explicitly confirm native geocoded poin
  assert.match(picker,/await Linking\.openURL\(urls\.primary\)/);
  assert.match(picker,/onPress=\{\(\)=>\{void viewSelectedMap\(\);\}\}/);
  assert.match(picker,/onDestinationChange\(selected\.label\)/);
+ assert.match(picker,/void viewSelectedMap\(place\)/);
+ assert.match(picker,/Preserve the chosen/);
  assert.match(picker,/disabled=\{!editable\|\|gpsBusy\|\|searchBusy\}/);
  assert.match(picker,/epoch\.current\+\+/);
  assert.match(picker,/request!==epoch\.current/);
