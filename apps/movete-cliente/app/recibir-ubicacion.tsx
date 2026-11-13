@@ -39,7 +39,7 @@ export default function ReceiveMapsLocation(){
       {candidate.code==='PLACE_NAME_REQUIRED'
        ?'El enlace no contiene un nombre verificable. Buscá el destino en Movete Fácil; nunca se aceptan coordenadas sin verificar.'
        :'No se recibió un lugar válido de Google Maps. Podés regresar y buscarlo manualmente.'}
-     </Text>
+     </Text>}
    {error&&<Text accessibilityRole="alert" style={styles.small}>
     No se pudo interpretar el contenido compartido.</Text>}
    <Action secondary label="Volver a transporte" onPress={cancel}/>
