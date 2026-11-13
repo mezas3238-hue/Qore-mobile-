@@ -17,6 +17,8 @@ import {createPassengerMapPreviewLinks}
  from '../src/domain/client-map-preview.mjs';
 import {createGoogleMapsLaunchUrl}
  from '../src/domain/client-google-maps-links.mjs';
+import {consumeGoogleMapsShare}
+ from '../src/domain/client-google-maps-share.mjs';
 import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.mjs';
 
 export default function ChoosePassengerVehicle(){
@@ -88,6 +90,17 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    if(mounted.current)setGpsBusy(false);
   }
  },[privateRevision,locationBudget]);
+ useEffect(()=>{
+  // Shared Maps place is a proposed SEARCH TEXT, never a trusted coordinate.
+  // Consume exactly once from RAM, never through a URL or persistent storage.
+  const shared=consumeGoogleMapsShare();
+  if(shared){
+   searchEpoch.current++;setDestination(shared.query);setDropoff(null);
+   setDestinationConfirmed(false);setSuggestions([]);
+   setDestinationNotice('Lugar recibido de Google Maps. Tocá Buscar destinos, elegí el resultado de Paraguay y confirmalo.');
+   setMapNotice('Google Maps compartió el nombre, no una ubicación geográfica certificada.');
+  }
+ },[]);
  useEffect(()=>{
   mounted.current=true;
   active.current=AppState.currentState!=='background';
@@ -265,8 +278,9 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     </Text>
    </Pressable>
    <Text style={styles.small}>
-    Cuando elijas el lugar en Google Maps, volvé aquí y escribí su dirección para confirmar
-    las coordenadas en Movete Fácil. Google Maps no las devuelve automáticamente a esta app.
+    En Google Maps elegí el lugar y usá Compartir → Movete Fácil Cliente para traer el nombre.
+    Luego verificá la dirección aquí. Si Maps comparte solo un enlace corto,
+    escribí el lugar manualmente. No se aceptan coordenadas sin validación.
    </Text>
    <TextInput style={styles.field} value={destination} maxLength={120}
     accessibilityLabel="Dirección elegida para verificar en Movete Fácil"
