@@ -32,7 +32,7 @@ test('G328 keeps hardware stability, no per-key geocoding or LIVE booking',()=>{
  assert.match(s,/locationBudget\.beginGps\(\{manual\}\)/);
  assert.match(s,/return \(\)=>clearTimeout\(handle\)/);
  const dest=s.slice(s.indexOf('¿A dónde vas?</Text>'),s.indexOf('Buscar de nuevo (opcional)'));
- const onchange=dest.slice(dest.indexOf('onChangeText={value=>'),dest.indexOf('/}>'));
+ const onchange=dest.slice(dest.indexOf('onChangeText={value=>'),dest.indexOf('}}/>')+4);
  assert.doesNotMatch(onchange,/searchPassengerDestination|findPlace|geocodeAsync/);
  assert.doesNotMatch(s,/reserveQuotedAuto|bookMoto|fetch\(/);
 });
