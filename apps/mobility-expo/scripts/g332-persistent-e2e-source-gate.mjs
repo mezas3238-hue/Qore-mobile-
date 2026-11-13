@@ -53,12 +53,28 @@ export function checkG332CiOnlySources({
  }
  for(const f of listMigrations().filter(x=>x.endsWith('.sql'))){
   const sql=load('infra/qore-staging/migrations/'+f);
+  // G333: CI-only fixture guard and CREATE might be pasted into a persistent
+  // migration with quoted SQL identifiers or a non-public schema. Reject ALL.
+  if(/qore_disposable_chain/i.test(sql)&&
+   /(?:POSTGRES_)?CI_ONLY/i.test(sql))
+   issues.push('COPIED_CI_ONLY_FIXTURE:'+f);
+  // Comments are not executable DDL; strip those to avoid false alarms.
+  // Do NOT strip quoted SQL function bodies: dynamic CREATE also needs review.
+  const statements=sql.replace(/\\/\\*[\\s\\S]*?\\*\\/|--[^\\r\\n]*/g,' ');
+  const ident='(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)';
   for(const [_,kind,name] of missing){
-   // Ignore references in comments/guards/queries: only CREATE is a migration.
-   const re=new RegExp('\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?'+
-    (kind==='table'?'TABLE':'FUNCTION')+'\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?'+
-    '(?:public\\.)?'+name+'\\s*[\\(\\s]','i');
-   if(re.test(sql))issues.push('UNREVIEWED_PG16_PROMOTION:'+f+':'+name);
+   // Quoted public."name", "public"."name", and other_schema.name are
+   // PostgreSQL identifiers too. One optional schema with whitespace around
+   // dot is accepted; IF NOT EXISTS and CREATE OR REPLACE are supported.
+   const target='(?:"'+name+'"|'+name+')';
+   const definition='\\\\bCREATE\\\\s+(?:OR\\\\s+REPLACE\\\\s+)?'+
+    '(?:(?:TEMP|TEMPORARY|UNLOGGED)\\\\s+)?'+
+    (kind==='table'?'TABLE':'FUNCTION')+
+    '\\\\s+(?:IF\\\\s+NOT\\\\s+EXISTS\\\\s+)?'+
+    '(?:'+ident+'\\\\s*\\\\.\\\\s*)?'+target+
+    '(?=\\\\s|\\\\(|;|$)';
+   if(new RegExp(definition,'i').test(statements))
+    issues.push('UNREVIEWED_PG16_PROMOTION:'+f+':'+name);
   }
  }
  if(missing.length!==17||[...names].length!==17)
