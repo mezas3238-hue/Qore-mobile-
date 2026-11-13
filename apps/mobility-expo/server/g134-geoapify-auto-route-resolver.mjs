@@ -8,6 +8,7 @@
  * a toll authority and a durable atomic G130 Free quota repository.
  */
 import {createHmac} from 'node:crypto';
+import {validG328Point} from './g328-pinned-auto-evidence.mjs';
 import {createG128GeoapifyCargoRoadResolver}
  from './g128-geoapify-cargo-road-resolver.mjs';
 
@@ -45,8 +46,18 @@ export function createG134GeoapifyAutoRouteResolver({
    const covered=await resolveCoveredAutoCoordinates(Object.freeze({
     actorId:requestScope.actorId,quoteRequestKey:key,
     origin:requestScope.origin,destination:requestScope.destination,
-    service:requestScope.service
+    service:requestScope.service,
+    ...(requestScope.verifiedPinEvidence===null?{}:{
+     verifiedPinEvidence:requestScope.verifiedPinEvidence})
    }));
+   const pin=requestScope.verifiedPinEvidence;
+   if(pin!==null&&(!obj(covered)||
+     covered.pinEvidenceId!==pin.evidenceId||
+     covered.originCoordinates?.lat!==pin.pickupPoint.latitude||
+     covered.originCoordinates?.lon!==pin.pickupPoint.longitude||
+     covered.destinationCoordinates?.lat!==pin.dropoffPoint.latitude||
+     covered.destinationCoordinates?.lon!==pin.dropoffPoint.longitude))
+    throw Error('G134 pin-bound coverage mismatch');
    if(!obj(covered)||covered.source!=='INDEPENDENT_COVERAGE_AUTHORITY'||
     covered.coverageVerified!==true||
     covered.actorId!==requestScope.actorId||
@@ -98,17 +109,30 @@ export function createG134GeoapifyAutoRouteResolver({
  // Scoped only during the awaited server-side route call; never retain
  // plaintext user addresses once the provider/toll resolution finishes.
  const pending=new Map();
- return async({actorId,quoteRequestKey,origin,destination,service}={})=>{
+ return async({actorId,quoteRequestKey,origin,destination,service,
+  verifiedPinEvidence=null}={})=>{
   if(!UUID.test(actorId??'')||!UUID.test(quoteRequestKey??'')||
    !NAME(origin)||!NAME(destination)||
    origin.toLocaleLowerCase('es-PY')===destination.toLocaleLowerCase('es-PY')||
    !SERVICE.has(service)||pending.has(quoteRequestKey))
    throw Error('G134 invalid or concurrent quote route request');
+  if(verifiedPinEvidence!==null&&(
+    !obj(verifiedPinEvidence)||
+    verifiedPinEvidence.source!=='INDEPENDENT_PIN_AUTHORITY'||
+    verifiedPinEvidence.actorId!==actorId||
+    verifiedPinEvidence.quoteRequestKey!==quoteRequestKey||
+    verifiedPinEvidence.origin!==origin||
+    verifiedPinEvidence.destination!==destination||
+    verifiedPinEvidence.service!==service||
+    !UUID.test(verifiedPinEvidence.evidenceId??'')||
+    !validG328Point(verifiedPinEvidence.pickupPoint)||
+    !validG328Point(verifiedPinEvidence.dropoffPoint)))
+   throw Error('G134 invalid verified pin evidence');
   const originTag=tag(tagSecret,actorId,origin);
   const destinationTag=tag(tagSecret,actorId,destination);
   if(originTag===destinationTag)throw Error('G134 address identity collision');
   pending.set(quoteRequestKey,{actorId,origin,destination,service,
-   originTag,destinationTag});
+   originTag,destinationTag,verifiedPinEvidence});
   try{
    const road=await mapRoad({actorId,deliveryId:quoteRequestKey,
     vehicleKind:'AUTO',pickupTag:originTag,deliveryTag:destinationTag});
@@ -119,7 +143,9 @@ export function createG134GeoapifyAutoRouteResolver({
     routingVerified:true,coverageVerified:true,trafficAware:true,
     fallbackUsed:false,originTag,destinationTag,zoneTag:road.zoneTag,
     distanceMeters:road.distanceMeters,
-    durationSeconds:road.durationSeconds,tollsPyg:road.tollsPyg
+    durationSeconds:road.durationSeconds,tollsPyg:road.tollsPyg,
+    ...(verifiedPinEvidence===null?{}:{pinBound:true,
+     pinEvidenceId:verifiedPinEvidence.evidenceId})
    });
   }finally{pending.delete(quoteRequestKey);}
  };

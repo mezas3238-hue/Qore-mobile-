@@ -2,6 +2,8 @@
  * Any missing provider or role fails closed. No commercial trip or PSP.
  */
 import {assertStagingRef} from './g2-staging-vehicle-gateway.mjs';
+import {admitG328PinnedAutoRoute,validG328PinnedRouteBody}
+ from './g328-pinned-auto-evidence.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id=x=>typeof x==='string'&&UUID.test(x);
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -36,11 +38,18 @@ const quoteFields=['mode','commercialEnabled','ownerId','routeId','quoteId',
  'expiresAt','serverPriced','routingVerified','status'];
 const bookFields=['mode','commercialEnabled','ownerId','requestKey',
  'quoteId','routeId','tripId','revision','serverPersisted','status'];
-const saneRoute=(x,uid,key,serviceName,now)=>exact(x,routeFields)&&
+const saneRoute=(x,uid,key,serviceName,now,pinEvidence=null)=>
+ exact(x,pinEvidence===null?routeFields:[...routeFields,'pinEvidenceId','pinBound'])&&
  x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
  x.ownerId===uid&&x.requestKey===key&&id(x.routeId)&&
  x.service===serviceName&&x.routingVerified===true&&
+ (pinEvidence===null||(x.pinBound===true&&
+  x.pinEvidenceId===pinEvidence.evidenceId))&&
  Number.isSafeInteger(x.expiresAt)&&x.expiresAt>now&&x.expiresAt<=now+3600000;
+const sanePinnedRouteReceipt=(x,uid,routeId,at)=>
+ obj(x)&&id(x.requestKey)&&id(x.pinEvidenceId)&&
+ x.routeId===routeId&&saneRoute(x,uid,x.requestKey,x.service,at,
+ {evidenceId:x.pinEvidenceId});
 const saneQuote=(x,uid,key,routeId,now)=>exact(x,quoteFields)&&
  x.mode==='STAGING_DEMO_ONLY'&&x.commercialEnabled===false&&
  x.ownerId===uid&&x.routeId===routeId&&id(x.quoteId)&&
@@ -144,7 +153,9 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
  allowRequest,resolveVerifiedRoute,registerRoute,loadRoute,quoteRoute,loadQuote,
  bookQuote,reconcileBooking,dispatchBookedAuto=null,readDispatchStatus=null,
  readSubsidyPreview=null,readAutoFinancialState=null,
- cancelBookedAuto=null,readCancellation=null,now=Date.now}={}){
+ cancelBookedAuto=null,readCancellation=null,now=Date.now,
+ requirePinnedAutoRoute=false,verifyIndependentPins=null,
+ registerPinnedRoute=null,loadPinnedRoute=null}={}){
  assertStagingRef(projectRef);
  if(![verifyAccessToken,authorizePassenger,allowRequest,resolveVerifiedRoute,
  registerRoute,loadRoute,quoteRoute,loadQuote,bookQuote,reconcileBooking,now]
@@ -154,7 +165,12 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
  !(readSubsidyPreview===null||typeof readSubsidyPreview==='function')||
  !(readAutoFinancialState===null||typeof readAutoFinancialState==='function')||
  !(cancelBookedAuto===null||typeof cancelBookedAuto==='function')||
- !(readCancellation===null||typeof readCancellation==='function'))
+ !(readCancellation===null||typeof readCancellation==='function')||
+ typeof requirePinnedAutoRoute!=='boolean'||
+ (requirePinnedAutoRoute===true&&(
+  typeof verifyIndependentPins!=='function'||
+  typeof registerPinnedRoute!=='function'||
+  typeof loadPinnedRoute!=='function')))
  throw Error('G73 backend adapters required');
  return async({method,path,headers={},body}={})=>{
   const isRoute=method==='POST'&&path===ROUTE;
@@ -172,10 +188,12 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   if((match||dispatchMatch||subsidyMatch||financialMatch||cancelReceiptMatch)&&
    body!==undefined&&body!==null)
    return respond(400,{error:'Read-only GET cannot contain a body'});
-  if(isRoute&&(!exact(body,['quoteRequestKey','origin','destination','service'])||
+  if(isRoute&&(requirePinnedAutoRoute===true?
+    !validG328PinnedRouteBody(body):
+    (!exact(body,['quoteRequestKey','origin','destination','service'])||
     !id(body.quoteRequestKey)||!human(body.origin)||!human(body.destination)||
     body.origin.toLowerCase()===body.destination.toLowerCase()||
-    !service(body.service)))return respond(400,{error:'Invalid route'});
+    !service(body.service))))return respond(400,{error:'Invalid route'});
   if(isQuote&&(!exact(body,['requestKey','routeId'])||
     !id(body.requestKey)||!id(body.routeId)))
     return respond(400,{error:'Invalid quote'});
@@ -205,11 +223,23 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
   catch{return respond(503,{error:'Rate limiter unavailable'});}
   try{
    if(isRoute){
+    // G328 is off by default. When enabled, the old label-only route
+    // request is rejected, never silently treated as a geolocated journey.
+    let pinEvidence=null;
+    if(requirePinnedAutoRoute){
+     const admission=await admitG328PinnedAutoRoute({
+      input:body,actorId:user.id,verifyIndependentPins,now});
+     if(!admission.ok)return respond(409,{error:'Independent pin evidence unavailable'});
+     pinEvidence=admission.evidence;
+    }
     const r=await resolveVerifiedRoute({
      actorId:user.id,quoteRequestKey:body.quoteRequestKey,
      origin:body.origin,destination:body.destination,
-     service:body.service});
+     service:body.service,
+     ...(pinEvidence===null?{}:{verifiedPinEvidence:pinEvidence})});
     if(!obj(r)||r.routingVerified!==true||r.coverageVerified!==true||
+      (pinEvidence!==null&&(r.pinBound!==true||
+       r.pinEvidenceId!==pinEvidence.evidenceId))||
       r.trafficAware!==true||
       r.fallbackUsed!==false||!tag(r.originTag)||!tag(r.destinationTag)||
       r.originTag===r.destinationTag||!tag(r.zoneTag)||
@@ -218,13 +248,18 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
       r.durationSeconds<0||r.durationSeconds>86400||
       !Number.isSafeInteger(r.tollsPyg)||r.tollsPyg<0||r.tollsPyg>1000000)
       return respond(409,{error:'Independently verified route unavailable'});
-    const routeId=await registerRoute({
+    // Do not let a legacy label-only SQL writer silently discard the pin
+    // proof. G328 requires its own independently reviewed atomic repository.
+    const routeId=await (pinEvidence===null?registerRoute:registerPinnedRoute)({
      actorId:user.id,requestKey:body.quoteRequestKey,service:body.service,
      originTag:r.originTag,destinationTag:r.destinationTag,zoneTag:r.zoneTag,
      distanceMeters:r.distanceMeters,durationSeconds:r.durationSeconds,
-     tollsPyg:r.tollsPyg});
-    const receipt=await loadRoute({actorId:user.id,routeId});
-    if(!saneRoute(receipt,user.id,body.quoteRequestKey,body.service,now()))
+     tollsPyg:r.tollsPyg,
+     ...(pinEvidence===null?{}:{pinEvidenceId:pinEvidence.evidenceId})});
+    const receipt=await (pinEvidence===null?loadRoute:loadPinnedRoute)({
+     actorId:user.id,routeId,...(pinEvidence===null?{}:{
+      pinEvidenceId:pinEvidence.evidenceId})});
+    if(!saneRoute(receipt,user.id,body.quoteRequestKey,body.service,now(),pinEvidence))
       throw Error('Route not confirmed');
     // Echo only the same just-authenticated route intent; SQL retains no
     // human-readable address. The verified resolver MUST attest coverage.
@@ -238,6 +273,13 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     return respond(200,consumer);
    }
    if(isQuote){
+    // A pin-required request cannot quote a legacy, unpinned route.
+    // This owner-scoped independent SQL readback is mandatory BEFORE price.
+    if(requirePinnedAutoRoute){
+     const pinned=await loadPinnedRoute({actorId:user.id,routeId:body.routeId});
+     if(!sanePinnedRouteReceipt(pinned,user.id,body.routeId,now()))
+      return respond(409,{error:'Pinned route authority unavailable'});
+    }
     const quoteId=await quoteRoute({actorId:user.id,
       requestKey:body.requestKey,routeId:body.routeId});
     const receipt=await loadQuote({actorId:user.id,quoteId});
@@ -257,6 +299,20 @@ export function createQoreG73AutoGateway({projectRef,verifyAccessToken,authorize
     return respond(200,receipt);
    }
    if(isBook){
+    // Pre-quote and booking must not bypass pin-required mode by reusing an
+    // old quoteId. Require both owner-scoped quote and linked pinned route.
+    if(requirePinnedAutoRoute){
+     const verifiedQuote=await loadQuote({actorId:user.id,quoteId:body.quoteId});
+     if(!obj(verifiedQuote)||!id(verifiedQuote.routeId)||
+      !id(verifiedQuote.quoteRequestKey)||
+      !saneQuote(verifiedQuote,user.id,verifiedQuote.quoteRequestKey,
+       verifiedQuote.routeId,now())||verifiedQuote.quoteId!==body.quoteId)
+      return respond(409,{error:'Pinned quote authority unavailable'});
+     const pinned=await loadPinnedRoute({actorId:user.id,
+      routeId:verifiedQuote.routeId});
+     if(!sanePinnedRouteReceipt(pinned,user.id,verifiedQuote.routeId,now()))
+      return respond(409,{error:'Pinned quote route unavailable'});
+    }
     const tripId=await bookQuote({actorId:user.id,requestKey:body.requestKey,
       quoteId:body.quoteId});
     const rec=await reconcileBooking({actorId:user.id,requestKey:body.requestKey});
