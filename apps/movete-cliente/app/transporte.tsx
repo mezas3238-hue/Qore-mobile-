@@ -15,7 +15,7 @@ import {createClientLocationWorkBudget}
  from '../src/domain/client-location-work-budget.mjs';
 import {createPassengerMapPreviewLinks}
  from '../src/domain/client-map-preview.mjs';
-import {createGoogleMapsLaunchUrl}
+import {createGoogleMapsLaunchUrl,createGoogleMapsDirectionsUrl}
  from '../src/domain/client-google-maps-links.mjs';
 import {consumeGoogleMapsShare}
  from '../src/domain/client-google-maps-share.mjs';
@@ -205,6 +205,21 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   pickup.label===origin&&dropoff.label===destination&&
   pickupConfirmed&&destinationConfirmed;
  const canContinue=choice.ok&&routeReview.ok&&pointsSelected;
+ async function openConfirmedRoadRoute(){
+  // Deliberate user tap only: Google Maps owns the road route and duration.
+  // No local price or trip claim is derived from its navigation screen.
+  if(!pointsSelected||!pickup||!dropoff)return;
+  const url=createGoogleMapsDirectionsUrl(pickup,dropoff);
+  if(!url){setMapNotice('Revisá los dos puntos antes de abrir la ruta.');return;}
+  try{
+   await Linking.openURL(url);
+   if(mounted.current)setMapNotice(
+    'Google Maps muestra un recorrido orientativo. La tarifa y la cobertura de Movete Fácil deben verificarse en el servidor.'
+   );
+  }catch{
+   if(mounted.current)setMapNotice('No fue posible abrir la ruta en Google Maps.');
+  }
+ }
  function continueToRide(){
   // Navegar no cotiza, reserva ni inicia un despacho.
   if(!canContinue)return;
@@ -318,6 +333,9 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
      disabled={destinationConfirmed} onPress={()=>{setDestinationConfirmed(true);
       setDestinationNotice('Destino confirmado por el pasajero.');}}/>
    </>}
+   {pointsSelected&&<Action secondary label="Ver recorrido en mi Google Maps"
+    hint="Abre Maps para ver el recorrido; no reserva ni cotiza"
+    onPress={()=>{void openConfirmedRoadRoute();}}/>}
    {mapNotice!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{mapNotice}</Text>}
    <Action secondary label="Intercambiar origen y destino"
     onPress={()=>{setOrigin(destination);setDestination(origin);
