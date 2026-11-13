@@ -56,11 +56,22 @@ jobs:
         env:
           PGOPTIONS: '-c qore.g337_owner_rollback_approved=true'
         run: |
-          if psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql > /tmp/g337_rollback_refusal.log 2>&1; then
+          set -euo pipefail
+          # G338 adds adversarial bookings: never assume a fixed fixture count.
+          # The rollback must reject ANY persisted evidence and mutate nothing.
+          before_quotes="$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_quotes')"
+          before_trips="$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_trips')"
+          before_ledger="$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_ledger')"
+          test "$before_quotes" -ge 1
+          test "$before_trips" -ge 1
+          test "$before_ledger" -ge 1
+          if psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql > /tmp/g337_rollback_refusal.log 2>&1; then
             echo 'FAIL: rollback destroyed data'; exit 1;
           fi
           grep -q 'G337 MOTO PG17 has data' /tmp/g337_rollback_refusal.log
-          psql -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM qore_stage_internal.g337_moto_quotes" | grep -qx 1
+          test "$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_quotes')" = "$before_quotes"
+          test "$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_trips')" = "$before_trips"
+          test "$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_ledger')" = "$before_ledger"
       - name: After disposable evidence is deleted, exact scoped rollback succeeds
         env:
           PGOPTIONS: '-c qore.g337_owner_rollback_approved=true'
