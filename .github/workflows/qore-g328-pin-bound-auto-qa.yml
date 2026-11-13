@@ -41,6 +41,7 @@ jobs:
           test "$QORE_G328_PIN_BOUND_ROUTING_ENABLED" = false
           node --check apps/mobility-expo/server/g328-pinned-auto-evidence.mjs
           node --check apps/mobility-expo/server/g73-f1-auto-gateway.mjs
+          node --check apps/mobility-expo/server/g134-geoapify-auto-route-resolver.mjs
       - name: Verify G328 proof plus unchanged legacy G73 and G134
         run: |
           node --test \
