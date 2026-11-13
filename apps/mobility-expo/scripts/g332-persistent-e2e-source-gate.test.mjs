@@ -73,3 +73,26 @@ test('G333 ignores DDL text in comments but refuses copied CI_ONLY fixtures',()=
  });
  assert.ok(copied.issues.includes('COPIED_CI_ONLY_FIXTURE:'+pretend));
 });
+
+// G335: full Git blob pin is deliberate: no generic G75 allowlist.
+test('G335 allows only the exact reviewed native G333 G262/G73 receipt',()=>{
+ const path='infra/qore-staging/migrations/g333_private_admin_auto_f1_receipt_pg17_DRAFT.sql';
+ const original=load(path);
+ const approved=checkG332CiOnlySources({load,listMigrations});
+ assert.equal(approved.code,'PASS_CI_ONLY_SOURCES_ISOLATED',approved.issues.join(','));
+ const altered=checkG332CiOnlySources({
+  listMigrations,load:p=>p===path?
+   original.replace('SECURITY INVOKER','SECURITY DEFINER'):load(p)
+ });
+ assert.ok(altered.issues.includes(
+  'UNREVIEWED_PG16_PROMOTION:g333_private_admin_auto_f1_receipt_pg17_DRAFT.sql:mobility_stage_g75_admin_f1_receipt'));
+});
+test('G335 rejects verbatim native receipt copied under an unreviewed migration name',()=>{
+ const original=load('infra/qore-staging/migrations/g333_private_admin_auto_f1_receipt_pg17_DRAFT.sql');
+ const file='g999_native_receipt_copy.sql';
+ const r=checkG332CiOnlySources({
+  listMigrations:()=>[...listMigrations(),file],
+  load:p=>p.endsWith('/'+file)?original:load(p)
+ });
+ assert.ok(r.issues.includes('UNREVIEWED_PG16_PROMOTION:'+file+':mobility_stage_g75_admin_f1_receipt'));
+});
