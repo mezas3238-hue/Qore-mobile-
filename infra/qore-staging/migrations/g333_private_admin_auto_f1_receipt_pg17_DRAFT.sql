@@ -63,7 +63,9 @@ RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $g333
   AND t.status::text IN ('searching','accepted','arriving','in_progress',
    'completed','cancelled')
   AND (t.status::text<>'searching' OR t.driver_id IS NULL)
-  AND (t.status::text NOT IN ('accepted','arriving','in_progress')
+  -- A completed ride cannot be certified without a persisted driver.
+  -- Cancelled rides may legitimately have no assigned driver.
+  AND (t.status::text NOT IN ('accepted','arriving','in_progress','completed')
    OR t.driver_id IS NOT NULL)
   AND q.total_pyg BETWEEN 1 AND 100000000
   AND q.commission_pyg BETWEEN 0 AND q.total_pyg
