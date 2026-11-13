@@ -3,6 +3,7 @@ import {AppState,ScrollView,Text,TextInput,View} from 'react-native';
 import * as Crypto from 'expo-crypto';
 import {router} from 'expo-router';
 import {Action,Panel,palette,styles} from '../src/ClientUI';
+import {PassengerPlaceFields} from '../src/PassengerPlaceFields';
 import {BookingRecoveryPanel} from '../src/BookingRecoveryPanel';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import type {ClientExperience,ClientSnapshot} from '../src/domain/client-experience.mjs';
@@ -289,14 +290,9 @@ function PrivateRideForm({client,view}:{client:ClientExperience;view:ClientSnaps
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>Paso 1 · Tu ruta</Text>
-   <Text style={styles.text}>Origen</Text>
-   <TextInput style={styles.field} value={pickup} onChangeText={editPickup}
-    editable={free} maxLength={120} placeholder="Ej.: Centro de San Lorenzo"
-    accessibilityLabel="Origen del viaje"/>
-   <Text style={styles.text}>Destino</Text>
-   <TextInput style={styles.field} value={destination} onChangeText={editDestination}
-    editable={free} maxLength={120} placeholder="Ej.: Villa Morra, Asunción"
-    accessibilityLabel="Destino del viaje"/>
+   <PassengerPlaceFields origin={pickup} destination={destination}
+    editable={free} onOriginChange={editPickup}
+    onDestinationChange={editDestination}/>
    <Action label="Invertir origen y destino" secondary disabled={!free}
     onPress={()=>changeRoute({type:'swap'})}/>
    <Text accessibilityRole="header" style={styles.heading}>Paradas adicionales · borrador local</Text>

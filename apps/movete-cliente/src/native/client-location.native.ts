@@ -36,6 +36,18 @@ export async function getPassengerCurrentPickup():Promise<{
    accuracyMeters:valid.point.accuracyMeters};
  }catch{return {ok:false,code:'LOCATION_UNAVAILABLE'};}
 }
+/**
+ * Permission only: tapping Destino opens the place picker without forcing a
+ * high-accuracy GPS sample. Android native forward geocoding needs this grant.
+ */
+export async function requestPassengerGeocoderPermission():Promise<boolean>{
+ try{
+  const current=await timeout(Location.getForegroundPermissionsAsync(),5000);
+  if(current.granted===true)return true;
+  const prompted=await timeout(Location.requestForegroundPermissionsAsync(),12000);
+  return prompted.granted===true;
+ }catch{return false;}
+}
 export async function searchPassengerDestination(query:string):Promise<{
  ok:true;places:readonly PassengerPlace[]
 }|{ok:false;code:string}>{
