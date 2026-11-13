@@ -1,6 +1,6 @@
 /** Explicit AUTO/MOTO passenger choice, without mixing cargo/merchant modes. */
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {router} from 'expo-router';
+import {router,useFocusEffect} from 'expo-router';
 import {AppState,Linking,Platform,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
@@ -90,9 +90,11 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    if(mounted.current)setGpsBusy(false);
   }
  },[privateRevision,locationBudget]);
- useEffect(()=>{
-  // Shared Maps place is a proposed SEARCH TEXT, never a trusted coordinate.
-  // Consume exactly once from RAM, never through a URL or persistent storage.
+ useFocusEffect(useCallback(()=>{
+  // G333: Android's share sheet may return to an EXISTING Transporte screen.
+  // Consume the shared place on FOCUS, not just on the first mount.
+  // RAM consumption is one-shot; it does not restart GPS, request permissions,
+  // geocode again or mark destination as confirmed.
   const shared=consumeGoogleMapsShare();
   if(shared){
    // G331: native geocoder result is a proposed DRAFT, never a confirmed
@@ -108,7 +110,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     ?'La dirección se localizó en el teléfono. No se solicitó ni cotizó un viaje.'
     :'Google Maps compartió el nombre, no una ubicación geográfica certificada.');
   }
- },[]);
+ },[]));
  useEffect(()=>{
   mounted.current=true;
   active.current=AppState.currentState!=='background';
