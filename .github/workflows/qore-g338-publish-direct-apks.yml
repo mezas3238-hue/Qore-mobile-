@@ -1,0 +1,119 @@
+name: QORE G338 stable direct Cliente Driver QA APKs (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/qore-g338-direct-apks-20261113
+    paths:
+      - '.github/workflows/qore-g338-publish-direct-apks.yml'
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: qore-g338-stable-qa-apks-one-shot
+  cancel-in-progress: false
+jobs:
+  publish-existing-verified-build:
+    name: Publish verified full Client and Driver QA assets from integrated G338
+    if: github.repository == 'mezas3238-hue/Qore-mobile-'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: '43490554916'
+      SOURCE_SHA: '3732781a050791c028a44431db8c9c806d545ec8'
+      SOURCE_BRANCH: 'integration/qore-g338-unified-g337-moto-g336-delivery-gps-qa-20261113'
+      RELEASE_TAG: 'qa-g338-integrated-2026-11-13-3732781a0507-run43490554916'
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Refuse non-QA or wrong source and enforce commercial flags OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          test "$GITHUB_REF_NAME" = qa/qore-g338-direct-apks-20261113
+          git merge-base --is-ancestor "$SOURCE_SHA" HEAD
+          test "$SOURCE_RUN_ID" = 43490554916
+          test "$SOURCE_SHA" = 3732781a050791c028a44431db8c9c806d545ec8
+      - name: Require finished source Android build success
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run watch "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+          api="repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID"
+          test "$(gh api "$api" --jq '.head_sha')" = "$SOURCE_SHA"
+          test "$(gh api "$api" --jq '.head_branch')" = "$SOURCE_BRANCH"
+          test "$(gh api "$api" --jq '.conclusion')" = success
+          test "$(gh api "$api" --jq '.event')" = pull_request
+          test "$(gh api "$api" --jq '.path')" = '.github/workflows/qore-g338-integrated-client-driver-android-qa.yml'
+      - name: Download both full APK artifacts from exact source run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/qore-g338-artifacts"
+          mkdir -p "$dir"
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'QORE-G338-integrated-*' --dir "$dir"
+          client="$(find "$dir" -mindepth 1 -maxdepth 1 -type d -name 'QORE-G338-integrated-movete-cliente-arm64-qa-*' -print -quit)"
+          driver="$(find "$dir" -mindepth 1 -maxdepth 1 -type d -name 'QORE-G338-integrated-movete-driver-arm64-qa-*' -print -quit)"
+          test -n "$client" && test -n "$driver"
+          test -s "$client/app-release.apk"
+          test -s "$driver/app-release.apk"
+          unzip -t "$client/app-release.apk" | grep -q 'No errors detected'
+          unzip -t "$driver/app-release.apk" | grep -q 'No errors detected'
+          test "$(stat -c%s "$client/app-release.apk")" -lt 180000000
+          test "$(stat -c%s "$driver/app-release.apk")" -lt 180000000
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          cp "$client/app-release.apk" "$RUNNER_TEMP/release-assets/Movete-Facil-Cliente-G338-Integrada-ARM64-QA.apk"
+          cp "$driver/app-release.apk" "$RUNNER_TEMP/release-assets/Movete-Facil-Driver-G338-Integrada-ARM64-QA.apk"
+          cd "$RUNNER_TEMP/release-assets"
+          sha256sum -- *.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Publish immutable QA prerelease direct APK links (no deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Immutable QA tag already exists; never overwrite assets' >&2
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/g338-qa-notes.md" <<'NOTES'
+          MOVETE FÁCIL G338 · CLIENTE Y DRIVER COMPLETOS · ANDROID ARM64 · QA OFFLINE
+
+          Estas dos APK contienen aplicaciones completas construidas desde la candidatura
+          integradora G338. Cliente conserva el GPS aprobado. Driver incorpora cámara y
+          registro tal como se encuentran en el árbol integrado, sin falsificar KYC.
+
+          PR #160, código fuente integrado sin merge a main.
+          Versión de PRUEBA: LIVE, PSP y conexiones Supabase/Railway desactivadas.
+          No solicita cobros reales, no ofrece viajes reales y no certifica 5/5 E2E.
+          Paquetes Android aislados para no reemplazar apps productivas.
+          Instalar cada APK en Android ARM64 físico y documentar cualquier fallo.
+
+          El archivo SHA256SUMS.txt verifica la integridad de ambas APK.
+          Este prerelease NO es lanzamiento comercial ni distribución Play Store.
+          NOTES
+          printf '\nSHA de origen: %s\nEjecución Android: %s\n' "$SOURCE_SHA" "$SOURCE_RUN_ID" >> "$RUNNER_TEMP/g338-qa-notes.md"
+          gh release create "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release-assets/Movete-Facil-Cliente-G338-Integrada-ARM64-QA.apk" \
+            "$RUNNER_TEMP/release-assets/Movete-Facil-Driver-G338-Integrada-ARM64-QA.apk" \
+            "$RUNNER_TEMP/release-assets/SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" \
+            --title 'Movete Fácil G338 — Cliente y Driver QA integrados (NO LIVE)' \
+            --prerelease --notes-file "$RUNNER_TEMP/g338-qa-notes.md"
+      - name: Verify both directly downloadable assets actually exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' > "$RUNNER_TEMP/g338-assets.txt"
+          grep -Fx 'Movete-Facil-Cliente-G338-Integrada-ARM64-QA.apk' "$RUNNER_TEMP/g338-assets.txt"
+          grep -Fx 'Movete-Facil-Driver-G338-Integrada-ARM64-QA.apk' "$RUNNER_TEMP/g338-assets.txt"
+          grep -Fx 'SHA256SUMS.txt' "$RUNNER_TEMP/g338-assets.txt"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url
