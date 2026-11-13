@@ -198,6 +198,37 @@ DO $driver_receipt$ DECLARE v jsonb; BEGIN
  THEN RAISE EXCEPTION 'G333 accepted Driver proof wrong: %',v; END IF;
 END $driver_receipt$;
 RESET ROLE;
+
+-- Completed rides without an assigned Driver must not look externally certified.
+UPDATE public.mobility_stage_auto_demo_trips
+ SET status='completed',driver_id=NULL,revision=3
+ WHERE id='33300000-0000-4333-8333-000000000010';
+SET ROLE service_role;
+DO $completed_orphan$ BEGIN
+ IF public.mobility_stage_g75_admin_f1_receipt(
+  '33300000-0000-4333-8333-000000000001',
+  '33300000-0000-4333-8333-000000000010') IS NOT NULL
+ THEN RAISE EXCEPTION 'G333 orphan completed ride was accepted'; END IF;
+END $completed_orphan$;
+RESET ROLE;
+
+-- A legitimately completed Driver trip remains readable for Admin audit,
+-- keeping the G75 19-field DTO and redaction rules unchanged.
+UPDATE public.mobility_stage_auto_demo_trips
+ SET status='completed',driver_id='33300000-0000-4333-8333-000000000004',
+  revision=4
+ WHERE id='33300000-0000-4333-8333-000000000010';
+SET ROLE service_role;
+DO $completed_assigned$ DECLARE v jsonb; BEGIN
+ v:=public.mobility_stage_g75_admin_f1_receipt(
+  '33300000-0000-4333-8333-000000000001',
+  '33300000-0000-4333-8333-000000000010');
+ IF v IS NULL OR v->>'status'<>'completed'
+  OR v->>'assignmentPersisted'<>'true'
+  OR v->>'driverId' IS NOT NULL OR v->>'revision'<>'4'
+ THEN RAISE EXCEPTION 'G333 valid completed ride proof rejected: %',v; END IF;
+END $completed_assigned$;
+RESET ROLE;
 DO $counts$ BEGIN
  IF (SELECT count(*) FROM public.mobility_stage_auto_demo_trips)<>1
   OR (SELECT count(*) FROM public.mobility_stage_g262_auto_prequotes)<>1
