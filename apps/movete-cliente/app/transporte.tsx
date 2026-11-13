@@ -2,6 +2,9 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {router} from 'expo-router';
 import {AppState,Linking,Platform,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
+import Constants from 'expo-constants';
+import {ClientNativeMapPicker} from '../src/native/ClientNativeMapPicker';
+import {PassengerRoutePreview} from '../src/PassengerRoutePreview';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {useClientView,usePassengerRideIntent} from '../src/ClientRuntime';
 import {reviewLocalRouteDraft} from '../src/domain/client-route-editor.mjs';
@@ -39,6 +42,11 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const [pickupConfirmed,setPickupConfirmed]=useState(false);
  const [destinationConfirmed,setDestinationConfirmed]=useState(false);
  const [mapNotice,setMapNotice]=useState('');
+ const [mapKind,setMapKind]=useState<'pickup'|'destination'|null>(null);
+ // Android MapView requires a build-time SDK key restricted to the APK package+SHA-1.
+ // Never mount a blank Android map if credentials are absent.
+ const nativeMapReady=Platform.OS==='ios'||
+  (Platform.OS==='android'&&Constants.expoConfig?.extra?.qoreAndroidMapsReady===true);
  const [gpsBusy,setGpsBusy]=useState(false);
  const [searchBusy,setSearchBusy]=useState(false);
  const [feedback,setFeedback]=useState('');
@@ -93,7 +101,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   const sub=AppState.addEventListener('change',status=>{
    if(status==='background'){
     active.current=false;gpsEpoch.current++;searchEpoch.current++;
-    setSuggestions([]);setPickupSuggestions([]);
+    setSuggestions([]);setPickupSuggestions([]);setMapKind(null);
     setDestinationNotice('Escribí la dirección y tocá Buscar cuando vuelvas a la app.');
    }else if(status==='active'){
     active.current=true;
@@ -159,6 +167,27 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    }
   }
  }
+ async function searchInNativeMap(query:string){
+  // Share the SAME serialized budget with the existing form's geocoder.
+  const lease=locationBudget.beginDestination(query);
+  if(!lease.ok)return {ok:false as const,code:lease.code};
+  try{return await searchPassengerDestination(query);}
+  finally{locationBudget.end('destination');}
+ }
+ function confirmNativeMap(place:PassengerPlace){
+  if(mapKind==='pickup'){
+   gpsEpoch.current++;searchEpoch.current++;
+   setPickup(place);setOrigin(place.label);setPickupAccuracy(null);
+   setPickupConfirmed(true);setPickupSuggestions([]);
+   setPickupNotice('Punto de recogida confirmado en el mapa.');
+  }else if(mapKind==='destination'){
+   searchEpoch.current++;
+   setDropoff(place);setDestination(place.label);
+   setDestinationConfirmed(true);setSuggestions([]);
+   setDestinationNotice('Destino confirmado en el mapa.');
+  }
+  setFeedback('');setMapKind(null);
+ }
  const choice=selectPassengerVehicle(vehicle);
  const routeReview=reviewLocalRouteDraft({origin,destination,stops:[],revision:0});
  const pointsSelected=pickup!==null&&dropoff!==null&&
@@ -198,14 +227,18 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>2 · Origen y destino</Text>
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
-   <TextInput style={styles.field} value={origin} maxLength={120}
+   {nativeMapReady?<Pressable accessibilityRole="button"
+    accessibilityLabel="Abrir GPS y mapa de recogida" style={styles.field}
+    onPress={()=>{setMapKind('pickup');if(!pickup&&!gpsBusy)void refreshPickup(true);}}>
+    <Text style={{fontSize:16,color:'#183044'}}>{origin||'Tocá para localizar tu recogida'}</Text>
+   </Pressable>:<TextInput style={styles.field} value={origin} maxLength={120}
     accessibilityLabel="Origen de transporte" placeholder="Buscando ubicación GPS…"
     onChangeText={value=>{gpsEpoch.current++;searchEpoch.current++;setOrigin(value);setPickup(null);
      setPickupAccuracy(null);setPickupConfirmed(false);setPickupSuggestions([]);setFeedback('');
-     setPickupNotice('Origen editado. Buscá la dirección o actualizá el GPS.');}}/>
-   <Action secondary label={searchBusy?'Buscando…':'Buscar otro punto de recogida'}
+     setPickupNotice('Origen editado. Buscá la dirección o actualizá el GPS.');}}/>}
+   {!nativeMapReady&&<Action secondary label={searchBusy?'Buscando…':'Buscar otro punto de recogida'}
     disabled={gpsBusy||searchBusy||origin.trim().length<4}
-    onPress={()=>{void findPlace('pickup');}}/>
+    onPress={()=>{void findPlace('pickup');}}/>}
    {pickupSuggestions.map((option,i)=><Pressable key={'pickup-'+i+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
      setOrigin(option.label);setPickup(option);setPickupAccuracy(null);
@@ -222,20 +255,26 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Action secondary label={gpsBusy?'Consultando GPS…':'Actualizar ubicación GPS'}
     disabled={gpsBusy||searchBusy} onPress={()=>{void refreshPickup(true);}}/>
    {pickup!==null&&pickup.label===origin&&<>
-    <Action secondary label="Ver recogida en el mapa" onPress={()=>{void openPlaceOnMap(pickup);}}/>
+    <Action secondary label="Ver recogida en el mapa" onPress={()=>{
+     if(nativeMapReady)setMapKind('pickup');else void openPlaceOnMap(pickup);
+    }}/>
     <Action label={pickupConfirmed?'Recogida confirmada':'Confirmar punto de recogida'}
      disabled={pickupConfirmed} onPress={()=>{setPickupConfirmed(true);
       setPickupNotice('Punto de recogida confirmado por el pasajero.');}}/>
    </>}
    <Text style={styles.text}>¿A dónde vas?</Text>
-   <TextInput style={styles.field} value={destination} maxLength={120}
+   {nativeMapReady?<Pressable accessibilityRole="button"
+    accessibilityLabel="Abrir mapa y buscar destino" style={styles.field}
+    onPress={()=>setMapKind('destination')}>
+    <Text style={{fontSize:16,color:'#183044'}}>{destination||'Tocá y buscá a dónde querés ir'}</Text>
+   </Pressable>:<TextInput style={styles.field} value={destination} maxLength={120}
     accessibilityLabel="Destino de transporte" placeholder="Calle, comercio, barrio y ciudad"
     onChangeText={value=>{searchEpoch.current++;setDestination(value);setDropoff(null);
      setDestinationConfirmed(false);setSuggestions([]);setFeedback('');
-     setDestinationNotice('Escribí la calle y ciudad. Tocá Buscar para ver sugerencias.');}}/>
-   <Action secondary label={searchBusy?'Buscando dirección…':'Buscar destinos'}
+     setDestinationNotice('Escribí la calle y ciudad. Tocá Buscar para ver sugerencias.');}}/>}
+   {!nativeMapReady&&<Action secondary label={searchBusy?'Buscando dirección…':'Buscar destinos'}
     disabled={gpsBusy||searchBusy||destination.trim().length<4||dropoff!==null}
-    onPress={()=>{void findPlace('destination');}}/>
+    onPress={()=>{void findPlace('destination');}}/>}
    <Text accessibilityLiveRegion="polite" style={styles.small}>{destinationNotice}</Text>
    {suggestions.map((option,i)=><Pressable key={String(i)+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
@@ -249,12 +288,17 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     </Text>
    </Pressable>)}
    {dropoff!==null&&dropoff.label===destination&&<>
-    <Action secondary label="Ver destino en el mapa" onPress={()=>{void openPlaceOnMap(dropoff);}}/>
+    <Action secondary label="Ver destino en el mapa" onPress={()=>{
+     if(nativeMapReady)setMapKind('destination');else void openPlaceOnMap(dropoff);
+    }}/>
     <Action label={destinationConfirmed?'Destino confirmado':'Confirmar destino'}
      disabled={destinationConfirmed} onPress={()=>{setDestinationConfirmed(true);
       setDestinationNotice('Destino confirmado por el pasajero.');}}/>
    </>}
    {mapNotice!==''&&<Text accessibilityLiveRegion="polite" style={styles.small}>{mapNotice}</Text>}
+   <PassengerRoutePreview enabled={nativeMapReady}
+    pickup={pickupConfirmed&&pickup?.label===origin?pickup:null}
+    destination={destinationConfirmed&&dropoff?.label===destination?dropoff:null}/>
    <Action secondary label="Intercambiar origen y destino"
     onPress={()=>{setOrigin(destination);setDestination(origin);
      setPickup(dropoff);setDropoff(pickup);setPickupAccuracy(null);
@@ -262,7 +306,9 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
      setSuggestions([]);setPickupSuggestions([]);setFeedback('');
      setPickupNotice('Punto intercambiado. Verificá la ubicación antes de viajar.');
      setDestinationNotice('Punto intercambiado. Confirmá el destino.');}}/>
-   <Text style={styles.small}>El origen se localiza automáticamente una vez al entrar, con tu permiso. Podés elegir otra recogida o buscar un destino con una consulta geográfica a la vez. Los botones de mapa abren una aplicación externa únicamente si los tocás. Volvé a Movete Fácil y confirmá cada punto. No se guarda tu ruta en el teléfono; el servidor todavía debe validar ruta y tarifa antes de reservar.</Text>
+   <Text style={styles.small}>{nativeMapReady
+    ?'Tocá origen para ver tu GPS y ajustar la recogida; tocá destino para buscar un lugar y confirmar el marcador dentro de Movete Fácil.'
+    :'El origen se localiza automáticamente una vez al entrar. El mapa nativo requiere un proveedor Android configurado; por ahora podés buscar direcciones y comprobarlas en el mapa externo.'} No se almacena tu ubicación en esta pantalla y el servidor aún debe validar ruta y tarifa antes de reservar.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>3 · Continuá con tu viaje</Text>
@@ -277,5 +323,10 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    {feedback!==''&&<Text accessibilityRole="alert" style={styles.small}>{feedback}</Text>}
    <Action secondary label="Volver al inicio" onPress={()=>router.back()}/>
   </Panel>
+  {nativeMapReady&&mapKind!==null&&<ClientNativeMapPicker
+   visible={true} kind={mapKind}
+   initial={mapKind==='pickup'?pickup:dropoff}
+   origin={pickup} onClose={()=>setMapKind(null)}
+   onConfirm={confirmNativeMap} onSearch={searchInNativeMap}/>}
  </ScrollView>;
 }
