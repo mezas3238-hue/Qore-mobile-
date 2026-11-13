@@ -22,7 +22,7 @@ function fixture(override={}){
   coverageVerified:true,actorId,quoteRequestKey,
   originAddress:params.origin,destinationAddress:params.destination,
   service:'economico',evidenceId:coverageEvidenceId,
-  revision:1,zoneTag:'ALTO_PARANA',
+  revision:1,zoneTag:'AUTO_ALTO_PARANA',
   pinEvidenceId:evidenceId,
   originCoordinates:{lat:-25.4061,lon:-54.6302},
   destinationCoordinates:{lat:-25.5092,lon:-54.6115},
