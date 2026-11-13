@@ -47,5 +47,6 @@ jobs:
           node --test \
             apps/mobility-expo/server/g328-pinned-auto-evidence.test.mjs \
             apps/mobility-expo/server/g328-pinned-route-g73.test.mjs \
+            apps/mobility-expo/server/g328-geoapify-pin-bridge.test.mjs \
             apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs \
             apps/mobility-expo/server/g134-geoapify-auto-route-resolver.test.mjs
