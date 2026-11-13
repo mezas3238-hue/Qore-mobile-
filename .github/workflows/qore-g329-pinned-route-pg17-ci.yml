@@ -1,0 +1,68 @@
+name: QORE G329 pinned AUTO PostgreSQL 17 disposable CI ONLY
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g329_*'
+      - 'infra/qore-staging/ci/g329_*'
+      - 'apps/mobility-expo/server/g329-*'
+      - '.github/workflows/qore-g329-pinned-route-pg17-ci.yml'
+  push:
+    branches:
+      - integration/qore-g329-pinned-auto-postgres17-20261113
+    paths:
+      - 'infra/qore-staging/migrations/g329_*'
+      - 'infra/qore-staging/ci/g329_*'
+      - 'apps/mobility-expo/server/g329-*'
+      - '.github/workflows/qore-g329-pinned-route-pg17-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g329-pg17-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: qa_only_ci_disposable
+          POSTGRES_DB: qore_g329_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g329_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qa_only_ci_disposable
+      PGDATABASE: qore_g329_ci
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated database and disable commercial flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGDATABASE" = 'qore_g329_ci'
+          test "$QORE_LIVE_OPERATIONS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          psql --version
+          psql -Atqc "SELECT current_database(),current_setting('server_version_num')" |
+            grep -E '^qore_g329_ci\|17[0-9]{4}$'
+      - name: Install G329 DRAFT only into disposable PostgreSQL and test negative cases
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g329_pg17_disposable_only.sql
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Backend route and RPC adapter tests, no real network or SQL mutation
+        run: |
+          node --test apps/mobility-expo/server/g329-pinned-route-repository.test.mjs \
+            apps/mobility-expo/server/g328-pinned-auto-evidence.test.mjs \
+            apps/mobility-expo/server/g328-pinned-route-g73.test.mjs \
+            apps/mobility-expo/server/g328-geoapify-pin-bridge.test.mjs \
+            apps/mobility-expo/server/g73-f1-auto-gateway.test.mjs
