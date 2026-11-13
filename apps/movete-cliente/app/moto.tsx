@@ -1,7 +1,7 @@
 /** MOTO_RIDE Passenger: independent, local-only route review until A certifies API. */
 import React,{useCallback,useRef,useState} from 'react';
 import * as Crypto from 'expo-crypto';
-import {AppState,ScrollView,Text,TextInput,View} from 'react-native';
+import {AppState,ScrollView,Text,View} from 'react-native';
 import {router,useFocusEffect} from 'expo-router';
 import {Action,Panel,styles} from '../src/ClientUI';
 import {PassengerPlaceFields} from '../src/PassengerPlaceFields';
