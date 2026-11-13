@@ -34,3 +34,42 @@ test('G332 rejects promotion of synthetic G100 table into official PG17 migratio
  assert.equal(r.code,'FAIL_CI_ONLY_DEPENDENCY_PROVENANCE');
  assert(r.issues.includes('UNREVIEWED_PG16_PROMOTION:'+pretend+':mobility_stage_g100_moto_trips'));
 });
+
+test('G333 catches quoted names, quoted schema, non-public schema and newlines',()=>{
+ const cases=[
+  'CREATE TABLE "public"."mobility_stage_g100_moto_trips" (id uuid);',
+  'CREATE TABLE IF NOT EXISTS public . "mobility_stage_g100_moto_trips" (id uuid);',
+  'CREATE UNLOGGED TABLE staging.mobility_stage_g100_moto_trips (id uuid);',
+  'CREATE TABLE "mobility_stage_g100_moto_trips" (id uuid);',
+  'CREATE OR REPLACE FUNCTION "public"."mobility_stage_g75_admin_f1_receipt"(id uuid) RETURNS void LANGUAGE sql AS $$ SELECT 1 $$;',
+  'CREATE FUNCTION private_schema . "mobility_stage_g75_admin_f1_receipt"(id uuid) RETURNS void LANGUAGE sql AS $$ SELECT 1 $$;'
+ ];
+ for(let i=0;i<cases.length;i++){
+  const pretend='g999_quoted_'+i+'.sql';
+  const r=checkG332CiOnlySources({
+   listMigrations:()=>[...listMigrations(),pretend],
+   load:p=>p.endsWith('/'+pretend)?cases[i]:load(p)
+  });
+  const name=i<4?'mobility_stage_g100_moto_trips':'mobility_stage_g75_admin_f1_receipt';
+  assert.ok(r.issues.includes('UNREVIEWED_PG16_PROMOTION:'+pretend+':'+name),
+   cases[i]+' :: '+r.issues.join(','));
+  assert.equal(r.safeToCertifyExternalE2E,false);
+ }
+});
+test('G333 ignores DDL text in comments but refuses copied CI_ONLY fixtures',()=>{
+ const pretend='g999_safety_comments.sql';
+ const comments='-- CREATE TABLE public.mobility_stage_g100_moto_trips (id uuid);\n'+
+  '/* CREATE FUNCTION public.mobility_stage_g75_admin_f1_receipt() RETURNS void */\nSELECT 1;';
+ const clean=checkG332CiOnlySources({
+  listMigrations:()=>[...listMigrations(),pretend],
+  load:p=>p.endsWith('/'+pretend)?comments:load(p)
+ });
+ assert.equal(clean.code,'PASS_CI_ONLY_SOURCES_ISOLATED',clean.issues.join(','));
+ const copied=checkG332CiOnlySources({
+  listMigrations:()=>[...listMigrations(),pretend],
+  load:p=>p.endsWith('/'+pretend)
+   ?'-- POSTGRES_CI_ONLY\n-- qore_disposable_chain\nSELECT 1;'
+   :load(p)
+ });
+ assert.ok(copied.issues.includes('COPIED_CI_ONLY_FIXTURE:'+pretend));
+});
