@@ -15,6 +15,11 @@ DO $gate$ BEGIN
  END IF;
 END $gate$;
 
+-- G336 transaction boundary: all private objects, wrappers, REVOKEs and GRANTs
+-- are created atomically; any SQL failure rolls the whole DRAFT back.
+-- Public function EXECUTE defaults are never observable mid-installation.
+BEGIN;
+
 -- Private table: no API-facing table, no addresses, no price, no driver details.
 -- Pin retention and deletion must be reviewed before a commercial launch.
 CREATE TABLE qore_stage_internal.mobility_stage_g329_auto_pinned_routes (
@@ -186,3 +191,5 @@ GRANT EXECUTE ON FUNCTION qore_stage_internal.mobility_stage_g329_route_pinned(
  TO service_role;
 GRANT EXECUTE ON FUNCTION qore_stage_internal.mobility_stage_g329_route_pinned_receipt(uuid,uuid)
  TO service_role;
+
+COMMIT;

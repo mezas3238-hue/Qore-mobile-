@@ -739,9 +739,13 @@ export async function prepareQoreG4StagingRuntime({
   requestDelivery:params=>deliveryPersistence.request({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),
-  acceptDelivery:params=>deliveryPersistence.accept({
-   mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
-  }),
+  // G336: the original G5 direct acceptance RPC is retired and is not
+  // installed on PG17. Only the G10 private, expiring, G42-revocable
+  // courier offer decision may assign a courier. Fail closed even if a
+  // transport change accidentally exposes the retired G5 HTTP route.
+  acceptDelivery:async()=>{
+   throw Error('G336 direct delivery assignment prohibited: G10 offer required');
+  },
   transitionDelivery:params=>deliveryPersistence.transition({
    mode:'SYNTHETIC_STAGING',liveEnabled:false,...params,
   }),

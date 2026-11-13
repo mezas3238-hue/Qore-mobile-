@@ -1,0 +1,81 @@
+name: QORE G337 native MOTO PG17 disposable contract only
+on:
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g337_private_moto_native_pg17_DRAFT_NOT_DEPLOYED.sql'
+      - 'infra/qore-staging/ci/g337_moto_pg17_disposable_only.sql'
+      - 'infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql'
+      - '.github/workflows/qore-g337-moto-pg17-disposable-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pg17-moto-no-commercial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: g337_disposable_only
+          POSTGRES_DB: qore_disposable_g337
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_disposable_g337"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      LIVE_PAYOUTS_ENABLED: 'false'
+      COMMERCE_COD_ENABLED: 'false'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: g337_disposable_only
+      PGDATABASE: qore_disposable_g337
+      PGAPPNAME: qore_disposable_chain
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Refuse persistent or real account execution
+        run: |
+          test "$PGDATABASE" = qore_disposable_g337
+          test "$PGAPPNAME" = qore_disposable_chain
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$LIVE_PAYOUTS_ENABLED" = false
+          test "$COMMERCE_COD_ENABLED" = false
+      - name: Native MOTO SQL and full simulated ledger replay on disposable PG17
+        run: psql -v ON_ERROR_STOP=1 --single-transaction -f infra/qore-staging/ci/g337_moto_pg17_disposable_only.sql
+      - name: Assert G100 legacy CI_ONLY tables were never promoted
+        run: |
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN to_regclass('public.mobility_stage_g100_moto_quotes') IS NULL AND to_regclass('public.mobility_stage_g100_moto_trips') IS NULL AND to_regclass('public.mobility_stage_g100_moto_entries') IS NULL THEN 'LEGACY_TABLES_ABSENT' ELSE 'FAIL' END" | grep -qx LEGACY_TABLES_ABSENT
+      - name: Owner-gated empty-only rollback must REJECT persisted QA evidence
+        env:
+          PGOPTIONS: '-c qore.g337_owner_rollback_approved=true'
+        run: |
+          set -euo pipefail
+          # G338 adds adversarial bookings: never assume a fixed fixture count.
+          # The rollback must reject ANY persisted evidence and mutate nothing.
+          before_quotes="$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_quotes')"
+          before_trips="$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_trips')"
+          before_ledger="$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_ledger')"
+          test "$before_quotes" -ge 1
+          test "$before_trips" -ge 1
+          test "$before_ledger" -ge 1
+          if psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql > /tmp/g337_rollback_refusal.log 2>&1; then
+            echo 'FAIL: rollback destroyed data'; exit 1;
+          fi
+          grep -q 'G337 MOTO PG17 has data' /tmp/g337_rollback_refusal.log
+          test "$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_quotes')" = "$before_quotes"
+          test "$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_trips')" = "$before_trips"
+          test "$(psql -X -Atqc 'SELECT count(*) FROM qore_stage_internal.g337_moto_ledger')" = "$before_ledger"
+      - name: After disposable evidence is deleted, exact scoped rollback succeeds
+        env:
+          PGOPTIONS: '-c qore.g337_owner_rollback_approved=true'
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "TRUNCATE qore_stage_internal.g337_moto_ledger,qore_stage_internal.g337_moto_trips,qore_stage_internal.g337_moto_quotes"
+          psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN to_regclass('qore_stage_internal.g337_moto_quotes') IS NULL AND to_regprocedure('public.mobility_stage_g100_moto_quote_qa(uuid,uuid,text,text,text,integer,integer)') IS NULL THEN 'SCOPED_EMPTY_ROLLBACK_OK' ELSE 'FAIL' END" | grep -qx SCOPED_EMPTY_ROLLBACK_OK

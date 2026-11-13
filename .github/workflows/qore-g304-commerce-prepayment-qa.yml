@@ -32,7 +32,7 @@ jobs:
           node --check apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs
       - name: Prepayment before goods and post-delivery reconciliation
         run: node --test apps/mobility-expo/server/g304-merchant-financial-reconciliation-qa.test.mjs
-      - name: Client options: merchants prepaid, passengers cash or card
+      - name: 'Client options: merchants prepaid, passengers cash or card'
         run: node --test apps/movete-cliente/src/domain/g304-payment-choice-policy.test.mjs
       - name: Legacy finance adapter refuses merchant CASH
         run: node --test apps/mobility-expo/server/g7-supabase-finance-repository.test.mjs

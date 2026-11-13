@@ -1,0 +1,131 @@
+name: QORE G338 integrated Cliente + Driver full APK (NO DEPLOY)
+on:
+  push:
+    branches:
+      - integration/qore-g338-unified-g337-moto-g336-delivery-gps-qa-20261113
+    paths:
+      - '.github/workflows/qore-g338-integrated-client-driver-android-qa.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g338-integrated-client-driver-android-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-complete-app:
+    name: Native QA APK / ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [movete-cliente, movete-driver]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    env:
+      QORE_QA_BUILD: 'true'
+      EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED: 'false'
+      EXPO_PUBLIC_F1_OWNER_APPROVED: 'false'
+      EXPO_PUBLIC_MOTO_OWNER_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED: 'false'
+      EXPO_PUBLIC_QORE_G299_OFFLINE_OCR_QA_APPROVED: 'true'
+      EXPO_PUBLIC_SUPABASE_URL: ''
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+      EXPO_PUBLIC_F1_STAGING_ORIGIN: ''
+      EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN: ''
+      EXPO_PUBLIC_QORE_STAGING_API_ORIGIN: ''
+      EXPO_PUBLIC_QORE_STAGING_API_HOST: ''
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enforce offline native QA — never connected STAGING or commercial
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$QORE_QA_BUILD" = true
+          test "$EXPO_PUBLIC_LIVE_OPERATIONS_ENABLED" = false
+          test "$EXPO_PUBLIC_F1_OWNER_APPROVED" = false
+          test "$EXPO_PUBLIC_MOTO_OWNER_APPROVED" = false
+          test "$EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED" = false
+          test -z "$EXPO_PUBLIC_SUPABASE_URL"
+          test -z "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          test -z "$EXPO_PUBLIC_QORE_STAGING_API_ORIGIN"
+          test -z "$EXPO_PUBLIC_F1_STAGING_ORIGIN"
+          test -z "$EXPO_PUBLIC_F1_STAGING_PINNED_ORIGIN"
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          node -e 'const j=require("./app.json").expo;if(j.extra?.liveOperationsEnabled!==false)process.exit(1);'
+      - name: Record integrated candidate SHA and disable external services
+        run: |
+          echo "INTEGRATED_QA_SOURCE_SHA=$GITHUB_SHA"
+          git rev-parse HEAD
+          test "$EXPO_PUBLIC_QORE_STAGING_RUNTIME_APPROVED" = false
+      - name: Install application dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Check complete existing app types and domain tests
+        run: npm run check
+      - name: Give each full QA app a G338-only Android identifier in this runner
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const path='app.json';
+          const j=JSON.parse(fs.readFileSync(path,'utf8'));
+          if(j.expo?.extra?.liveOperationsEnabled!==false)throw Error('LIVE forbidden');
+          j.expo.android.package+='.g338';
+          j.expo.name+=' G338';
+          fs.writeFileSync(path,JSON.stringify(j,null,2));
+          NODE
+      - name: Prove unique non-production QA application identifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo config --json > "$RUNNER_TEMP/g338-${{ matrix.app }}.json"
+          node - "$RUNNER_TEMP/g338-${{ matrix.app }}.json" <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(!p.android?.package?.endsWith('.qa')||p.extra?.liveOperationsEnabled!==false||
+           p.extra?.qaBuild!==true)throw Error('G338 lacks safe QA package/flags');
+          process.stdout.write('G338 isolated package: '+p.android.package+'\n');
+          NODE
+      - name: Prebuild actual Cliente/Driver Android package (no test-card substitution)
+        run: |
+          npx expo prebuild --platform android --no-install --clean
+          chmod +x android/gradlew
+      - name: Compile complete ARM64 APK from current integrated branch
+        run: |
+          cd android
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+      - name: Verify actual APK and source fingerprint
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$apk"
+          unzip -t "$apk" | grep -q 'No errors detected'
+          unzip -Z -1 "$apk" | grep -x 'AndroidManifest.xml' >/dev/null
+          unzip -Z -1 "$apk" | grep -x 'lib/arm64-v8a/libreactnative.so' >/dev/null
+          sha256sum "$apk"
+          test "$(stat -c %s "$apk")" -lt 180000000
+          echo "APK_SOURCE_SHA=$GITHUB_SHA"
+          echo "G338 APK is QA-only; no device install or E2E certified"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QORE-G338-integrated-${{ matrix.app }}-arm64-qa-${{ github.sha }}
+          path: apps/${{ matrix.app }}/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+          if-no-files-found: error
