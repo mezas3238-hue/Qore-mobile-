@@ -19,6 +19,8 @@ import {createGoogleMapsLaunchUrl}
  from '../src/domain/client-google-maps-links.mjs';
 import {consumeGoogleMapsShare}
  from '../src/domain/client-google-maps-share.mjs';
+import {createClientDestinationAutocompleteGate}
+ from '../src/domain/client-destination-autocomplete.mjs';
 import type {PassengerVehicleKind} from '../src/domain/passenger-vehicle-choice.mjs';
 
 export default function ChoosePassengerVehicle(){
@@ -44,6 +46,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const [destinationConfirmed,setDestinationConfirmed]=useState(false);
  const [mapNotice,setMapNotice]=useState('');
  const [editingPickup,setEditingPickup]=useState(false);
+ const [destinationFocused,setDestinationFocused]=useState(false);
  // External Google Maps is user-triggered; no SDK/API key or background polling.
  const [gpsBusy,setGpsBusy]=useState(false);
  const [searchBusy,setSearchBusy]=useState(false);
@@ -51,6 +54,8 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const mounted=useRef(true);
  const active=useRef(AppState.currentState!=='background'&&AppState.currentState!=='inactive');
  const gpsEpoch=useRef(0),searchEpoch=useRef(0);
+ const lastPickupFixAt=useRef<number|null>(null);
+ const autocompleteGate=useMemo(()=>createClientDestinationAutocompleteGate(),[]);
  // One native operation at a time, with an explicit cooldown and no loop.
  const locationBudget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
@@ -74,6 +79,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    if(!isValid(epoch))return;
    if(!result.ok){
     setPickup(null);setPickupAccuracy(null);setPickupConfirmed(false);
+    lastPickupFixAt.current=null;
     setPickupNotice(result.code==='LOCATION_DENIED'
      ?'No hay permiso GPS. Podés activarlo desde los ajustes del teléfono.'
      :result.code==='GPS_NOT_PRECISE'||result.code==='UNKNOWN_ACCURACY'
@@ -82,6 +88,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     return;
    }
    setPickup(result.place);setOrigin(result.place.label);
+   lastPickupFixAt.current=Date.now();
    setPickupConfirmed(false);setPickupSuggestions([]);
    setPickupAccuracy(result.accuracyMeters);
    setPickupNotice('Origen obtenido del GPS. Confirmá que sea el punto correcto.');
@@ -110,7 +117,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   const sub=AppState.addEventListener('change',status=>{
    if(status==='background'){
     active.current=false;gpsEpoch.current++;searchEpoch.current++;
-    setSuggestions([]);setPickupSuggestions([]);
+    setDestinationFocused(false);setSuggestions([]);setPickupSuggestions([]);
     setDestinationNotice('Escribí la dirección y tocá Buscar cuando vuelvas a la app.');
    }else if(status==='active'){
     active.current=true;
@@ -137,6 +144,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   if(kind==='pickup')setPickupNotice('Buscando puntos de recogida en Paraguay…');
   else setDestinationNotice('Buscando direcciones en Paraguay…');
   try{
+   if(kind==='destination')autocompleteGate.markStarted(query);
    const result=await searchPassengerDestination(query);
    if(!mounted.current||!active.current||epoch!==searchEpoch.current)return;
    if(!result.ok){
@@ -151,13 +159,23 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     setPickupNotice('Elegí el punto de recogida y confirmalo en el mapa.');
    }else{
     setSuggestions(result.places);
-    setDestinationNotice('Elegí el destino y comprobalo en el mapa.');
+    setDestinationNotice('Elegí una de las direcciones sugeridas para confirmar el destino.');
    }
   }finally{
    locationBudget.end('destination');
    if(mounted.current)setSearchBusy(false);
   }
  }
+ // After a brief pause in typing, search automatically and show candidates.
+ // One native geocoder at a time; G319 budget enforces a 3-second cooldown.
+ // Do not re-query on focus/foreground loops or every keystroke.
+ useEffect(()=>{
+  if(!destinationFocused||!active.current||gpsBusy||searchBusy||dropoff!==null)return;
+  const plan=autocompleteGate.plan(destination);
+  if(!plan)return;
+  const handle=setTimeout(()=>void findPlace('destination'),plan.delayMs);
+  return ()=>clearTimeout(handle);
+ },[destination,destinationFocused,dropoff,gpsBusy,searchBusy,autocompleteGate]);
  async function openPlaceOnMap(place:PassengerPlace|null){
   if(!place)return;
   const links=createPassengerMapPreviewLinks(place,Platform.OS);
@@ -230,9 +248,17 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>2 · Origen y destino</Text>
    <Text style={styles.text}>¿Dónde te buscamos?</Text>
-   <Pressable accessibilityRole="button" accessibilityLabel="Abrir Google Maps con mi ubicación GPS"
-    style={styles.field} onPress={()=>{void openPersonalGoogleMaps('pickup');}}>
-    <Text style={{fontSize:16,color:'#183044'}}>{origin||'Tocá para ver tu ubicación en Google Maps'}</Text>
+   <Pressable accessibilityRole="button"
+    accessibilityLabel="Detectar mi ubicación automáticamente con GPS"
+    style={styles.field} disabled={gpsBusy} onPress={()=>{
+     if(pickup!==null&&lastPickupFixAt.current!==null&&
+      Date.now()-lastPickupFixAt.current<30000){
+      setPickupNotice('Tu posición GPS ya está detectada. Comprobá el punto y confirmalo.');
+     }else void refreshPickup(true);
+    }}>
+    <Text style={{fontSize:16,color:'#183044'}}>
+     {gpsBusy?'Localizando con GPS…':origin||'Tocá para detectar tu posición GPS'}
+    </Text>
    </Pressable>
    <Action secondary label={editingPickup?'Ocultar edición de recogida':'Elegir otro punto de recogida'}
     onPress={()=>setEditingPickup(v=>!v)}/>
@@ -251,7 +277,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    {pickupSuggestions.map((option,i)=><Pressable key={'pickup-'+i+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
      setOrigin(option.label);setPickup(option);setPickupAccuracy(null);
-     setPickupConfirmed(false);setPickupSuggestions([]);
+     lastPickupFixAt.current=null;setPickupConfirmed(false);setPickupSuggestions([]);
      setPickupNotice('Recogida localizada en Paraguay. Comprobá el punto en Google Maps.');
     }} style={{padding:12,borderRadius:12,borderWidth:1,borderColor:'#D1E3E0'}}>
     <Text style={styles.text}>{option.label}</Text>
@@ -260,49 +286,49 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    {pickupAccuracy!==null&&<Text style={styles.small}>
     Precisión comunicada por Android: ±{Math.round(pickupAccuracy)} m. Confirmá el punto antes de viajar.
    </Text>}
+   {pickup!==null&&<Text style={styles.small}>
+    Punto GPS: {pickup.latitude.toFixed(6)}, {pickup.longitude.toFixed(6)}
+   </Text>}
    <Action secondary label={gpsBusy?'Consultando GPS…':'Actualizar ubicación GPS'}
     disabled={gpsBusy||searchBusy} onPress={()=>{void refreshPickup(true);}}/>
    {pickup!==null&&pickup.label===origin&&<>
-    <Action secondary label="Ver recogida en Google Maps"
-     onPress={()=>{void openPersonalGoogleMaps('pickup');}}/>
+    <Action secondary label="Comprobar recogida en Google Maps (opcional)"
+     onPress={()=>{void openPlaceOnMap(pickup);}}/>
     <Action label={pickupConfirmed?'Recogida confirmada':'Confirmar punto de recogida'}
      disabled={pickupConfirmed} onPress={()=>{setPickupConfirmed(true);
       setPickupNotice('Punto de recogida confirmado por el pasajero.');}}/>
    </>}
    <Text style={styles.text}>¿A dónde vas?</Text>
-   <Pressable accessibilityRole="button"
-    accessibilityLabel="Abrir mi Google Maps y buscar destino" style={styles.field}
-    onPress={()=>{void openPersonalGoogleMaps('destination');}}>
-    <Text style={{fontSize:16,color:'#183044'}}>
-     {destination||'Tocá para buscar tu destino en Google Maps'}
-    </Text>
-   </Pressable>
-   <Text style={styles.small}>
-    En Google Maps elegí el lugar y usá Compartir → Movete Fácil Cliente para traer el nombre.
-    Luego verificá la dirección aquí. Si Maps comparte solo un enlace corto,
-    escribí el lugar manualmente. No se aceptan coordenadas sin validación.
-   </Text>
    <TextInput style={styles.field} value={destination} maxLength={120}
-    accessibilityLabel="Dirección elegida para verificar en Movete Fácil"
-    placeholder="Lugar o calle elegida en Google Maps"
-    onChangeText={value=>{searchEpoch.current++;setDestination(value);setDropoff(null);
+    accessibilityLabel="Buscar destino, sugerencias automáticas"
+    placeholder="Escribí calle, local, barrio o lugar"
+    returnKeyType="search"
+    onFocus={()=>setDestinationFocused(true)}
+    onSubmitEditing={()=>{void findPlace('destination');}}
+    onChangeText={value=>{
+     searchEpoch.current++;setDestination(value);setDropoff(null);
      setDestinationConfirmed(false);setSuggestions([]);setFeedback('');
-     setDestinationNotice('Tocá Buscar destinos y elegí la dirección comprobada.');}}/>
-   <Action secondary label={searchBusy?'Buscando dirección…':'Buscar destinos'}
-    disabled={gpsBusy||searchBusy||destination.trim().length<4||dropoff!==null}
-    onPress={()=>{void findPlace('destination');}}/>
+     setDestinationNotice(value.trim().length>=4
+      ?'Buscando opciones al dejar de escribir…'
+      :'Escribí al menos cuatro caracteres para recibir opciones.');
+    }}/>
    <Text accessibilityLiveRegion="polite" style={styles.small}>{destinationNotice}</Text>
    {suggestions.map((option,i)=><Pressable key={String(i)+'-'+option.latitude+'-'+option.longitude}
     accessibilityRole="button" onPress={()=>{
      setDestination(option.label);setDropoff(option);setSuggestions([]);
-     setDestinationConfirmed(false);
+     setDestinationFocused(false);setDestinationConfirmed(false);
      setDestinationNotice('Destino geocodificado. Comprobá el marcador y confirmá el lugar.');
-    }} style={{padding:12,borderRadius:12,borderWidth:1,borderColor:'#D1E3E0'}}>
+    }} style={{padding:12,minHeight:52,borderRadius:12,borderWidth:1,borderColor:'#D1E3E0'}}>
     <Text style={styles.text}>{option.label}</Text>
     <Text style={styles.small}>
      Dirección localizada en Paraguay · Confirmá el punto antes de viajar
     </Text>
    </Pressable>)}
+   <Action secondary label={searchBusy?'Buscando…':'Buscar de nuevo (opcional)'}
+    disabled={gpsBusy||searchBusy||destination.trim().length<4||dropoff!==null}
+    onPress={()=>{void findPlace('destination');}}/>
+   <Action secondary label="Buscar con Google Maps (opcional)"
+    onPress={()=>{void openPersonalGoogleMaps('destination');}}/>
    {dropoff!==null&&dropoff.label===destination&&<>
     <Action secondary label="Ver destino en Google Maps"
      onPress={()=>{void openPlaceOnMap(dropoff);}}/>
@@ -314,14 +340,16 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
    <Action secondary label="Intercambiar origen y destino"
     onPress={()=>{setOrigin(destination);setDestination(origin);
      setPickup(dropoff);setDropoff(pickup);setPickupAccuracy(null);
+     lastPickupFixAt.current=null;setDestinationFocused(false);
      setPickupConfirmed(false);setDestinationConfirmed(false);
      setSuggestions([]);setPickupSuggestions([]);setFeedback('');
      setPickupNotice('Punto intercambiado. Verificá la ubicación antes de viajar.');
      setDestinationNotice('Punto intercambiado. Confirmá el destino.');}}/>
-   <Text style={styles.small}>Se utiliza tu Google Maps al tocar origen o destino, sin API key
-    para abrir la aplicación. La búsqueda y selección final se validan en Movete Fácil antes
-    de continuar. No se rastrea tu ubicación en segundo plano. El servidor debe verificar
-    ruta y tarifa para poder reservar.</Text>
+   <Text style={styles.small}>El campo de origen obtiene la ubicación del GPS del teléfono;
+    al escribir el destino aparecen opciones del buscador geográfico de Android sin API key
+    de Google Maps. Si no aparece el lugar, podés buscarlo manualmente o usar Google Maps
+    como apoyo. Las coordenadas se confirman en Movete Fácil; no hay seguimiento en segundo
+    plano. El servidor debe validar la ruta y tarifa antes de reservar.</Text>
   </Panel>
   <Panel>
    <Text accessibilityRole="header" style={styles.heading}>3 · Continuá con tu viaje</Text>
