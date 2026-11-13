@@ -121,6 +121,20 @@ BEGIN
   RAISE EXCEPTION 'G329 accepted Driver as passenger';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
 END $reject$;
+-- The same attestation cannot be reused for a different request key.
+-- Unique violation must roll back the entire attempted G73 insert.
+DO $proof_unique$ BEGIN
+ BEGIN
+  PERFORM public.mobility_stage_g329_route_pinned(
+   '32900000-0000-4329-8329-000000000001',
+   '32900000-0000-4329-8329-000000000014','economico',
+   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
+   '32900000-0000-4329-8329-000000000020',
+   -25.4061,-54.6302,-25.5092,-54.6115,
+   (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+  RAISE EXCEPTION 'G329 accepted reused attestation for second request';
+ EXCEPTION WHEN unique_violation THEN NULL; END;
+END $proof_unique$;
 RESET ROLE;
 -- Legacy route key with no proof must not be upgraded after the fact.
 INSERT INTO public.mobility_stage_g73_auto_routes(
