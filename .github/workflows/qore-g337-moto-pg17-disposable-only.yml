@@ -4,6 +4,7 @@ on:
     paths:
       - 'infra/qore-staging/migrations/g337_private_moto_native_pg17_DRAFT_NOT_DEPLOYED.sql'
       - 'infra/qore-staging/ci/g337_moto_pg17_disposable_only.sql'
+      - 'infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql'
       - '.github/workflows/qore-g337-moto-pg17-disposable-only.yml'
   workflow_dispatch:
 permissions:
@@ -51,3 +52,19 @@ jobs:
       - name: Assert G100 legacy CI_ONLY tables were never promoted
         run: |
           psql -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN to_regclass('public.mobility_stage_g100_moto_quotes') IS NULL AND to_regclass('public.mobility_stage_g100_moto_trips') IS NULL AND to_regclass('public.mobility_stage_g100_moto_entries') IS NULL THEN 'LEGACY_TABLES_ABSENT' ELSE 'FAIL' END" | grep -qx LEGACY_TABLES_ABSENT
+      - name: Owner-gated empty-only rollback must REJECT persisted QA evidence
+        env:
+          PGOPTIONS: '-c qore.g337_owner_rollback_approved=true'
+        run: |
+          if psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql > /tmp/g337_rollback_refusal.log 2>&1; then
+            echo 'FAIL: rollback destroyed data'; exit 1;
+          fi
+          grep -q 'G337 MOTO PG17 has data' /tmp/g337_rollback_refusal.log
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM qore_stage_internal.g337_moto_quotes" | grep -qx 1
+      - name: After disposable evidence is deleted, exact scoped rollback succeeds
+        env:
+          PGOPTIONS: '-c qore.g337_owner_rollback_approved=true'
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "TRUNCATE qore_stage_internal.g337_moto_ledger,qore_stage_internal.g337_moto_trips,qore_stage_internal.g337_moto_quotes"
+          psql -v ON_ERROR_STOP=1 -f infra/qore-staging/migrations/g337_rollback_moto_native_EMPTY_ONLY_NOT_DEPLOYED.sql
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN to_regclass('qore_stage_internal.g337_moto_quotes') IS NULL AND to_regprocedure('public.mobility_stage_g100_moto_quote_qa(uuid,uuid,text,text,text,integer,integer)') IS NULL THEN 'SCOPED_EMPTY_ROLLBACK_OK' ELSE 'FAIL' END" | grep -qx SCOPED_EMPTY_ROLLBACK_OK
