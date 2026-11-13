@@ -4,6 +4,7 @@
  * Runs without GitHub/Supabase/Railway credentials or network access.
  */
 import {readFileSync,readdirSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 const root=resolve(fileURLToPath(new URL('../../../',import.meta.url)));
@@ -53,12 +54,42 @@ export function checkG332CiOnlySources({
  }
  for(const f of listMigrations().filter(x=>x.endsWith('.sql'))){
   const sql=load('infra/qore-staging/migrations/'+f);
+  // G333: CI-only fixture guard and CREATE might be pasted into a persistent
+  // migration with quoted SQL identifiers or a non-public schema. Reject ALL.
+  if(/qore_disposable_chain/i.test(sql)&&
+   /(?:POSTGRES_)?CI_ONLY/i.test(sql))
+   issues.push('COPIED_CI_ONLY_FIXTURE:'+f);
+  // Comments are not executable DDL; strip those to avoid false alarms.
+  // Do NOT strip quoted SQL function bodies: dynamic CREATE also needs review.
+  const statements=sql.replace(/\/\*[\s\S]*?\*\/|--[^\r\n]*/g,' ');
+  // G335: permit exactly the independently reviewed, native PG17 G333
+  // G262/G73 receipt from PR #152. Historical G75 CI_ONLY may NEVER be
+  // promoted; any byte of change requires explicit review of a new blob SHA.
+  const G335_PG17_NATIVE_G75_BLOB='a9e058ea78e39001cfbf570af0905f7458bd90ea';
+  const blobSha=createHash('sha1')
+   .update('blob '+Buffer.byteLength(sql,'utf8')+'\0')
+   .update(sql,'utf8').digest('hex');
+
+  const ident='(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)';
   for(const [_,kind,name] of missing){
-   // Ignore references in comments/guards/queries: only CREATE is a migration.
-   const re=new RegExp('\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?'+
-    (kind==='table'?'TABLE':'FUNCTION')+'\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?'+
-    '(?:public\\.)?'+name+'\\s*[\\(\\s]','i');
-   if(re.test(sql))issues.push('UNREVIEWED_PG16_PROMOTION:'+f+':'+name);
+   // Quoted public."name", "public"."name", and other_schema.name are
+   // PostgreSQL identifiers too. One optional schema with whitespace around
+   // dot is accepted; IF NOT EXISTS and CREATE OR REPLACE are supported.
+   const target='(?:"'+name+'"|'+name+')';
+   const definition='\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?'+
+    '(?:(?:TEMP|TEMPORARY|UNLOGGED)\\s+)?'+
+    (kind==='table'?'TABLE':'FUNCTION')+
+    '\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?'+
+    '(?:'+ident+'\\s*\\.\\s*)?'+target+
+    '(?=\\s|\\(|;|$)';
+   if(new RegExp(definition,'i').test(statements)){
+    const allowReviewedNativeG75=
+     f==='g333_private_admin_auto_f1_receipt_pg17_DRAFT.sql'&&
+     kind==='function'&&name==='mobility_stage_g75_admin_f1_receipt'&&
+     blobSha===G335_PG17_NATIVE_G75_BLOB;
+    if(!allowReviewedNativeG75)
+     issues.push('UNREVIEWED_PG16_PROMOTION:'+f+':'+name);
+   }
   }
  }
  if(missing.length!==17||[...names].length!==17)
