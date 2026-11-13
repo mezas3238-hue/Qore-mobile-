@@ -1,0 +1,59 @@
+name: QORE G323 Android APK installability diagnostics (no deploy)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qore-g323-apk-installability-diagnostics.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-released-apks:
+    name: Verify installability of public Cliente G319 and Driver G313 APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      QORE_LIVE_OPERATIONS_ENABLED: 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: Cliente
+            tag: qa-g319-cliente-gps-estable-2026-11-12
+            filename: Movete-Facil-Cliente-G319-GPS-Estable-ARM64-QA.apk
+            expected_id: com.movetefacil.cliente.g319qa
+            expected_sha256: 2425b810425271a52c947b656223bf5d6bf931fe8167ea1997874e4256d95d88
+          - role: Driver
+            tag: qa-g313-driver-arm64-2026-11-12
+            filename: Movete-Facil-Driver-G313-ARM64-QA.apk
+            expected_id: com.movetefacil.driver.ocrqa
+            expected_sha256: 62471be99ac88906ee1db3640980802082272e4de2a2a5a9ed22c85630e1698e
+    steps:
+      - name: Download the actual GitHub Release artifact, not a simulated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "${{ matrix.tag }}" --repo "$GITHUB_REPOSITORY" \
+            --pattern "${{ matrix.filename }}" --dir "$RUNNER_TEMP/apk"
+          test -s "$RUNNER_TEMP/apk/${{ matrix.filename }}"
+      - name: Verify downloaded bytes and archive integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/apk"
+          echo "${{ matrix.expected_sha256 }}  ${{ matrix.filename }}" | sha256sum -c -
+          unzip -t "${{ matrix.filename }}" > "$RUNNER_TEMP/zip-integrity.txt"
+          tail -n 1 "$RUNNER_TEMP/zip-integrity.txt"
+          unzip -Z1 "${{ matrix.filename }}" | grep -q '^lib/arm64-v8a/'
+      - name: Check Android manifest, min/target SDK and APK signing certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -x "$BUILD_TOOLS/apksigner"
+          test -x "$BUILD_TOOLS/aapt"
+          apk="$RUNNER_TEMP/apk/${{ matrix.filename }}"
+          "$BUILD_TOOLS/aapt" dump badging "$apk" | tee "$RUNNER_TEMP/apk-badging.txt" | grep -E '^(package:|sdkVersion:|targetSdkVersion:|native-code:)'
+          grep -F "name='${{ matrix.expected_id }}'" "$RUNNER_TEMP/apk-badging.txt"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$apk"
+          echo 'PASS package+signature+ZIP+ARM64. Physical install on Android remains unverified.'
