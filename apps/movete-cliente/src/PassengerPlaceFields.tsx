@@ -167,7 +167,7 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
    onPress={()=>{void openDestinationPicker();}}
    style={[styles.field,{justifyContent:'center',opacity:editable?1:0.55}]}>
    <Text style={{color:palette.ink,fontSize:16}}>
-    {destination||'Tocá para buscar tu destino en el mapa'}
+    {destination||'Tocá para buscar y verificar tu destino'}
    </Text>
   </Pressable>
   <Text style={styles.small}>Buscá una dirección y verificá el marcador en Google Maps o Apple Maps. No se inicia un viaje al elegirla.</Text>
@@ -175,7 +175,7 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
    presentationStyle="pageSheet">
    <ScrollView style={styles.page} contentContainerStyle={styles.content}
     keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-    <Text accessibilityRole="header" style={styles.heroText}>
+    <Text accessibilityRole="header" style={[styles.heading,{fontSize:24}]}>
      Elegí tu destino
     </Text>
     <Text style={styles.text}>Escribí un lugar, calle, barrio o comercio de Paraguay.</Text>
