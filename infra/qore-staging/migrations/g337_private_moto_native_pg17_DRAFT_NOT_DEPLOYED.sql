@@ -92,7 +92,7 @@ REVOKE ALL ON qore_stage_internal.g337_moto_quotes,
 
 CREATE FUNCTION qore_stage_internal.g337_moto_quote_receipt(
  _passenger uuid,_request uuid
-) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
+) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
  SELECT pg_catalog.jsonb_build_object(
   'mode','STAGING_DEMO_ONLY','commercialEnabled',false,
   'ownerId',q.passenger_id,'serviceKind','MOTO_RIDE','service','moto_pasajero',
@@ -110,7 +110,7 @@ $f$;
 
 CREATE FUNCTION qore_stage_internal.g337_moto_trip_receipt(
  _passenger uuid,_booking uuid
-) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
+) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
  SELECT pg_catalog.jsonb_build_object(
   'mode','STAGING_DEMO_ONLY','commercialEnabled',false,'ownerId',t.passenger_id,
   'serviceKind','MOTO_RIDE','service','moto_pasajero',
@@ -144,7 +144,7 @@ $f$;
 
 CREATE FUNCTION qore_stage_internal.g337_moto_status(
  _passenger uuid,_booking uuid
-) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
+) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path='' AS $f$
  SELECT pg_catalog.jsonb_build_object(
   'mode','STAGING_DEMO_ONLY','commercialEnabled',false,'ownerId',t.passenger_id,
   'bookingKey',t.booking_key,'tripId',t.id,'serviceKind','MOTO_RIDE',
@@ -211,7 +211,7 @@ BEGIN
   OR fare.minimum_pyg<1
  THEN RAISE EXCEPTION 'G337 approved Owner MOTO fare unavailable' USING ERRCODE='P3373'; END IF;
 
- amount:=pg_catalog.greatest(fare.minimum_pyg::numeric,
+ amount:=GREATEST(fare.minimum_pyg::numeric,
   fare.base_pyg::numeric+
   pg_catalog.ceil(fare.per_km_pyg::numeric*_distance/1000)+
   pg_catalog.ceil(fare.per_minute_pyg::numeric*_seconds/60));
@@ -327,12 +327,12 @@ CREATE FUNCTION public.mobility_stage_g100_moto_book_qa(
 $f$;
 CREATE FUNCTION public.mobility_stage_g100_moto_booking_receipt_qa(
  _passenger uuid,_booking uuid
-) RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $f$
+) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY INVOKER SET search_path='' AS $f$
  SELECT qore_stage_internal.g337_moto_trip_receipt($1,$2)
 $f$;
 CREATE FUNCTION public.mobility_stage_g118_moto_status_qa(
  _passenger uuid,_booking uuid
-) RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $f$
+) RETURNS jsonb LANGUAGE sql VOLATILE SECURITY INVOKER SET search_path='' AS $f$
  SELECT qore_stage_internal.g337_moto_status($1,$2)
 $f$;
 CREATE FUNCTION public.mobility_stage_g100_moto_cancel_qa(
@@ -341,7 +341,15 @@ CREATE FUNCTION public.mobility_stage_g100_moto_cancel_qa(
  SELECT qore_stage_internal.g337_moto_cancel($1,$2,$3)
 $f$;
 
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA qore_stage_internal FROM PUBLIC,anon,authenticated,service_role;
+-- Revoke ONLY new functions; never alter ACL of pre-existing PG17 RPCs.
+REVOKE ALL ON FUNCTION
+ qore_stage_internal.g337_moto_quote_receipt(uuid,uuid),
+ qore_stage_internal.g337_moto_trip_receipt(uuid,uuid),
+ qore_stage_internal.g337_moto_status(uuid,uuid),
+ qore_stage_internal.g337_moto_quote(uuid,uuid,text,text,text,integer,integer),
+ qore_stage_internal.g337_moto_book(uuid,uuid,uuid),
+ qore_stage_internal.g337_moto_cancel(uuid,uuid,uuid)
+ FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION
  public.mobility_stage_g100_moto_quote_qa(uuid,uuid,text,text,text,integer,integer),
  public.mobility_stage_g100_moto_book_qa(uuid,uuid,uuid),
