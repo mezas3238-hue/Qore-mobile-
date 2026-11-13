@@ -1,0 +1,35 @@
+name: QORE G336 native G10 delivery offer-only boundary
+on:
+  pull_request:
+    paths:
+      - 'apps/mobility-expo/server/g4-staging-runtime.mjs'
+      - 'apps/mobility-expo/server/g336-delivery-offer-only-http.test.mjs'
+      - 'infra/qore-staging/readiness/G336_NATIVE_DELIVERY_AND_MOTO_RPC_CONTRACT_READONLY.sql'
+      - '.github/workflows/qore-g336-delivery-offer-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  delivery-offer-g336:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      COMMERCE_COD_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: G336 exact adapter syntax
+        run: |
+          node --check apps/mobility-expo/server/g4-staging-runtime.mjs
+          node --check apps/mobility-expo/server/g336-delivery-offer-only-http.test.mjs
+      - name: Old G5 direct assignment refused, private G10 accepted only after Auth
+        run: |
+          node --test apps/mobility-expo/server/g336-delivery-offer-only-http.test.mjs
+          node --test apps/mobility-expo/server/g10-delivery-offer-gateway.test.mjs
+          node --test apps/mobility-expo/server/g143-courier-custody-http-routing.test.mjs
