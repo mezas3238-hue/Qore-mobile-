@@ -53,6 +53,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
  const gpsEpoch=useRef(0),searchEpoch=useRef(0);
  // A recent foreground fix may be reused for a tap; no periodic tracking.
  const lastGpsFixAt=useRef(0);
+ const lastGpsFixPlace=useRef<PassengerPlace|null>(null);
  // One native operation at a time, with an explicit cooldown and no loop.
  const locationBudget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const isValid=(epoch:number)=>isCurrentPassengerLocationResult({
@@ -84,6 +85,7 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     return;
    }
    lastGpsFixAt.current=Date.now();
+   lastGpsFixPlace.current=result.place;
    setPickup(result.place);setOrigin(result.place.label);
    setPickupConfirmed(false);setPickupSuggestions([]);
    setPickupAccuracy(result.accuracyMeters);
@@ -199,7 +201,10 @@ function PrivatePassengerVehicleForm({privateRevision}:{privateRevision:number})
     setMapNotice('El GPS está localizando. Tocá Origen cuando termine la consulta.');
     return;
    }
-   if(!mapsPickup||Date.now()-lastGpsFixAt.current>30000){
+   if(!mapsPickup||!lastGpsFixPlace.current||
+    mapsPickup.latitude!==lastGpsFixPlace.current.latitude||
+    mapsPickup.longitude!==lastGpsFixPlace.current.longitude||
+    Date.now()-lastGpsFixAt.current>30000){
     mapsPickup=await refreshPickup(true)??null;
     if(!mapsPickup){
      setMapNotice('Todavía no tenemos tu ubicación GPS precisa. Revisá el permiso o la señal y volvé a tocar Origen.');
