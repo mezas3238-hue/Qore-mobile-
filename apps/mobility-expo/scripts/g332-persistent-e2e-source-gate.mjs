@@ -37,7 +37,8 @@ const missing=[
 const nativeG75File='g333_private_admin_auto_f1_receipt_pg17_DRAFT.sql';
 const nativeG75Blob='a9e058ea78e39001cfbf570af0905f7458bd90ea';
 const blobSha=sql=>createHash('sha1')
- .update('blob '+Buffer.byteLength(sql,'utf8')+'\\0')
+ .update('blob '+Buffer.byteLength(sql,'utf8'))
+ .update(Buffer.from([0]))
  .update(sql,'utf8').digest('hex');
 const read=p=>readFileSync(resolve(root,p),'utf8');
 export function checkG332CiOnlySources({
