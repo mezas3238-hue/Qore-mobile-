@@ -1,0 +1,64 @@
+name: QORE G333 native G262 Admin AUTO receipt PG17 CI (NO DEPLOY)
+on:
+  push:
+    branches:
+      - integration/qore-g333-admin-auto-pg17-native-receipt-20261113
+    paths:
+      - 'infra/qore-staging/migrations/g333_*'
+      - 'infra/qore-staging/ci/g333_*'
+      - '.github/workflows/qore-g333-admin-auto-pg17-source-receipt.yml'
+  pull_request:
+    paths:
+      - 'infra/qore-staging/migrations/g333_*'
+      - 'infra/qore-staging/ci/g333_*'
+      - '.github/workflows/qore-g333-admin-auto-pg17-source-receipt.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g333-original-pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: qa_g333_disposable_only
+          POSTGRES_DB: qore_g333_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qore_g333_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: qa_g333_disposable_only
+      PGDATABASE: qore_g333_ci
+      LIVE_TRIPS_ENABLED: 'false'
+      LIVE_PAYMENTS_ENABLED: 'false'
+      PSP_PAYOUTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove target is disposable PostgreSQL 17; no commercial flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PGDATABASE" = qore_g333_ci
+          test "$LIVE_TRIPS_ENABLED" = false
+          test "$LIVE_PAYMENTS_ENABLED" = false
+          test "$PSP_PAYOUTS_ENABLED" = false
+          psql -Atqc 'select current_database()' | grep -Fx qore_g333_ci
+          psql -Atqc "select current_setting('server_version_num')::int>=170000" | grep -Fx t
+      - name: Test original G262/G73 Admin G75 receipt with fake actors only
+        run: psql -X -v ON_ERROR_STOP=1 -f infra/qore-staging/ci/g333_admin_auto_pg17_disposable_only.sql
+      - name: Existing G75 and G262 HTTP trust and negative regression
+        run: |
+          node --test apps/mobility-expo/server/g75-f1-admin-audit-gateway.test.mjs \
+            apps/mobility-expo/server/g262-native-admin-trace-gateway.test.mjs
