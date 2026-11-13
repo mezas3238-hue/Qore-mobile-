@@ -11,6 +11,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {AppState,Linking,Modal,Platform,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
 import Constants from 'expo-constants';
 import {ClientNativeMapPicker} from './native/ClientNativeMapPicker';
+import {PassengerRoutePreview} from './PassengerRoutePreview';
 import {Action,palette,styles} from './ClientUI';
 import {getPassengerCurrentPickup,searchPassengerDestination,
  requestPassengerGeocoderPermission} from './native/client-location';
@@ -215,7 +216,12 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
     {destination||'Tocá para buscar y verificar tu destino'}
    </Text>
   </Pressable>
-  <Text style={styles.small}>Buscá una dirección y verificá el marcador en Google Maps o Apple Maps. No se inicia un viaje al elegirla.</Text>
+  <Text style={styles.small}>{nativeMapReady
+   ?'Elegí el destino dentro del mapa y confirmá el marcador. No se inicia un viaje al elegirlo.'
+   :'Buscá una dirección y verificá el marcador en Google Maps o Apple Maps. No se inicia un viaje al elegirla.'}</Text>
+  <PassengerRoutePreview enabled={nativeMapReady}
+   pickup={nativePickup?.label===origin?nativePickup:null}
+   destination={nativeDropoff?.label===destination?nativeDropoff:null}/>
   <Modal visible={pickerOpen} animationType="slide" onRequestClose={closePicker}
    presentationStyle="pageSheet">
    <ScrollView style={styles.page} contentContainerStyle={styles.content}
