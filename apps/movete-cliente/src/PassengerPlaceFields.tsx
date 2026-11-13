@@ -33,6 +33,12 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
  const budget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const mounted=useRef(true);
  const foreground=useRef(AppState.currentState==='active');
+ // Async GPS must use CURRENT route locks and callbacks, not a stale render
+ // captured before a server quote, booking or account revision changed.
+ const editableNow=useRef(editable);
+ const originChangeNow=useRef(onOriginChange);
+ editableNow.current=editable;
+ originChangeNow.current=onOriginChange;
  const epoch=useRef(0);
  useEffect(()=>{
   mounted.current=true;
@@ -59,7 +65,7 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
   setGpsBusy(true);setOriginNotice('Buscando tu ubicación GPS…');
   try{
    const result=await getPassengerCurrentPickup();
-   if(!mounted.current||!foreground.current||request!==epoch.current)return;
+   if(!mounted.current||!foreground.current||request!==epoch.current||!editableNow.current)return;
    if(!result.ok){
     setGpsAccuracy(null);
     setOriginNotice(result.code==='LOCATION_DENIED'
@@ -70,7 +76,7 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
     return;
    }
    setGpsAccuracy(result.accuracyMeters);
-   onOriginChange(result.place.label);
+   originChangeNow.current(result.place.label);
    setOriginNotice('Origen ubicado por GPS. Revisá que el punto sea correcto.');
   }catch{
    if(mounted.current)setOriginNotice('GPS no disponible. Reintentá manualmente.');
@@ -80,7 +86,7 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
   }
  }
  function closePicker(){
-  epoch.current++;setPickerOpen(false);setCandidates([]);setSelected(null);
+  epoch.current++;setPickerOpen(false);setQuery('');setCandidates([]);setSelected(null);
   setMapNotice('');setSearchBusy(false);
  }
  async function openDestinationPicker(){
