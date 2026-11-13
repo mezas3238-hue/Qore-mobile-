@@ -9,6 +9,8 @@
  */
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {AppState,Linking,Modal,Platform,Pressable,ScrollView,Text,TextInput,View} from 'react-native';
+import Constants from 'expo-constants';
+import {ClientNativeMapPicker} from './native/ClientNativeMapPicker';
 import {Action,palette,styles} from './ClientUI';
 import {getPassengerCurrentPickup,searchPassengerDestination,
  requestPassengerGeocoderPermission} from './native/client-location';
@@ -30,6 +32,13 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
  const [candidates,setCandidates]=useState<readonly PassengerPlace[]>([]);
  const [selected,setSelected]=useState<PassengerPlace|null>(null);
  const [mapNotice,setMapNotice]=useState('');
+ const [nativeMapKind,setNativeMapKind]=useState<'pickup'|'destination'|null>(null);
+ const [nativePickup,setNativePickup]=useState<PassengerPlace|null>(null);
+ const [nativeDropoff,setNativeDropoff]=useState<PassengerPlace|null>(null);
+ // Reuse A's native map component only with approved SDK credentials.
+ // No blank/billable Android map without explicit build-time opt-in.
+ const nativeMapReady=Platform.OS==='ios'||
+  (Platform.OS==='android'&&Constants.expoConfig?.extra?.qoreAndroidMapsReady===true);
  const budget=useMemo(()=>createClientLocationWorkBudget(),[]);
  const mounted=useRef(true);
  const foreground=useRef(AppState.currentState==='active');
@@ -78,6 +87,8 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
    }
    setGpsAccuracy(result.accuracyMeters);
    originChangeNow.current(result.place.label);
+   setNativePickup(result.place);
+   if(nativeMapReady)setNativeMapKind('pickup');
    setOriginNotice('Origen ubicado por GPS. Revisá que el punto sea correcto.');
   }catch{
    if(mounted.current)setOriginNotice('GPS no disponible. Reintentá manualmente.');
@@ -94,7 +105,8 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
   if(!editable||gpsBusy||searchBusy||!foreground.current)return;
   epoch.current++;setQuery('');setCandidates([]);setSelected(null);
   setMapNotice('');setDestinationNotice('');
-  setPickerOpen(true);
+  if(nativeMapReady)setNativeMapKind('destination');
+  else setPickerOpen(true);
   const permitted=await requestPassengerGeocoderPermission();
   if(!mounted.current||!foreground.current)return;
   if(!permitted)setDestinationNotice(
@@ -152,7 +164,33 @@ export function PassengerPlaceFields({origin,destination,editable,onOriginChange
   onDestinationChange(selected.label);
   closePicker();
  }
+ async function searchNativeMap(queryText:string){
+  const lease=budget.beginDestination(queryText);
+  if(!lease.ok)return {ok:false as const,code:lease.code};
+  try{return await searchPassengerDestination(queryText);}
+  finally{budget.end('destination');}
+ }
+ function confirmNativeMap(place:PassengerPlace){
+  if(!editableNow.current||!nativeMapKind)return;
+  if(nativeMapKind==='pickup'){
+   setNativePickup(place);setGpsAccuracy(null);
+   originChangeNow.current(place.label);
+   setOriginNotice('Recogida confirmada en el mapa.');
+  }else{
+   setNativeDropoff(place);
+   onDestinationChange(place.label);
+   setDestinationNotice('Destino confirmado en el mapa.');
+  }
+  setNativeMapKind(null);
+ }
  return <>
+  <ClientNativeMapPicker visible={nativeMapKind!==null}
+   kind={nativeMapKind??'destination'}
+   initial={nativeMapKind==='pickup'?nativePickup:nativeDropoff}
+   origin={nativePickup}
+   onClose={()=>{setNativeMapKind(null);}}
+   onConfirm={confirmNativeMap}
+   onSearch={searchNativeMap}/>
   <Text style={styles.text}>Origen</Text>
   <Pressable accessibilityRole="button" accessibilityLabel="Origen: detectar mi ubicación GPS"
    accessibilityState={{disabled:!editable||gpsBusy||searchBusy}}
