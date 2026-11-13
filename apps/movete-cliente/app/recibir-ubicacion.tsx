@@ -6,8 +6,9 @@ import {Action,Panel,styles} from '../src/ClientUI';
 import {readGoogleMapsShare,stageGoogleMapsShare} from '../src/domain/client-google-maps-share.mjs';
 
 export default function ReceiveMapsLocation(){
- const {sharedPayloads,clearSharedPayloads,error}=useIncomingShare();
- const candidate=useMemo(()=>readGoogleMapsShare(sharedPayloads),[sharedPayloads]);
+ const {sharedPayloads,resolvedSharedPayloads,isResolving,clearSharedPayloads,error}=useIncomingShare();
+ const candidate=useMemo(()=>readGoogleMapsShare(sharedPayloads,resolvedSharedPayloads),
+  [sharedPayloads,resolvedSharedPayloads]);
  function cancel(){clearSharedPayloads();router.replace('/transporte');}
  function accept(){
   if(!candidate.ok||!stageGoogleMapsShare(candidate.query))return;
@@ -29,11 +30,16 @@ export default function ReceiveMapsLocation(){
     <Text style={styles.small}>Al continuar, verificá el resultado y confirmá el destino
      dentro de Movete Fácil. Google Maps no garantiza coordenadas desde enlaces compartidos.</Text>
     <Action label="Buscar y confirmar este destino" onPress={accept}/>
-   </View>:<Text accessibilityRole="alert" style={styles.text}>
-    {candidate.code==='PLACE_NAME_REQUIRED'
-     ?'El enlace corto de Google Maps no contiene un nombre verificable. Regresá y escribí el lugar en el buscador de Movete Fácil.'
-     :'No se recibió un lugar válido de Google Maps. Podés regresar y buscarlo manualmente.'}
-   </Text>}
+   </View>:isResolving&&candidate.code==='PLACE_NAME_REQUIRED'
+    ?<Text accessibilityLiveRegion="polite" style={styles.text}>
+      Comprobando el enlace compartido de Google Maps. Solo aceptaremos un
+      lugar con nombre que puedas verificar antes de confirmar el viaje.
+     </Text>
+    :<Text accessibilityRole="alert" style={styles.text}>
+      {candidate.code==='PLACE_NAME_REQUIRED'
+       ?'El enlace no contiene un nombre verificable. Buscá el destino en Movete Fácil; nunca se aceptan coordenadas sin verificar.'
+       :'No se recibió un lugar válido de Google Maps. Podés regresar y buscarlo manualmente.'}
+     </Text>
    {error&&<Text accessibilityRole="alert" style={styles.small}>
     No se pudo interpretar el contenido compartido.</Text>}
    <Action secondary label="Volver a transporte" onPress={cancel}/>
