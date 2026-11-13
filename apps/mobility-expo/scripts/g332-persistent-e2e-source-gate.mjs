@@ -67,7 +67,7 @@ export function checkG332CiOnlySources({
   // promoted; any byte of change requires explicit review of a new blob SHA.
   const G335_PG17_NATIVE_G75_BLOB='a9e058ea78e39001cfbf570af0905f7458bd90ea';
   const blobSha=createHash('sha1')
-   .update('blob '+Buffer.byteLength(sql,'utf8')+'\\0')
+   .update('blob '+Buffer.byteLength(sql,'utf8')+'\0')
    .update(sql,'utf8').digest('hex');
 
   const ident='(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)';
