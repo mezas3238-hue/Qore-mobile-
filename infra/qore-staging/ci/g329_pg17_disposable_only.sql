@@ -58,7 +58,7 @@ SELECT public.mobility_stage_g329_route_pinned(
  'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
  '32900000-0000-4329-8329-000000000020',
  -25.4061,-54.6302,-25.5092,-54.6115,
- (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint
+ pg_catalog.floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint
 ) AS route_id \gset
 -- SQL-level assertions avoid substituting psql variables into DO dollar strings.
 SELECT 1/(CASE WHEN
@@ -97,7 +97,7 @@ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000099',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+  pg_catalog.floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted changed route evidence';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
  BEGIN
@@ -107,7 +107,7 @@ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000021',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (extract(epoch FROM pg_catalog.clock_timestamp()-interval '2 minutes')*1000)::bigint);
+  pg_catalog.floor(extract(epoch FROM (pg_catalog.clock_timestamp()-interval '2 minutes'))*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted expired evidence';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
  BEGIN
@@ -117,7 +117,7 @@ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000022',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+  pg_catalog.floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted Driver as passenger';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
 END $reject$;
@@ -131,7 +131,7 @@ DO $proof_unique$ BEGIN
    'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
    '32900000-0000-4329-8329-000000000020',
    -25.4061,-54.6302,-25.5092,-54.6115,
-   (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+   pg_catalog.floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 accepted reused attestation for second request';
  EXCEPTION WHEN unique_violation THEN NULL; END;
 END $proof_unique$;
@@ -153,7 +153,7 @@ DO $legacy$ BEGIN
   'HERNANDARIAS','CIUDAD_DEL_ESTE','AUTO_ALTO_PARANA',5000,620,0,
   '32900000-0000-4329-8329-000000000023',
   -25.4061,-54.6302,-25.5092,-54.6115,
-  (extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
+  pg_catalog.floor(extract(epoch FROM pg_catalog.clock_timestamp())*1000)::bigint);
   RAISE EXCEPTION 'G329 retrofitted legacy route proof';
  EXCEPTION WHEN SQLSTATE 'P3291' THEN NULL; END;
 END $legacy$;
