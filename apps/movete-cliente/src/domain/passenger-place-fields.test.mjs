@@ -31,6 +31,14 @@ test('G325 origin on tap is a single foreground GPS request; destination opens s
  assert.match(picker,/onSubmitEditing=\{\(\)=>\{void searchPlace\(\);\}\}/);
  assert.doesNotMatch(picker,/watchPositionAsync\(|getLastKnownPositionAsync\(|setInterval\(/);
 });
+test('G326 native map uses existing approved provider gate, fallback remains QA-safe',()=>{
+ assert.match(picker,/ClientNativeMapPicker visible=\{nativeMapKind!==null\}/);
+ assert.match(picker,/qoreAndroidMapsReady===true/);
+ assert.match(picker,/if\(nativeMapReady\)setNativeMapKind\('pickup'\)/);
+ assert.match(picker,/if\(nativeMapReady\)setNativeMapKind\('destination'\)/);
+ assert.match(picker,/if\(!editableNow\.current\|\|!nativeMapKind\)return/);
+ assert.match(picker,/onSearch=\{searchNativeMap\}/);
+});
 test('G325 only user can preview map and explicitly confirm native geocoded point',()=>{
  assert.match(picker,/await Linking\.openURL\(urls\.primary\)/);
  assert.match(picker,/onPress=\{\(\)=>\{void viewSelectedMap\(\);\}\}/);
