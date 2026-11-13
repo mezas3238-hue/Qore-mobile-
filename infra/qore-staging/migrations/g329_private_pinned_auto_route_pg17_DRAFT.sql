@@ -72,10 +72,6 @@ BEGIN
   OR _pickup_longitude IS NULL OR _pickup_longitude NOT BETWEEN -62.9 AND -54.1
   OR _dropoff_latitude IS NULL OR _dropoff_latitude NOT BETWEEN -27.8 AND -19.2
   OR _dropoff_longitude IS NULL OR _dropoff_longitude NOT BETWEEN -62.9 AND -54.1
-  OR NOT pg_catalog.isfinite(_pickup_latitude)
-  OR NOT pg_catalog.isfinite(_pickup_longitude)
-  OR NOT pg_catalog.isfinite(_dropoff_latitude)
-  OR NOT pg_catalog.isfinite(_dropoff_longitude)
   OR ROW(_pickup_latitude,_pickup_longitude) IS NOT DISTINCT FROM
      ROW(_dropoff_latitude,_dropoff_longitude)
   OR _verified_at_ms IS NULL OR _verified_at_ms <= 0
@@ -135,7 +131,7 @@ CREATE FUNCTION qore_stage_internal.mobility_stage_g329_route_pinned_receipt(
   'ownerId',r.passenger_id,'routeId',r.id,
   'requestKey',r.request_key,'service',r.service,
   'routingVerified',true,
-  'expiresAt',pg_catalog.floor(pg_catalog.extract(epoch FROM r.expires_at)*1000)::bigint,
+  'expiresAt',pg_catalog.floor(extract(epoch FROM r.expires_at)*1000)::bigint,
   'pinEvidenceId',p.pin_evidence_id,'pinBound',true)
  FROM public.mobility_stage_g73_auto_routes r
  JOIN qore_stage_internal.mobility_stage_g329_auto_pinned_routes p
