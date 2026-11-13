@@ -4,6 +4,7 @@
  * Runs without GitHub/Supabase/Railway credentials or network access.
  */
 import {readFileSync,readdirSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 const root=resolve(fileURLToPath(new URL('../../../',import.meta.url)));
@@ -29,6 +30,15 @@ const missing=[
  ['JOURNEY','function','mobility_stage_g198_open_case_qa','G198_POST_RIDE_LOST_ITEMS_CHAT_POSTGRES_CI_ONLY.sql'],
  ['JOURNEY','function','mobility_stage_g200_open_case_qa','G200_POST_MOTO_LOST_ITEMS_CHAT_POSTGRES_CI_ONLY.sql']
 ];
+// G334: Exact, reviewed PG17 source from G333 #152. This is NOT a filename
+// exception. Any byte change invalidates the review and fails closed; the blob
+// identity is the Git SHA-1 blob content ID, not a caller-controlled label.
+// Do not extend this allowlist to synthetic G72/G93 or any other CI-only object.
+const nativeG75File='g333_private_admin_auto_f1_receipt_pg17_DRAFT.sql';
+const nativeG75Blob='a9e058ea78e39001cfbf570af0905f7458bd90ea';
+const blobSha=sql=>createHash('sha1')
+ .update('blob '+Buffer.byteLength(sql,'utf8')+'\\0')
+ .update(sql,'utf8').digest('hex');
 const read=p=>readFileSync(resolve(root,p),'utf8');
 export function checkG332CiOnlySources({
  load=read, listMigrations=()=>readdirSync(resolve(root,'infra/qore-staging/migrations'))
@@ -53,12 +63,31 @@ export function checkG332CiOnlySources({
  }
  for(const f of listMigrations().filter(x=>x.endsWith('.sql'))){
   const sql=load('infra/qore-staging/migrations/'+f);
+  const reviewedNativeG75=f===nativeG75File&&blobSha(sql)===nativeG75Blob;
+  // G333: CI-only fixture guard and CREATE might be pasted into a persistent
+  // migration with quoted SQL identifiers or a non-public schema. Reject ALL.
+  if(/qore_disposable_chain/i.test(sql)&&
+   /(?:POSTGRES_)?CI_ONLY/i.test(sql))
+   issues.push('COPIED_CI_ONLY_FIXTURE:'+f);
+  // Comments are not executable DDL; strip those to avoid false alarms.
+  // Do NOT strip quoted SQL function bodies: dynamic CREATE also needs review.
+  const statements=sql.replace(/\/\*[\s\S]*?\*\/|--[^\r\n]*/g,' ');
+  const ident='(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)';
   for(const [_,kind,name] of missing){
-   // Ignore references in comments/guards/queries: only CREATE is a migration.
-   const re=new RegExp('\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?'+
-    (kind==='table'?'TABLE':'FUNCTION')+'\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?'+
-    '(?:public\\.)?'+name+'\\s*[\\(\\s]','i');
-   if(re.test(sql))issues.push('UNREVIEWED_PG16_PROMOTION:'+f+':'+name);
+   // Quoted public."name", "public"."name", and other_schema.name are
+   // PostgreSQL identifiers too. One optional schema with whitespace around
+   // dot is accepted; IF NOT EXISTS and CREATE OR REPLACE are supported.
+   const target='(?:"'+name+'"|'+name+')';
+   const definition='\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?'+
+    '(?:(?:TEMP|TEMPORARY|UNLOGGED)\\s+)?'+
+    (kind==='table'?'TABLE':'FUNCTION')+
+    '\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?'+
+    '(?:'+ident+'\\s*\\.\\s*)?'+target+
+    '(?=\\s|\\(|;|$)';
+   if(new RegExp(definition,'i').test(statements)&&
+      !(reviewedNativeG75&&kind==='function'&&
+        name==='mobility_stage_g75_admin_f1_receipt'))
+    issues.push('UNREVIEWED_PG16_PROMOTION:'+f+':'+name);
   }
  }
  if(missing.length!==17||[...names].length!==17)
