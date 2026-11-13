@@ -45,7 +45,9 @@ test('R80 MOTO route fields lock with a server quote and discard never books',()
  const screen=readFileSync(new URL('../../app/moto.tsx',import.meta.url),'utf8');
  const flow=readFileSync(new URL('./g100-moto-passenger-flow.mjs',import.meta.url),'utf8');
  assert.match(screen,/const canEdit=moto\.phase==='idle'&&!sending/);
- assert.equal((screen.match(/editable=\{canEdit\}/g)??[]).length,2);
+ assert.match(screen,/<PassengerPlaceFields origin=\{origin\} destination=\{destination\}/);
+ assert.match(screen,/editable=\{canEdit\} onOriginChange=/);
+ assert.match(screen,/onDestinationChange=\{value=>edit\(setDestination,value\)\}/);
  assert.match(screen,/disabled=\{!canEdit\}/);
  assert.match(screen,/client\.discardMotoQuote\(\)/);
  assert.match(screen,/quoteExpired/);
